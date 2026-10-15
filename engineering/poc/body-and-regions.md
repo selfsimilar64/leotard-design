@@ -79,15 +79,18 @@ Every field is "positive inside, roughly in metres", evaluated in the reference 
 `aCover` (fabric exists) and `aZone` (sleeve field, accent field) per vertex; the fabric shader
 thresholds them per pixel (see [fabric shader](/engineering/poc/fabric-shader.md)).[^body-js]
 
-## Per-body work (`setBody`)
+## Per-body work (`setBody`) and garment surface (`updateGarment`)
 
-1. Copy positions, compute area-weighted normals.
-2. Solve the lift membrane (`computeLift`: outward-only Jacobi, `LIFT_MAX` 3 cm, 220 iterations; see
+1. `setBody`: copy positions, compute area-weighted normals; tangent = up × normal, i.e. horizontal
+   around the body — "the direction of greatest stretch", used for tricot highlight anisotropy;
+   crotch point; then `updateGarment`.
+2. `updateGarment` (also run by `setStyle` when sleeves or back change, since the result depends on
+   where fabric is): solve the lift membrane (`computeLift`: outward-only Jacobi, `LIFT_MAX` 3 cm, 220
+   iterations, bare skin pinned at 0; see
    [fabric bridging hollows](/engineering/geometry/fabric-bridging-hollows.md)); garment positions
-   P + N·h and garment normals (flat across bridges).
-3. Tangent = up × normal, i.e. horizontal around the body — "the direction of greatest stretch", used
-   for tricot highlight anisotropy.
-4. AO from lift depth; area-weighted triangle CDF on the garment surface; crotch point.[^body-js]
+   P + N·h and garment normals (flat across bridges); AO from lift depth; area-weighted triangle CDF on
+   the garment surface.[^body-js]
+3. `main.js` calls `setStyle` before the first `setBody`, so the ~0.7 s solve runs once at start-up.
 
 ## Surface-point API (used by stones)
 
@@ -97,9 +100,11 @@ thresholds them per pixel (see [fabric shader](/engineering/poc/fabric-shader.md
 | `projectFront(x, y, back)` | orthographic projection of a reference frontal-plane point onto the front (or back) torso via a 4 mm raster (160 × 280 cells, x from −0.32, y from 0.45; arms and head excluded) → surface point |
 | `armRing(side, t)` | the iso-line `armT = t` (a cuff) as surface points ordered by angle around the arm |
 | `sample(rand)` | area-weighted random surface point |
+| `contour(field)` | zero line of any per-vertex field as closed loops of edge crossings `{i, j, w}` (shared by the two below) |
 | `cutLoops()` | boundary loops of the `keep` field on the current body, for the dress-form end caps (same interpolation as the per-pixel discard) |
+| `edgeLoops()` | the garment's openings (zero line of `cover`) on the garment surface, with normal, inward vector, curvature across the edge and reference attributes, for the [finished edges](/engineering/poc/trim.md) |
 
-Consumers: [stones](/engineering/poc/stones.md) and [stands](/engineering/poc/stands.md).[^stones-js]
+Consumers: [stones](/engineering/poc/stones.md), [stands](/engineering/poc/stands.md) and [trim](/engineering/poc/trim.md).[^stones-js]
 
 # Limits for the professional tool **[INFERRED]**
 
@@ -111,7 +116,7 @@ Consumers: [stones](/engineering/poc/stones.md) and [stands](/engineering/poc/st
 | No panels, seams, line types, fabric assignment per panel | Cannot express pieced vs appliqué vs print lines, closing seams or lining; "cover" and two zones only |
 | No 2D flattening, allowances, markings, stretch compensation, grading tables | No pattern output for a [seamstress](/product/personas/seamstress.md) or factory |
 | Side seam is a computed mid-plane, armhole seam a skinning-weight iso-line | Construction seams are artefacts of the body model, not designer choices |
-| Lift is a geometric heuristic per body | Not tied to fabric, panel or elastic tension |
+| Lift is a geometric heuristic per body | Not tied to fabric or panel tension; openings are pinned to the skin (all-or-nothing) rather than pulled by modelled elastic |
 
 **Worth keeping:** shared topology across sizes; surface points `{f, b0, b1, b2}` found on the reference
 body and evaluated per body; the circumferential tangent field (grain direction); the front-projection

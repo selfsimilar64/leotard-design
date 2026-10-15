@@ -8,6 +8,7 @@
 * [Proof-of-concept fabric shader (fabric.js)](fabric-shader.md) - poc-threejs/src/fabric.js extends three.js MeshPhysicalMaterial with an injected procedural layer (foil dots, hologram rainbow, glitter, bump, knit, mesh holes, ombré) and draws each garment zone as a masked pass over the shared body geometry; 15 fabric presets, with known shortcuts.
 * [Display stands (stand.js)](stands.md) - poc-threejs/src/stand.js builds the display hardware around the mannequin: a glass base with a calf rod for the full body, and end caps, wooden neck cap, crotch pole and five-leg caster base for the dress form.
 * [PoC stones module (crystals and spangles)](stones.md) - poc-threejs/src/stones.js: one InstancedMesh of 32-triangle crystals or 14-triangle spangles, a MeshPhysicalMaterial with an injected per-channel inner-reflection shader for fire and AB, nine hard-coded placement patterns (pen-stroke walk and dart-throwing scatter on the body surface), nine finishes; known shortcuts and what production needs.
+* [Finished edges (trim.js)](trim.md) - poc-threejs/src/trim.js: sweeps a raised elastic or binding profile with coverstitching along every garment opening, hides the jagged per-pixel cut beneath it, and keeps stones off it.
 
 # Section
 

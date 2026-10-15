@@ -67,6 +67,7 @@ tangent (for anisotropy) runs horizontally around the body ("the direction of gr
 | Mesh | hex holes at `uMeshPitch` (0.7 mm); far field becomes alpha `1 − 3.6276·holeR²·ndv^0.6`, so mesh reads more opaque towards the silhouette; flakes stay opaque | [mesh over skin](/engineering/rendering/fabric-shading/mesh-over-skin-blend.md) |
 | Ombré | smoothstep on reference-body height with a sine wobble; foil on an ombré follows the same gradient | [sublimation](/domain/fabrics/sublimation-printing.md) |
 | Tapes | dress-form tapes (centre lines, side/princess seams, waist, bust, hip) on zone 3 | — |
+| Finished edges | zone 4 = the [finished-edge rim](/engineering/poc/trim.md): no zone mask, no lift (geometry is pre-placed), twin-needle topstitching from `aRim`; fabric zones pull their cut back under it (`uTrimInset`) and darken beside it (`uTrimWidth`, `gTrimAO`) | added 2026-10-15 |
 
 # Fabric presets (`FABRICS`)
 
