@@ -103,7 +103,11 @@ learning.[^vmod-terms] Using them for the owner's own renders and look developme
 them inside an app that other people install (designers, clubs) is not clearly allowed**, because
 installed texture files can be extracted. Ask VMOD (support@vmod.xyz) before relying on them for the
 shipped fabric library, and keep the decision to prefer free, open assets in mind
-([decision](/decisions/2026-10-13-prefer-free-open-assets.md)). The app's import pipeline does not
+([decision](/decisions/2026-10-13-prefer-free-open-assets.md)). Further terms: free-plan licences are single-user and
+non-commercial; team plans may not share assets beyond team members; assets paid for before
+cancelling stay usable but availability is not guaranteed; Korean law. The price-plans page (read
+2026-10-18) prices downloads in credits (texture 60, digital fabric 100, drape template 35); plan
+prices were not readable.[^vmod-terms] The app's import pipeline does not
 depend on the source, so licensed, CC0 or the maker's own scans all go through the same steps.
 
 [^owner]: Product owner, 2026-10-18
