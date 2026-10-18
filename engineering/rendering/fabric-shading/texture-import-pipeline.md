@@ -22,6 +22,19 @@ sources:
   - id: vmod-news
     resource: https://persportaal.anp.nl/artikel/CSN-170822090/swatchon-launches-a-digital-twin-3d-fabric-library-to-forge-fashions-future
     title: SwatchOn launches a digital-twin 3D fabric library (materials for Adobe Substance 3D, CLO3D, Marvelous Designer)
+  - id: tex-faq
+    resource: https://www.textures.com/faq-license
+    title: Textures.com licence FAQ (bundling textures with models, scenes and game levels)
+    author: org:textures-com
+  - id: texmax
+    resource: https://www.texturemax.com/licensing
+    title: "TextureMax licensing: games allowed if image files are in a proprietary format and not directly accessible"
+  - id: ue-forum
+    resource: https://forums.unrealengine.com/t/can-i-sell-this/126395
+    title: "Unreal Engine forum: Marketplace refused products with Quixel textures because end users could export them (informal, ~2019)"
+  - id: wwd
+    resource: https://wwd.com/sourcing-journal/industry-news/swatchon-vmod-3d-digital-fabric-library-clo-fashion-design-product-development-1238814240/
+    title: "WWD: SwatchOn launches VMOD; CLO is partner and investor"
   - id: map-sets
     resource: https://cgaxis.com/?p=3311023
     title: "Typical commercial fabric PBR set: base colour, roughness, normal (DirectX and OpenGL), height, metallic; 4K/8K"
@@ -99,9 +112,22 @@ So glitter, reflective and hologram textures are used as **inputs to the existin
 VMOD's terms grant a non-transferable, non-sublicensable licence to use assets inside a "Larger
 Work", forbid letting a third party "use, download, extract, or access" the assets on a standalone
 basis, require a paid plan for commercial distribution, and forbid using them to train machine
-learning.[^vmod-terms] Using them for the owner's own renders and look development fits; **shipping
-them inside an app that other people install (designers, clubs) is not clearly allowed**, because
-installed texture files can be extracted. Ask VMOD (support@vmod.xyz) before relying on them for the
+learning.[^vmod-terms] Re-read on 2026-10-18 with exact wording: the extraction ban in §4.1 covers letting a third party
+use, download, extract or access the assets **"on a stand-alone basis"**, and §3.2/§4.6 allow
+commercial distribution of a Larger or Modified Work on a paid plan when the work would be original
+without the asset and its "primary value does not lie with the VMOD 3D Asset(s) itself".[^vmod-terms]
+That is the same structure as game-asset licences, which allow textures inside a shipped product but
+not as files a user can take away.[^tex-faq][^texmax] Using them for the owner's own renders and look
+development fits plainly. **Shipping them inside the design app is likely within that structure but
+not certain**, for a reason specific to design tools: users apply the fabric itself to their own
+designs, which licensors can read as handing over the asset. Epic's Marketplace refused products
+containing Quixel textures for exactly that reason, because end users could export the textures.[^ue-forum]
+No public example of third-party software shipping VMOD assets was found; VMOD's only named software
+partner is CLO, its investor, whose users license assets through VMOD themselves.[^wwd]
+**Mitigations [INFERRED]:** ship only GPU-compressed (KTX2) copies, never the original maps; no
+texture export from the app; design files reference fabrics by id and never embed maps; renders and
+PDFs are Larger Works. Get written confirmation from VMOD before shipping. Web delivery does not
+remove the question, since a browser also downloads the bytes; what matters is stand-alone access. Ask VMOD (support@vmod.xyz) before relying on them for the
 shipped fabric library, and keep the decision to prefer free, open assets in mind
 ([decision](/decisions/2026-10-13-prefer-free-open-assets.md)). Further terms: free-plan licences are single-user and
 non-commercial; team plans may not share assets beyond team members; assets paid for before
@@ -111,6 +137,10 @@ prices were not readable.[^vmod-terms] The app's import pipeline does not
 depend on the source, so licensed, CC0 or the maker's own scans all go through the same steps.
 
 [^owner]: Product owner, 2026-10-18
+[^tex-faq]: Textures.com licence FAQ
+[^texmax]: TextureMax licensing
+[^ue-forum]: Unreal Engine forum, "Can I Sell This?"
+[^wwd]: WWD on the VMOD launch and CLO partnership
 [^vmod-home]: VMOD home page
 [^vmod-terms]: VMOD terms, read 2026-10-18
 [^vmod-news]: SwatchOn VMOD launch article
