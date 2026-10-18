@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-18
+* **Creation**: [Fabric texture sources compared](/engineering/rendering/fabric-shading/fabric-texture-sources.md): CC0 (3dtextures.me, ShareTextures, ambientCG) first, Adobe Substance 3D Assets for parametric variety, VMOD after written permission.
 * **Creation**: [Texture import pipeline](/engineering/rendering/fabric-shading/texture-import-pipeline.md): owner will supply scanned fabrics from VMOD; take the Blender download, extract/bake PBR maps at real size, compress to KTX2, apply in cloth-space UVs; textures drive structure, shaders keep sparkle; VMOD licence caveat for shipping. Roadmap P1 and the fidelity-inputs question updated.
 * **Decision**: The [moodboard is the acceptance set](/decisions/2026-10-18-moodboard-is-the-acceptance-set.md): any moodboard design must be buildable with in-app tools; the owner will test with one photo to rebuild. Plan only; execution waits for the owner.
 * **Creation**: Teardown of all 138 moodboard photos in seven [catalogue parts](/domain/moodboard/about.md) and the [design-space taxonomy](/domain/moodboard/design-space-taxonomy.md).
