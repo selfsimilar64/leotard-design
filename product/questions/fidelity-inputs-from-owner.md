@@ -50,7 +50,11 @@ comparison. Items 5-8 matter for production accuracy more than for appearance.
 
 # Answer
 
-Open.
+Partly answered 2026-10-18: the best the owner can provide is **pre-made scanned fabric textures from
+a library such as VMOD (vmod.xyz)**, which covers lace, reflective and glitter fabrics.[^owner] How they
+enter the app, what they can and cannot replace (structure yes, view-dependent sparkle no) and the
+licence caveat are in [texture import pipeline](/engineering/rendering/fabric-shading/texture-import-pipeline.md).
+Swatch and stone photos (items 1-2) remain the only route to calibrated sparkle; items 3-8 are still open.
 
 [^owner]: Product owner, 2026-10-18
 [^calib]: Calibrating fabric materials against physical swatches

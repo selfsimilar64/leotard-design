@@ -95,6 +95,10 @@ parallel once P1 lands (different modules, shared document).
   the flat view (4-point affine alignment).
 - Arrangement by curve insertion, cell labelling, panel meshes, per-panel LSCM UVs; fabric shader
   moved from tri-planar to cloth-space UVs with per-panel grain; one draw per panel.
+- Texture import (owner's scanned fabrics, e.g. VMOD): Blender-package extraction, PBR map sets at a
+  stated real-world size, KTX2 compression, texture slots in the fabric material; first three
+  owner samples (lace, glitter, foil) shown on panels
+  ([pipeline](/engineering/rendering/fabric-shading/texture-import-pipeline.md)).
 - Lift warm start; POC rims re-hosted on edge curves.
 - Block library (tank, cap, 3/4, long; crew, scoop, V, mock, high neck; standard/high leg; closed,
   scoop, V, keyhole backs).
