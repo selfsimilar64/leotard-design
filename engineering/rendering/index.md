@@ -10,3 +10,7 @@
 # Section
 
 * [Rendering](about.md) - How fabrics and sparkle are drawn in real time: fabric shading recipes and the glitter, spangle and crystal techniques.
+
+# Technique
+
+* [Realism upgrades that fit in 60 fps](realism-upgrades-at-60fps.md) (draft) - Gap analysis of the POC render against the moodboard photos and a costed list of upgrades (photo-studio lighting with area lights and a matching environment, crystal studio read, glare presets, AO and soft shadow, skin, mesh over skin, lace and prints in cloth space, seams, tension wrinkles, idle refinement) inside a 14 ms frame on a GTX 1650.

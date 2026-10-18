@@ -15,6 +15,7 @@
 * [POC complete; build a professional, role-based tool](2026-10-15-poc-complete-move-to-professional-tool.md) - The proof of concept is considered finished; the next phase develops it into a professional tool for gyms and coaches, designers and seamstresses, each with a different view.
 * [Seamstress output: printable PDF patterns](2026-10-15-printable-pdf-patterns.md) - Flattened pattern pieces are delivered as printable full-scale PDFs with markings and measurements; DXF and graded size runs are not required now.
 * [Engine: three.js, not Unreal](2026-10-15-threejs-over-unreal.md) - After building POCs in both, the owner chose three.js for lightness and fast iteration; the Unreal POC was removed.
+* [The moodboard is the designer tool's acceptance set](2026-10-18-moodboard-is-the-acceptance-set.md) - Any design in the owner's 138-photo moodboard must be achievable with in-app tools; the owner will test the finished tool by handing over one leotard photo to rebuild, judged on form and appearance.
 
 # Section
 

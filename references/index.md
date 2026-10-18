@@ -6,6 +6,10 @@
 
 * [research/](research/) - Mirrors of the October 2026 research notes and report kept in the project's research_notes/ and reports/ folders.
 
+# Reference
+
+* [Owner-facing overview: building every moodboard leotard in the app](moodboard-tools-plan-overview.md) - Mirror pointer for reports/Moodboard tools plan - overview.md, the plain-language answer to the owner's five moodboard questions and the summary of the nine-phase plan.
+
 # Section
 
 * [References](about.md) - In-bundle mirrors of material kept outside the bundle (research notes, the research report, external specifications), so sources can point inside the bundle.

@@ -1,5 +1,11 @@
 # Bundle update log
 
+## 2026-10-18
+* **Decision**: The [moodboard is the acceptance set](/decisions/2026-10-18-moodboard-is-the-acceptance-set.md): any moodboard design must be buildable with in-app tools; the owner will test with one photo to rebuild. Plan only; execution waits for the owner.
+* **Creation**: Teardown of all 138 moodboard photos in seven [catalogue parts](/domain/moodboard/about.md) and the [design-space taxonomy](/domain/moodboard/design-space-taxonomy.md).
+* **Creation**: Plan concepts: [tool space](/product/requirements/tool-space-for-moodboard.md) (T1-T14, M1-M10), [roadmap](/product/roadmap/moodboard-coverage-roadmap.md) (P0-P8, 13 benchmark designs, rehearsal protocol), [design document model](/engineering/architecture/design-document-model.md), [editor architecture](/engineering/architecture/editor-architecture.md), [frictionless design flow](/engineering/ux/frictionless-design-flow.md), [realism upgrades at 60 fps](/engineering/rendering/realism-upgrades-at-60fps.md) and [inputs the owner could provide](/product/questions/fidelity-inputs-from-owner.md); owner-facing summary mirrored at [/references/](/references/moodboard-tools-plan-overview.md).
+* **Update**: POC benchmark on the owner's GTX 1650: 6.1 ms/frame (showpiece), 7.8 ms/frame with 16,148 stones at 1792x1344.
+
 ## 2026-10-15
 * **Update**: Finished edges (raised elastic or binding rim with topstitching) added to the POC, see [trim](/engineering/poc/trim.md); fit fix pinning bare skin in the lift solve, see [fabric bridging hollows](/engineering/geometry/fabric-bridging-hollows.md). Owner asked whether to cloth-simulate per body: recorded as not needed.
 * **Decision**: Owner answered four product questions: coach designs come from a [leotard maker's catalogue](/decisions/2026-10-15-coach-designs-come-from-maker-catalogue.md); designs move as [files](/decisions/2026-10-15-design-files-for-handover.md); seamstresses get [printable PDF patterns](/decisions/2026-10-15-printable-pdf-patterns.md); the first release is [designer tools proven by pattern output](/decisions/2026-10-15-designer-first-proven-by-patterns.md).

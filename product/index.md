@@ -6,6 +6,8 @@
 
 * [personas/](personas/) - The three user groups the professional tool serves: gym owners and coaches, professional designers, and seamstresses.
 * [questions/](questions/) - Product questions only the owner can settle; each records options, a recommendation and, once answered, the answer and the resulting decision.
+* [requirements/](requirements/) - What the product must be able to do, stated as capabilities with acceptance checks.
+* [roadmap/](roadmap/) - The phased build plan, its gates and the benchmark designs it is measured against.
 
 # Product Vision
 

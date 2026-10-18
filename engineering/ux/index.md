@@ -12,6 +12,10 @@
 * [Principles for frictionless creative tools](creativity-tool-principles.md) - Resnick et al. (2005) and NN/g reduce 'frictionless' to: direct manipulation with immediate results, trustworthy undo, low viscosity, well-chosen high-level primitives, low threshold with a high ceiling, restraint in features, and pleasure.
 * [Dressmaker's build loop - what to take, what to leave](dressmaker-build-loop.md) - The Steam sewing game Dressmaker (2026-09-21) builds a dress in three layers: catalogue parts, a fabric per panel, freely placed decorations. Take those and its free rearrangement stage; leave its missing decoration undo and its manual labour that players modded away.
 
+# Requirement
+
+* [Frictionless design flow for the designer tool](frictionless-design-flow.md) (draft) - How a designer gets from a blank or a reference photo to a finished leotard with the fewest decisions: start from a block, draw in 3D or on a synced 2D flat, smart context actions on whatever is clicked, generators that stay editable, mirror and snapping on by default, trace-over-photo, live counts and side-by-side compare.
+
 # Section
 
 * [Interaction design](about.md) - How the editor should feel and behave: the Dressmaker build loop, painting and sculpting tool models, creativity-tool principles and the stone-placement interaction model.

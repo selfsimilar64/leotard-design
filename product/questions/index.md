@@ -4,6 +4,7 @@
 
 # Open Question
 
+* [What could the owner provide to raise fidelity?](fidelity-inputs-from-owner.md) (draft) - Ranked list of real-world inputs (swatch photo sets, stone grids, a studio lighting capture, artwork files, real patterns, matched photo sets, body measurements) that would replace guessed rendering and shape parameters with measured ones.
 * [How do designs move between roles?](how-designs-move-between-roles.md) - A coach, a designer and a seamstress are usually different people; how a design passes between them (files, accounts, a shared server) is unsettled.
 * [In what form do seamstresses receive pattern pieces?](pattern-output-format.md) - Flattened pieces could be printable full-scale PDFs for workshops, DXF for factory CAD and cutters, or both, with or without size grading.
 * [Which role should the first professional release serve?](which-role-first.md) - Ordering the designer, seamstress and coach views determines what is built first.
