@@ -12,7 +12,15 @@
 import { DocumentStore, commandList } from './doc/store.js';
 import { newDocument } from './doc/schema.js';
 import './doc/commands-core.js';
+import './doc/commands-garment.js';
+import { defineCommand } from './doc/store.js';
 import { legacyFromLook } from './garment/legacy.js';
+import { buildGarment, inheritPanels } from './garment/build.js';
+import { showCells } from './render/debug.js';
+
+// Ends a drag: touches the curves so the garment is re-cut and new cells get their panels, inside
+// the drag's own history entry.
+defineCommand('garment.settle', { label: 'Re-cut', run(tx) { tx.touched.add('curves'); } });
 
 const AUTOSAVE = 'leotard.autosave.v1';
 
@@ -42,18 +50,46 @@ export class App {
 
 	attach(engine) {
 		this.engine = engine;
+		engine.app = this;
+		this.store.ctx = { man: engine.body, surf: engine.surf, garment: () => engine.g, get evaluated() { return engine.g?.evaluated; } };
+		this.store.hooks.push((tx, touched) => this.inheritHook(tx, touched));
+		engine.viewport.onResize.add((w, h) => engine.overlay.setResolution(w, h));
+		engine.overlay.setResolution(engine.viewport.container.clientWidth, engine.viewport.container.clientHeight);
 		engine.sync(this.doc, new Set(Object.keys(this.doc)), 'load');
 		engine.frameCamera(this.doc.body.form);
+	}
+
+	// When lines change, cells cut from a panel become panels of their own (same fabric), in the
+	// same undo step. Skipped mid-drag; the drag's settle command runs it once at the end.
+	inheritHook(tx, touched) {
+		const e = this.engine;
+		if (!e || !touched.has('curves') || tx.doc.legacy || this._inGesture) return;
+		const prev = e.g;
+		const g = buildGarment(tx.doc, e.surf, { prev });
+		const add = inheritPanels(g, prev, tx.doc, e.surf);
+		for (const p of add) tx.insert('panels', { id: tx.newId('p'), layer: 'L0', name: p.name ?? '', seed: p.seed, mirror: p.mirror, stack: p.stack });
+		e.pending = g; // same curves: the engine re-locates the seeds on this arrangement
 	}
 
 	get doc() { return this.store.doc; }
 	get revision() { return this.store.revision; }
 	onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
 
-	exec(cmd, opts) { return this.store.exec(cmd, opts); }
+	exec(cmd, opts) {
+		const first = Array.isArray(cmd) ? cmd[0] : cmd;
+		this._inGesture = !!first?.gesture;
+		if (first?.gesture) this._gesture = first.gesture;
+		try { return this.store.exec(cmd, opts); } finally { this._inGesture = false; }
+	}
 	undo() { return this.store.undo(); }
 	redo() { return this.store.redo(); }
-	endGesture() { this.store.endGesture(); }
+	endGesture() {
+		const g = this._gesture;
+		this._gesture = null;
+		const top = this.store.undoStack[this.store.undoStack.length - 1];
+		if (g && top?.gesture === g && top.touched.includes('curves')) this.store.exec({ op: 'garment.settle', gesture: g }, { settle: true });
+		this.store.endGesture();
+	}
 	commands() { return commandList(); }
 	history() { return { undo: this.store.undoStack.map((e) => e.label), redo: this.store.redoStack.map((e) => e.label).reverse() }; }
 
@@ -96,12 +132,14 @@ export class App {
 
 	async capture(name, opts = {}) {
 		if (opts.view) this.view(opts.view);
-		const blob = await this.engine.viewport.capture();
+		const blob = await this.engine.viewport.capture(opts.width ?? 1600, opts.height ?? 1200);
 		const file = safeName(name) + '.png';
 		const r = await fetch('/__fs/captures/' + file, { method: 'POST', body: blob }).catch(() => null);
 		if (!r || !r.ok) { download(file, blob); return 'downloaded ' + file; }
 		return 'captures/' + file;
 	}
+
+	get debug() { return { cells: (on = true) => showCells(this.engine, on) }; }
 
 	benchmark(n = 60) { return +this.engine.viewport.benchmark(n).toFixed(2); }
 	stats() { return { ...this.engine.viewport.stats, ...this.engine.timing, legacy: this.engine.legacy.timing }; }

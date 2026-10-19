@@ -203,6 +203,15 @@ class Mannequin {
 		if (this.key) this.updateGarment();
 	}
 
+	// Cover field from a cut garment (render/garment.js): +1 on fabric, -1 on bare skin. The lift
+	// is warm-started from the previous solution, which is close when only some lines moved.
+	setCover(cover) {
+		this.aCover.array.set(cover);
+		this.aCover.needsUpdate = true;
+		this.styleKey = null;
+		if (this.key) this.updateGarment(true);
+	}
+
 	// -------------------------------------------------------------------------------------------
 	// Switching bodies: positions, normals, the fabric's lift over hollows, AO, sampling tables.
 
@@ -231,9 +240,10 @@ class Mannequin {
 
 	// The garment surface on the current body and style: the fabric's lift over hollows, its
 	// normals, AO, and the sampling table stones are scattered with.
-	updateGarment() {
+	updateGarment(warm = false) {
 		const N = this.vertices, idx = this.idx, P = this.aPos.array, Nn = this.aNrm.array;
-		const h = this.computeLift(P, Nn);
+		const h = warm && this.liftBody === this.key ? this.computeLift(P, Nn, undefined, 40, this.aLift.array) : this.computeLift(P, Nn);
+		this.liftBody = this.key;
 		this.aLift.array.set(h);
 		// Garment surface normals: normals of the lifted surface (flat across the bridges).
 		const G = new Float32Array(N * 3);
@@ -265,12 +275,14 @@ class Mannequin {
 	// Only fabric bridges: bare skin (cover <= 0) is pinned at 0, which also pins every opening to
 	// the body the way its elastic does. Without this the "fabric" spanned from the shoulder strap
 	// towards the bare neck hollow and floated ~1 cm off the shoulder.
-	computeLift(P, Nn) {
-		const N = this.vertices, S = this.adjStart, A = this.adj, C = this.aCover.array;
-		let h = new Float32Array(N), h2 = new Float32Array(N);
+	// cover: per-vertex field (> 0 = fabric); iter / warm: fewer iterations from a previous solution.
+	computeLift(P, Nn, C = this.aCover.array, iter = LIFT_ITER, warm = null) {
+		const N = this.vertices, S = this.adjStart, A = this.adj;
+		let h = warm ? Float32Array.from(warm) : new Float32Array(N), h2 = new Float32Array(N);
 		const fixed = new Uint8Array(N);
 		for (let i = 0; i < N; i++) fixed[i] = this.wHead[i] > 0.5 || this.armT[i] > 1 || C[i] <= 0 ? 1 : 0;
-		for (let it = 0; it < LIFT_ITER; it++) {
+		for (let i = 0; i < N; i++) if (fixed[i]) h[i] = 0;
+		for (let it = 0; it < iter; it++) {
 			for (let i = 0; i < N; i++) {
 				if (fixed[i]) { h2[i] = 0; continue; }
 				const px = P[i * 3], py = P[i * 3 + 1], pz = P[i * 3 + 2], nx = Nn[i * 3], ny = Nn[i * 3 + 1], nz = Nn[i * 3 + 2];
@@ -455,7 +467,7 @@ class Mannequin {
 	}
 }
 
-function vertexNormals(P, idx, out) {
+export function vertexNormals(P, idx, out) {
 	out.fill(0);
 	for (let f = 0; f < idx.length; f += 3) {
 		const a = idx[f] * 3, b = idx[f + 1] * 3, c = idx[f + 2] * 3;

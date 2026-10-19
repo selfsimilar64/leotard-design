@@ -5,6 +5,7 @@ import { rev, stats } from './ui/state.js';
 import { Viewport } from './render/viewport.js';
 import { Engine } from './render/engine.js';
 import { loadMannequins } from './body/mannequin.js';
+import { buildReference } from './body/reference.js';
 import './ui/styles.css';
 
 app.onChange(() => { rev.value++; });
@@ -16,7 +17,7 @@ async function start(el) {
 	const viewport = new Viewport(el);
 	const t0 = performance.now();
 	const body = await loadMannequins();
-	const engine = new Engine(viewport, body);
+	const engine = new Engine(viewport, body, buildReference(body));
 	engine.timing.load = performance.now() - t0;
 	app.attach(engine);
 	rev.value++;

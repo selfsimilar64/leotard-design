@@ -85,5 +85,5 @@ export default defineConfig({
 	oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
 	server: { port: 5174, strictPort: true },
 	build: { target: 'es2022' },
-	test: { environment: 'node', include: ['test/**/*.test.js'] },
+	test: { environment: 'node', include: ['test/**/*.test.js'], exclude: ['test/debug/**'], testTimeout: 120000 },
 });

@@ -5,10 +5,14 @@ import { createFabricMaterial } from '../materials/fabric.js';
 import { fullBodyStand, dressFormStand } from './stand.js';
 import { MANNEQUIN_FINISHES } from './presets.js';
 import { LegacyGarment } from '../garment/legacy.js';
+import { GarmentView } from './garment.js';
+import { buildGarment, evaluateAll } from '../garment/build.js';
+import { Overlay } from './overlay.js';
 
 export class Engine {
-	constructor(viewport, body) {
-		this.viewport = viewport; this.body = body;
+	// ref: the reference garment surface (body/reference.js), where curves live
+	constructor(viewport, body, ref) {
+		this.viewport = viewport; this.body = body; this.ref = ref; this.surf = ref.surface;
 		const scene = viewport.scene;
 		this.skin = createFabricMaterial(3);
 		this.skinMesh = new THREE.Mesh(body.geometry, this.skin);
@@ -17,28 +21,69 @@ export class Engine {
 		this.capMaterial = new THREE.MeshPhysicalMaterial();
 		this.stand = null;
 		this.legacy = new LegacyGarment(scene, body);
-		this.timing = { mannequin: 0 };
+		this.garment = new GarmentView(scene, body);
+		this.overlay = new Overlay(scene, body);
+		this.ui = { selected: null, hover: null, showPoints: false }; // overlay state from the UI
+		this.timing = { mannequin: 0, garment: null };
 		this.bodyKey = null;
-		viewport.onFrame.add(() => this.legacy.frame(viewport.keyDir));
+		this.g = null;
+		this.geoSig = null;
+		viewport.onFrame.add(() => { this.legacy.frame(viewport.keyDir); this.garment.frame(viewport.keyDir); });
 	}
 
 	stoneCount() { return this.legacy.visible === false ? 0 : this.legacy.stones.count; }
 
-	get fabricMaterials() { return [this.skin, ...this.legacy.materials]; }
+	get fabricMaterials() { return [this.skin, ...this.legacy.materials, ...this.garment.materials.values()]; }
 
 	sync(doc, touched, why) {
 		const all = why === 'load' || !this.synced;
 		const t = (k) => all || touched.has(k);
 		if (t('scene')) this.viewport.applyScene(doc.scene);
-		// Style before the first body: the garment surface needs the regions, and setStyle skips the
-		// rebuild until a body is set, so the lift solve (~0.7 s) runs once at start-up.
-		if (all && doc.legacy && !this.body.key) this.body.setStyle(doc.legacy);
-		if (t('body')) this.applyBody(doc.body, all);
-		if (t('legacy')) {
-			if (doc.legacy) { this.legacy.setVisible(true); this.legacy.apply(doc.legacy); }
-			else this.legacy.setVisible(false);
+		const legacy = !!doc.legacy;
+		if (legacy !== this.legacyMode) {
+			// switching garment model: the other model's cover field must be rebuilt
+			this.legacyMode = legacy;
+			this.legacy.state = null; this.body.styleKey = null; this.geoSig = null;
+			this.legacy.setVisible(legacy); this.garment.setVisible(!legacy);
 		}
+		if (legacy) {
+			// Style before the first body: the garment surface needs the regions, and setStyle skips the
+			// rebuild until a body is set, so the lift solve (~0.7 s) runs once at start-up.
+			if (!this.body.key) this.body.setStyle(doc.legacy);
+			if (t('body')) this.applyBody(doc.body, all);
+			if (t('legacy') || !this.legacy.state) this.legacy.apply(doc.legacy);
+		} else if (why === 'gesture' && !all) {
+			// mid-drag: only the dragged lines move; the garment is re-cut when the gesture ends
+			if (touched.has('curves')) this.drawOverlay(doc, evaluateAll(doc, this.surf, 'L0', this.g?.evaluated));
+			if (touched.has('panels')) this.garment.applyMaterials(doc);
+		} else {
+			if (t('curves') || t('panels') || t('layers') || this.geoSig === null) this.syncGarment(doc);
+			if (t('body')) this.applyBody(doc.body, all);
+		}
+		if (!legacy && why !== 'gesture') this.drawOverlay(doc);
 		this.synced = true;
+	}
+
+	drawOverlay(doc, evaluated = this.g?.evaluated) {
+		this.overlay.setVisible(!doc.legacy);
+		if (evaluated) this.overlay.setCurves(evaluated, doc, this.ui);
+		this.lastEvaluated = evaluated;
+	}
+	setUI(ui) { Object.assign(this.ui, ui); if (this.lastEvaluated && this.app) this.drawOverlay(this.app.doc, this.lastEvaluated); }
+
+	// Rebuild the cut garment when its geometry inputs changed; otherwise only its materials.
+	syncGarment(doc) {
+		const sig = JSON.stringify([doc.curves, doc.panels.map((p) => [p.id, p.seed, p.removed, p.mirror, p.layer])]);
+		if (sig !== this.geoSig) {
+			const t0 = performance.now();
+			const prev = this.pending?.curveSig === JSON.stringify(doc.curves) ? this.pending : this.g;
+			this.g = buildGarment(doc, this.surf, { prev });
+			this.pending = null;
+			const t1 = performance.now();
+			this.garment.setGarment(this.g, doc);
+			this.geoSig = sig;
+			this.timing.garment = { ...this.g.ms, meshes: performance.now() - t1, total: performance.now() - t0, warn: this.g.arr.warn.length };
+		} else this.garment.applyMaterials(doc);
 	}
 
 	applyFinish(name) {
@@ -76,7 +121,7 @@ export class Engine {
 		const s = torso ? 0.9 : 0.75, blob = this.viewport.blob;
 		blob.scale.set(s, s, 1); blob.position.z = torso ? body.crotch.z : 0;
 		this.timing.mannequin = performance.now() - t;
-		this.legacy.onBodyChanged();
+		if (this.legacyMode) this.legacy.onBodyChanged(); else { this.garment.refresh(); if (this.app) this.drawOverlay(this.app.doc); }
 		if (reframe) this.frameCamera(b.form);
 	}
 

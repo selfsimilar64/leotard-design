@@ -1,0 +1,38 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import { loadBody } from './helpers.js';
+import { makeBlock, BLOCK_OPTIONS } from '../src/garment/blocks.js';
+import { buildGarment } from '../src/garment/build.js';
+import { newDocument } from '../src/doc/schema.js';
+
+let B;
+beforeAll(async () => { B = await loadBody(); }, 60000);
+
+function docFor(opts) {
+	const d = newDocument('t');
+	const blk = makeBlock(B.man, B.surf, opts);
+	d.curves = blk.curves.map(({ key, ...c }) => ({ id: key, layer: 'L0', ...c }));
+	d.panels = blk.panels.map((p, i) => ({ id: 'p' + (i + 1), layer: 'L0', ...p }));
+	return d;
+}
+
+describe('blocks on the body', () => {
+	it('default block (scoop, long sleeves, high leg) cuts into front, back and sleeves', () => {
+		const d = docFor({});
+		const g = buildGarment(d, B.surf);
+		expect(g.arr.warn).toEqual([]);
+		expect(g.seeds.every((s) => s.cell >= 0)).toBe(true);
+		const [front, back, sleeveL, sleeveR] = g.seeds.map((s) => g.arr.cells[s.cell]);
+		expect(new Set(g.seeds.map((s) => s.cell)).size).toBe(4);
+		// sleeves mirror each other; front and back are each roughly a quarter square metre
+		expect(Math.abs(sleeveL.area - sleeveR.area) / sleeveL.area).toBeLessThan(0.02);
+		for (const c of [front, back]) { expect(c.area).toBeGreaterThan(0.12); expect(c.area).toBeLessThan(0.3); }
+		console.log('ms', g.ms, 'cells', g.arr.cells.map((c) => +c.area.toFixed(4)));
+	});
+	it('every block option builds a closed, warning-free arrangement', () => {
+		for (const [k, vals] of Object.entries(BLOCK_OPTIONS)) for (const v of vals) {
+			const g = buildGarment(docFor({ [k]: v }), B.surf);
+			expect(g.arr.warn, `${k}=${v}`).toEqual([]);
+			expect(g.seeds.every((s) => s.cell >= 0), `${k}=${v}`).toBe(true);
+		}
+	});
+});

@@ -18,7 +18,7 @@ export function defineCommand(op, def) {
 export const commandList = () => [...COMMANDS.entries()].map(([op, d]) => ({ op, label: d.label, args: d.args ?? '' }));
 
 class Transaction {
-	constructor(store) { this.store = store; this.doc = store.doc; this.prims = []; this.inv = []; this.touched = new Set(); this.after = []; }
+	constructor(store) { this.store = store; this.doc = store.doc; this.ctx = store.ctx; this.prims = []; this.inv = []; this.touched = new Set(); this.after = []; }
 	_apply(prim) {
 		const inv = applyPrim(this.doc, prim);
 		this.prims.push(clone(prim)); this.inv.push(inv);
@@ -51,6 +51,7 @@ export class DocumentStore {
 		this.listeners = new Set();
 		this.revision = 0;
 		this.hooks = []; // (tx, touched) => void, run inside every transaction before commit
+		this.ctx = null; // geometry context for commands that resolve points (set by the app)
 	}
 	onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
 	_emit(touched, why) {
@@ -76,7 +77,7 @@ export class DocumentStore {
 			tx.rollback();
 			throw e;
 		}
-		if (!tx.prims.length) return result;
+		if (!tx.prims.length) { if (opts.settle) this._emit(tx.touched, 'exec'); return result; }
 		const first = Array.isArray(cmd) ? cmd[0] : cmd;
 		const label = opts.label ?? (Array.isArray(cmd) && cmd.length > 1 ? `${COMMANDS.get(first.op)?.label ?? first.op} (+${cmd.length - 1})` : COMMANDS.get(first.op)?.label ?? first.op);
 		const gesture = first.gesture;
@@ -85,7 +86,7 @@ export class DocumentStore {
 		else this.undoStack.push({ label, cmd: clone(cmd), prims: tx.prims, inv: tx.inv, touched: [...tx.touched], gesture, time: Date.now() });
 		if (this.undoStack.length > 500) this.undoStack.shift();
 		this.redoStack.length = 0;
-		this._emit(tx.touched, 'exec');
+		this._emit(tx.touched, gesture && !opts.settle ? 'gesture' : 'exec');
 		for (const fn of tx.after) fn();
 		return result;
 	}

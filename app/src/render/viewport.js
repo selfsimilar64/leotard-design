@@ -61,6 +61,7 @@ export class Viewport {
 
 		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: true, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1 };
 		this.onFrame = new Set();
+		this.onResize = new Set();
 		this.stats = { fps: 0, cpuMs: 0, triangles: 0, width: 0, height: 0 };
 		this.timer = new THREE.Timer();
 		this.keyDir = new THREE.Vector3();
@@ -73,6 +74,7 @@ export class Viewport {
 
 	resize() {
 		const w = Math.max(this.container.clientWidth, 1), h = Math.max(this.container.clientHeight, 1);
+		if (w < 8 || h < 8) return; // pane hidden: keep the last size
 		const pr = Math.min(window.devicePixelRatio, 2) * this.settings.renderScale;
 		this.camera.aspect = w / h;
 		this.camera.updateProjectionMatrix();
@@ -81,6 +83,7 @@ export class Viewport {
 		this.composer.setPixelRatio(pr);
 		this.composer.setSize(w, h);
 		this.bloom.setSize(w * pr / 2, h * pr / 2); // glow is blurry by nature: half resolution is invisible and 4x cheaper
+		for (const fn of this.onResize ?? []) fn(w, h);
 	}
 
 	applyScene(s) {
@@ -128,10 +131,17 @@ export class Viewport {
 		return (performance.now() - t) / n;
 	}
 
-	// The current view as a PNG blob (rendered fresh, so it does not need preserveDrawingBuffer).
-	capture() {
+	// The current view as a PNG blob at a fixed size (independent of the pane, which may be hidden),
+	// rendered fresh so it does not need preserveDrawingBuffer.
+	capture(width = 1600, height = 1200) {
+		const r = this.renderer, cam = this.camera, aspect = cam.aspect;
+		r.setPixelRatio(1); r.setSize(width, height, false);
+		this.composer.setPixelRatio(1); this.composer.setSize(width, height);
+		this.bloom.setSize(width / 2, height / 2);
+		cam.aspect = width / height; cam.updateProjectionMatrix();
+		for (const fn of this.onResize) fn(width, height);
 		this.render();
-		return new Promise((resolve) => this.renderer.domElement.toBlob(resolve, 'image/png'));
+		return new Promise((resolve) => r.domElement.toBlob((b) => { cam.aspect = aspect; this.resize(); resolve(b); }, 'image/png'));
 	}
 
 	setCamera({ position, target, fov }) {

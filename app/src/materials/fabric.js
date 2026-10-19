@@ -22,6 +22,8 @@ attribute float aKeep;
 attribute vec2 aForm;
 attribute vec2 aRim;
 varying vec2 vRim;
+attribute vec2 aUV;
+varying vec2 vUV;
 uniform float uOffset;
 uniform float uGarment;
 varying vec3 vObjPos;
@@ -45,6 +47,7 @@ vRef = aRef;
 vKeep = aKeep;
 vForm = aForm;
 vRim = aRim;
+vUV = aUV;
 `;
 
 const BEGIN_NORMAL = /* glsl */`
@@ -65,7 +68,10 @@ varying float vCover;
 varying vec2 vZone;
 varying float vAO;
 
-uniform int uZone;
+uniform int uZone;         // 0-2 POC zones, 3 skin, 4 finished edge, 5 panel (exact geometry, cloth-space UVs)
+varying vec2 vUV;          // cloth-space coordinates of a panel, metres (garment/flatten.js)
+uniform float uUV;         // 1 = pattern space is vUV rotated by uGrain, 0 = tri-planar object space
+uniform float uGrain;      // grain angle on the panel, radians
 uniform float uSleeveSplit;
 uniform float uTrimInset;  // metres the fabric's cut is pulled back under the finished edge (hides the jagged cut)
 uniform float uTrimWidth;  // finished edge width, for the contact shadow it casts on the fabric beside it
@@ -168,6 +174,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 	// not visible. fp is the size of one pixel on the surface, in metres.
 	vec3 an = abs( normalize( vObjNormal ) );
 	vec2 q = ( an.z >= an.x && an.z >= an.y ) ? vObjPos.xy : ( an.x >= an.y ? vObjPos.zy : vObjPos.xz );
+	if ( uUV > .5 ) { float cg = cos( uGrain ), sg = sin( uGrain ); q = mat2( cg, sg, - sg, cg ) * vUV; }
 	float fp = length( fwidth( vObjPos ) );
 	vec3 viewDir = normalize( vViewPosition );
 
@@ -298,9 +305,10 @@ reflectedLight.directDiffuse *= mix( 1., aoT, .35 );
 `;
 
 export function createFabricMaterial(zone) {
+	const panel = zone === 5;
 	const u = {
-		uZone: { value: zone }, uSleeveSplit: { value: 0 }, uOffset: { value: zone >= 3 ? 0 : 0.0012 + zone * 0.00015 },
-		uGarment: { value: zone >= 3 ? 0 : 1 }, uClip: { value: 0 }, uTape: { value: 0 },
+		uZone: { value: zone }, uSleeveSplit: { value: 0 }, uOffset: { value: panel ? 0.0012 : zone >= 3 ? 0 : 0.0012 + zone * 0.00015 },
+		uGarment: { value: panel || zone < 3 ? 1 : 0 }, uClip: { value: 0 }, uTape: { value: 0 }, uUV: { value: panel ? 1 : 0 }, uGrain: { value: 0 },
 		uTrimInset: { value: 0 }, uTrimWidth: { value: 0 }, uRows: { value: new THREE.Vector2() }, uThread: { value: new THREE.Color() },
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
