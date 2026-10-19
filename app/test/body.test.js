@@ -33,6 +33,8 @@ describe('blocks on the body', () => {
 			const g = buildGarment(docFor({ [k]: v }), B.surf);
 			expect(g.arr.warn, `${k}=${v}`).toEqual([]);
 			expect(g.seeds.every((s) => s.cell >= 0), `${k}=${v}`).toBe(true);
+			// the front and back seeds sit in the body panels, not in an opening
+			for (const s of g.seeds.slice(0, 2)) expect(g.arr.cells[s.cell].area, `${k}=${v} ${s.panel}`).toBeGreaterThan(0.08);
 		}
 	});
 });

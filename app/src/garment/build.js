@@ -14,10 +14,11 @@ const SLIVER = 0.0003; // m2 (3 cm2)
 
 // -> Map(key -> evaluated) where key is the curve id, or id + '~m' for its mirror image.
 // Curves attached to other curves are evaluated after them (and re-evaluated when they change).
-export function evaluateAll(doc, surf, layer = 'L0', cache = null) {
+// layer null: every layer's curves (lines may attach to lines on other layers).
+export function evaluateAll(doc, surf, layer = null, cache = null) {
 	const out = new Map();
 	const mfn = (sp) => mirrorSP(sp, surf);
-	const curves = doc.curves.filter((c) => (c.layer ?? 'L0') === layer);
+	const curves = doc.curves.filter((c) => layer === null || (c.layer ?? 'L0') === layer);
 	const byId = new Map(curves.map((c) => [c.id, c]));
 	const deps = (c) => c.points.filter((p) => p.on && byId.has(p.on.curve) && p.on.curve !== c.id).map((p) => p.on.curve);
 	// depth-first topological order; a dependency cycle just drops the attachment
@@ -87,14 +88,16 @@ function snapEnds(list, surf) {
 
 // prev: an earlier build; when the curves are unchanged its evaluation and arrangement are reused
 // and only the panel seeds are re-located.
-export function buildGarment(doc, surf, { prev = null } = {}) {
+// layer: which layer's lines cut this garment; evaluated: a shared evaluation of all curves.
+export function buildGarment(doc, surf, { prev = null, layer = 'L0', evaluated: shared = null } = {}) {
 	const t0 = performance.now();
 	const curveSig = JSON.stringify(doc.curves);
 	let evaluated, arr, tEval = t0;
-	if (prev && prev.curveSig === curveSig) ({ evaluated, arr } = prev);
+	if (prev && prev.curveSig === curveSig && prev.layer === layer) ({ evaluated, arr } = prev);
 	else {
-		evaluated = evaluateAll(doc, surf, 'L0', prev?.evaluated);
-		const cutting = [...evaluated.entries()].filter(([, e]) => CUTTING.has(e.role) && e.sps.length > 1);
+		evaluated = shared ?? evaluateAll(doc, surf, null, prev?.evaluated);
+		const ofLayer = new Set(doc.curves.filter((c) => (c.layer ?? 'L0') === layer).map((c) => c.id));
+		const cutting = [...evaluated.entries()].filter(([, e]) => ofLayer.has(e.curve) && CUTTING.has(e.role) && e.sps.length > 1);
 		// snapping edits the polylines: work on copies so cached evaluations stay pristine
 		const list = cutting.map(([key, e]) => ({ key, id: key, sps: e.sps.slice(), pts: e.pts.slice(), closed: e.closed }));
 		snapEnds(list, surf);
@@ -105,7 +108,7 @@ export function buildGarment(doc, surf, { prev = null } = {}) {
 	const cellPanel = new Int32Array(arr.cells.length).fill(-1);
 	const seeds = [], panelIds = doc.panels.map((p) => p.id);
 	doc.panels.forEach((p, pi) => {
-		if ((p.layer ?? 'L0') !== 'L0') return;
+		if ((p.layer ?? 'L0') !== layer) return;
 		const sps = [fromSP(p.seed)];
 		if (p.mirror === 'both') sps.push(mirrorSP(sps[0], surf));
 		for (const sp of sps) {
@@ -124,7 +127,7 @@ export function buildGarment(doc, surf, { prev = null } = {}) {
 		if (best >= 0) cellPanel[c] = cellPanel[best];
 	}
 	return {
-		evaluated, arr, cellPanel, seeds, curveSig, panelIds,
+		evaluated, arr, cellPanel, seeds, curveSig, panelIds, layer,
 		ms: { eval: tEval - t0, arrangement: prev?.arr === arr ? 0 : arr.ms, total: performance.now() - t0 },
 	};
 }

@@ -5,12 +5,14 @@ import { createFabricMaterial } from '../materials/fabric.js';
 import { fullBodyStand, dressFormStand } from './stand.js';
 import { MANNEQUIN_FINISHES } from './presets.js';
 import { LegacyGarment } from '../garment/legacy.js';
-import { GarmentView } from './garment.js';
+import { GarmentView, sameSign } from './garment.js';
 import { buildGarment, evaluateAll, panelAt } from '../garment/build.js';
 import { Surface } from '../body/surface.js';
 import { Overlay } from './overlay.js';
 import { Rims } from './rims.js';
 import { TextureLibrary } from '../materials/textures.js';
+import { StrapView } from './straps.js';
+import { HardwareView } from './hardware.js';
 
 export class Engine {
 	// ref: the reference garment surface (body/reference.js), where curves live
@@ -26,17 +28,23 @@ export class Engine {
 		this.capMaterial = new THREE.MeshPhysicalMaterial();
 		this.stand = null;
 		this.legacy = new LegacyGarment(scene, body);
-		this.garment = new GarmentView(scene, body);
 		this.textures = new TextureLibrary(viewport.renderer);
-		this.garment.textures = this.textures;
+		this.layers = new Map(); // layer id -> { layer, g, view: GarmentView, rims: Rims }
+		this.straps = new StrapView(scene, body, this.textures);
+		this.hardware = new HardwareView(scene, body, this.surf);
+		this.coverHooks = [(cover) => this.straps.markCover(cover)];
 		this.overlay = new Overlay(scene, body);
-		this.rims = new Rims(scene, body);
 		this.ui = { selected: null, hover: null, showPoints: false }; // overlay state from the UI
 		this.timing = { mannequin: 0, garment: null };
 		this.bodyKey = null;
-		this.g = null;
+		this.g = null;          // the shell layer's build (tools and picking use it)
+		this.evaluated = null;  // every layer's evaluated curves
 		this.geoSig = null;
-		viewport.onFrame.add(() => { this.legacy.frame(viewport.keyDir); this.garment.frame(viewport.keyDir); this.rims.frame(viewport.keyDir); });
+		viewport.onFrame.add(() => {
+			this.legacy.frame(viewport.keyDir);
+			for (const L of this.layers.values()) { L.view.frame(viewport.keyDir); L.rims.frame(viewport.keyDir); }
+			this.straps.frame(viewport.keyDir);
+		});
 		// picking surface: the garment surface of the body on show (same canonical faces as everywhere)
 		this.pick = null;
 		body.onGarment = [() => { if (this.pick) this.pick.update(body.garmentPos); else this.pick = new Surface(body.idx, body.garmentPos); }];
@@ -52,7 +60,14 @@ export class Engine {
 		this.raycaster.setFromCamera(ndc, vp.camera);
 		const hit = this.pick.raycast(this.raycaster.ray);
 		const out = { x, y, sp: hit ? { f: hit.f, b0: hit.b0, b1: hit.b1, b2: hit.b2 } : null, point: hit?.point ?? null, distance: hit?.distance ?? Infinity };
-		if (out.sp && this.g && this.app) out.panel = panelAt(this.g, this.app.doc, this.surf, out.sp);
+		if (out.sp && this.app) {
+			// the outermost layer with a (not cut out) panel here
+			for (const L of [...this.layers.values()].sort((a, b) => (b.layer.z ?? 0) - (a.layer.z ?? 0))) {
+				const id = panelAt(L.g, this.app.doc, this.surf, out.sp);
+				if (id && !this.app.doc.panels.find((p) => p.id === id)?.removed) { out.panel = id; out.layer = L.layer.id; break; }
+				if (id && !out.panel) { out.panel = id; out.layer = L.layer.id; }
+			}
+		}
 		return out;
 	}
 
@@ -66,10 +81,10 @@ export class Engine {
 
 	// Nearest curve (by screen distance) within `px` pixels of (x, y), not hidden behind the body.
 	curveAt(x, y, px = 7) {
-		if (!this.g) return null;
+		if (!this.evaluated) return null;
 		const surfHit = this.pickAt(x, y);
 		let best = null, bd = px;
-		for (const [key, e] of this.g.evaluated) {
+		for (const [key, e] of this.evaluated) {
 			for (let i = 0; i < e.sps.length; i += 2) {
 				const s = this.toScreen(e.sps[i]);
 				if (s.behind) continue;
@@ -82,7 +97,10 @@ export class Engine {
 
 	stoneCount() { return this.legacy.visible === false ? 0 : this.legacy.stones.count; }
 
-	get fabricMaterials() { return [this.skin, ...this.legacy.materials, ...this.garment.materials.values()]; }
+	get fabricMaterials() { return [this.skin, ...this.legacy.materials, ...[...this.layers.values()].flatMap((L) => [...L.view.materials.values()])]; }
+	get garment() { return this.layers.get('L0')?.view ?? null; }
+	get views() { return [...this.layers.values()].map((L) => L.view); }
+	whenFlat() { return Promise.all(this.views.map((v) => v.whenFlat())); }
 
 	sync(doc, touched, why) {
 		const all = why === 'load' || !this.synced;
@@ -93,7 +111,9 @@ export class Engine {
 			// switching garment model: the other model's cover field must be rebuilt
 			this.legacyMode = legacy;
 			this.legacy.state = null; this.body.styleKey = null; this.geoSig = null;
-			this.legacy.setVisible(legacy); this.garment.setVisible(!legacy); this.rims.setVisible(!legacy);
+			this.legacy.setVisible(legacy);
+			for (const L of this.layers.values()) { L.view.setVisible(!legacy); L.rims.setVisible(!legacy); }
+			this.straps.setVisible(!legacy); this.hardware.setVisible(!legacy);
 		}
 		if (legacy) {
 			// Style before the first body: the garment surface needs the regions, and setStyle skips the
@@ -103,41 +123,82 @@ export class Engine {
 			if (t('legacy') || !this.legacy.state) this.legacy.apply(doc.legacy);
 		} else if (why === 'gesture' && !all) {
 			// mid-drag: only the dragged lines move; the garment is re-cut when the gesture ends
-			if (touched.has('curves')) this.drawOverlay(doc, evaluateAll(doc, this.surf, 'L0', this.g?.evaluated));
-			if (touched.has('panels')) this.garment.applyMaterials(doc);
+			if (touched.has('curves')) this.drawOverlay(doc, evaluateAll(doc, this.surf, null, this.evaluated));
+			if (touched.has('panels')) for (const v of this.views) v.applyMaterials(doc);
 		} else {
 			if (t('curves') || t('panels') || t('layers') || t('trims') || this.geoSig === null) this.syncGarment(doc);
+			else if (t('straps')) this.syncStraps(doc);
+			if (t('hardware') || t('curves') || t('panels')) this.hardware.build(doc);
 			if (t('body')) this.applyBody(doc.body, all);
 		}
 		if (!legacy && why !== 'gesture') this.drawOverlay(doc);
 		this.synced = true;
 	}
 
-	drawOverlay(doc, evaluated = this.g?.evaluated) {
+	drawOverlay(doc, evaluated = this.evaluated) {
 		this.overlay.setVisible(!doc.legacy);
 		if (evaluated) this.overlay.setCurves(evaluated, doc, this.ui);
 		this.lastEvaluated = evaluated;
 	}
 	setUI(ui) { Object.assign(this.ui, ui); if (this.lastEvaluated && this.app) this.drawOverlay(this.app.doc, this.lastEvaluated); }
 
-	// Rebuild the cut garment when its geometry inputs changed; otherwise only its materials.
+	// Rebuild the cut garment (every layer) when its geometry inputs changed; otherwise only its
+	// materials and edge finishes.
 	syncGarment(doc) {
-		const sig = JSON.stringify([doc.curves, doc.panels.map((p) => [p.id, p.seed, p.removed, p.mirror, p.layer])]);
+		const sig = JSON.stringify([doc.curves, doc.panels.map((p) => [p.id, p.seed, p.removed, p.mirror, p.layer]), doc.layers]);
+		const trimSig = JSON.stringify([doc.trims, doc.panels.map((p) => p.stack?.[0])]);
 		if (sig !== this.geoSig) {
-			const t0 = performance.now();
-			const prev = this.pending?.curveSig === JSON.stringify(doc.curves) ? this.pending : this.g;
-			this.g = buildGarment(doc, this.surf, { prev });
+			const t0 = performance.now(), scene = this.viewport.scene;
+			const curveSig = JSON.stringify(doc.curves);
+			const evaluated = this.pending?.curveSig === curveSig ? this.pending.evaluated : evaluateAll(doc, this.surf, null, this.evaluated);
+			const keep = new Set(doc.layers.map((l) => l.id));
+			for (const [id, L] of this.layers) if (!keep.has(id)) { L.view.dispose(); L.rims.dispose(); scene.remove(L.view.group); scene.remove(L.rims.group); this.layers.delete(id); }
+			for (const layer of doc.layers) {
+				let L = this.layers.get(layer.id);
+				if (!L) {
+					L = { layer, view: new GarmentView(scene, this.body, layer), rims: new Rims(scene, this.body), g: null };
+					L.view.textures = this.textures;
+					this.layers.set(layer.id, L);
+				}
+				L.layer = layer; L.view.layer = layer; L.rims.kind = layer.kind; L.rims.layerId = layer.id;
+				const prev = layer.id === 'L0' && this.pending?.curveSig === curveSig ? this.pending : L.g;
+				L.g = buildGarment(doc, this.surf, { prev, layer: layer.id, evaluated });
+				L.view.setGarment(L.g, doc);
+			}
 			this.pending = null;
-			const t1 = performance.now();
-			this.garment.setGarment(this.g, doc);
-			this.rims.build(this.g, doc, this.garment.garmentCells);
-			this.geoSig = sig;
-			this.trimSig = JSON.stringify([doc.trims, doc.panels.map((p) => p.stack?.[0])]);
-			this.timing.garment = { ...this.g.ms, meshes: performance.now() - t1, total: performance.now() - t0, warn: this.g.arr.warn.length };
+			this.evaluated = evaluated;
+			this.g = this.layers.get('L0')?.g ?? null;
+			this.straps.prepare(doc, evaluated, this.surf);
+			this.updateCover(doc);
+			for (const L of this.layers.values()) L.rims.build(L.g, doc, L.view.garmentCells, this.evaluated, layerLift(L.layer));
+			this.straps.build(doc, this.fabricCover);
+			this.geoSig = sig; this.trimSig = trimSig;
+			this.timing.garment = { ...(this.g?.ms ?? {}), total: performance.now() - t0, warn: this.g?.arr.warn.length ?? 0 };
 		} else {
-			this.garment.applyMaterials(doc);
-			const ts = JSON.stringify([doc.trims, doc.panels.map((p) => p.stack?.[0])]);
-			if (ts !== this.trimSig) { this.trimSig = ts; this.rims.build(this.g, doc, this.garment.garmentCells); }
+			for (const v of this.views) v.applyMaterials(doc);
+			if (trimSig !== this.trimSig) { this.trimSig = trimSig; for (const L of this.layers.values()) L.rims.build(L.g, doc, L.view.garmentCells, this.evaluated, layerLift(L.layer)); }
+			this.syncStraps(doc);
+		}
+	}
+
+	// Straps alone changed (or the garment did): new grids, cover (they bridge hollows like fabric), meshes.
+	syncStraps(doc) {
+		this.straps.prepare(doc, this.evaluated, this.surf);
+		this.updateCover(doc);
+		this.straps.build(doc, this.fabricCover);
+	}
+
+	// The fabric lift solve sees every layer's fabric (and strap footprints, via coverHooks); it
+	// only re-runs when where-fabric-is changes, then every layer re-reads the lifted surface.
+	updateCover(doc) {
+		const V = this.body.vertices, cover = new Float32Array(V).fill(-1);
+		for (const L of this.layers.values()) { const c = L.view.cover; if (c) for (let i = 0; i < V; i++) if (c[i] > 0) cover[i] = 1; }
+		this.fabricCover = Float32Array.from(cover); // fabric only (straps lie on it or on skin)
+		for (const fn of this.coverHooks ?? []) fn(cover, doc);
+		if (!this.cover || !sameSign(this.cover, cover)) {
+			this.cover = cover;
+			this.body.setCover(cover);
+			for (const v of this.views) v.refresh();
 		}
 	}
 
@@ -177,7 +238,10 @@ export class Engine {
 		blob.scale.set(s, s, 1); blob.position.z = torso ? body.crotch.z : 0;
 		this.timing.mannequin = performance.now() - t;
 		if (this.legacyMode) this.legacy.onBodyChanged();
-		else { this.garment.refresh(); if (this.app) { this.drawOverlay(this.app.doc); this.rims.build(this.g, this.app.doc, this.garment.garmentCells); } }
+		else {
+			for (const v of this.views) v.refresh();
+			if (this.app) { this.drawOverlay(this.app.doc); for (const L of this.layers.values()) L.rims.build(L.g, this.app.doc, L.view.garmentCells, this.evaluated, layerLift(L.layer)); this.straps.build(this.app.doc, this.fabricCover); this.hardware.build(this.app.doc); }
+		}
 		if (reframe) this.frameCamera(b.form);
 	}
 
@@ -195,3 +259,6 @@ export class Engine {
 		cam.position.copy(centre).addScaledVector(dir, dist);
 	}
 }
+
+// Extra height of a layer's finishes above the shell's (overlays sit 0.9 mm per step higher).
+function layerLift(layer) { const z = layer?.z ?? 0; return z > 0 ? 0.0009 * z : 0; }

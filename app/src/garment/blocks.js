@@ -56,7 +56,8 @@ function fields(man, opts) {
 		// a high neck is a ring round the neck below the chin (the head's skin weights start
 		// there): lower at the front, open everything above it
 		const fN = opts.neck === 'high' ? mix(1.395, 1.372, front) - y : frontNeck(x, y, opts.neck);
-		const bN = opts.neck === 'high' ? min(mix(1.395, 1.372, front) - y, backNeck(x, y, opts.back)) : backNeck(x, y, opts.back);
+		// with a high neck the back opening (if any) stays its own opening below the neck ring
+		const bN = opts.neck === 'high' ? min(mix(1.395, 1.372, front) - y, opts.back === 'crew' ? 1 : max(backNeck(x, y, opts.back), y - 1.3)) : backNeck(x, y, opts.back);
 		neck[i] = man.wHead[i] > 0.5 ? -1 : min(mix(bN, fN, front), NECK_TOP - y);
 		const yFront = 0.765 + slope * max(ax - 0.03, 0);
 		const yBack = 0.765 + (opts.leg === 'standard' ? 0.15 : 0.195) * Math.pow(min(ax / 0.16, 1.3), 2.3);
@@ -187,8 +188,9 @@ export function makeBlock(man, surf, opts = {}, stack = [{ fabric: 'mystique', c
 		seam('underarm', 'Underarm seam', [armpit, ...pts, cuffIn]);
 	}
 
-	panels.push({ name: 'Front', seed: toSP(man.projectFront(0, 1.04, false)), mirror: 'none', stack: structuredClone(stack) });
-	panels.push({ name: 'Back', seed: toSP(man.projectFront(0, 1.04, true)), mirror: 'none', stack: structuredClone(stack) });
+	// seeds low on the torso, below every neckline and back opening the blocks offer
+	panels.push({ name: 'Front', seed: toSP(man.projectFront(0, 0.95, false)), mirror: 'none', stack: structuredClone(stack) });
+	panels.push({ name: 'Back', seed: toSP(man.projectFront(0, 0.9, true)), mirror: 'none', stack: structuredClone(stack) });
 	if (!tank) {
 		// a point half way down the sleeve, on the outside of the left arm (mirrored for the right)
 		const { SH, EL, L1, L2 } = man.arm, t = (SLEEVE_END[opts.sleeves] * (L1 + L2)) / 2 / L1;

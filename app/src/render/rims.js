@@ -27,15 +27,18 @@ export class Rims {
 		const main = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
 		const t = main && doc.trims.find((x) => x.on?.includes(main));
 		const s = panel?.stack?.[0] ?? { fabric: 'matte', colour: '#888888', second: 'Tone-on-tone' };
+		// overlay pieces (lace, appliqué) and linings are raw-edged unless a finish is set
+		if (!t && this.kind && this.kind !== 'shell') return null;
 		if (!t) return { kind: 'elastic', fabric: s.fabric, colour: s.colour, second: s.second ?? 'Tone-on-tone' };
 		if (t.kind === 'none') return null;
 		const f = t.kind === 'binding' && t.fabric ? t.fabric : s;
 		return { kind: TRIMS[t.kind] ? t.kind : 'elastic', fabric: f.fabric ?? s.fabric, colour: f.colour ?? s.colour, second: f.second ?? 'Tone-on-tone' };
 	}
 
-	build(g, doc, garment) {
+	build(g, doc, garment, evaluated = null, lift = 0) {
 		this.dispose();
 		if (!g || !this.man.garmentPos) return; // the body is not set yet: applyBody rebuilds us
+		this.lift = lift;
 		const man = this.man, arr = g.arr, V = man.vertices, idx = man.idx;
 		const G = man.garmentPos, GN = man.aGNormal.array, R = man.ref, K = man.keep;
 		const at = (A, v, out) => {
@@ -68,9 +71,35 @@ export class Rims {
 			if (!gr) groups.set(key, gr = { fin, loops: [] });
 			gr.loops.push(recs);
 		}
+		// piping: a corded trim along a seam line, on this layer's seams
+		if (evaluated) for (const t of doc.trims.filter((x) => x.kind === 'piping')) {
+			for (const id of t.on) {
+				const c = doc.curves.find((x) => x.id === id);
+				if (!c || (c.layer ?? 'L0') !== (this.layerId ?? 'L0')) continue;
+				for (const key of [id, id + '~m']) {
+					const e = evaluated.get(key);
+					if (!e || e.sps.length < 3) continue;
+					const recs = [], n = e.sps.length, V2 = new THREE.Vector3();
+					const atSp = (A, sp, out) => { out.set(0, 0, 0); const b = [sp.b0, sp.b1, sp.b2]; for (let j = 0; j < 3; j++) { const i = idx[sp.f * 3 + j]; out.x += b[j] * A[i * 3]; out.y += b[j] * A[i * 3 + 1]; out.z += b[j] * A[i * 3 + 2]; } return out; };
+					for (let i = 0; i < n; i++) {
+						const sp = e.sps[i], p = atSp(G, sp, new THREE.Vector3()), nn = atSp(GN, sp, new THREE.Vector3()).normalize();
+						const tt = atSp(G, e.sps[Math.min(i + 1, n - 1)], V2.clone()).sub(atSp(G, e.sps[Math.max(i - 1, 0)], new THREE.Vector3()));
+						const inside = new THREE.Vector3().crossVectors(nn, tt).normalize();
+						recs.push({ p, n: nn, inside, kappa: 0, ref: atSp(R, sp, new THREE.Vector3()), keep: 1, sleeve: 0 });
+					}
+					const fin = { kind: 'piping', fabric: t.fabric?.fabric ?? 'satin', colour: t.fabric?.colour ?? '#ffffff', second: t.fabric?.second ?? 'Tone-on-tone' };
+					const key2 = JSON.stringify(fin);
+					let gr = groups.get(key2);
+					if (!gr) groups.set(key2, gr = { fin, loops: [] });
+					recs.open = !e.closed;
+					gr.loops.push(recs);
+				}
+			}
+		}
 		for (const { fin, loops } of groups.values()) {
 			const T = TRIMS[fin.kind], prof = T.profile, built = [];
 			for (const raw of loops) {
+				if (raw.open) { built.push(openRun(raw)); continue; }
 				const { pts, length } = resample(raw);
 				const n = pts.length;
 				const P = pts.map((p) => p.p), Nn = pts.map((p) => p.n), In = pts.map((p) => p.inside), Kp = pts.map((p) => p.kappa);
@@ -85,6 +114,7 @@ export class Rims {
 				}
 				built.push({ frames, scale, pts, length });
 			}
+			for (const b of built) if (this.lift) for (const f of b.frames) f.p.addScaledVector(f.n, this.lift);
 			const mat = this.material(fin);
 			const mesh = new THREE.Mesh(buildGeometry(built, prof), mat);
 			mesh.renderOrder = -4; // outermost layer: drawn first, so the fabric under it fails the depth test
@@ -110,4 +140,18 @@ export class Rims {
 
 	setVisible(v) { this.group.visible = v; }
 	frame(keyDir) { for (const m of this.materials.values()) m.userData.u.uHoloDirW.value.copy(keyDir); }
+}
+
+// An open run (piping along a seam that ends on other lines): frames without wrapping round.
+function openRun(recs) {
+	const n = recs.length, frames = [], scale = [];
+	let length = 0;
+	for (let i = 0; i < n; i++) {
+		const r = recs[i], t = recs[Math.min(i + 1, n - 1)].p.clone().sub(recs[Math.max(i - 1, 0)].p).normalize();
+		const d = new THREE.Vector3().crossVectors(r.n, t).normalize();
+		frames.push({ p: r.p.clone(), n: r.n, d, kap: 0 });
+		scale.push(1);
+		if (i) length += r.p.distanceTo(recs[i - 1].p);
+	}
+	return { frames, scale, pts: recs, length, open: true };
 }

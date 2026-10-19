@@ -12,7 +12,7 @@ export function FlatView() {
 	useEffect(() => {
 		if (!show || !app.engine) return;
 		let live = true;
-		app.engine.garment.whenFlat().then(() => { if (live) setData(layoutPieces(patternPieces(app.engine.garment, app.doc).pieces)); });
+		app.engine.whenFlat().then(() => { if (live) setData(layoutPieces(patternPieces(app.engine.views, app.doc).pieces)); });
 		return () => { live = false; };
 	}, [rev.value, show]);
 	if (!show) return null;

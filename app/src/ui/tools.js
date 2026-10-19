@@ -18,7 +18,7 @@ import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
 
 export const toolOptions = signal({
-	penRole: 'seam', penMirror: 'auto',
+	penRole: 'seam', penMirror: 'auto', strapWidth: 0.01,
 	swatch: { fabric: 'mystique', colour: '#2b1d6e', second: 'Tone-on-tone' },
 });
 
@@ -34,7 +34,7 @@ export class ToolController {
 		el.addEventListener('pointerdown', (e) => this.down(e));
 		el.addEventListener('pointermove', (e) => this.move(e));
 		el.addEventListener('pointerup', (e) => this.up(e));
-		el.addEventListener('dblclick', (e) => { if (tool.value === 'pen') { e.preventDefault(); this.finishPen(); } });
+		el.addEventListener('dblclick', (e) => { if (tool.value === 'pen' || tool.value === 'strap') { e.preventDefault(); this.finishPen(); } });
 		el.addEventListener('contextmenu', (e) => e.preventDefault());
 		window.addEventListener('keydown', (e) => this.key(e));
 		tool.subscribe((t) => this.onTool(t));
@@ -46,14 +46,14 @@ export class ToolController {
 		c.mouseButtons = t === 'orbit'
 			? { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
 			: { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
-		if (t !== 'pen') this.cancelPen();
-		this.el.style.cursor = t === 'orbit' ? 'grab' : t === 'pen' ? 'crosshair' : 'default';
+		if (t !== 'pen' && t !== 'strap') this.cancelPen();
+		this.el.style.cursor = t === 'orbit' ? 'grab' : t === 'pen' || t === 'strap' ? 'crosshair' : 'default';
 		this.refreshOverlay();
 	}
 
 	refreshOverlay() {
 		const sel = selection.value;
-		this.engine.setUI({ selected: sel?.kind === 'curves' ? sel.id : null, showPoints: tool.value === 'select' || tool.value === 'pen' });
+		this.engine.setUI({ selected: sel?.kind === 'curves' ? sel.id : null, showPoints: ['select', 'pen', 'strap', 'trim'].includes(tool.value) });
 	}
 
 	xy(e) { const r = this.el.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
@@ -81,6 +81,12 @@ export class ToolController {
 		if (e.button !== 0 || e.altKey && tool.value !== 'select') return;
 		const t = tool.value, [x, y] = this.xy(e);
 		if (t === 'orbit') return;
+		if (t === 'trim') {
+			// edges tool: pick a line (an edge or a seam) to give it a finish in the inspector
+			const c = this.engine.curveAt(x, y, 9);
+			selection.value = c ? { kind: 'curves', id: c.curve } : null;
+			return;
+		}
 		if (t === 'select') {
 			const p = this.pointAt(x, y);
 			if (p) {
@@ -96,7 +102,7 @@ export class ToolController {
 			selection.value = h?.panel ? { kind: 'panels', id: h.panel } : null;
 			return;
 		}
-		if (t === 'pen') { this.penClick(x, y, e.shiftKey); return; }
+		if (t === 'pen' || t === 'strap') { this.penClick(x, y, e.shiftKey); return; }
 		if (t === 'fabric' || t === 'cut') {
 			const h = this.engine.pickAt(x, y);
 			if (!h?.sp) return;
@@ -125,7 +131,7 @@ export class ToolController {
 			this.run({ op: 'curve.movePoint', id: this.drag.curve, i: this.drag.i, to: { sp: toSP(sp) }, gesture: this.drag.gesture });
 			return;
 		}
-		if (tool.value === 'pen' && this.pen) {
+		if ((tool.value === 'pen' || tool.value === 'strap') && this.pen) {
 			const h = this.engine.pickAt(x, y);
 			if (h?.sp) this.previewPen(h.sp);
 		}
@@ -138,7 +144,7 @@ export class ToolController {
 	key(e) {
 		if (e.target.closest?.('input, select, textarea')) return;
 		const k = e.key;
-		if (tool.value === 'pen') {
+		if (tool.value === 'pen' || tool.value === 'strap') {
 			if (k === 'Enter') { this.finishPen(); e.preventDefault(); }
 			else if (k === 'Escape') this.cancelPen();
 			else if (k === 'Backspace' && this.pen?.points.length) { this.pen.points.pop(); this.previewPen(null); e.preventDefault(); }
@@ -204,6 +210,13 @@ export class ToolController {
 		// a line that crosses the centre front/back is drawn whole; one off to a side is mirrored
 		const crosses = pen.points.some((p) => Math.abs(this.engine.surf.pos(p.sp).x) < 0.006);
 		const mirror = opt.penMirror === 'auto' ? (crosses ? 'none' : 'both') : opt.penMirror;
+		if (tool.value === 'strap') {
+			const sw = opt.swatch;
+			const sid = this.run({ op: 'strap.add', width: opt.strapWidth, mirror, fabric: sw.fabric, colour: sw.colour, second: sw.second,
+				points: pen.points.map((p) => (p.on ? { at: { sp: toSP(p.sp) }, kind: p.kind, on: p.on } : { at: { sp: toSP(p.sp) }, kind: p.kind })) });
+			if (sid) notify('Strap added');
+			return;
+		}
 		const id = this.run({
 			op: 'curve.add', role: opt.penRole, closed, mirror,
 			points: pen.points.map((p) => (p.on ? { at: { sp: toSP(p.sp) }, kind: p.kind, on: p.on } : { at: { sp: toSP(p.sp) }, kind: p.kind })),

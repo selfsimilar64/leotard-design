@@ -15,7 +15,7 @@ import './doc/commands-core.js';
 import './doc/commands-garment.js';
 import { defineCommand } from './doc/store.js';
 import { legacyFromLook } from './garment/legacy.js';
-import { buildGarment, inheritPanels } from './garment/build.js';
+import { buildGarment, inheritPanels, evaluateAll } from './garment/build.js';
 import { showCells } from './render/debug.js';
 import { patternPieces } from './garment/pattern.js';
 import { patternPDF } from './export/pdf.js';
@@ -53,7 +53,7 @@ export class App {
 	attach(engine) {
 		this.engine = engine;
 		engine.app = this;
-		this.store.ctx = { man: engine.body, surf: engine.surf, garment: () => engine.g, get evaluated() { return engine.g?.evaluated; } };
+		this.store.ctx = { man: engine.body, surf: engine.surf, garment: (layer = 'L0') => engine.layers.get(layer)?.g ?? engine.g, get evaluated() { return engine.evaluated; } };
 		this.store.hooks.push((tx, touched) => this.inheritHook(tx, touched));
 		engine.viewport.onResize.add((w, h) => engine.overlay.setResolution(w, h));
 		engine.overlay.setResolution(engine.viewport.container.clientWidth, engine.viewport.container.clientHeight);
@@ -66,11 +66,15 @@ export class App {
 	inheritHook(tx, touched) {
 		const e = this.engine;
 		if (!e || !touched.has('curves') || tx.doc.legacy || this._inGesture) return;
-		const prev = e.g;
-		const g = buildGarment(tx.doc, e.surf, { prev });
-		const add = inheritPanels(g, prev, tx.doc, e.surf);
-		for (const p of add) tx.insert('panels', { id: tx.newId('p'), layer: 'L0', name: p.name ?? '', seed: p.seed, mirror: p.mirror, stack: p.stack });
-		e.pending = g; // same curves: the engine re-locates the seeds on this arrangement
+		const evaluated = evaluateAll(tx.doc, e.surf, null, e.evaluated);
+		for (const layer of tx.doc.layers) {
+			const prev = e.layers.get(layer.id)?.g;
+			if (!prev) continue;
+			const g = buildGarment(tx.doc, e.surf, { prev, layer: layer.id, evaluated });
+			const add = inheritPanels(g, prev, tx.doc, e.surf);
+			for (const p of add) tx.insert('panels', { id: tx.newId('p'), layer: layer.id, name: p.name ?? '', seed: p.seed, mirror: p.mirror, stack: p.stack });
+			if (layer.id === 'L0') e.pending = g; // same curves: the engine re-locates the seeds on this arrangement
+		}
 	}
 
 	get doc() { return this.store.doc; }
@@ -143,8 +147,8 @@ export class App {
 
 	// Pattern pieces of the current garment (mm), once every piece is flattened.
 	async pattern(opts) {
-		await this.engine.garment.whenFlat();
-		return patternPieces(this.engine.garment, this.doc, opts);
+		await this.engine.whenFlat();
+		return patternPieces(this.engine.views, this.doc, opts);
 	}
 	// Printable full-scale PDF of the pattern: exports/<name>.pdf (dev server) or a download.
 	async exportPattern(name = (this.doc.meta.name || 'design') + ' pattern') {

@@ -8,11 +8,12 @@ import { createFabricMaterial, applyFabric, applyTexture } from '../materials/fa
 import { cellPiece, cellSignature } from '../garment/pieces.js';
 import { Flattener } from '../garment/flattener.js';
 
-function sameSign(a, b) { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if ((a[i] > 0) !== (b[i] > 0)) return false; return true; }
+export function sameSign(a, b) { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if ((a[i] > 0) !== (b[i] > 0)) return false; return true; }
 
 export class GarmentView {
-	constructor(scene, man) {
-		this.scene = scene; this.man = man;
+	// layer: { id, kind, z } from the document (z orders layers: shell 0, overlays above, linings below)
+	constructor(scene, man, layer = { id: 'L0', kind: 'shell', z: 0 }) {
+		this.scene = scene; this.man = man; this.layer = layer;
 		this.group = new THREE.Group();
 		scene.add(this.group);
 		this.cells = [];          // { cell, panelId, mesh, hosts: { i: Uint32Array(n*3), w: Float32Array(n*3) } }
@@ -44,8 +45,7 @@ export class GarmentView {
 		const man = this.man, arr = g.arr, V = man.vertices, idx = man.idx;
 		const { cover, garment } = this.coverFor(g, doc);
 		this.garmentCells = garment;
-		// the lift only depends on where fabric is: moving a seam inside the garment keeps it
-		if (!this.cover || !sameSign(this.cover, cover)) { man.setCover(cover); this.cover = cover; }
+		this.cover = cover; // the engine merges every layer's cover into the lift solve
 		const gen = this.gen = (this.gen ?? 0) + 1;
 		for (let c = 0; c < arr.cells.length; c++) {
 			if (!garment[c]) continue;
@@ -61,11 +61,11 @@ export class GarmentView {
 			}
 			const geo = new THREE.BufferGeometry();
 			const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
-			A('position', 3); A('normal', 3); A('aLift', 1); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2);
+			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 1); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2);
 			geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
 			geo.setIndex(new THREE.BufferAttribute(piece.I, 1));
 			const mesh = new THREE.Mesh(geo, this.material(panel.id));
-			mesh.renderOrder = -1;
+			mesh.renderOrder = -1 - Math.max(this.layer.z ?? 0, 0); // outer layers first: what they hide fails the depth test
 			mesh.frustumCulled = false;
 			mesh.userData = { cell: c, panel: panel.id };
 			this.group.add(mesh);
@@ -98,7 +98,13 @@ export class GarmentView {
 
 	material(id) {
 		let m = this.materials.get(id);
-		if (!m) { m = createFabricMaterial(5); this.materials.set(id, m); }
+		if (!m) {
+			m = createFabricMaterial(5);
+			// overlays sit 0.9 mm per step above the shell, linings 0.5 mm below it
+			const z = this.layer.z ?? 0;
+			m.userData.u.uOffset.value = z >= 0 ? 0.0012 + 0.0009 * z : 0.0007;
+			this.materials.set(id, m);
+		}
 		return m;
 	}
 
@@ -142,6 +148,10 @@ export class GarmentView {
 		const A = geo.attributes;
 		lerp3(man.aPos.array, A.position, false); lerp3(man.aNrm.array, A.normal, true); lerp3(man.aGNormal.array, A.aGNormal, true);
 		lerp3(man.ref, A.aRef, false); lerp1(man.aLift.array, A.aLift); lerp1(man.aAO.array, A.aAO); lerp1(man.keep, A.aKeep); lerp1(man.form, A.aForm, 2);
+		// tangent round the body (the stretch direction anisotropic shine follows), as the POC's
+		lerp1(man.aTan.array, A.tangent, 4);
+		const T = A.tangent.array;
+		for (let l = 0; l < n; l++) { const x = T[l * 4], y = T[l * 4 + 1], z = T[l * 4 + 2], L = Math.hypot(x, y, z) || 1; T[l * 4] = x / L; T[l * 4 + 1] = y / L; T[l * 4 + 2] = z / L; T[l * 4 + 3] = 1; }
 		geo.computeBoundingSphere();
 	}
 

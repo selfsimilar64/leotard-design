@@ -100,10 +100,10 @@ export function signedArea(poly) { let s = 0; for (let i = 0; i < poly.length; i
 
 // garmentView: render/garment.js GarmentView (cells with piece + uv), doc: the design.
 // -> [{ key, panelId, name, colour, cut: 'Cut 1' | 'Cut 2 (mirror pair)', stitch: [[x, y] mm], cutLine, grain: { at, angle }, size: [w, h] }]
-export function patternPieces(garmentView, doc, opts = {}) {
+export function patternPieces(views, doc, opts = {}) {
 	const o = { ...PATTERN_DEFAULTS, ...(doc.meta.pattern ?? {}), ...opts };
 	const out = [], seenMirror = new Set();
-	for (const c of garmentView.cells) {
+	for (const c of (Array.isArray(views) ? views : [views]).flatMap((v) => v.cells)) {
 		if (!c.hasUV) continue;
 		const panel = doc.panels.find((p) => p.id === c.panelId);
 		if (!panel) continue;

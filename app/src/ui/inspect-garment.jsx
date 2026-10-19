@@ -23,6 +23,7 @@ function CurveInspector({ sel, doc }) {
 				<Row label="Closed loop"><Toggle value={!!c.closed} onChange={(v) => run({ op: 'curve.set', id: c.id, closed: v })} /></Row>
 				<Row label="Points"><span class="dim">{c.points.length} (Alt-click to add, C corner, Del delete)</span></Row>
 			</Section>
+			<FinishSection c={c} doc={doc} />
 			<Section title="Shape">
 				<Row label="Edge shape"><Select value={sh.mod} options={[['none', 'Plain'], ['scallop', 'Scallop'], ['zigzag', 'Zigzag'], ['wave', 'Wave']]} onChange={(v) => run({ op: 'curve.set', id: c.id, shape: { ...sh, mod: v, amp: sh.amp || 0.004, period: sh.period || 0.015 } })} /></Row>
 				{sh.mod !== 'none' ? (
@@ -59,6 +60,45 @@ function PanelInspector({ sel, doc }) {
 	);
 }
 
+// Edge finish of a line: elastic, binding or none on an edge; piping on a seam; bands on edges.
+function FinishSection({ c, doc }) {
+	if (c.role !== 'edge' && c.role !== 'seam') return null;
+	const t = doc.trims.find((x) => x.on.includes(c.id));
+	const kind = t?.kind ?? (c.role === 'edge' ? 'elastic' : 'none');
+	const kinds = c.role === 'edge' ? [['elastic', 'Turned elastic'], ['binding', 'Contrast binding'], ['none', 'Raw / laser cut']] : [['none', 'Plain seam'], ['piping', 'Piping']];
+	const f = t?.fabric ?? { fabric: 'satin', colour: '#ffffff', second: 'Tone-on-tone' };
+	const set = (patch) => run({ op: 'trim.set', on: c.id, kind, fabric: f, ...patch });
+	return (
+		<Section title="Finish">
+			<Row label="Finish"><Select value={kind} options={kinds} onChange={(v) => run({ op: 'trim.set', on: c.id, kind: v, ...(v === 'binding' || v === 'piping' ? { fabric: f } : {}) })} /></Row>
+			{kind === 'binding' || kind === 'piping' ? (
+				<>
+					<Row label="Fabric"><Select value={f.fabric} options={fabricOptions} onChange={(v) => set({ fabric: { ...f, fabric: v } })} /></Row>
+					<Row label="Colour"><Colour value={f.colour} onChange={(v) => set({ fabric: { ...f, colour: v } })} /></Row>
+				</>
+			) : null}
+			{c.role === 'edge' ? <Row label="Band"><button class="btn" onClick={() => run({ op: 'band.add', on: c.id, ...toolOptions.value.swatch })}>Add band on this edge</button></Row> : null}
+		</Section>
+	);
+}
+
+function StrapInspector({ sel, doc }) {
+	const s = doc.straps.find((x) => x.id === sel.id);
+	if (!s) return <div class="section-body dim">Strap {sel.id} no longer exists.</div>;
+	const f = s.fabric ?? {};
+	return (
+		<Section title={`Strap ${s.id}`} actions={<button class="btn" onClick={() => { run({ op: 'strap.remove', id: s.id }); selection.value = null; }}>Delete</button>}>
+			<Row label="Width"><Slider value={s.width} min={0.003} max={0.04} step={0.0005} format={mm} onChange={(v, g) => run({ op: 'strap.set', id: s.id, width: v, gesture: g })} /></Row>
+			<Row label="Fabric"><Select value={f.fabric} options={fabricOptions} onChange={(v) => run({ op: 'strap.set', id: s.id, fabric: v })} /></Row>
+			<Row label="Colour"><Colour value={f.colour ?? '#222222'} onChange={(v, g) => run({ op: 'strap.set', id: s.id, colour: v, gesture: g })} /></Row>
+			<Row label="Foil / second"><Select value={f.second ?? 'Tone-on-tone'} options={SECOND} onChange={(v) => run({ op: 'strap.set', id: s.id, second: v })} /></Row>
+			<Row label="Edges"><Select value={s.edge ?? 'elastic'} options={[['elastic', 'Topstitched'], ['none', 'Plain']]} onChange={(v) => run({ op: 'strap.set', id: s.id, edge: v })} /></Row>
+			<Row label="Stacking"><Slider value={s.layer ?? 0} min={0} max={8} step={1} format={(v) => String(v)} onChange={(v, g) => run({ op: 'strap.set', id: s.id, layer: v, gesture: g })} /></Row>
+		</Section>
+	);
+}
+registerInspector('straps', StrapInspector);
+
 // scanned fabrics available (filled once the texture manifest has loaded)
 let scanList = [];
 const scans = () => { if (!scanList.length && app.engine?.textures) app.engine.textures.list().then((l) => { scanList = l; }); return scanList; };
@@ -74,6 +114,19 @@ export function ToolOptions() {
 			<Row label="Draws"><Select value={o.penRole} options={ROLES} onChange={(v) => set({ penRole: v })} /></Row>
 			<Row label="Mirror"><Select value={o.penMirror} options={[['auto', 'Auto (off at the centre)'], ['both', 'Both sides'], ['none', 'One side']]} onChange={(v) => set({ penMirror: v })} /></Row>
 			<div class="dim">Click on the body to place points (Shift: corner). Click the first point to close, or end on another line. Enter or double-click finishes; Esc cancels.</div>
+		</Section>
+	);
+	if (t === 'strap') return (
+		<Section title="Strap">
+			<div class="dim">Draw the strap's path like a line: click points (Shift: corner), end on an edge; Enter finishes. Mirrored unless it crosses the centre.</div>
+			<Row label="Width"><Slider value={o.strapWidth} min={0.003} max={0.04} step={0.0005} format={mm} onChange={(v) => set({ strapWidth: v })} /></Row>
+			<Row label="Fabric"><Select value={o.swatch.fabric} options={fabricOptions} onChange={(v) => set({ swatch: { ...o.swatch, fabric: v } })} /></Row>
+			<Row label="Colour"><Colour value={o.swatch.colour} onChange={(v) => set({ swatch: { ...o.swatch, colour: v } })} /></Row>
+		</Section>
+	);
+	if (t === 'trim') return (
+		<Section title="Edges">
+			<div class="dim">Click an edge or a seam to choose its finish (elastic, binding, piping) or add a band.</div>
 		</Section>
 	);
 	if (t === 'fabric' || t === 'cut') return (

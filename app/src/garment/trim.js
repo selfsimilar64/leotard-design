@@ -19,6 +19,11 @@ export const TRIMS = {
 		label: 'Turned elastic (self fabric)', width: 0.010, rows: [0.0085, 0.0045],
 		profile: [[0.0006, 0.0002, 0.55], [0, 0.001, 0.75], [0.0005, 0.0019, 0.9], [0.0014, 0.0024, 1], [0.003, 0.0025, 1], [0.0075, 0.0023, 1], [0.0092, 0.0019, 1], [0.01, 0.0014, 0.95], [0.0112, 0.001, 0.9]],
 	},
+	// a corded piping straddling a seam (u runs either side of the seam line)
+	piping: {
+		label: 'Piping (corded, on a seam)', width: 0.0028, rows: [0, 0],
+		profile: [[-0.0016, 0.0001, 0.6], [-0.0013, 0.0009, 0.85], [-0.0007, 0.0016, 1], [0, 0.0019, 1], [0.0007, 0.0016, 1], [0.0013, 0.0009, 0.85], [0.0016, 0.0001, 0.6]],
+	},
 	binding: {
 		label: 'Binding (contrast strip)', width: 0.008, rows: [0.0064, 0],
 		profile: [[0.0005, 0.0002, 0.55], [0, 0.0011, 0.75], [0.0005, 0.0021, 0.9], [0.0015, 0.0027, 1], [0.0065, 0.0027, 1], [0.0077, 0.0021, 1], [0.008, 0.0015, 0.85], [0.0086, 0.001, 0.8]],
@@ -166,9 +171,10 @@ export function buildGeometry(loops, prof) {
 	for (const l of loops) V += l.frames.length * M;
 	const pos = new Float32Array(V * 3), nrm = new Float32Array(V * 3), ref = new Float32Array(V * 3), rim = new Float32Array(V * 2);
 	const keep = new Float32Array(V), ao = new Float32Array(V), cover = new Float32Array(V).fill(1), index = [];
+	const tan = new Float32Array(V * 4); // along the edge: anisotropic fabrics need a tangent frame
 	const v = new THREE.Vector3(), nv = new THREE.Vector3();
 	let base = 0;
-	for (const { frames, scale, pts, length } of loops) {
+	for (const { frames, scale, pts, length, open } of loops) {
 		const n = frames.length;
 		for (let i = 0; i < n; i++) {
 			const { p, n: sn, d, kap } = frames[i], s = scale[i], along = (i / n) * length;
@@ -179,6 +185,8 @@ export function buildGeometry(loops, prof) {
 				nv.copy(d).multiplyScalar(pn[k][0]).addScaledVector(sn, pn[k][1]).normalize().toArray(nrm, o * 3);
 				pts[i].ref.toArray(ref, o * 3);
 				rim[o * 2] = prof[k][0]; rim[o * 2 + 1] = along;
+				const tv = nv.clone().crossVectors(d, sn).normalize();
+				tan[o * 4] = tv.x; tan[o * 4 + 1] = tv.y; tan[o * 4 + 2] = tv.z; tan[o * 4 + 3] = 1;
 				keep[o] = pts[i].keep; ao[o] = prof[k][2];
 			}
 		}
@@ -186,7 +194,7 @@ export function buildGeometry(loops, prof) {
 		// when the loop runs one way; flip the whole loop if it runs the other.
 		const a = new THREE.Vector3().fromArray(pos, (base + 1) * 3), b = new THREE.Vector3().fromArray(pos, (base + 2) * 3), c = new THREE.Vector3().fromArray(pos, (base + M + 1) * 3);
 		const face = b.clone().sub(a).cross(c.clone().sub(a)), flip = face.dot(new THREE.Vector3().fromArray(nrm, (base + 1) * 3)) < 0;
-		for (let i = 0; i < n; i++) for (let k = 0; k < M - 1; k++) {
+		for (let i = 0; i < (open ? n - 1 : n); i++) for (let k = 0; k < M - 1; k++) {
 			const i0 = base + i * M + k, i1 = base + ((i + 1) % n) * M + k;
 			if (flip) index.push(i0, i1, i0 + 1, i0 + 1, i1, i1 + 1);
 			else index.push(i0, i0 + 1, i1, i0 + 1, i1 + 1, i1);
@@ -201,6 +209,7 @@ export function buildGeometry(loops, prof) {
 	g.setAttribute('aKeep', new THREE.BufferAttribute(keep, 1));
 	g.setAttribute('aAO', new THREE.BufferAttribute(ao, 1));
 	g.setAttribute('aCover', new THREE.BufferAttribute(cover, 1));
+	g.setAttribute('tangent', new THREE.BufferAttribute(tan, 4));
 	g.setIndex(index);
 	return g;
 }
