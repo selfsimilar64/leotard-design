@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-19
+* **Update**: [Build status](/engineering/app/build-status.md): P2 (layers, straps, bands, piping, hardware), P6 core (photo tracing with camera solve and warp; B5 back rebuilt) and the stone system (P4-P5 core; 21k stones at 8.4 ms/frame) done.
 * **Creation**: [Designer app](/engineering/app/about.md) section: [build status](/engineering/app/build-status.md) (P0 done, P1 core done), [garment cutting from curves](/engineering/app/garment-cutting.md), [pattern pieces and flattening](/engineering/app/pattern-pieces-and-flattening.md) (cylinder unroll + ARAP with envelope Cholesky; LSCM alone left ~30% stretch), [scripting surface](/engineering/app/scripting-surface.md).
 * **Update**: Owner gave the go-ahead to implement the whole plan; work on branch `build/designer-app`.
 
