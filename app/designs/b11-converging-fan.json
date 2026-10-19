@@ -1,0 +1,1501 @@
+{
+ "format": "leotard-design",
+ "version": 1,
+ "meta": {
+  "name": "B11 converging fan",
+  "author": "",
+  "created": "2026-10-19T07:30:59.575Z",
+  "notes": "",
+  "block": {
+   "neck": "high",
+   "back": "crew",
+   "sleeves": "three-quarter",
+   "leg": "standard",
+   "armhole": "raglan"
+  }
+ },
+ "ids": {
+  "c": 12,
+  "p": 6,
+  "t": 3,
+  "g": 7
+ },
+ "body": {
+  "size": "young",
+  "form": "full",
+  "finish": "Athlete skin, light",
+  "pose": "left-hand-on-hip"
+ },
+ "scene": {
+  "rig": "White seamless (photo studio)",
+  "rotateLights": false,
+  "exposure": 1,
+  "bloom": 0.18,
+  "envRotation": 0,
+  "glare": "plain"
+ },
+ "legacy": null,
+ "layers": [
+  {
+   "id": "L0",
+   "kind": "shell",
+   "z": 0
+  }
+ ],
+ "curves": [
+  {
+   "id": "c1",
+   "layer": "L0",
+   "name": "Neckline",
+   "role": "seam",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 24,
+      "b": [
+       0.053373,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 292,
+      "b": [
+       0,
+       0.186187
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 364,
+      "b": [
+       0.152542,
+       0.847458
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 733,
+      "b": [
+       0,
+       0.458839
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37399,
+      "b": [
+       0.430034,
+       0.569966
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37360,
+      "b": [
+       0,
+       0.519241
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37284,
+      "b": [
+       0,
+       0.226235
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37152,
+      "b": [
+       0,
+       0.408199
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37120,
+      "b": [
+       0,
+       0.573799
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37766,
+      "b": [
+       0,
+       0.689591
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 36975,
+      "b": [
+       0.718005,
+       0.281995
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 531,
+      "b": [
+       0.904713,
+       0.095287
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 587,
+      "b": [
+       0.464127,
+       0.535873
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 175,
+      "b": [
+       0.180948,
+       0.819052
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c2",
+   "layer": "L0",
+   "name": "Leg line",
+   "role": "edge",
+   "closed": true,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 63250,
+      "b": [
+       0.14949,
+       0.85051
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63308,
+      "b": [
+       0,
+       0.406709
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64712,
+      "b": [
+       0,
+       0.36611
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63290,
+      "b": [
+       0,
+       0.667798
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63336,
+      "b": [
+       0,
+       0.748974
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64914,
+      "b": [
+       0,
+       0.784684
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 81932,
+      "b": [
+       0.237648,
+       0.762352
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 79230,
+      "b": [
+       0.468453,
+       0.531547
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 75888,
+      "b": [
+       0,
+       0.549848
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64828,
+      "b": [
+       0,
+       0.697842
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 79140,
+      "b": [
+       0.47618,
+       0.52382
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64115,
+      "b": [
+       0.200437,
+       0.799563
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64121,
+      "b": [
+       0.92703,
+       0.07297
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64066,
+      "b": [
+       0,
+       0.803731
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64406,
+      "b": [
+       0.107038,
+       0.892962
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63646,
+      "b": [
+       0,
+       0.476763
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63656,
+      "b": [
+       0,
+       0.203888
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63603,
+      "b": [
+       0,
+       0.47943
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63595,
+      "b": [
+       0,
+       0.62773
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63832,
+      "b": [
+       0,
+       0.511706
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c3",
+   "layer": "L0",
+   "name": "Cuff",
+   "role": "edge",
+   "closed": true,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 56008,
+      "b": [
+       0.840851,
+       0.159149
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56061,
+      "b": [
+       0.938395,
+       0.061605
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56096,
+      "b": [
+       0,
+       0.270152
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 60248,
+      "b": [
+       0,
+       0.631837
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56024,
+      "b": [
+       0.52951,
+       0.47049
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56102,
+      "b": [
+       0.591318,
+       0.408682
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56052,
+      "b": [
+       0.559971,
+       0.440029
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56035,
+      "b": [
+       0,
+       0.363038
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56012,
+      "b": [
+       0.022134,
+       0.977866
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56112,
+      "b": [
+       0,
+       0.161934
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c4",
+   "layer": "L0",
+   "name": "Raglan seam (front)",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 36869,
+      "b": [
+       0.072975,
+       0.167272
+      ]
+     },
+     "on": {
+      "curve": "c1",
+      "t": 0.5504812942719923
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 40774,
+      "b": [
+       0.76925,
+       0.100455
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 40861,
+      "b": [
+       0.204037,
+       0.367737
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42819,
+      "b": [
+       0.145107,
+       0.512865
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c5",
+   "layer": "L0",
+   "name": "Raglan seam (back)",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 37151,
+      "b": [
+       0.522843,
+       0.335201
+      ]
+     },
+     "on": {
+      "curve": "c1",
+      "t": 0.5131129810084757
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41652,
+      "b": [
+       0.566586,
+       0.135528
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42515,
+      "b": [
+       0.673715,
+       0.097513
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42819,
+      "b": [
+       0.145107,
+       0.512865
+      ]
+     },
+     "on": {
+      "curve": "c4",
+      "t": 1
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c6",
+   "layer": "L0",
+   "name": "Side seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 42819,
+      "b": [
+       0.145107,
+       0.512865
+      ]
+     },
+     "kind": "smooth",
+     "on": {
+      "curve": "c4",
+      "t": 1
+     }
+    },
+    {
+     "sp": {
+      "f": 60845,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61027,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61218,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61395,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61590,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 62528,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63451,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63604,
+      "b": [
+       0.434338,
+       0.464038
+      ]
+     },
+     "on": {
+      "curve": "c2",
+      "t": 0.8591342178131389
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c7",
+   "layer": "L0",
+   "name": "Crotch seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 75888,
+      "b": [
+       0.505783,
+       0.247469
+      ]
+     },
+     "on": {
+      "curve": "c2",
+      "t": 0.3948663926554036
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 29692,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 29701,
+      "b": [
+       0.247469,
+       0.505784
+      ]
+     },
+     "on": {
+      "curve": "c2",
+      "t": 0.3948663926554036,
+      "mirror": true
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c8",
+   "layer": "L0",
+   "name": "Underarm seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 42819,
+      "b": [
+       0.145107,
+       0.512865
+      ]
+     },
+     "kind": "smooth",
+     "on": {
+      "curve": "c4",
+      "t": 1
+     }
+    },
+    {
+     "sp": {
+      "f": 43108,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 43340,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 55174,
+      "b": [
+       1,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 55766,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56119,
+      "b": [
+       0.042171,
+       0.388623
+      ]
+     },
+     "on": {
+      "curve": "c3",
+      "t": 0.4775098674216299
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c9",
+   "layer": "L0",
+   "role": "seam",
+   "name": "Navy V",
+   "closed": false,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 41150,
+      "b": [
+       0.110068,
+       0.563921
+      ]
+     },
+     "kind": "smooth",
+     "on": {
+      "curve": "c4",
+      "t": 0.8871489261946464
+     }
+    },
+    {
+     "sp": {
+      "f": 61838,
+      "b": [
+       0.379404,
+       0.609849
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61849,
+      "b": [
+       0.19429,
+       0.024256
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 62181,
+      "b": [
+       0,
+       0.80329
+      ]
+     },
+     "kind": "corner"
+    },
+    {
+     "sp": {
+      "f": 21734,
+      "b": [
+       0.024266,
+       0.19429
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 21721,
+      "b": [
+       0.609857,
+       0.3794
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 1223,
+      "b": [
+       0.563752,
+       0.110361
+      ]
+     },
+     "kind": "smooth",
+     "on": {
+      "curve": "c4",
+      "t": 0.8808133583674829,
+      "mirror": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "c10",
+   "layer": "L0",
+   "role": "edge",
+   "name": "Neckline band",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 0,
+      "b": [
+       0.330408,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 222,
+      "b": [
+       0.56924,
+       0.276889
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 337,
+      "b": [
+       0.378388,
+       0.57701
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 752,
+      "b": [
+       0.273458,
+       0.631592
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37378,
+      "b": [
+       0.467472,
+       0.084591
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37338,
+      "b": [
+       0.578164,
+       0.123173
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37215,
+      "b": [
+       0,
+       0.287263
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 36847,
+      "b": [
+       0.1188,
+       0.840769
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37100,
+      "b": [
+       0.321066,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 38534,
+      "b": [
+       0.286311,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37630,
+      "b": [
+       0.283804,
+       0.28294
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 39014,
+      "b": [
+       0.225709,
+       0.508107
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 40212,
+      "b": [
+       0.555436,
+       0.402218
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42,
+      "b": [
+       0.663569,
+       0.336431
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c11",
+   "layer": "L0",
+   "role": "guide",
+   "name": "Waist band",
+   "closed": false,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 62529,
+      "b": [
+       0.247541,
+       0.69217
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 62522,
+      "b": [
+       0.546495,
+       0.424545
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 62151,
+      "b": [
+       0,
+       0.229492
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 22421,
+      "b": [
+       0.424542,
+       0.546497
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 22430,
+      "b": [
+       0.692164,
+       0.247539
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  }
+ ],
+ "panels": [
+  {
+   "id": "p1",
+   "layer": "L0",
+   "mirror": "none",
+   "name": "Front",
+   "seed": {
+    "f": 64653,
+    "b": [
+     0.925466,
+     0.074534
+    ]
+   },
+   "stack": [
+    {
+     "fabric": "shiny",
+     "colour": "#1b3f9e",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p2",
+   "layer": "L0",
+   "mirror": "none",
+   "name": "Back",
+   "seed": {
+    "f": 62678,
+    "b": [
+     0.033503,
+     0
+    ]
+   },
+   "stack": [
+    {
+     "fabric": "shiny",
+     "colour": "#1b3f9e",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p3",
+   "layer": "L0",
+   "mirror": "both",
+   "name": "Sleeve",
+   "seed": {
+    "f": 43486,
+    "b": [
+     0.621844,
+     0.378156
+    ]
+   },
+   "stack": [
+    {
+     "fabric": "shiny",
+     "colour": "#141a52",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p4",
+   "layer": "L0",
+   "name": "Navy V",
+   "seed": {
+    "f": 40846,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "shiny",
+     "colour": "#141a52",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p5",
+   "layer": "L0",
+   "name": "Mock neck",
+   "seed": {
+    "f": 193,
+    "b": [
+     0.148158,
+     0.306221
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "shiny",
+     "colour": "#141a52",
+     "second": "Tone-on-tone"
+    }
+   ]
+  }
+ ],
+ "straps": [],
+ "trims": [
+  {
+   "id": "t1",
+   "on": [
+    "c2"
+   ],
+   "kind": "elastic",
+   "fabric": {
+    "fabric": "shiny",
+    "colour": "#1b3f9e",
+    "second": "Tone-on-tone"
+   }
+  },
+  {
+   "id": "t2",
+   "on": [
+    "c3"
+   ],
+   "kind": "elastic",
+   "fabric": {
+    "fabric": "shiny",
+    "colour": "#141a52",
+    "second": "Tone-on-tone"
+   }
+  }
+ ],
+ "bands": [],
+ "decals": [],
+ "details": [],
+ "hardware": [],
+ "stones": [
+  {
+   "id": "g1",
+   "kind": "row",
+   "name": "",
+   "on": {
+    "curve": "c1"
+   },
+   "params": {
+    "size": "ss8",
+    "rows": 2,
+    "offset": 0.006,
+    "gap": 1.2,
+    "rowGap": 0.004
+   },
+   "stone": "Crystal",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 13
+  },
+  {
+   "id": "g2",
+   "kind": "row",
+   "name": "",
+   "on": {
+    "curve": "c9"
+   },
+   "params": {
+    "size": "ss8",
+    "rows": 2,
+    "offset": 0.004,
+    "gap": 1.25,
+    "rowGap": 0.0045,
+    "side": "right"
+   },
+   "stone": "Crystal",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 7932
+  },
+  {
+   "id": "g3",
+   "kind": "rays",
+   "name": "Converging fan",
+   "on": null,
+   "at": {
+    "sp": {
+     "f": 62184,
+     "b": [
+      0.071109,
+      0
+     ]
+    }
+   },
+   "params": {
+    "count": 21,
+    "spread": 1.5,
+    "angle": 1.5707963267948966,
+    "lengths": [
+     0.34
+    ],
+    "sizeFrom": "ss6",
+    "sizeTo": "ss10",
+    "start": 0.025,
+    "gap": 1.6,
+    "centre": false
+   },
+   "stone": "Crystal",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 15851
+  },
+  {
+   "id": "g4",
+   "kind": "row",
+   "name": "",
+   "on": {
+    "curve": "c11"
+   },
+   "params": {
+    "size": "ss8",
+    "rows": 3,
+    "offset": -0.004,
+    "gap": 1.25,
+    "rowGap": 0.0042,
+    "side": "both"
+   },
+   "stone": "Crystal",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 23770
+  },
+  {
+   "id": "g5",
+   "kind": "scatter",
+   "name": "",
+   "on": {
+    "panel": "p1"
+   },
+   "params": {
+    "from": {
+     "curve": "c11"
+    },
+    "near": 0.6,
+    "far": 0,
+    "distance": 0.06,
+    "sizes": [
+     "ss8",
+     "ss6"
+    ],
+    "gap": 1.6
+   },
+   "stone": "Crystal",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 31689
+  },
+  {
+   "id": "g6",
+   "kind": "fill",
+   "name": "",
+   "on": {
+    "panel": "p3"
+   },
+   "params": {
+    "size": "ss8",
+    "pattern": "random",
+    "gap": 6
+   },
+   "stone": "Crystal",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 39608
+  }
+ ],
+ "placed": [],
+ "reference": [],
+ "locks": {}
+}
