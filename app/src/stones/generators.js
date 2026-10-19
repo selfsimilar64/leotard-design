@@ -370,7 +370,7 @@ const GENERATORS = {
 	// fringe: strands of stones hanging from a line (a waistband fringe, crystal rain): one strand
 	// every `spacing` metres along the line, `lengths` cycled (or random between min and max),
 	// sizes graded from `sizeFrom` at the line to `sizeTo` at the tip; `direction` 'down' (straight
-	// down the body) or 'away' (square off the line, on `side`)
+	// down the body) or 'away' (square off the line, on `side`); `jitter` (m) lets strands wander
 	fringe(gen, ctx, rand) {
 		const P = gen.params ?? {}, pick = picker(gen, rand), out = [];
 		const id = gen.on?.curve;
@@ -386,7 +386,16 @@ const GENERATORS = {
 				const away = (p, n) => n.clone().cross(s0.tangent).multiplyScalar(si ? -side : side);
 				const path = march(ctx, s0.sp, P.direction === 'away' ? away : () => down, L);
 				const sizeAt = (u) => lerpSize(from, to, u);
-				for (const q of alongPath(path, sizeAt, P.gap ?? 1.3, ctx.surf)) out.push({ sp: q.sp, size: sizeAt(q.u), stone: ramp(gen.colourRamp, q.u) ?? pick(), angle: angleAt(ctx, q.sp, q.tangent), lift: 0 });
+				for (const q of alongPath(path, sizeAt, P.gap ?? 1.3, ctx.surf)) {
+					let sp = q.sp;
+					// jitter: rain wanders a little sideways off its line (metres, either way)
+					if (P.jitter) {
+						const n = ctx.surf.faceNormal(q.sp.f, new THREE.Vector3()), side = n.clone().cross(q.tangent).normalize();
+						const r = projectNear(ctx.surf, q.p.clone().addScaledVector(side, (rand() - 0.5) * 2 * P.jitter), q.sp.f, {});
+						sp = { f: r.f, b0: r.b0, b1: r.b1, b2: r.b2 };
+					}
+					out.push({ sp, size: sizeAt(q.u), stone: ramp(gen.colourRamp, q.u) ?? pick(), angle: angleAt(ctx, sp, q.tangent), lift: 0 });
+				}
 			});
 		});
 		return out;
