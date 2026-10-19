@@ -8,8 +8,8 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 export const GLARE = {
 	plain: null,
-	star: { rays: 4, angle: Math.PI / 4, strength: 1.2, threshold: 0.8, atten: 0.9 },
-	star6: { rays: 6, angle: Math.PI / 2, strength: 1.1, threshold: 0.8, atten: 0.9 },
+	star: { rays: 4, angle: Math.PI / 4, strength: 0.9, threshold: 2.4, atten: 0.9 },
+	star6: { rays: 6, angle: Math.PI / 2, strength: 0.85, threshold: 2.4, atten: 0.9 },
 	arena: { rays: 8, angle: 0.2, strength: 1.15, threshold: 0.9, atten: 0.92 },
 };
 
