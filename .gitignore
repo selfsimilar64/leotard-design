@@ -1,0 +1,14 @@
+# Large or re-downloadable, kept on the owner's machine only
+tools/
+assets/
+moodboard/
+
+# Installed libraries and build output
+node_modules/
+dist/
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Temporary copy used while folding the knowledge history in
+knowledge_tmp/

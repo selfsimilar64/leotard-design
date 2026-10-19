@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Leotard POC (three.js)</title>
+	<style>
+		html, body { margin: 0; height: 100%; overflow: hidden; background: #08080b; }
+		canvas { display: block; }
+		#hud {
+			position: fixed; left: 12px; bottom: 10px; z-index: 2; pointer-events: none; white-space: pre;
+			font: 12px/1.4 ui-monospace, Consolas, monospace; color: #d7dae2; text-shadow: 0 1px 2px #000;
+		}
+		#help { position: fixed; left: 12px; top: 10px; z-index: 2; pointer-events: none; font: 12px/1.4 system-ui, sans-serif; color: #9aa0ad; }
+	</style>
+</head>
+<body>
+	<div id="help">Drag to orbit · scroll to zoom (zooms toward the cursor) · right-drag to pan</div>
+	<div id="hud">loading mannequins…</div>
+	<script type="module" src="/src/main.js"></script>
+</body>
+</html>
