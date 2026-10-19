@@ -31,6 +31,8 @@ export function surfaceLandmarks(man, surf) {
 	// hip: the widest point of the hips, between the waist and the crotch (where a photo shows it)
 	const hipY = man.crotchY + (fl.waist - man.crotchY) * 0.38;
 	both('hip', (s) => at(best((x, y) => -x * s + abs(y - hipY) * 4, (i) => man.wHead[i] < 0.3 && man.wArm[i] < 0.2)));
+	// under the arm: the side of the ribcage just below the armpit (the back or front silhouette there)
+	both('underarm', (s) => at(best((x, y) => -x * s + abs(y - (fl.bust + 0.06)) * 4, torso)));
 	both('elbow', (s) => near([EL[0] * s + 0.03 * s, EL[1], EL[2] - 0.02]));
 	both('wrist', (s) => near([WR[0] * s + 0.025 * s, WR[1], WR[2]]));
 	both('knee', (s) => near([KN[0] * s, KN[1], KN[2] + 0.06]));
@@ -41,6 +43,6 @@ export function surfaceLandmarks(man, surf) {
 export const LANDMARK_HELP = {
 	'cf-neck': 'notch at the front base of the neck', 'cb-neck': 'centre back at the base of the neck', navel: 'navel',
 	'cb-waist': 'centre back at the waist', crotch: 'crotch point', 'shoulder-l': "wearer's left shoulder tip",
-	'bust-l': "wearer's left bust point", 'waist-l': "wearer's left waist (side)", 'hip-l': "wearer's left hip (side, widest)",
+	'bust-l': "wearer's left bust point", 'underarm-l': "wearer's left side of the ribcage just below the armpit", 'waist-l': "wearer's left waist (side)", 'hip-l': "wearer's left hip (side, widest)",
 	'elbow-l': "wearer's left elbow (outside)", 'wrist-l': "wearer's left wrist", 'knee-l': "wearer's left knee (front)",
 };

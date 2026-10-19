@@ -45,7 +45,7 @@ defineCommand('reference.solve', {
 		if (!ctx?.landmarkPos) throw new Error('The body is still loading');
 		const pins = r.pins.map((p) => ({ X: ctx.landmarkPos(p.lm), u: p.px }));
 		const cam = solveCamera(pins, r.size, { crop: r.crop, fitScale: a.fitScale ?? true });
-		tx.set(['reference', a.id, 'camera'], { position: cam.position, quaternion: cam.quaternion, fov: cam.fov, f: cam.f, size: cam.size, crop: cam.crop, scale: cam.scale, pivot: cam.pivot, error: +cam.error.toFixed(2), errors: cam.errors.map((e) => +e.toFixed(1)), body: ctx.bodyKey?.() ?? null });
+		tx.set(['reference', a.id, 'camera'], { position: cam.position, quaternion: cam.quaternion, fov: cam.fov, f: cam.f, size: cam.size, crop: cam.crop, scale: cam.scale, pivot: cam.pivot, warp: cam.warp, error: +cam.error.toFixed(2), errors: cam.errors.map((e) => +e.toFixed(1)), body: ctx.bodyKey?.() ?? null });
 		return { error: +cam.error.toFixed(2), fov: +cam.fov.toFixed(1), scale: cam.scale.map((s) => +s.toFixed(3)), errors: Object.fromEntries(r.pins.map((p, i) => [p.lm, +cam.errors[i].toFixed(1)])) };
 	},
 });

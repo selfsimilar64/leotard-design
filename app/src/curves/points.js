@@ -6,7 +6,8 @@
 //   { lm: 'shoulder_l', d: [dx, dy, dz] }  a rig landmark (+ offset) -> closest point
 //   { curve: 'c3', t: 0.25 }          a point along an evaluated curve (0..1 of its length)
 //   { mirror: <spec> }                the mirror image (x -> -x) of another spec
-//   { photo: { ref: 'r1', px: [x, y] } }  the body under a pixel of a reference photo (solved camera)
+//   { photo: { ref: 'r1', px: [x, y], part?: torso|arm|any } }  the body under a pixel of a
+//                                     reference photo (solved camera); torso hits win over arms by default
 // The context gives the reference surface, the mannequin and the evaluated curves.
 import * as THREE from 'three';
 import { fromSP } from '../body/surface.js';
@@ -42,7 +43,11 @@ export function resolvePoint(spec, ctx) {
 		const r = ctx.doc?.reference.find((x) => x.id === ref);
 		if (!r) throw new Error('No reference photo ' + ref);
 		if (!r.camera) throw new Error('Solve the camera of ' + ref + ' first (reference.solve)');
-		const hit = ctx.pickRay(rayThrough(r.camera, px));
+		const part = spec.photo.part ?? 'torso';
+		let hit = ctx.pickRay(rayThrough(r.camera, px), part);
+		// a point on the photographed silhouette can fall just off the mannequin: step inwards
+		const c = r.camera.crop ?? [0, 0, ...r.size], cx = (c[0] + c[2]) / 2;
+		for (let k = 1; !hit && k <= 8; k++) hit = ctx.pickRay(rayThrough(r.camera, [px[0] + Math.sign(cx - px[0]) * 2 * k, px[1]]), part);
 		if (!hit) throw new Error('Pixel [' + px.join(', ') + '] of ' + ref + ' is not on the body');
 		return strip(hit);
 	}

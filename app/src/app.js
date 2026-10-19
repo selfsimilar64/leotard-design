@@ -15,6 +15,7 @@ import './doc/commands-core.js';
 import './doc/commands-garment.js';
 import './doc/commands-reference.js';
 import { surfaceLandmarks } from './body/landmarks.js';
+import { resolvePoint } from './curves/points.js';
 import { defineCommand } from './doc/store.js';
 import { legacyFromLook } from './garment/legacy.js';
 import { buildGarment, inheritPanels, evaluateAll } from './garment/build.js';
@@ -62,7 +63,20 @@ export class App {
 			get evaluated() { return engine.evaluated; },
 			get doc() { return app.doc; },
 			// on the body as shown (size, pose, lift): what a photo's camera sees
-			pickRay: (ray) => engine.pick?.raycast(ray) ?? null,
+			// photo rays: the first hit on the torso or legs, unless the point is meant for an arm
+			// (the mannequin's arms can stand where the photographed arms are not)
+			pickRay: (ray, part = 'torso') => {
+				const pk = engine.pick;
+				if (!pk) return null;
+				if (part === 'any') return pk.raycast(ray);
+				const hits = pk.bvh.raycast(ray, 2).sort((a, b) => a.distance - b.distance), man = engine.body, idx = man.idx;
+				const armOf = (f) => (man.wArm[idx[f * 3]] + man.wArm[idx[f * 3 + 1]] + man.wArm[idx[f * 3 + 2]]) / 3;
+				const hit = hits.find((h) => (part === 'arm' ? armOf(h.faceIndex) > 0.5 : armOf(h.faceIndex) < 0.5)) ?? hits[0];
+				if (!hit) return null;
+				const out = pk.baryOf(hit.faceIndex, hit.point, {});
+				const s = Math.max(out.b0, 0) + Math.max(out.b1, 0) + Math.max(out.b2, 0) || 1;
+				return { f: out.f, b0: Math.max(out.b0, 0) / s, b1: Math.max(out.b1, 0) / s, b2: Math.max(out.b2, 0) / s };
+			},
 			landmarkPos: (lm) => engine.pick.pos(landmarks[lm]).toArray(),
 			bodyKey: () => engine.bodyKey,
 		};
@@ -179,6 +193,21 @@ export class App {
 		return this.exec({ op: 'reference.add', src, size: [img.naturalWidth, img.naturalHeight], ...opts });
 	}
 	landmarks() { return Object.keys(this.store.ctx.landmarks); }
+
+	// Where a point spec falls on a line (or its mirror image): { curve, t, mirror? } ready to use
+	// as an attachment ({ on: ... }) so a new line ends exactly on it. distance in metres.
+	nearestOn(curveId, spec) {
+		const ctx = this.store.ctx, sp = resolvePoint(spec, ctx), p = ctx.surf.pos(sp);
+		let best = null;
+		for (const [key, mirror] of [[curveId, false], [curveId + '~m', true]]) {
+			const e = this.engine.evaluated?.get(key);
+			if (!e) continue;
+			e.pts.forEach((q, i) => { const d = q.distanceTo(p); if (!best || d < best.distance) best = { curve: curveId, t: e.s[i] / Math.max(e.s[e.s.length - 1], 1e-9), ...(mirror ? { mirror: true } : {}), distance: d }; });
+		}
+		if (!best) throw new Error('No line ' + curveId);
+		return best;
+	}
+	curveByName(name) { return this.doc.curves.find((c) => c.name === name)?.id ?? null; }
 	// Look through a solved reference photo (or leave it with null): mode over|under|off, opacity 0..1.
 	lookThrough(id, { opacity, mode = 'over' } = {}) {
 		const vp = this.engine.viewport;

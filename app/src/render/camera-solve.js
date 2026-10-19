@@ -58,12 +58,52 @@ export function solveCamera(pins, size, { fovGuess = 28, crop = null, fitScale =
 	const rot = rotOf(q), quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().setFromMatrix3(rot));
 	const res = residuals(q, new Float64Array(m));
 	const errors = pins.map((_, i) => Math.hypot(res[2 * i], res[2 * i + 1]));
+	// what the camera cannot explain (a body shaped differently from the mannequin) is taken up by
+	// a thin-plate spline from photo pixels to where the model projects: exact at the pins
+	const warp = pins.length >= 4 ? fitWarp(U, U.map((u, i) => [res[2 * i], res[2 * i + 1]])) : null;
 	return {
 		position: [q[4], q[5], q[6]], quaternion: quat.toArray(), f,
 		fov: THREE.MathUtils.radToDeg(2 * Math.atan(H / 2 / f)), size: [W, H], crop: cr,
-		scale: useScale ? [Math.exp(q[7]), Math.exp(q[8])] : [1, 1], pivot: c3.toArray(),
+		scale: useScale ? [Math.exp(q[7]), Math.exp(q[8])] : [1, 1], pivot: c3.toArray(), warp,
 		error: Math.sqrt(errors.reduce((a, e) => a + e * e, 0) / errors.length), errors,
 	};
+}
+
+// Thin-plate spline in image space: src points and the displacement to add at each.
+// -> { src, w: [[wx, wy] per point], a: [[ax, ay] x 3] }
+export function fitWarp(src, disp) {
+	const n = src.length, N = n + 3;
+	const U = (r2) => (r2 < 1e-12 ? 0 : r2 * Math.log(Math.sqrt(r2)));
+	const A = Array.from({ length: N }, () => new Float64Array(N));
+	for (let i = 0; i < n; i++) {
+		for (let j = 0; j < n; j++) A[i][j] = U((src[i][0] - src[j][0]) ** 2 + (src[i][1] - src[j][1]) ** 2);
+		A[i][i] += 1e-3; // a touch of smoothing: pins are not exact
+		A[i][n] = A[n][i] = 1; A[i][n + 1] = A[n + 1][i] = src[i][0]; A[i][n + 2] = A[n + 2][i] = src[i][1];
+	}
+	const sol = [0, 1].map((c) => gauss(A.map((r) => Array.from(r)), [...disp.map((d) => d[c]), 0, 0, 0]));
+	if (!sol[0] || !sol[1]) return null;
+	return { src: src.map((s) => [...s]), w: src.map((_, i) => [sol[0][i], sol[1][i]]), a: [0, 1, 2].map((k) => [sol[0][n + k], sol[1][n + k]]) };
+}
+export function applyWarp(warp, px) {
+	if (!warp) return px;
+	let dx = warp.a[0][0] + warp.a[1][0] * px[0] + warp.a[2][0] * px[1], dy = warp.a[0][1] + warp.a[1][1] * px[0] + warp.a[2][1] * px[1];
+	warp.src.forEach((s, i) => {
+		const r2 = (px[0] - s[0]) ** 2 + (px[1] - s[1]) ** 2, u = r2 < 1e-12 ? 0 : r2 * Math.log(Math.sqrt(r2));
+		dx += warp.w[i][0] * u; dy += warp.w[i][1] * u;
+	});
+	return [px[0] + dx, px[1] + dy];
+}
+function gauss(M, b) {
+	const n = b.length;
+	for (let i = 0; i < n; i++) M[i].push(b[i]);
+	for (let c = 0; c < n; c++) {
+		let p = c;
+		for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+		if (Math.abs(M[p][c]) < 1e-14) return null;
+		[M[c], M[p]] = [M[p], M[c]];
+		for (let r = 0; r < n; r++) { if (r === c) continue; const k = M[r][c] / M[c][c]; for (let k2 = c; k2 <= n; k2++) M[r][k2] -= k * M[c][k2]; }
+	}
+	return M.map((row, i) => row[n] / row[i]);
 }
 
 const scaleOf = (cam) => new THREE.Vector3(cam.scale?.[0] ?? 1, cam.scale?.[1] ?? 1, cam.scale?.[0] ?? 1);
@@ -80,7 +120,9 @@ export function projectWith(cam, p) {
 }
 
 // Ray through an image pixel, expressed in the body's own (unscaled) space, for picking the body.
-export function rayThrough(cam, px) {
+// The photo's warp (if solved) first moves the pixel to where the mannequin shows that spot.
+export function rayThrough(cam, px0, { warp = true } = {}) {
+	const px = warp ? applyWarp(cam.warp, px0) : px0;
 	const [cx, cy] = centre(cam), S = scaleOf(cam), C = pivotOf(cam);
 	const d = new THREE.Vector3((px[0] - cx) / cam.f, -(px[1] - cy) / cam.f, -1).applyMatrix3(rotMat(cam));
 	// undo the body-proportion scaling: x' = (x - C) / S + C
