@@ -34,6 +34,7 @@ its arguments at runtime (the same text as below); this concept is the guide.[^c
 | `app.swatchSheet(name, { colour, second, colour2, fabrics })` | Contact sheet of fabric swatches |
 | `app.addReference(src, opts)`, `app.landmarks()`, `app.lookThrough(id, { opacity, mode })`, `app.compare(id, name)` | Reference photos: add, the pinnable landmarks, look through the solved camera, photo / render / blend sheet |
 | `app.pickColour(refId, [x, y])` | The photo's colour there (median of a 9 px square) |
+| `app.pickStones(refId, { region: [x0, y0, x1, y1], size: 'ss8' \| 'auto', stone: name \| 'auto', threshold, minDist })` | Rhinestones picked off a solved photo: highlights detected and placed as single stones (on straps where they fall on one), one undo step; returns `{ found, placed, skipped }` |
 | `app.matchColour({ panel, ref, px, layer })` | Set a panel's colour so its render matches the photo at that pixel under the current lights (needs a solved camera); returns `{ colour, photo, rendered, note? }`; `note` explains when the lights cannot reach the photo's colour or the pixel is not on the panel |
 | `app.nearestOn(curveId, spec)`, `app.curveByName(name)` | Where a point falls on a line (for attaching); a line's id from its name |
 | `app.pattern()`, `app.exportPattern(name)` | Pattern pieces (mm) and the tiled PDF in `app/exports/` |
@@ -54,7 +55,7 @@ mirror? } }` (attached ends follow their line).
 
 - Design: `meta.set`, `body.set { size: child|teen|young|adult, form: full|torso, finish, pose }`
   (finishes include athlete skin tones; poses in [poses and shading](/engineering/app/poses-and-shading.md)), `scene.set { rig, exposure, bloom, envRotation,
-  rotateLights }` (rigs include white and grey seamless photo studios and a gym).
+  rotateLights, glare: plain|star|star6|arena }` (rigs include white and grey seamless photo studios and a gym).
 - Garment: `block.apply { neck, back, sleeves, leg, armhole: set-in|raglan, fabric, colour, second }`;
   `curve.add { points, role: seam|edge|print|guide|strap-path|trim-path, closed, mirror, shape, layer }`;
   `curve.set`, `curve.points`, `curve.movePoint { id, i, to }`, `curve.insertPoint`,
@@ -70,8 +71,9 @@ mirror? } }` (attached ends follow their line).
   `hardware.add { kind: clear-hook|hook-and-bar|zip-pull, at }`, `hardware.remove`.
 - Logos, lettering and fold stamps: `decal.add { at, text | src, font, weight, size, aspect, rotate,
   colour, look: print|foil|holo|glitter|flock | gather|ruche|twist, layer }`, `decal.set`, `decal.remove`.
-- Stones: `stones.add { kind: row|fill|scatter|rays|motif|lattice|cluster, on, at, params, stone |
-  palette | colourRamp, shape, mirror }`, `stones.set`, `stones.remove`, `stones.erase`,
+- Stones: `stones.add { kind: row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on, at, params, stone |
+  palette | colourRamp, shape, mirror }` (fringe: `{ lengths | random, min, max, spacing, sizeFrom, sizeTo,
+  direction: down|away }`; lettering: `{ text, font, height, stoneSize, mode: fill|outline|both, angle }`), `stones.set`, `stones.remove`, `stones.erase`,
   `stone.place`, `stone.remove`, `stones.release`.
 - Reference photos: `reference.add`, `reference.pin { id, lm, px }`, `reference.unpin`,
   `reference.solve`, `reference.set`, `reference.remove`.

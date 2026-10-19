@@ -45,8 +45,8 @@ finished edges, printable pattern).[^build]
 | P0 Foundation | done | Document schema v1, path primitives with exact inverses, command bus, undo/redo with drag coalescing, autosave, save/open, UI shell (top bar, tool rail, inspector, outliner, history), renderer ported; POC looks load from JSON |
 | P1 Curves, panels, flat piece | core done | Surface splines, attachments, mirror, blocks with real seams, [garment cutting](/engineering/app/garment-cutting.md), [pieces and flattening](/engineering/app/pattern-pieces-and-flattening.md), cloth-space shader, pen/select/fabric/cut tools, finished edges and bindings, scanned (VMOD) textures, flat pattern view, tiled PDF pattern |
 | P2 Layers, straps, edges | done | Layers (shell, overlays at +0.9 mm per step, linings), straps as surface ribbons with profile, topstitch and contact shadow, bands (edge offset into the opening), piping along seams, hardware (clear hook, hook-and-bar, zip pull), strap and edges tools |
-| P6 Photo tracing | core done | Body landmarks, reference photos with pins, camera solve (lens prior, body-proportion scale, TPS warp for residuals), look-through overlay, compare sheets (photo / render / blend), photo point specs for curves (`{ref, px}`), `nearestOn` attach helper. B5's back rebuilt by tracing |
-| P4-P5 Stones | core done | Stone library (ss sizes, ~50 colours, coatings, cuts), generators (row, fill random/contour, scatter, rays, motif, lattice, cluster), single stones and eraser marks, mirror, keep-out of edges, release-to-singles, instanced crystal shader with per-stone finish, stone tools and live counts |
+| P6 Photo tracing | core done | Body landmarks, reference photos with pins, camera solve (lens prior, body-proportion scale, TPS warp for residuals), look-through overlay, compare sheets (photo / render / blend), photo point specs for curves (`{ref, px}`), `nearestOn` attach helper, colour pick and match, stones picked off a photo (`app.pickStones`: highlights detected, mapped through the camera, lifted onto straps). B5's back rebuilt by tracing |
+| P4-P5 Stones | core done | Stone library (ss sizes, ~50 colours, coatings, cuts), generators (row, fill random/contour, scatter, rays, motif, lattice, cluster, fringe/rain, lettering in any font), single stones and eraser marks, mirror, keep-out of edges, release-to-singles, instanced crystal shader with per-stone finish, stone tools and live counts, star-filter glare presets (4, 6, 8 rays; about +1.3 ms) |
 | P3 Materials and studio realism | done, owner review pending | [Studio rigs, skin, fabric looks, logos, seams, swatches, colour match](/engineering/app/studio-and-fabric-looks.md); raglan block option; B4, B8, B12 rebuilt (`app/designs/b4-*`, `b8-*`, `b12-*`) and compared side by side with their photos |
 | P7 Poses and realism II | done | [Poses, soft shadow, contact darkening, tension wrinkles, fold stamps, dynamic resolution](/engineering/app/poses-and-shading.md); gate designs posed as in their photos at 9.8-10.9 ms |
 | P8 | not started | |
@@ -77,8 +77,9 @@ finished edges, printable pattern).[^build]
 
 - Photo tracing: the mannequin's arms are in one pose, so photos with arms down or hands on hips
   align on the torso only (poses come in P7). Stone pick-up from photos and colour pick not built.
-- Stones: large fills regenerate in about 1.5 s; no level of detail; no star-filter glare preset;
-  fringe/drops and lettering not built.
+- Stones: large fills regenerate in about 1.5 s; no level of detail; no comet brush tool (a row
+  with `sizeRamp` on a drawn line does it by script); auto-sized stones from photos are rough
+  (give a size); no idle refinement (supersampled stills when the view is still).
 
 [^owner]: Product owner, 2026-10-19
 [^build]: build/designer-app branch
