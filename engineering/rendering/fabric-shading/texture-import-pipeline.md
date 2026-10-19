@@ -138,6 +138,10 @@ list per fabric).[^samples]
 
 # Licence caveat
 
+**Status 2026-10-18:** the owner is on a VMOD **paid plan**, which covers commercial use inside
+Larger Works; keep the subscription active for as long as the shipped app contains VMOD fabrics
+(§3.2(d) is worded in the present tense). The open point below concerns outside users only.
+
 VMOD's terms grant a non-transferable, non-sublicensable licence to use assets inside a "Larger
 Work", forbid letting a third party "use, download, extract, or access" the assets on a standalone
 basis, require a paid plan for commercial distribution, and forbid using them to train machine
