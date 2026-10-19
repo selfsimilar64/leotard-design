@@ -1,0 +1,74 @@
+{
+ "format": "leotard-design",
+ "version": 1,
+ "meta": {
+  "name": "POC Sunset ombré",
+  "author": "",
+  "created": "2026-10-19T04:27:37.078Z",
+  "notes": ""
+ },
+ "ids": {},
+ "body": {
+  "size": "young",
+  "form": "full",
+  "finish": "Matte white fibreglass",
+  "pose": "a-pose"
+ },
+ "scene": {
+  "rig": "Arena (ring of small lights)",
+  "rotateLights": true,
+  "exposure": 1,
+  "bloom": 0.18,
+  "envRotation": 0,
+  "glare": "plain"
+ },
+ "legacy": {
+  "look": "Sunset ombré",
+  "sleeves": "long",
+  "back": "scoop",
+  "pattern": "Cascade scatter",
+  "finish": "Gold",
+  "zones": {
+   "body": {
+    "fabric": "ombremystique",
+    "colour": "#ff4f8b",
+    "second": "Tone-on-tone"
+   },
+   "accent": {
+    "fabric": "glitter",
+    "colour": "#f2c14e",
+    "second": "Gold"
+   },
+   "sleeve": {
+    "fabric": "mesh",
+    "colour": "#d2a48a",
+    "second": "Tone-on-tone"
+   }
+  },
+  "trim": {
+   "finish": "elastic",
+   "fabric": "mystique",
+   "colour": "#c9ccd6",
+   "second": "Silver"
+  }
+ },
+ "layers": [
+  {
+   "id": "L0",
+   "kind": "shell",
+   "z": 0
+  }
+ ],
+ "curves": [],
+ "panels": [],
+ "straps": [],
+ "trims": [],
+ "bands": [],
+ "decals": [],
+ "details": [],
+ "hardware": [],
+ "stones": [],
+ "placed": [],
+ "reference": [],
+ "locks": {}
+}

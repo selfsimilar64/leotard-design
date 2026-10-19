@@ -1,0 +1,74 @@
+{
+ "format": "leotard-design",
+ "version": 1,
+ "meta": {
+  "name": "POC Emerald glitter tank",
+  "author": "",
+  "created": "2026-10-19T04:27:37.308Z",
+  "notes": ""
+ },
+ "ids": {},
+ "body": {
+  "size": "young",
+  "form": "full",
+  "finish": "Matte white fibreglass",
+  "pose": "a-pose"
+ },
+ "scene": {
+  "rig": "Arena (ring of small lights)",
+  "rotateLights": true,
+  "exposure": 1,
+  "bloom": 0.18,
+  "envRotation": 0,
+  "glare": "plain"
+ },
+ "legacy": {
+  "look": "Emerald glitter tank",
+  "sleeves": "tank",
+  "back": "strappy",
+  "pattern": "Spirals and rosette",
+  "finish": "Colour-matched AB",
+  "zones": {
+   "body": {
+    "fabric": "glitter",
+    "colour": "#0b7d55",
+    "second": "Tone-on-tone"
+   },
+   "accent": {
+    "fabric": "pearl",
+    "colour": "#f4f1ea",
+    "second": "Silver"
+   },
+   "sleeve": {
+    "fabric": "mesh",
+    "colour": "#0b7d55",
+    "second": "Tone-on-tone"
+   }
+  },
+  "trim": {
+   "finish": "elastic",
+   "fabric": "mystique",
+   "colour": "#c9ccd6",
+   "second": "Silver"
+  }
+ },
+ "layers": [
+  {
+   "id": "L0",
+   "kind": "shell",
+   "z": 0
+  }
+ ],
+ "curves": [],
+ "panels": [],
+ "straps": [],
+ "trims": [],
+ "bands": [],
+ "decals": [],
+ "details": [],
+ "hardware": [],
+ "stones": [],
+ "placed": [],
+ "reference": [],
+ "locks": {}
+}

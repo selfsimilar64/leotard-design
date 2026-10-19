@@ -9,3 +9,7 @@ dist/
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# App screenshots and reference photos (regenerated; photos may be the owner's)
+app/captures/
+app/references/

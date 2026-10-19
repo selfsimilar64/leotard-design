@@ -1,0 +1,146 @@
+// The 3D view: renderer, camera and orbit, environment, light rig, floor, post-processing,
+// frame loop, benchmark and capture. Ported from poc-threejs/src/main.js (same settings, so the
+// POC's looks render the same); the garment and body are added by the engine (render/engine.js).
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SCENE, RIGS } from './presets.js';
+
+export class Viewport {
+	constructor(container) {
+		this.container = container;
+		// HDR, 4x MSAA, bloom, Khronos PBR Neutral tone mapping (keeps fabric colours true)
+		const renderer = this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+		renderer.toneMapping = THREE.NeutralToneMapping;
+		renderer.info.autoReset = false;
+		container.appendChild(renderer.domElement);
+		renderer.domElement.style.display = 'block';
+
+		const scene = this.scene = new THREE.Scene();
+		const camera = this.camera = new THREE.PerspectiveCamera(SCENE.camera.fov, 1, 0.01, 40);
+		camera.position.fromArray(SCENE.camera.position);
+		const controls = this.controls = new OrbitControls(camera, renderer.domElement);
+		controls.target.fromArray(SCENE.camera.target);
+		controls.enableDamping = true;
+		controls.zoomToCursor = true;
+		controls.minDistance = 0.03;
+		controls.maxDistance = 6;
+
+		const pmrem = this.pmrem = new THREE.PMREMGenerator(renderer);
+		scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
+		scene.background = scene.environment;
+		scene.backgroundBlurriness = 0.7;
+
+		const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+		const composer = this.composer = new EffectComposer(renderer, target);
+		composer.addPass(new RenderPass(scene, camera));
+		this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.18, 0.1, 1.6);
+		composer.addPass(this.bloom);
+		composer.addPass(new OutputPass());
+
+		// Eight point lights, re-aimed per preset (see RIGS in presets.js).
+		this.rig = new THREE.Group();
+		scene.add(this.rig);
+		this.lights = Array.from({ length: 8 }, () => { const l = new THREE.PointLight(0xffffff, 0, 0, 2); this.rig.add(l); return l; });
+
+		// Dark studio floor with a soft contact shadow under the stand.
+		const floor = this.floor = new THREE.Mesh(new THREE.CircleGeometry(4, 96), new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.85 }));
+		floor.rotation.x = -Math.PI / 2; floor.position.y = -0.0085;
+		scene.add(floor);
+		const c = document.createElement('canvas'); c.width = c.height = 128;
+		const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+		gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.25)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+		x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+		const blob = this.blob = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+		blob.rotation.x = -Math.PI / 2; blob.position.y = -0.0082;
+		scene.add(blob);
+
+		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: true, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1 };
+		this.onFrame = new Set();
+		this.stats = { fps: 0, cpuMs: 0, triangles: 0, width: 0, height: 0 };
+		this.timer = new THREE.Timer();
+		this.keyDir = new THREE.Vector3();
+		this._frames = 0; this._acc = 0; this._cpu = 0;
+
+		new ResizeObserver(() => this.resize()).observe(container);
+		this.resize();
+		renderer.setAnimationLoop(() => this.frame());
+	}
+
+	resize() {
+		const w = Math.max(this.container.clientWidth, 1), h = Math.max(this.container.clientHeight, 1);
+		const pr = Math.min(window.devicePixelRatio, 2) * this.settings.renderScale;
+		this.camera.aspect = w / h;
+		this.camera.updateProjectionMatrix();
+		this.renderer.setPixelRatio(pr);
+		this.renderer.setSize(w, h);
+		this.composer.setPixelRatio(pr);
+		this.composer.setSize(w, h);
+		this.bloom.setSize(w * pr / 2, h * pr / 2); // glow is blurry by nature: half resolution is invisible and 4x cheaper
+	}
+
+	applyScene(s) {
+		Object.assign(this.settings, s);
+		const r = RIGS[this.settings.rig] ?? RIGS['Arena (ring of small lights)'];
+		// Unused lights are hidden, not dimmed: every visible light is paid for on every pixel.
+		r.lights.forEach((d, i) => { const l = this.lights[i]; l.position.fromArray(d.p); l.intensity = d.cd; l.color.set(d.c); l.visible = d.cd > 0; });
+		this.scene.environmentIntensity = r.env;
+		this.scene.backgroundIntensity = r.bg;
+	}
+
+	frame() {
+		this.timer.update();
+		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
+		if (!this.container.clientWidth) return; // pane not laid out yet
+		if (s.rotateLights) this.rig.rotation.y += dt * SCENE.lightSpin;
+		this.scene.environmentRotation.y = this.scene.backgroundRotation.y = s.envRotation + this.rig.rotation.y * SCENE.envFollow;
+		this.renderer.toneMappingExposure = s.exposure;
+		this.bloom.strength = s.bloom;
+		this.lights[0].getWorldPosition(this.keyDir).sub(this.controls.target).normalize();
+		for (const fn of this.onFrame) fn(dt);
+		this.controls.update();
+		this.render();
+		this._cpu += performance.now() - start;
+		this._frames++; this._acc += dt;
+		if (this._acc >= 0.5) {
+			const sz = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+			Object.assign(this.stats, { fps: this._frames / this._acc, cpuMs: this._cpu / this._frames, triangles: this.renderer.info.render.triangles, width: sz.x, height: sz.y });
+			this._frames = 0; this._acc = 0; this._cpu = 0;
+		}
+	}
+
+	render() {
+		this.renderer.info.reset();
+		this.composer.render();
+	}
+
+	// Renders frames back to back and waits for the GPU each time, so the number is the true cost
+	// of a frame, not the display's refresh interval. Same method as the POC's "Measure frame cost".
+	benchmark(n = 60) {
+		const gl = this.renderer.getContext(), px = new Uint8Array(4);
+		const run = () => { for (let i = 0; i < n; i++) { this.rig.rotation.y += 0.01; this.render(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); } };
+		run(); // warm up: compiles any shader variant not yet seen
+		const t = performance.now(); run();
+		return (performance.now() - t) / n;
+	}
+
+	// The current view as a PNG blob (rendered fresh, so it does not need preserveDrawingBuffer).
+	capture() {
+		this.render();
+		return new Promise((resolve) => this.renderer.domElement.toBlob(resolve, 'image/png'));
+	}
+
+	setCamera({ position, target, fov }) {
+		if (fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+		if (target) this.controls.target.fromArray(target);
+		if (position) this.camera.position.fromArray(position);
+		this.controls.update();
+	}
+	getCamera() {
+		return { position: this.camera.position.toArray(), target: this.controls.target.toArray(), fov: this.camera.fov };
+	}
+}

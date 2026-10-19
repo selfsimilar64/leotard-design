@@ -1,0 +1,74 @@
+{
+ "format": "leotard-design",
+ "version": 1,
+ "meta": {
+  "name": "POC Midnight velvet",
+  "author": "",
+  "created": "2026-10-19T04:27:33.100Z",
+  "notes": ""
+ },
+ "ids": {},
+ "body": {
+  "size": "young",
+  "form": "full",
+  "finish": "Matte white fibreglass",
+  "pose": "a-pose"
+ },
+ "scene": {
+  "rig": "Arena (ring of small lights)",
+  "rotateLights": true,
+  "exposure": 1,
+  "bloom": 0.18,
+  "envRotation": 0,
+  "glare": "plain"
+ },
+ "legacy": {
+  "look": "Midnight velvet",
+  "sleeves": "long",
+  "back": "keyhole",
+  "pattern": "Starburst",
+  "finish": "Crystal AB",
+  "zones": {
+   "body": {
+    "fabric": "velvet",
+    "colour": "#16205c",
+    "second": "Silver"
+   },
+   "accent": {
+    "fabric": "hologlitter",
+    "colour": "#cfd4e6",
+    "second": "Silver"
+   },
+   "sleeve": {
+    "fabric": "glittermesh",
+    "colour": "#10142e",
+    "second": "Silver"
+   }
+  },
+  "trim": {
+   "finish": "elastic",
+   "fabric": "mystique",
+   "colour": "#c9ccd6",
+   "second": "Silver"
+  }
+ },
+ "layers": [
+  {
+   "id": "L0",
+   "kind": "shell",
+   "z": 0
+  }
+ ],
+ "curves": [],
+ "panels": [],
+ "straps": [],
+ "trims": [],
+ "bands": [],
+ "decals": [],
+ "details": [],
+ "hardware": [],
+ "stones": [],
+ "placed": [],
+ "reference": [],
+ "locks": {}
+}
