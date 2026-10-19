@@ -17,6 +17,8 @@ import { defineCommand } from './doc/store.js';
 import { legacyFromLook } from './garment/legacy.js';
 import { buildGarment, inheritPanels } from './garment/build.js';
 import { showCells } from './render/debug.js';
+import { patternPieces } from './garment/pattern.js';
+import { patternPDF } from './export/pdf.js';
 
 // Ends a drag: touches the curves so the garment is re-cut and new cells get their panels, inside
 // the drag's own history entry.
@@ -137,6 +139,20 @@ export class App {
 		const r = await fetch('/__fs/captures/' + file, { method: 'POST', body: blob }).catch(() => null);
 		if (!r || !r.ok) { download(file, blob); return 'downloaded ' + file; }
 		return 'captures/' + file;
+	}
+
+	// Pattern pieces of the current garment (mm), once every piece is flattened.
+	async pattern(opts) {
+		await this.engine.garment.whenFlat();
+		return patternPieces(this.engine.garment, this.doc, opts);
+	}
+	// Printable full-scale PDF of the pattern: exports/<name>.pdf (dev server) or a download.
+	async exportPattern(name = (this.doc.meta.name || 'design') + ' pattern') {
+		const pdf = patternPDF(await this.pattern(), { name: this.doc.meta.name });
+		const blob = pdf.output('blob'), file = safeName(name) + '.pdf';
+		const r = await fetch('/__fs/exports/' + file, { method: 'POST', body: blob }).catch(() => null);
+		if (!r || !r.ok) { download(file, blob); return 'downloaded ' + file; }
+		return 'exports/' + file;
 	}
 
 	get debug() { return { cells: (on = true) => showCells(this.engine, on) }; }

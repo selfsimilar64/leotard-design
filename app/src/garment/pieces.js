@@ -37,7 +37,8 @@ export function cellPiece(arr, cell) {
 	const cut = new Set();
 	for (const k of twice) {
 		const a = Math.floor(k / n), b = k % n;
-		if (arr.constraint.has(arr.ekey(verts[a], verts[b]))) cut.add(k);
+		const ak = arr.ekey(verts[a], verts[b]);
+		if (arr.constraint.has(ak) && !arr.softEdges?.has(ak)) cut.add(k);
 	}
 	// boundary loops after slitting (boundary = edges with one triangle, or cut)
 	const isOpen = (k) => cut.has(k) || edgeTris.get(k).length === 1;

@@ -102,6 +102,23 @@ uniform float uBumpScale;
 uniform float uKnit;
 
 uniform float uChecker;    // > 0: debug checker of this size (metres) in pattern space, for checking UVs
+// Scanned fabric (materials/textures.js): maps tiled at their real size in pattern space
+uniform float uTex;        // 1 = a texture set is bound
+uniform sampler2D tBase; uniform sampler2D tNormal; uniform sampler2D tRough; uniform sampler2D tAlpha; uniform sampler2D tMtl; uniform sampler2D tMask;
+uniform vec2 uTile;        // metres covered by one repeat of the maps
+uniform float uTexRecolour; uniform vec3 uTexTint; uniform float uTexLum; // recolour: luminance x tint
+uniform float uTexNormal;  // normal map strength (0 = off)
+uniform vec4 uTexFlags;    // x roughness map, y alpha map, z metal mask, w colour masks
+uniform vec4 uMaskOn; uniform vec3 uMaskCol0; uniform vec3 uMaskCol1; uniform vec3 uMaskCol2; uniform vec3 uMaskCol3;
+// Tangent frame from screen-space derivatives of position and pattern coordinates (no tangent attribute needed).
+mat3 cotangentFrame( vec3 N, vec3 p, vec2 uv ) {
+	vec3 dp1 = dFdx( p ), dp2 = dFdy( p );
+	vec2 duv1 = dFdx( uv ), duv2 = dFdy( uv );
+	vec3 dp2perp = cross( dp2, N ), dp1perp = cross( N, dp1 );
+	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x, B = dp2perp * duv1.y + dp1perp * duv2.y;
+	float invmax = inversesqrt( max( max( dot( T, T ), dot( B, B ) ), 1e-20 ) );
+	return mat3( T * invmax, B * invmax, N );
+}
 uniform float uOmbre;
 uniform vec3 uOmbreColor;
 uniform vec2 uOmbreY;
@@ -179,6 +196,27 @@ const FABRIC_FRAGMENT = /* glsl */`
 	float fp = length( fwidth( vObjPos ) );
 	vec3 viewDir = normalize( vViewPosition );
 
+	if ( uTex > .5 ) {
+		vec2 tuv = q / uTile;
+		vec4 tb = texture2D( tBase, tuv );
+		vec3 col = tb.rgb;
+		if ( uTexRecolour > .5 ) col = uTexTint * ( dot( col, vec3( .2126, .7152, .0722 ) ) / max( uTexLum, 1e-3 ) );
+		if ( uTexFlags.w > .5 ) {
+			vec4 mk = texture2D( tMask, tuv ) * uMaskOn;
+			float sh = dot( tb.rgb, vec3( .2126, .7152, .0722 ) ) / max( uTexLum, 1e-3 );
+			col = mix( col, uMaskCol0 * sh, mk.x ); col = mix( col, uMaskCol1 * sh, mk.y );
+			col = mix( col, uMaskCol2 * sh, mk.z ); col = mix( col, uMaskCol3 * sh, mk.w );
+		}
+		diffuseColor.rgb = col;
+		if ( uTexFlags.x > .5 ) roughnessFactor = clamp( texture2D( tRough, tuv ).r, .04, 1. );
+		if ( uTexFlags.z > .5 ) metalnessFactor = max( metalnessFactor, texture2D( tMtl, tuv ).r );
+		if ( uTexFlags.y > .5 ) diffuseColor.a *= texture2D( tAlpha, tuv ).r;
+		if ( uTexNormal > 0. ) {
+			vec3 tn = texture2D( tNormal, tuv ).xyz * 2. - 1.;
+			tn.xy *= uTexNormal;
+			normal = normalize( cotangentFrame( normal, - vViewPosition, tuv ) * tn );
+		}
+	}
 	if ( uChecker > 0. ) {
 		vec2 cq = floor( q / uChecker );
 		float ck = mod( cq.x + cq.y, 2. );
@@ -324,7 +362,12 @@ export function createFabricMaterial(zone) {
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
-		uChecker: { value: 0 }, uOmbre: { value: 0 }, uOmbreColor: { value: new THREE.Color(0, 0, 0) }, uOmbreY: { value: new THREE.Vector2(0.82, 1.32) },
+		uChecker: { value: 0 },
+		uTex: { value: 0 }, tBase: { value: null }, tNormal: { value: null }, tRough: { value: null }, tAlpha: { value: null }, tMtl: { value: null }, tMask: { value: null },
+		uTile: { value: new THREE.Vector2(0.1, 0.1) }, uTexRecolour: { value: 0 }, uTexTint: { value: new THREE.Color(1, 1, 1) }, uTexLum: { value: 1 }, uTexNormal: { value: 1 },
+		uTexFlags: { value: new THREE.Vector4() }, uMaskOn: { value: new THREE.Vector4() },
+		uMaskCol0: { value: new THREE.Color() }, uMaskCol1: { value: new THREE.Color() }, uMaskCol2: { value: new THREE.Color() }, uMaskCol3: { value: new THREE.Color() },
+		uOmbre: { value: 0 }, uOmbreColor: { value: new THREE.Color(0, 0, 0) }, uOmbreY: { value: new THREE.Vector2(0.82, 1.32) },
 	};
 	const m = new THREE.MeshPhysicalMaterial({ transparent: zone !== 3 });
 	m.userData.u = u;
@@ -415,4 +458,26 @@ export function applyFabric(m, key, colour, second) {
 	m.transparent = !!f.mesh;
 	m.alphaToCoverage = !f.mesh;
 	m.needsUpdate = true; // sheen / clearcoat / anisotropy / iridescence switch shader variants
+}
+
+// Bind a scanned texture set (materials/textures.js) to a fabric material, or unbind it (set = null).
+// opts: { scale (tile multiplier), recolour (tint the luminance with `colour`), colour, masks: [colours],
+//         normal (strength) }
+export function applyTexture(m, set, opts = {}) {
+	const u = m.userData.u;
+	if (!set) { u.uTex.value = 0; return; }
+	u.uTex.value = 1;
+	u.tBase.value = set.base; u.tNormal.value = set.normal; u.tRough.value = set.rough; u.tAlpha.value = set.alpha; u.tMtl.value = set.mtl; u.tMask.value = set.mask;
+	const k = opts.scale ?? 1;
+	u.uTile.value.set(set.tile[0] * k, set.tile[1] * k);
+	u.uTexRecolour.value = opts.recolour ? 1 : 0;
+	u.uTexTint.value.set(opts.colour ?? '#ffffff');
+	u.uTexLum.value = set.lum || 1;
+	u.uTexNormal.value = set.normal ? (opts.normal ?? 1) : 0;
+	const masks = (opts.masks ?? []).slice(0, set.maskCount);
+	u.uTexFlags.value.set(set.rough ? 1 : 0, set.hasAlpha ? 1 : 0, set.hasMetal ? 1 : 0, masks.length && set.mask ? 1 : 0);
+	u.uMaskOn.value.set(...[0, 1, 2, 3].map((i) => (masks[i] ? 1 : 0)));
+	[u.uMaskCol0, u.uMaskCol1, u.uMaskCol2, u.uMaskCol3].forEach((c, i) => c.value.set(masks[i] ?? '#ffffff'));
+	if (set.hasAlpha) { m.transparent = true; m.alphaToCoverage = false; m.depthWrite = true; }
+	m.needsUpdate = true;
 }

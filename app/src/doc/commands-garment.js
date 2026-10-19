@@ -159,11 +159,12 @@ function setStackFields(tx, p, a, layer = 0) {
 	if (a.second !== undefined) oneOf('second', a.second, SECOND);
 	const base = ['panels', p.id, 'stack', String(layer)];
 	if (!p.stack[layer]) tx.insert(['panels', p.id, 'stack'], { fabric: 'matte', colour: '#888888', second: 'Tone-on-tone' }, layer);
-	for (const k of ['fabric', 'colour', 'second', 'grain', 'print', 'texture']) if (a[k] !== undefined) tx.set([...base, k], a[k]);
+	if (a.texMode !== undefined) oneOf('texMode', a.texMode, ['original', 'recolour']);
+	for (const k of ['fabric', 'colour', 'second', 'grain', 'print', 'texture', 'texMode', 'texScale', 'texNormal', 'masks']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
 }
 
 defineCommand('panel.set', {
-	label: 'Change panel', args: '{ id | at: spec, fabric?, colour?, second?, grain?, texture?, name?, layer? (0 = outer) }',
+	label: 'Change panel', args: '{ id | at: spec, fabric?, colour?, second?, grain?, texture? (scan id or null), texMode?: original|recolour, texScale?, texNormal?, masks?: [colours], name?, layer? (0 = outer) }',
 	run(tx, a) {
 		const p = findPanel(tx, a);
 		setStackFields(tx, p, a, a.layer ?? 0);

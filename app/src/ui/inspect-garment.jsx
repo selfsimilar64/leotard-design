@@ -46,11 +46,22 @@ function PanelInspector({ sel, doc }) {
 			<Row label="Fabric"><Select value={s.fabric} options={fabricOptions} onChange={(v) => run({ op: 'panel.set', id: p.id, fabric: v })} /></Row>
 			<Row label="Colour"><Colour value={s.colour ?? '#888888'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, colour: v, gesture: g })} /></Row>
 			<Row label="Foil / second"><Select value={s.second ?? 'Tone-on-tone'} options={SECOND} onChange={(v) => run({ op: 'panel.set', id: p.id, second: v })} /></Row>
+			<Row label="Scanned fabric"><Select value={s.texture ?? ''} options={[['', 'None (procedural)'], ...scans().map((f) => [f.id, f.name + ' (' + f.id.slice(-4) + ')'])]} onChange={(v) => run({ op: 'panel.set', id: p.id, texture: v || null })} /></Row>
+			{s.texture ? (
+				<>
+					<Row label="Scan colour"><Select value={s.texMode ?? 'original'} options={[['original', 'As scanned'], ['recolour', 'Recolour with colour']]} onChange={(v) => run({ op: 'panel.set', id: p.id, texMode: v })} /></Row>
+					<Row label="Scan scale"><Slider value={s.texScale ?? 1} min={0.25} max={4} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, texScale: v, gesture: g })} /></Row>
+				</>
+			) : null}
 			<Row label="Grain"><Slider value={s.grain ?? 0} min={-Math.PI / 2} max={Math.PI / 2} step={0.01} format={(v) => (v * 180 / Math.PI).toFixed(0) + '°'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, grain: v, gesture: g })} /></Row>
 			<Row label="Mirrored"><span class="dim">{p.mirror === 'both' ? 'yes (both sides)' : 'no'}</span></Row>
 		</Section>
 	);
 }
+
+// scanned fabrics available (filled once the texture manifest has loaded)
+let scanList = [];
+const scans = () => { if (!scanList.length && app.engine?.textures) app.engine.textures.list().then((l) => { scanList = l; }); return scanList; };
 
 registerInspector('curves', CurveInspector);
 registerInspector('panels', PanelInspector);

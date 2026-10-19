@@ -13,3 +13,4 @@ dist/
 # App screenshots and reference photos (regenerated; photos may be the owner's)
 app/captures/
 app/references/
+app/exports/

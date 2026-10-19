@@ -11,7 +11,7 @@ import path from 'node:path';
 //   GET  /textures/<...>                  owner's licensed textures from ../assets/textures (never bundled)
 // Paths are confined to their folder; anything else is refused.
 const ROOT = path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1'));
-const DIRS = { designs: path.join(ROOT, 'designs'), captures: path.join(ROOT, 'captures'), references: path.join(ROOT, 'references') };
+const DIRS = { designs: path.join(ROOT, 'designs'), captures: path.join(ROOT, 'captures'), references: path.join(ROOT, 'references'), exports: path.join(ROOT, 'exports') };
 const TEXTURES = path.join(ROOT, '..', 'assets', 'textures');
 
 function inside(dir, rel) {
@@ -38,7 +38,7 @@ function fileBridge() {
 			server.middlewares.use(async (req, res, next) => {
 				const url = decodeURIComponent((req.url || '').split('?')[0]);
 				try {
-					let m = url.match(/^\/__fs\/(designs|captures|references)\/(.*)$/);
+					let m = url.match(/^\/__fs\/(designs|captures|references|exports)\/(.*)$/);
 					if (m) {
 						const dir = DIRS[m[1]];
 						fs.mkdirSync(dir, { recursive: true });

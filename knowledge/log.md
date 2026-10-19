@@ -1,5 +1,9 @@
 # Bundle update log
 
+## 2026-10-19
+* **Creation**: [Designer app](/engineering/app/about.md) section: [build status](/engineering/app/build-status.md) (P0 done, P1 core done), [garment cutting from curves](/engineering/app/garment-cutting.md), [pattern pieces and flattening](/engineering/app/pattern-pieces-and-flattening.md) (cylinder unroll + ARAP with envelope Cholesky; LSCM alone left ~30% stretch), [scripting surface](/engineering/app/scripting-surface.md).
+* **Update**: Owner gave the go-ahead to implement the whole plan; work on branch `build/designer-app`.
+
 ## 2026-10-18
 * **Update**: The bundle is now part of the project repository (`selfsimilar64/leotard-design`, private, on GitHub), history kept; [conventions](/bundle-conventions.md) updated. `tools/`, `assets/` and `moodboard/` are not tracked.
 * **Update**: Nine owner-downloaded VMOD fabrics unpacked to `assets/textures/vmod/` with a manifest; findings (PNG pHYs gives real tile size, OpenGL normals, seamless, colour masks per fabric part, iridescence not in maps) recorded in the [texture import pipeline](/engineering/rendering/fabric-shading/texture-import-pipeline.md).

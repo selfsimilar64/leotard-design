@@ -10,6 +10,7 @@ import { buildGarment, evaluateAll, panelAt } from '../garment/build.js';
 import { Surface } from '../body/surface.js';
 import { Overlay } from './overlay.js';
 import { Rims } from './rims.js';
+import { TextureLibrary } from '../materials/textures.js';
 
 export class Engine {
 	// ref: the reference garment surface (body/reference.js), where curves live
@@ -26,6 +27,8 @@ export class Engine {
 		this.stand = null;
 		this.legacy = new LegacyGarment(scene, body);
 		this.garment = new GarmentView(scene, body);
+		this.textures = new TextureLibrary(viewport.renderer);
+		this.garment.textures = this.textures;
 		this.overlay = new Overlay(scene, body);
 		this.rims = new Rims(scene, body);
 		this.ui = { selected: null, hover: null, showPoints: false }; // overlay state from the UI

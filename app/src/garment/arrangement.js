@@ -14,6 +14,7 @@ import * as THREE from 'three';
 const EPS_V = 0.0003;   // a crossing this close to a mesh vertex snaps to it (metres)
 const EPS = 0.00015;    // points this close merge into one
 const EPS_SEG = 0.00005; // a point this close to a segment lies on it
+const SLIVER = 0.00015; // m2: cells smaller than this (1.5 cm2) join a neighbour
 
 // Point kinds
 const VTX = 0, EDGE = 1, IN = 2;
@@ -456,18 +457,48 @@ export function buildArrangement(surf, curves) {
 	for (let t = 0; t < nT; t++) { const c = cellOf[t]; cells[c].tris[fill[c]++] = t; }
 
 	// cell adjacency: shared boundary length between neighbouring cells
-	const cellAdj = cells.map(() => new Map());
-	for (let q = 0; q < across.length; q += 4) {
-		const c1 = cellOf[across[q]], c2 = cellOf[across[q + 1]];
-		if (c1 === c2) continue;
-		const a = across[q + 2] * 3, b = across[q + 3] * 3;
-		const l = Math.hypot(VP[a] - VP[b], VP[a + 1] - VP[b + 1], VP[a + 2] - VP[b + 2]);
-		cellAdj[c1].set(c2, (cellAdj[c1].get(c2) ?? 0) + l);
-		cellAdj[c2].set(c1, (cellAdj[c2].get(c1) ?? 0) + l);
+	const adjacency = () => {
+		const adj = cells.map(() => new Map());
+		for (let q = 0; q < across.length; q += 4) {
+			const c1 = cellOf[across[q]], c2 = cellOf[across[q + 1]];
+			if (c1 === c2) continue;
+			const a = across[q + 2] * 3, b = across[q + 3] * 3;
+			const l = Math.hypot(VP[a] - VP[b], VP[a + 1] - VP[b + 1], VP[a + 2] - VP[b + 2]);
+			adj[c1].set(c2, (adj[c1].get(c2) ?? 0) + l);
+			adj[c2].set(c1, (adj[c2].get(c1) ?? 0) + l);
+		}
+		return adj;
+	};
+	let cellAdj = adjacency();
+	// Slivers: lines meeting at a shallow angle (several seams leaving one junction) can enclose a
+	// cell of a square centimetre or so; it joins the neighbour it shares most boundary with, so
+	// pattern pieces have clean outlines and no pin-hole openings appear.
+	const merge = cells.map((_, i) => i);
+	const root = (c) => { while (merge[c] !== c) c = merge[c] = merge[merge[c]]; return c; };
+	let merged = 0;
+	for (const c of cells) {
+		if (c.area > SLIVER) continue;
+		let best = -1, bl = 0;
+		for (const [n, l] of cellAdj[c.id]) if (l > bl && cells[n].area > SLIVER) { bl = l; best = n; }
+		if (best >= 0) { merge[c.id] = root(best); merged++; }
+	}
+	const softEdges = new Set(); // constraint edges now inside a merged cell: not seams of the piece
+	if (merged) {
+		for (let q = 0; q < across.length; q += 4) {
+			const c1 = cellOf[across[q]], c2 = cellOf[across[q + 1]];
+			if (c1 !== c2 && root(c1) === root(c2)) softEdges.add(ekey(across[q + 2], across[q + 3]));
+		}
+		const remap = new Int32Array(cells.length).fill(-1), next = [];
+		for (const c of cells) { const r = root(c.id); if (remap[r] < 0) { remap[r] = next.length; next.push({ id: next.length, tris: [], area: 0 }); } }
+		for (const c of cells) { const n = next[remap[root(c.id)]]; n.area += c.area; for (const t of c.tris) n.tris.push(t); }
+		for (let t = 0; t < nT; t++) cellOf[t] = remap[root(cellOf[t])];
+		for (const n of next) n.tris = Int32Array.from(n.tris);
+		cells.length = 0; cells.push(...next);
+		cellAdj = adjacency();
 	}
 
 	return {
-		cellAdj,
+		cellAdj, softEdges,
 		nV, hostF: Int32Array.from(hostF), hostB: Float32Array.from(hostB), baseV: surf.V, VP, ekey,
 		tris: Uint32Array.from(tris), triFace: Int32Array.from(triFace), cellOf, cells,
 		constraint, faceTris, faceTri0, loose, warn, ms: performance.now() - t0,

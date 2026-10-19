@@ -4,7 +4,7 @@
 // garment normal, AO, reference position) and the same fabric shader as the POC draws it
 // (zone 5: no region discards, cloth-space UVs). Changing body only re-interpolates.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, applyTexture } from '../materials/fabric.js';
 import { cellPiece, cellSignature } from '../garment/pieces.js';
 import { Flattener } from '../garment/flattener.js';
 
@@ -108,6 +108,10 @@ export class GarmentView {
 			const s = p.stack[0], m = this.material(p.id);
 			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone');
 			m.userData.u.uGrain.value = s.grain ?? 0;
+			if (s.texture && this.textures) {
+				const opts = { scale: s.texScale ?? 1, recolour: s.texMode === 'recolour', colour: s.colour, masks: s.masks, normal: s.texNormal };
+				this.textures.get(s.texture).then((set) => applyTexture(m, set, opts), (e) => console.warn('texture', s.texture, e.message));
+			} else applyTexture(m, null);
 		}
 		this.updateUVFlags();
 	}

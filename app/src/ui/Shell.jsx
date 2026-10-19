@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import { app } from '../instance.js';
 import { rev, selection, tool, layout, stats, toast, notify } from './state.js';
 import { Inspector } from './Inspector.jsx';
+import { FlatView } from './FlatView.jsx';
 import { tools } from './toolbar.js';
 import { LOOKS } from '../render/presets.js';
 import { run } from './controls.jsx';
@@ -14,7 +15,7 @@ export function Shell({ onViewport, onFlat }) {
 			<ToolRail />
 			<div class="views">
 				<div class="view3d" ref={(el) => el && onViewport?.(el)} />
-				<div class="viewflat" ref={(el) => el && onFlat?.(el)} />
+				<div class="viewflat"><FlatView /></div>
 				<Hud />
 			</div>
 			<aside class="side">
@@ -52,6 +53,7 @@ function TopBar() {
 				</select>
 			</span>
 			<span class="spacer" />
+			<button class="btn" title="Printable full-scale pattern (PDF)" onClick={async () => notify('Pattern saved: ' + await app.exportPattern())}>Pattern PDF</button>
 			<button class="btn" title="Measure the true GPU cost of a frame" onClick={() => notify(`Frame cost ${app.benchmark()} ms`)}>Measure</button>
 		</header>
 	);
