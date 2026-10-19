@@ -3,6 +3,7 @@ import { loadBody } from './helpers.js';
 import { makeBlock, BLOCK_OPTIONS } from '../src/garment/blocks.js';
 import { buildGarment } from '../src/garment/build.js';
 import { newDocument } from '../src/doc/schema.js';
+import { fromSP } from '../src/body/surface.js';
 
 let B;
 beforeAll(async () => { B = await loadBody(); }, 60000);
@@ -40,6 +41,17 @@ describe('blocks on the body', () => {
 			expect(area(g, 0), neck).toBeLessThan(area(set, 0));
 			expect(names.length).toBe(4);
 		}
+	});
+	it('V necklines reach their point (front about 1.27 m, back about 1.17 m on the reference body)', () => {
+		const lowest = (opts, back) => {
+			const neck = makeBlock(B.man, B.surf, opts).curves.find((c) => c.key === 'neck');
+			let y = Infinity;
+			for (const pt of neck.points) { const p = B.surf.pos(fromSP(pt.sp)); if ((p.z < 0.0) === back && Math.abs(p.x) < 0.03) y = Math.min(y, p.y); }
+			return y;
+		};
+		expect(lowest({ neck: 'v' }, false)).toBeLessThan(1.31);
+		expect(lowest({ back: 'v' }, true)).toBeLessThan(1.22);
+		expect(lowest({ neck: 'crew' }, false)).toBeGreaterThan(1.32);
 	});
 	it('every block option builds a closed, warning-free arrangement', () => {
 		for (const [k, vals] of Object.entries(BLOCK_OPTIONS)) for (const v of vals) {

@@ -1,0 +1,1987 @@
+{
+ "format": "leotard-design",
+ "version": 1,
+ "meta": {
+  "name": "B6 six-strap fan",
+  "author": "",
+  "created": "2026-10-19T07:39:57.258Z",
+  "notes": "",
+  "block": {
+   "neck": "crew",
+   "back": "crew",
+   "sleeves": "long",
+   "leg": "standard",
+   "armhole": "set-in"
+  }
+ },
+ "ids": {
+  "c": 14,
+  "p": 7,
+  "t": 4,
+  "s": 4,
+  "h": 2,
+  "g": 12
+ },
+ "body": {
+  "size": "young",
+  "form": "full",
+  "finish": "Athlete skin, light",
+  "pose": "hands-on-hips"
+ },
+ "scene": {
+  "rig": "White seamless (photo studio)",
+  "rotateLights": true,
+  "exposure": 1,
+  "bloom": 0.18,
+  "envRotation": 0,
+  "glare": "plain"
+ },
+ "legacy": null,
+ "layers": [
+  {
+   "id": "L0",
+   "kind": "shell",
+   "z": 0
+  }
+ ],
+ "curves": [
+  {
+   "id": "c1",
+   "layer": "L0",
+   "name": "Neckline",
+   "role": "edge",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 32,
+      "b": [
+       0.620079,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 269,
+      "b": [
+       0,
+       0.368379
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 348,
+      "b": [
+       0,
+       0.91978
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 1564,
+      "b": [
+       0,
+       0.253067
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 1512,
+      "b": [
+       0,
+       0.595812
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41462,
+      "b": [
+       0,
+       0.482714
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41474,
+      "b": [
+       0,
+       0.287149
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41498,
+      "b": [
+       0,
+       0.465229
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37262,
+      "b": [
+       0,
+       0.654694
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37144,
+      "b": [
+       0,
+       0.336173
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37128,
+      "b": [
+       0,
+       0.334933
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37782,
+      "b": [
+       0,
+       0.031781
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37704,
+      "b": [
+       0,
+       0.063887
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37024,
+      "b": [
+       0,
+       0.285567
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 566,
+      "b": [
+       0,
+       0.238597
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 570,
+      "b": [
+       0.039167,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 165,
+      "b": [
+       0.068307,
+       0.931693
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c2",
+   "layer": "L0",
+   "name": "Leg line",
+   "role": "edge",
+   "closed": true,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 63250,
+      "b": [
+       0.14949,
+       0.85051
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63308,
+      "b": [
+       0,
+       0.406709
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64712,
+      "b": [
+       0,
+       0.36611
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63290,
+      "b": [
+       0,
+       0.667798
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63336,
+      "b": [
+       0,
+       0.748974
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64914,
+      "b": [
+       0,
+       0.784684
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 81932,
+      "b": [
+       0.237648,
+       0.762352
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 79230,
+      "b": [
+       0.468453,
+       0.531547
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 75888,
+      "b": [
+       0,
+       0.549848
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64828,
+      "b": [
+       0,
+       0.697842
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 79140,
+      "b": [
+       0.47618,
+       0.52382
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64115,
+      "b": [
+       0.200437,
+       0.799563
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64121,
+      "b": [
+       0.92703,
+       0.07297
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64066,
+      "b": [
+       0,
+       0.803731
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64406,
+      "b": [
+       0.107038,
+       0.892962
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63646,
+      "b": [
+       0,
+       0.476763
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63656,
+      "b": [
+       0,
+       0.203888
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63603,
+      "b": [
+       0,
+       0.47943
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63595,
+      "b": [
+       0,
+       0.62773
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63832,
+      "b": [
+       0,
+       0.511706
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c3",
+   "layer": "L0",
+   "name": "Sleeve seam",
+   "role": "seam",
+   "closed": true,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 40709,
+      "b": [
+       0.833333,
+       0.166667
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42362,
+      "b": [
+       0,
+       0.738095
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42033,
+      "b": [
+       0,
+       0.275
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42394,
+      "b": [
+       0,
+       0.726191
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64326,
+      "b": [
+       0.839285,
+       0.160715
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42510,
+      "b": [
+       0,
+       0.436583
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42831,
+      "b": [
+       0.458172,
+       0.541828
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 59927,
+      "b": [
+       0.261422,
+       0.738578
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42454,
+      "b": [
+       0,
+       0.984999
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42612,
+      "b": [
+       0.422252,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42816,
+      "b": [
+       0,
+       0.501429
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41022,
+      "b": [
+       0,
+       0.773325
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41013,
+      "b": [
+       0.365002,
+       0.634998
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 40864,
+      "b": [
+       0.732416,
+       0.267584
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 58656,
+      "b": [
+       0.192308,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 40790,
+      "b": [
+       0,
+       0.583333
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c4",
+   "layer": "L0",
+   "name": "Cuff",
+   "role": "edge",
+   "closed": true,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 56524,
+      "b": [
+       0.941204,
+       0.058796
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56720,
+      "b": [
+       0,
+       0.965099
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56750,
+      "b": [
+       0,
+       0.343684
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56676,
+      "b": [
+       0.316437,
+       0.683563
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56651,
+      "b": [
+       0,
+       0.207789
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56712,
+      "b": [
+       0.559844,
+       0.440156
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 59082,
+      "b": [
+       0,
+       0.923824
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56580,
+      "b": [
+       0.96986,
+       0.03014
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c5",
+   "layer": "L0",
+   "name": "Side seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 42819,
+      "b": [
+       0.145107,
+       0.512865
+      ]
+     },
+     "on": {
+      "curve": "c3",
+      "t": 0.6003374313810582
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 60845,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61027,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61218,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61395,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61590,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 62528,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63451,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63604,
+      "b": [
+       0.434338,
+       0.464038
+      ]
+     },
+     "on": {
+      "curve": "c2",
+      "t": 0.8591342178131389
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c6",
+   "layer": "L0",
+   "name": "Shoulder seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 37142,
+      "b": [
+       0.139785,
+       0.234992
+      ]
+     },
+     "on": {
+      "curve": "c1",
+      "t": 0.5473875362186972
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41620,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42360,
+      "b": [
+       0.158851,
+       0.782947
+      ]
+     },
+     "on": {
+      "curve": "c3",
+      "t": 0.07783874405249142
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c7",
+   "layer": "L0",
+   "name": "Crotch seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 75888,
+      "b": [
+       0.505783,
+       0.247469
+      ]
+     },
+     "on": {
+      "curve": "c2",
+      "t": 0.3948663926554036
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 29692,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 29701,
+      "b": [
+       0.247469,
+       0.505784
+      ]
+     },
+     "on": {
+      "curve": "c2",
+      "t": 0.3948663926554036,
+      "mirror": true
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c8",
+   "layer": "L0",
+   "name": "Underarm seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 42819,
+      "b": [
+       0.145107,
+       0.512865
+      ]
+     },
+     "on": {
+      "curve": "c3",
+      "t": 0.6003374313810582
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 43108,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 43340,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 55174,
+      "b": [
+       1,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 55766,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56116,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56220,
+      "b": [
+       1,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 56762,
+      "b": [
+       0.122947,
+       0.261175
+      ]
+     },
+     "on": {
+      "curve": "c4",
+      "t": 0.5571862038766365
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c9",
+   "layer": "L0",
+   "role": "seam",
+   "name": "Yoke",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 44614,
+      "b": [
+       0.887531,
+       0.000001
+      ]
+     },
+     "kind": "corner"
+    },
+    {
+     "sp": {
+      "f": 44582,
+      "b": [
+       0.163112,
+       0.214648
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41184,
+      "b": [
+       0.037504,
+       0.039439
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 44560,
+      "b": [
+       0.098717,
+       0.54955
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42671,
+      "b": [
+       0.122405,
+       0.408675
+      ]
+     },
+     "kind": "smooth",
+     "on": {
+      "curve": "c5",
+      "t": 0.03643675960194452
+     }
+    },
+    {
+     "sp": {
+      "f": 64519,
+      "b": [
+       0.017073,
+       0.504274
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42132,
+      "b": [
+       0.446754,
+       0.067305
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42221,
+      "b": [
+       0.140175,
+       0.525309
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2362,
+      "b": [
+       0.609063,
+       0
+      ]
+     },
+     "kind": "corner"
+    },
+    {
+     "sp": {
+      "f": 2304,
+      "b": [
+       0.525293,
+       0.140173
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2217,
+      "b": [
+       0.067314,
+       0.446742
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 23776,
+      "b": [
+       0.504266,
+       0.017153
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2758,
+      "b": [
+       0.408715,
+       0.122375
+      ]
+     },
+     "kind": "smooth",
+     "on": {
+      "curve": "c5",
+      "t": 0.03643665456256087,
+      "mirror": true
+     }
+    },
+    {
+     "sp": {
+      "f": 4645,
+      "b": [
+       0.549492,
+       0.098789
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 1253,
+      "b": [
+       0.039431,
+       0.037495
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 4671,
+      "b": [
+       0.21465,
+       0.163102
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c10",
+   "layer": "L0",
+   "role": "edge",
+   "name": "Back U",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 41974,
+      "b": [
+       0.532893,
+       0.341314
+      ]
+     },
+     "kind": "corner"
+    },
+    {
+     "sp": {
+      "f": 42115,
+      "b": [
+       0.309152,
+       0.283621
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 59893,
+      "b": [
+       0.47978,
+       0.305909
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2378,
+      "b": [
+       0.472375,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 19762,
+      "b": [
+       0.305932,
+       0.479781
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2194,
+      "b": [
+       0.283617,
+       0.309152
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2063,
+      "b": [
+       0.341302,
+       0.532909
+      ]
+     },
+     "kind": "corner"
+    },
+    {
+     "sp": {
+      "f": 1671,
+      "b": [
+       0.152409,
+       0.847591
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c11",
+   "layer": "L0",
+   "role": "strap-path",
+   "name": "Fan strap 1",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 83086,
+      "b": [
+       0.033732,
+       0.472188
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42271,
+      "b": [
+       0.152666,
+       0.450257
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42279,
+      "b": [
+       0.252653,
+       0.442637
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c12",
+   "layer": "L0",
+   "role": "strap-path",
+   "name": "Fan strap 2",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 41645,
+      "b": [
+       0.441222,
+       0.391834
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42194,
+      "b": [
+       0.188277,
+       0.106291
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42223,
+      "b": [
+       0.204442,
+       0.556471
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c13",
+   "layer": "L0",
+   "role": "strap-path",
+   "name": "Fan strap 3",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 41926,
+      "b": [
+       0.254923,
+       0.213874
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42152,
+      "b": [
+       0.026196,
+       0.54606
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42135,
+      "b": [
+       0.049728,
+       0.468164
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  }
+ ],
+ "panels": [
+  {
+   "id": "p1",
+   "layer": "L0",
+   "mirror": "none",
+   "name": "Front",
+   "seed": {
+    "f": 64653,
+    "b": [
+     0.925466,
+     0.074534
+    ]
+   },
+   "stack": [
+    {
+     "fabric": "wet",
+     "colour": "#0a0a0c",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p2",
+   "layer": "L0",
+   "mirror": "none",
+   "name": "Back",
+   "seed": {
+    "f": 62678,
+    "b": [
+     0.033503,
+     0
+    ]
+   },
+   "stack": [
+    {
+     "fabric": "wet",
+     "colour": "#0a0a0c",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p3",
+   "layer": "L0",
+   "mirror": "both",
+   "name": "Sleeve",
+   "seed": {
+    "f": 55634,
+    "b": [
+     0.291009,
+     0.708991
+    ]
+   },
+   "stack": [
+    {
+     "fabric": "mesh",
+     "colour": "#0d0d10",
+     "second": "Tone-on-tone",
+     "sheer": 0.1
+    }
+   ]
+  },
+  {
+   "id": "p4",
+   "layer": "L0",
+   "name": "Front",
+   "seed": {
+    "f": 40846,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "mesh",
+     "colour": "#0d0d10",
+     "second": "Tone-on-tone",
+     "sheer": 0.1
+    }
+   ]
+  },
+  {
+   "id": "p5",
+   "layer": "L0",
+   "name": "Back",
+   "seed": {
+    "f": 2159,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "mesh",
+     "colour": "#0d0d10",
+     "second": "Tone-on-tone",
+     "sheer": 0.1
+    }
+   ]
+  },
+  {
+   "id": "p6",
+   "layer": "L0",
+   "name": "Back",
+   "seed": {
+    "f": 2414,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "wet",
+     "colour": "#0a0a0c",
+     "second": "Tone-on-tone"
+    }
+   ],
+   "removed": true
+  }
+ ],
+ "straps": [
+  {
+   "id": "s1",
+   "path": "c11",
+   "width": 0.007,
+   "edge": "none",
+   "layer": 0,
+   "fabric": {
+    "fabric": "wet",
+    "colour": "#0a0a0c",
+    "second": "Tone-on-tone"
+   }
+  },
+  {
+   "id": "s2",
+   "path": "c12",
+   "width": 0.007,
+   "edge": "none",
+   "layer": 1,
+   "fabric": {
+    "fabric": "wet",
+    "colour": "#0a0a0c",
+    "second": "Tone-on-tone"
+   }
+  },
+  {
+   "id": "s3",
+   "path": "c13",
+   "width": 0.007,
+   "edge": "none",
+   "layer": 2,
+   "fabric": {
+    "fabric": "wet",
+    "colour": "#0a0a0c",
+    "second": "Tone-on-tone"
+   }
+  }
+ ],
+ "trims": [
+  {
+   "id": "t1",
+   "on": [
+    "c1",
+    "c10"
+   ],
+   "kind": "binding",
+   "fabric": {
+    "fabric": "wet",
+    "colour": "#0a0a0c",
+    "second": "Tone-on-tone"
+   }
+  },
+  {
+   "id": "t2",
+   "on": [
+    "c2",
+    "c4"
+   ],
+   "kind": "elastic",
+   "fabric": {
+    "fabric": "wet",
+    "colour": "#0a0a0c",
+    "second": "Tone-on-tone"
+   }
+  },
+  {
+   "id": "t3",
+   "on": [
+    "c9"
+   ],
+   "kind": "tape",
+   "fabric": {
+    "fabric": "wet",
+    "colour": "#0a0a0c",
+    "second": "Tone-on-tone"
+   }
+  }
+ ],
+ "bands": [],
+ "decals": [],
+ "details": [],
+ "hardware": [
+  {
+   "id": "h1",
+   "kind": "clear-hook",
+   "at": {
+    "f": 41590,
+    "b": [
+     0.632344,
+     0.367656
+    ]
+   },
+   "angle": 0,
+   "mirror": "none"
+  }
+ ],
+ "stones": [
+  {
+   "id": "g1",
+   "kind": "row",
+   "name": "",
+   "on": {
+    "strap": "s1"
+   },
+   "params": {
+    "size": "ss6",
+    "rows": 1,
+    "gap": 1.6
+   },
+   "stone": "Light Rose AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 13
+  },
+  {
+   "id": "g2",
+   "kind": "row",
+   "name": "",
+   "on": {
+    "strap": "s2"
+   },
+   "params": {
+    "size": "ss6",
+    "rows": 1,
+    "gap": 1.6
+   },
+   "stone": "Light Rose AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 7932
+  },
+  {
+   "id": "g3",
+   "kind": "row",
+   "name": "",
+   "on": {
+    "strap": "s3"
+   },
+   "params": {
+    "size": "ss6",
+    "rows": 1,
+    "gap": 1.6
+   },
+   "stone": "Light Rose AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 15851
+  },
+  {
+   "id": "g4",
+   "kind": "motif",
+   "name": "",
+   "on": null,
+   "at": {
+    "sp": {
+     "f": 21002,
+     "b": [
+      0.322496,
+      0
+     ]
+    }
+   },
+   "params": {
+    "shape": "flower",
+    "size": 0.15,
+    "stoneSize": "ss6",
+    "mode": "outline",
+    "gap": 1.4
+   },
+   "palette": [
+    {
+     "stone": "Light Rose AB",
+     "weight": 1
+    },
+    {
+     "stone": "Rose AB",
+     "weight": 1
+    },
+    {
+     "stone": "Crystal AB",
+     "weight": 1
+    }
+   ],
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 23770
+  },
+  {
+   "id": "g5",
+   "kind": "motif",
+   "name": "",
+   "on": null,
+   "at": {
+    "sp": {
+     "f": 21002,
+     "b": [
+      0.322496,
+      0
+     ]
+    }
+   },
+   "params": {
+    "shape": "flower",
+    "size": 0.0825,
+    "stoneSize": "ss6",
+    "mode": "outline",
+    "gap": 1.4,
+    "angle": 0.63
+   },
+   "stone": "Rose AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 31689
+  },
+  {
+   "id": "g6",
+   "kind": "motif",
+   "name": "",
+   "on": null,
+   "at": {
+    "sp": {
+     "f": 21002,
+     "b": [
+      0.322496,
+      0
+     ]
+    }
+   },
+   "params": {
+    "shape": "circle",
+    "size": 0.027,
+    "stoneSize": "ss6",
+    "mode": "fill",
+    "fillSize": "ss6"
+   },
+   "stone": "Crystal AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 39608
+  },
+  {
+   "id": "g7",
+   "kind": "motif",
+   "name": "",
+   "on": null,
+   "at": {
+    "sp": {
+     "f": 61954,
+     "b": [
+      0.917646,
+      0.082354
+     ]
+    }
+   },
+   "params": {
+    "shape": "flower",
+    "size": 0.16,
+    "stoneSize": "ss6",
+    "mode": "outline",
+    "gap": 1.4
+   },
+   "palette": [
+    {
+     "stone": "Light Rose AB",
+     "weight": 1
+    },
+    {
+     "stone": "Rose AB",
+     "weight": 1
+    },
+    {
+     "stone": "Crystal AB",
+     "weight": 1
+    }
+   ],
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 47527
+  },
+  {
+   "id": "g8",
+   "kind": "motif",
+   "name": "",
+   "on": null,
+   "at": {
+    "sp": {
+     "f": 61954,
+     "b": [
+      0.917646,
+      0.082354
+     ]
+    }
+   },
+   "params": {
+    "shape": "flower",
+    "size": 0.08800000000000001,
+    "stoneSize": "ss6",
+    "mode": "outline",
+    "gap": 1.4,
+    "angle": 0.63
+   },
+   "stone": "Rose AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 55446
+  },
+  {
+   "id": "g9",
+   "kind": "motif",
+   "name": "",
+   "on": null,
+   "at": {
+    "sp": {
+     "f": 61954,
+     "b": [
+      0.917646,
+      0.082354
+     ]
+    }
+   },
+   "params": {
+    "shape": "circle",
+    "size": 0.0288,
+    "stoneSize": "ss6",
+    "mode": "fill",
+    "fillSize": "ss6"
+   },
+   "stone": "Crystal AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 63365
+  },
+  {
+   "id": "g10",
+   "kind": "scatter",
+   "name": "",
+   "on": {
+    "panel": "p4"
+   },
+   "params": {
+    "from": {
+     "curve": "c9"
+    },
+    "near": 0.8,
+    "far": 0.05,
+    "distance": 0.04,
+    "sizes": [
+     "ss6"
+    ],
+    "gap": 2
+   },
+   "stone": "Light Rose AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 71284
+  },
+  {
+   "id": "g11",
+   "kind": "scatter",
+   "name": "",
+   "on": {
+    "panel": "p3"
+   },
+   "params": {
+    "from": {
+     "curve": "c4"
+    },
+    "near": 0.9,
+    "far": 0.04,
+    "distance": 0.2,
+    "sizes": [
+     "ss6",
+     "ss8"
+    ],
+    "gap": 1.8
+   },
+   "stone": "Light Rose AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 79203
+  }
+ ],
+ "placed": [],
+ "reference": [],
+ "locks": {}
+}

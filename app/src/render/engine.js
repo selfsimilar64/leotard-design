@@ -319,7 +319,7 @@ Engine.prototype.syncStones = function (doc) {
 	const edge = this.edgeKeepOut(doc);
 	const layerZ = new Map(doc.layers.map((l) => [l.id, l.z ?? 0]));
 	const ctx = {
-		surf: this.surf, doc, evaluated: this.evaluated, landmarks: this.app?.store.ctx.landmarks,
+		surf: this.surf, man: this.body, doc, evaluated: this.evaluated, landmarks: this.app?.store.ctx.landmarks, // man: point specs such as { front: [x, y] }
 		garment: (layer = 'L0') => this.layers.get(layer)?.g ?? this.g,
 		strapHeight: (s) => 0.0009 + 0.0013 * (s.layer ?? 0) + 0.0019 * Math.min(s.width / 0.01, 1.4),
 		// on fabric (any layer's panel that is not cut out) and clear of finished opening edges

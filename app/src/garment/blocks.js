@@ -29,7 +29,8 @@ export const DEFAULT_BLOCK = { neck: 'scoop', back: 'scoop', sleeves: 'long', le
 function frontNeck(x, y, kind) {
 	switch (kind) {
 		case 'crew': return ellOut(x, y, 0, 1.405, 0.074, 0.062);
-		case 'v': return max(vOut(x, y, 1.265, 1.75), ellOut(x, y, 0, 1.43, 0.075, 0.08));
+		// the V clipped by an oval reaching down past its point (a small oval kept the V a crew)
+		case 'v': return max(vOut(x, y, 1.265, 1.75), ellOut(x, y, 0, 1.43, 0.08, 0.18));
 		case 'high': return null; // a ring round the neck, see neckField
 		case 'boat': return ellOut(x, y, 0, 1.43, 0.13, 0.085);
 		default: return ellOut(x, y, 0, 1.422, 0.085, 0.14); // scoop (the POC's)
@@ -39,7 +40,7 @@ function backNeck(x, y, kind) {
 	switch (kind) {
 		case 'crew': return ellOut(x, y, 0, 1.42, 0.074, 0.07);
 		case 'low': return ellOut(x, y, 0, 1.40, 0.105, 0.29);
-		case 'v': return max(vOut(x, y, 1.17, 2.3), ellOut(x, y, 0, 1.43, 0.08, 0.08));
+		case 'v': return max(vOut(x, y, 1.17, 2.3), ellOut(x, y, 0, 1.43, 0.085, 0.27));
 		case 'keyhole': return min(ellOut(x, y, 0, 1.442, 0.066, 0.085), ellOut(x, y, 0, 1.232, 0.04, 0.075));
 		case 'open': return min(ellOut(x, y, 0, 1.422, 0.085, 0.12), ellOut(x, y, 0, 1.187, 0.098, 0.15));
 		default: return ellOut(x, y, 0, 1.422, 0.085, 0.21); // scoop
