@@ -9,6 +9,7 @@ import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
 import { inspectors } from './inspectors.js';
 import { ToolOptions } from './inspect-garment.jsx';
+import { StoneCounts } from './inspect-stones.jsx';
 import { BLOCK_OPTIONS } from '../garment/blocks.js';
 import { tool } from './state.js';
 
@@ -46,6 +47,7 @@ function DesignProps({ doc }) {
 				<Row label="Exposure"><Slider value={s.exposure} min={0.3} max={2.5} onChange={(v, g) => run({ op: 'scene.set', exposure: v, gesture: g })} /></Row>
 				<Row label="Sparkle glow"><Slider value={s.bloom} min={0} max={1.2} onChange={(v, g) => run({ op: 'scene.set', bloom: v, gesture: g })} /></Row>
 			</Section>
+			<StoneCounts />
 			<BlockPicker doc={doc} />
 			{L ? <LegacyProps L={L} /> : null}
 		</>

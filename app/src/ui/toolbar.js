@@ -10,9 +10,9 @@ export const tools = [
 	{ id: 'strap', label: 'Strap', icon: '⌇', key: 'S' },
 	{ id: 'trim', label: 'Edges', icon: '▭', key: 'T' },
 	{ sep: 2 },
-	{ id: 'stones', label: 'Stones', icon: '✦', key: 'G', disabled: true },
-	{ id: 'single', label: 'Single stone', icon: '•', key: '1', disabled: true },
-	{ id: 'erase', label: 'Eraser', icon: '⌫', key: 'D', disabled: true },
+	{ id: 'stones', label: 'Stones', icon: '✦', key: 'G' },
+	{ id: 'single', label: 'Single stone', icon: '•', key: '1' },
+	{ id: 'erase', label: 'Eraser', icon: '⌫', key: 'D' },
 	{ sep: 3 },
 	{ id: 'trace', label: 'Trace photo', icon: '◫', key: 'R', disabled: true },
 ];

@@ -17,7 +17,8 @@
   "c": 39,
   "p": 18,
   "r": 3,
-  "s": 3
+  "s": 3,
+  "g": 11
  },
  "body": {
   "size": "teen",
@@ -1676,7 +1677,101 @@
  "decals": [],
  "details": [],
  "hardware": [],
- "stones": [],
+ "stones": [
+  {
+   "id": "g1",
+   "kind": "row",
+   "name": "Strap dots",
+   "on": {
+    "strap": "s1"
+   },
+   "params": {
+    "size": "ss10",
+    "gap": 2.2
+   },
+   "stone": "Jet",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 13
+  },
+  {
+   "id": "g2",
+   "kind": "row",
+   "name": "Strap dots 2",
+   "on": {
+    "strap": "s2"
+   },
+   "params": {
+    "size": "ss10",
+    "gap": 2.2
+   },
+   "stone": "Jet",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 7932
+  },
+  {
+   "id": "g3",
+   "kind": "row",
+   "name": "Bridge sides",
+   "on": {
+    "curve": "c34"
+   },
+   "params": {
+    "size": "ss12",
+    "offset": 0,
+    "gap": 1.6
+   },
+   "stone": "Light Amethyst AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 15851
+  },
+  {
+   "id": "g4",
+   "kind": "row",
+   "name": "Waistband dots",
+   "on": {
+    "curve": "c36"
+   },
+   "params": {
+    "size": "ss10",
+    "offset": 0.009,
+    "gap": 2
+   },
+   "stone": "Jet",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 23770
+  },
+  {
+   "id": "g5",
+   "kind": "row",
+   "name": "Opening outline",
+   "on": {
+    "curve": "c31"
+   },
+   "params": {
+    "size": "ss8",
+    "offset": -0.006,
+    "gap": 1.6
+   },
+   "stone": "Crystal AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 31689
+  }
+ ],
  "placed": [],
  "reference": [
   {

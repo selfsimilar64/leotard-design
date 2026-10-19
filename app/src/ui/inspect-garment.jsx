@@ -4,6 +4,7 @@ import { registerInspector } from './inspectors.js';
 import { Section, Row, Select, Colour, Slider, Toggle, run } from './controls.jsx';
 import { selection, tool } from './state.js';
 import { toolOptions } from './tools.js';
+import { StoneToolOptions } from './inspect-stones.jsx';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 
 const fabricOptions = Object.entries(FABRICS).map(([k, f]) => [k, f.label]);
@@ -109,6 +110,7 @@ registerInspector('panels', PanelInspector);
 // Tool options, shown above the selection's inspector while a drawing tool is active.
 export function ToolOptions() {
 	const t = tool.value, o = toolOptions.value, set = (patch) => { toolOptions.value = { ...o, ...patch }; };
+	if (t === 'stones' || t === 'single' || t === 'erase') return <StoneToolOptions tool={t} />;
 	if (t === 'pen') return (
 		<Section title="Pen">
 			<Row label="Draws"><Select value={o.penRole} options={ROLES} onChange={(v) => set({ penRole: v })} /></Row>

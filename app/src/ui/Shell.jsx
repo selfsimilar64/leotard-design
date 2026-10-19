@@ -82,7 +82,7 @@ function ToolRail() {
 function Outliner() {
 	rev.value;
 	const d = app.doc, sel = selection.value;
-	const groups = [['curves', 'Lines'], ['panels', 'Panels'], ['straps', 'Straps'], ['trims', 'Edge finishes'], ['stones', 'Stone generators'], ['placed', 'Single stones'], ['reference', 'Reference photos']];
+	const groups = [['layers', 'Layers'], ['curves', 'Lines'], ['panels', 'Panels'], ['straps', 'Straps'], ['trims', 'Edge finishes'], ['stones', 'Stone generators'], ['placed', 'Single stones'], ['hardware', 'Hardware'], ['reference', 'Reference photos']];
 	return (
 		<details class="section" open>
 			<summary><span>Outliner</span></summary>

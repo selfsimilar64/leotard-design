@@ -14,6 +14,7 @@ import { newDocument } from './doc/schema.js';
 import './doc/commands-core.js';
 import './doc/commands-garment.js';
 import './doc/commands-reference.js';
+import './doc/commands-stones.js';
 import { surfaceLandmarks } from './body/landmarks.js';
 import { resolvePoint } from './curves/points.js';
 import { defineCommand } from './doc/store.js';
@@ -79,6 +80,7 @@ export class App {
 			},
 			landmarkPos: (lm) => engine.pick.pos(landmarks[lm]).toArray(),
 			bodyKey: () => engine.bodyKey,
+			stonesOf: (gen) => engine.stoneRun.stones.filter((s) => s.gen === gen),
 		};
 		this.store.hooks.push((tx, touched) => this.inheritHook(tx, touched));
 		engine.viewport.onResize.add((w, h) => engine.overlay.setResolution(w, h));
@@ -243,6 +245,8 @@ export class App {
 
 	benchmark(n = 60) { return +this.engine.viewport.benchmark(n).toFixed(2); }
 	stats() { return { ...this.engine.viewport.stats, ...this.engine.timing, legacy: this.engine.legacy.timing }; }
+	// stone counts by size (mm) and colour, and generator problems
+	stoneStats() { return { ...this.engine.stoneView.stats(), dropped: this.engine.stoneRun.dropped, errors: this.engine.stoneRun.errors }; }
 }
 
 function loadAutosave() {

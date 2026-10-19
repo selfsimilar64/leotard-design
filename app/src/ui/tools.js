@@ -20,6 +20,7 @@ import { mirrorSP } from '../curves/points.js';
 export const toolOptions = signal({
 	penRole: 'seam', penMirror: 'auto', strapWidth: 0.01,
 	swatch: { fabric: 'mystique', colour: '#2b1d6e', second: 'Tone-on-tone' },
+	stone: { stone: 'Crystal AB', size: 'ss12', shape: 'round', rows: 1, offset: 0.004, gap: 1.15, fill: 'random', eraseR: 0.004 },
 });
 
 export class ToolController {
@@ -103,6 +104,22 @@ export class ToolController {
 			return;
 		}
 		if (t === 'pen' || t === 'strap') { this.penClick(x, y, e.shiftKey); return; }
+		if (t === 'stones' || t === 'single' || t === 'erase') {
+			const st = toolOptions.value.stone, h = this.engine.pickAt(x, y);
+			if (t === 'stones') {
+				// a line under the cursor gets rows along it; otherwise the panel gets a fill
+				const c = this.engine.curveAt(x, y, 8);
+				let id;
+				if (c) id = this.run({ op: 'stones.add', kind: 'row', on: { curve: c.curve }, stone: st.stone, shape: st.shape, params: { size: st.size, rows: st.rows, offset: st.offset, gap: st.gap } });
+				else if (h?.panel) id = this.run({ op: 'stones.add', kind: 'fill', on: { panel: h.panel }, stone: st.stone, shape: st.shape, params: { size: st.size, pattern: st.fill, gap: st.gap } });
+				if (id) selection.value = { kind: 'stones', id };
+				return;
+			}
+			if (!h?.sp) return;
+			if (t === 'single') this.run({ op: 'stone.place', at: { sp: toSP(h.sp) }, size: st.size, stone: st.stone, shape: st.shape });
+			else this.run({ op: 'stones.erase', at: { sp: toSP(h.sp) }, r: st.eraseR });
+			return;
+		}
 		if (t === 'fabric' || t === 'cut') {
 			const h = this.engine.pickAt(x, y);
 			if (!h?.sp) return;

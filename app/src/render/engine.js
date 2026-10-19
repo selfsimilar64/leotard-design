@@ -13,6 +13,10 @@ import { Rims } from './rims.js';
 import { TextureLibrary } from '../materials/textures.js';
 import { StrapView } from './straps.js';
 import { HardwareView } from './hardware.js';
+import { StoneView } from '../stones/view.js';
+import { runStones } from '../stones/generators.js';
+import { locate } from '../garment/arrangement.js';
+import { TRIMS } from '../garment/trim.js';
 
 export class Engine {
 	// ref: the reference garment surface (body/reference.js), where curves live
@@ -32,6 +36,8 @@ export class Engine {
 		this.layers = new Map(); // layer id -> { layer, g, view: GarmentView, rims: Rims }
 		this.straps = new StrapView(scene, body, this.textures);
 		this.hardware = new HardwareView(scene, body, this.surf);
+		this.stoneView = new StoneView(scene, body);
+		this.stoneRun = { stones: [], errors: [], dropped: 0 };
 		this.coverHooks = [(cover) => this.straps.markCover(cover)];
 		this.overlay = new Overlay(scene, body);
 		this.ui = { selected: null, hover: null, showPoints: false }; // overlay state from the UI
@@ -99,7 +105,7 @@ export class Engine {
 		return best;
 	}
 
-	stoneCount() { return this.legacy.visible === false ? 0 : this.legacy.stones.count; }
+	stoneCount() { return this.legacyMode ? this.legacy.stones.count : this.stoneView.count; }
 
 	get fabricMaterials() { return [this.skin, ...this.legacy.materials, ...[...this.layers.values()].flatMap((L) => [...L.view.materials.values()])]; }
 	get garment() { return this.layers.get('L0')?.view ?? null; }
@@ -117,7 +123,7 @@ export class Engine {
 			this.legacy.state = null; this.body.styleKey = null; this.geoSig = null;
 			this.legacy.setVisible(legacy);
 			for (const L of this.layers.values()) { L.view.setVisible(!legacy); L.rims.setVisible(!legacy); }
-			this.straps.setVisible(!legacy); this.hardware.setVisible(!legacy);
+			this.straps.setVisible(!legacy); this.hardware.setVisible(!legacy); this.stoneView.setVisible(!legacy);
 		}
 		if (legacy) {
 			// Style before the first body: the garment surface needs the regions, and setStyle skips the
@@ -133,6 +139,7 @@ export class Engine {
 			if (t('curves') || t('panels') || t('layers') || t('trims') || this.geoSig === null) this.syncGarment(doc);
 			else if (t('straps')) this.syncStraps(doc);
 			if (t('hardware') || t('curves') || t('panels')) this.hardware.build(doc);
+			if (t('stones') || t('placed') || t('curves') || t('panels') || t('straps') || t('trims') || t('layers')) this.syncStones(doc);
 			if (t('body')) this.applyBody(doc.body, all);
 		}
 		if (!legacy && why !== 'gesture') this.drawOverlay(doc);
@@ -244,7 +251,7 @@ export class Engine {
 		if (this.legacyMode) this.legacy.onBodyChanged();
 		else {
 			for (const v of this.views) v.refresh();
-			if (this.app) { this.drawOverlay(this.app.doc); for (const L of this.layers.values()) L.rims.build(L.g, this.app.doc, L.view.garmentCells, this.evaluated, layerLift(L.layer)); this.straps.build(this.app.doc, this.fabricCover); this.hardware.build(this.app.doc); }
+			if (this.app) { this.drawOverlay(this.app.doc); for (const L of this.layers.values()) L.rims.build(L.g, this.app.doc, L.view.garmentCells, this.evaluated, layerLift(L.layer)); this.straps.build(this.app.doc, this.fabricCover); this.hardware.build(this.app.doc); this.stoneView.build(); }
 		}
 		if (reframe) this.frameCamera(b.form);
 	}
@@ -266,3 +273,58 @@ export class Engine {
 
 // Extra height of a layer's finishes above the shell's (overlays sit 0.9 mm per step higher).
 function layerLift(layer) { const z = layer?.z ?? 0; return z > 0 ? 0.0009 * z : 0; }
+
+// --- stones --------------------------------------------------------------------------------------
+Engine.prototype.syncStones = function (doc) {
+	if (!this.g) return;
+	const t0 = performance.now();
+	const edge = this.edgeKeepOut(doc);
+	const layerZ = new Map(doc.layers.map((l) => [l.id, l.z ?? 0]));
+	const ctx = {
+		surf: this.surf, doc, evaluated: this.evaluated, landmarks: this.app?.store.ctx.landmarks,
+		garment: (layer = 'L0') => this.layers.get(layer)?.g ?? this.g,
+		strapHeight: (s) => 0.0009 + 0.0013 * (s.layer ?? 0) + 0.0019 * Math.min(s.width / 0.01, 1.4),
+		// on fabric (any layer's panel that is not cut out) and clear of finished opening edges
+		isFabric: (sp, p, size, keepOut) => {
+			let on = false;
+			for (const L of this.layers.values()) {
+				const t = locate(L.g.arr, this.surf, sp);
+				if (t < 0) continue;
+				const pi = L.g.cellPanel[L.g.arr.cellOf[t]];
+				if (pi >= 0 && !doc.panels[pi].removed) { on = true; break; }
+			}
+			return on && edge(p, keepOut) > size / 2;
+		},
+	};
+	this.stoneRun = runStones(doc, ctx);
+	this.stoneView.set(this.stoneRun.stones, (s) => (s.layer ? 0.0009 * Math.max(layerZ.get(s.layer) ?? 0, 0) : 0));
+	this.timing.stones = { ms: performance.now() - t0, count: this.stoneRun.stones.length, dropped: this.stoneRun.dropped, errors: this.stoneRun.errors };
+};
+
+// Distance from a reference position to the nearest finished opening edge, minus that edge's
+// keep-out (elastic 1 cm + 1.5 mm, binding 8 mm + 1.5 mm, raw 2 mm): stones stay off the elastic.
+Engine.prototype.edgeKeepOut = function (doc) {
+	const L0 = this.layers.get('L0');
+	const loops = L0?.rims?.loops ?? [];
+	const arr = this.g.arr, VP = arr.VP, cell = 0.02, grid = new Map();
+	for (const loop of loops) {
+		let keep = TRIMS.elastic.width + 0.0015;
+		const main = loop.curves.find(Boolean)?.replace(/~m$/, '');
+		const t = main && doc.trims.find((x) => x.on.includes(main));
+		if (t) keep = t.kind === 'none' ? 0.002 : t.kind === 'binding' ? TRIMS.binding.width + 0.0015 : keep;
+		for (const v of loop.verts) {
+			const x = VP[v * 3], y = VP[v * 3 + 1], z = VP[v * 3 + 2], k = Math.floor(x / cell) + ',' + Math.floor(y / cell) + ',' + Math.floor(z / cell);
+			if (!grid.has(k)) grid.set(k, []);
+			grid.get(k).push([x, y, z, keep]);
+		}
+	}
+	// override: a generator's own keep-out (metres) instead of the edge finish's
+	return (p, override) => {
+		let best = Infinity;
+		const cx = Math.floor(p.x / cell), cy = Math.floor(p.y / cell), cz = Math.floor(p.z / cell);
+		for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+			for (const q of grid.get((cx + i) + ',' + (cy + j) + ',' + (cz + k)) ?? []) best = Math.min(best, Math.hypot(p.x - q[0], p.y - q[1], p.z - q[2]) - (override ?? q[3]));
+		}
+		return best;
+	};
+};
