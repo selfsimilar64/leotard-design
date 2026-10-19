@@ -6,9 +6,11 @@
 //   { lm: 'shoulder_l', d: [dx, dy, dz] }  a rig landmark (+ offset) -> closest point
 //   { curve: 'c3', t: 0.25 }          a point along an evaluated curve (0..1 of its length)
 //   { mirror: <spec> }                the mirror image (x -> -x) of another spec
+//   { photo: { ref: 'r1', px: [x, y] } }  the body under a pixel of a reference photo (solved camera)
 // The context gives the reference surface, the mannequin and the evaluated curves.
 import * as THREE from 'three';
 import { fromSP } from '../body/surface.js';
+import { rayThrough } from '../render/camera-solve.js';
 
 const _v = new THREE.Vector3();
 
@@ -35,6 +37,15 @@ export function resolvePoint(spec, ctx) {
 		return pointAlong(c, spec.t ?? 0);
 	}
 	if (spec.mirror) return mirrorSP(resolvePoint(spec.mirror, ctx), S);
+	if (spec.photo) {
+		const { ref, px } = spec.photo;
+		const r = ctx.doc?.reference.find((x) => x.id === ref);
+		if (!r) throw new Error('No reference photo ' + ref);
+		if (!r.camera) throw new Error('Solve the camera of ' + ref + ' first (reference.solve)');
+		const hit = ctx.pickRay(rayThrough(r.camera, px));
+		if (!hit) throw new Error('Pixel [' + px.join(', ') + '] of ' + ref + ' is not on the body');
+		return strip(hit);
+	}
 	throw new Error(`Unknown point spec ${JSON.stringify(spec)}`);
 }
 

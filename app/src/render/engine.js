@@ -18,7 +18,7 @@ export class Engine {
 	// ref: the reference garment surface (body/reference.js), where curves live
 	constructor(viewport, body, ref) {
 		this.viewport = viewport; this.body = body; this.ref = ref; this.surf = ref.surface;
-		const scene = viewport.scene;
+		const scene = viewport.world; // the body and garment (scaled together when matching a photo)
 		this.skin = createFabricMaterial(3);
 		// the mannequin's neck is an open tube under the egg head: show its inside, not the background
 		this.skin.side = THREE.DoubleSide;
@@ -58,7 +58,11 @@ export class Engine {
 		const vp = this.viewport, el = vp.renderer.domElement, w = el.clientWidth, h = el.clientHeight;
 		const ndc = new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1);
 		this.raycaster.setFromCamera(ndc, vp.camera);
-		const hit = this.pick.raycast(this.raycaster.ray);
+		// into the body's own space (undo a photo's proportion scaling)
+		vp.world.updateMatrixWorld();
+		const ray = this.raycaster.ray.clone().applyMatrix4(vp.world.matrixWorld.clone().invert());
+		ray.direction.normalize();
+		const hit = this.pick.raycast(ray);
 		const out = { x, y, sp: hit ? { f: hit.f, b0: hit.b0, b1: hit.b1, b2: hit.b2 } : null, point: hit?.point ?? null, distance: hit?.distance ?? Infinity };
 		if (out.sp && this.app) {
 			// the outermost layer with a (not cut out) panel here
@@ -73,7 +77,7 @@ export class Engine {
 
 	// Screen position (CSS pixels) of a surface point on the current garment, and its depth.
 	toScreen(sp) {
-		const vp = this.viewport, el = vp.renderer.domElement, p = this.overlay.place(sp, new THREE.Vector3());
+		const vp = this.viewport, el = vp.renderer.domElement, p = this.overlay.place(sp, new THREE.Vector3()).applyMatrix4(vp.world.matrixWorld);
 		const d = p.distanceTo(vp.camera.position);
 		p.project(vp.camera);
 		return { x: (p.x + 1) / 2 * el.clientWidth, y: (1 - p.y) / 2 * el.clientHeight, d, behind: p.z > 1 };
@@ -148,7 +152,7 @@ export class Engine {
 		const sig = JSON.stringify([doc.curves, doc.panels.map((p) => [p.id, p.seed, p.removed, p.mirror, p.layer]), doc.layers]);
 		const trimSig = JSON.stringify([doc.trims, doc.panels.map((p) => p.stack?.[0])]);
 		if (sig !== this.geoSig) {
-			const t0 = performance.now(), scene = this.viewport.scene;
+			const t0 = performance.now(), scene = this.viewport.world;
 			const curveSig = JSON.stringify(doc.curves);
 			const evaluated = this.pending?.curveSig === curveSig ? this.pending.evaluated : evaluateAll(doc, this.surf, null, this.evaluated);
 			const keep = new Set(doc.layers.map((l) => l.id));
@@ -222,7 +226,7 @@ export class Engine {
 		if (!force && key === this.bodyKey) return;
 		const reframe = this.bodyKey !== null;
 		this.bodyKey = key;
-		const t = performance.now(), body = this.body, scene = this.viewport.scene;
+		const t = performance.now(), body = this.body, scene = this.viewport.world;
 		if (body.key !== b.size || !body.key) body.setBody(b.size);
 		const torso = b.form === 'torso';
 		body.clip = torso;

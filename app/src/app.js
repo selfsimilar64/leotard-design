@@ -13,6 +13,8 @@ import { DocumentStore, commandList } from './doc/store.js';
 import { newDocument } from './doc/schema.js';
 import './doc/commands-core.js';
 import './doc/commands-garment.js';
+import './doc/commands-reference.js';
+import { surfaceLandmarks } from './body/landmarks.js';
 import { defineCommand } from './doc/store.js';
 import { legacyFromLook } from './garment/legacy.js';
 import { buildGarment, inheritPanels, evaluateAll } from './garment/build.js';
@@ -53,7 +55,17 @@ export class App {
 	attach(engine) {
 		this.engine = engine;
 		engine.app = this;
-		this.store.ctx = { man: engine.body, surf: engine.surf, garment: (layer = 'L0') => engine.layers.get(layer)?.g ?? engine.g, get evaluated() { return engine.evaluated; } };
+		const app = this, landmarks = surfaceLandmarks(engine.body, engine.surf);
+		this.store.ctx = {
+			man: engine.body, surf: engine.surf, landmarks,
+			garment: (layer = 'L0') => engine.layers.get(layer)?.g ?? engine.g,
+			get evaluated() { return engine.evaluated; },
+			get doc() { return app.doc; },
+			// on the body as shown (size, pose, lift): what a photo's camera sees
+			pickRay: (ray) => engine.pick?.raycast(ray) ?? null,
+			landmarkPos: (lm) => engine.pick.pos(landmarks[lm]).toArray(),
+			bodyKey: () => engine.bodyKey,
+		};
 		this.store.hooks.push((tx, touched) => this.inheritHook(tx, touched));
 		engine.viewport.onResize.add((w, h) => engine.overlay.setResolution(w, h));
 		engine.overlay.setResolution(engine.viewport.container.clientWidth, engine.viewport.container.clientHeight);
@@ -159,6 +171,45 @@ export class App {
 		return 'exports/' + file;
 	}
 
+	// --- reference photos -------------------------------------------------------------------------
+
+	// Add a photo (reads its size): src is a url such as /moodboard/<file>.
+	async addReference(src, opts = {}) {
+		const img = await loadImage(src);
+		return this.exec({ op: 'reference.add', src, size: [img.naturalWidth, img.naturalHeight], ...opts });
+	}
+	landmarks() { return Object.keys(this.store.ctx.landmarks); }
+	// Look through a solved reference photo (or leave it with null): mode over|under|off, opacity 0..1.
+	lookThrough(id, { opacity, mode = 'over' } = {}) {
+		const vp = this.engine.viewport;
+		if (!id) { vp.setPhoto(null); this.looking = null; return; }
+		const r = this.doc.reference.find((x) => x.id === id);
+		if (!r?.camera) throw new Error('Solve the camera of ' + id + ' first');
+		vp.setPhoto({ url: r.src, size: r.size, cam: r.camera, opacity: opacity ?? r.opacity ?? 0.5, mode });
+		this.lookOpts = { opacity, mode };
+		this.looking = id;
+	}
+	// Side-by-side sheet at the photo's camera: photo | render | 50% blend -> captures/<name>.png
+	async compare(id, name = 'compare-' + id, { blend = 0.5 } = {}) {
+		const r = this.doc.reference.find((x) => x.id === id);
+		if (!r?.camera) throw new Error('Solve the camera of ' + id + ' first');
+		const was = this.looking, wasOpts = this.lookOpts;
+		this.lookThrough(id, { mode: 'off' });
+		const cr = r.camera.crop ?? [0, 0, r.size[0], r.size[1]], w = cr[2] - cr[0], h = cr[3] - cr[1];
+		const blob = await this.engine.viewport.capture(w, h);
+		if (was) this.lookThrough(was, wasOpts); else this.lookThrough(null);
+		const [photo, render] = await Promise.all([loadImage(r.src), loadImage(URL.createObjectURL(blob))]);
+		const c = document.createElement('canvas');
+		c.width = w * 3; c.height = h;
+		const x = c.getContext('2d');
+		x.drawImage(photo, cr[0], cr[1], w, h, 0, 0, w, h); x.drawImage(render, w, 0, w, h);
+		x.drawImage(render, 2 * w, 0, w, h); x.globalAlpha = blend; x.drawImage(photo, cr[0], cr[1], w, h, 2 * w, 0, w, h); x.globalAlpha = 1;
+		const out = await new Promise((res) => c.toBlob(res, 'image/png'));
+		const file = safeName(name) + '.png';
+		await fetch('/__fs/captures/' + file, { method: 'POST', body: out });
+		return 'captures/' + file;
+	}
+
 	get debug() { return { cells: (on = true) => showCells(this.engine, on) }; }
 
 	benchmark(n = 60) { return +this.engine.viewport.benchmark(n).toFixed(2); }
@@ -173,4 +224,8 @@ function download(file, blob) {
 	const a = document.createElement('a');
 	a.href = URL.createObjectURL(blob); a.download = file; a.click();
 	setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function loadImage(src) {
+	return new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => reject(new Error('Cannot load ' + src)); i.src = src; });
 }

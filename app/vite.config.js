@@ -9,10 +9,12 @@ import path from 'node:path';
 //   GET  /__fs/designs/                   list saved designs
 //   POST /__fs/captures/<name>.png        write a screenshot (body = PNG bytes)
 //   GET  /textures/<...>                  owner's licensed textures from ../assets/textures (never bundled)
+//   GET  /moodboard/<file>                the owner's moodboard photos from ../moodboard (never bundled)
 // Paths are confined to their folder; anything else is refused.
 const ROOT = path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1'));
 const DIRS = { designs: path.join(ROOT, 'designs'), captures: path.join(ROOT, 'captures'), references: path.join(ROOT, 'references'), exports: path.join(ROOT, 'exports') };
 const TEXTURES = path.join(ROOT, '..', 'assets', 'textures');
+const MOODBOARD = path.join(ROOT, '..', 'moodboard'); // the owner's reference photos (read only, never bundled)
 
 function inside(dir, rel) {
 	const p = path.resolve(dir, rel);
@@ -28,7 +30,7 @@ function readBody(req) {
 	});
 }
 
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.ktx2': 'image/ktx2', '.json': 'application/json', '.webp': 'image/webp' };
+const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.ktx2': 'image/ktx2', '.json': 'application/json', '.webp': 'image/webp', '.pdf': 'application/pdf' };
 
 function fileBridge() {
 	return {
@@ -62,9 +64,9 @@ function fileBridge() {
 							return;
 						}
 					}
-					m = url.match(/^\/textures\/(.*)$/);
+					m = url.match(/^\/(textures|moodboard)\/(.*)$/);
 					if (m) {
-						const p = inside(TEXTURES, m[1]);
+						const p = inside(m[1] === 'textures' ? TEXTURES : MOODBOARD, m[2]);
 						if (!p || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.statusCode = 404; res.end('missing'); return; }
 						res.setHeader('Content-Type', MIME[path.extname(p).toLowerCase()] || 'application/octet-stream');
 						res.setHeader('Cache-Control', 'max-age=3600');

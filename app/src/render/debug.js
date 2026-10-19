@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { vertexPos } from '../garment/arrangement.js';
 
 export function showCells(engine, on = true) {
-	const scene = engine.viewport.scene;
+	const scene = engine.viewport.world;
 	if (engine._cellDebug) { scene.remove(engine._cellDebug); engine._cellDebug.traverse((o) => o.geometry?.dispose()); engine._cellDebug = null; }
 	if (!on || !engine.g) return null;
 	const arr = engine.g.arr, man = engine.body, G = man.garmentPos, N = man.aGNormal.array, idx = man.idx, V = man.vertices;

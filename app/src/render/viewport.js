@@ -21,6 +21,10 @@ export class Viewport {
 		renderer.domElement.style.display = 'block';
 
 		const scene = this.scene = new THREE.Scene();
+		// everything of the body and garment lives in `world`: a reference photo's proportion
+		// correction scales it about a pivot (three.js cameras cannot carry a scale)
+		this.world = new THREE.Group();
+		scene.add(this.world);
 		const camera = this.camera = new THREE.PerspectiveCamera(SCENE.camera.fov, 1, 0.01, 40);
 		camera.position.fromArray(SCENE.camera.position);
 		const controls = this.controls = new OrbitControls(camera, renderer.domElement);
@@ -50,14 +54,14 @@ export class Viewport {
 		// Dark studio floor with a soft contact shadow under the stand.
 		const floor = this.floor = new THREE.Mesh(new THREE.CircleGeometry(4, 96), new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.85 }));
 		floor.rotation.x = -Math.PI / 2; floor.position.y = -0.0085;
-		scene.add(floor);
+		this.world.add(floor);
 		const c = document.createElement('canvas'); c.width = c.height = 128;
 		const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
 		gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.25)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
 		x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
 		const blob = this.blob = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
 		blob.rotation.x = -Math.PI / 2; blob.position.y = -0.0082;
-		scene.add(blob);
+		this.world.add(blob);
 
 		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: true, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1 };
 		this.onFrame = new Set();
@@ -73,8 +77,18 @@ export class Viewport {
 	}
 
 	resize() {
-		const w = Math.max(this.container.clientWidth, 1), h = Math.max(this.container.clientHeight, 1);
+		let w = Math.max(this.container.clientWidth, 1), h = Math.max(this.container.clientHeight, 1);
 		if (w < 8 || h < 8) return; // pane hidden: keep the last size
+		const el = this.renderer.domElement;
+		if (this.photo) {
+			// letterbox the canvas to the photo crop's aspect, the photo crop laid exactly over it
+			const c = this.photo.cam.crop ?? [0, 0, ...this.photo.size], cw = c[2] - c[0], ch = c[3] - c[1], a = cw / ch;
+			const fw = Math.min(w, h * a), fh = fw / a, left = (w - fw) / 2, top = (h - fh) / 2, k = fw / cw;
+			w = Math.round(fw); h = Math.round(fh);
+			Object.assign(el.style, { position: 'absolute', left: left + 'px', top: top + 'px' });
+			Object.assign(this.photoWrap.style, { left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px' });
+			Object.assign(this.photoImg.style, { left: -c[0] * k + 'px', top: -c[1] * k + 'px', width: this.photo.size[0] * k + 'px', height: this.photo.size[1] * k + 'px' });
+		} else Object.assign(el.style, { position: '', left: '', top: '' });
 		const pr = Math.min(window.devicePixelRatio, 2) * this.settings.renderScale;
 		this.camera.aspect = w / h;
 		this.camera.updateProjectionMatrix();
@@ -99,13 +113,13 @@ export class Viewport {
 		this.timer.update();
 		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
 		if (!this.container.clientWidth) return; // pane not laid out yet
-		if (s.rotateLights) this.rig.rotation.y += dt * SCENE.lightSpin;
+		if (s.rotateLights && !this.photo) this.rig.rotation.y += dt * SCENE.lightSpin;
 		this.scene.environmentRotation.y = this.scene.backgroundRotation.y = s.envRotation + this.rig.rotation.y * SCENE.envFollow;
 		this.renderer.toneMappingExposure = s.exposure;
 		this.bloom.strength = s.bloom;
 		this.lights[0].getWorldPosition(this.keyDir).sub(this.controls.target).normalize();
 		for (const fn of this.onFrame) fn(dt);
-		this.controls.update();
+		if (!this.photo) this.controls.update();
 		this.render();
 		this._cpu += performance.now() - start;
 		this._frames++; this._acc += dt;
@@ -133,7 +147,7 @@ export class Viewport {
 
 	// The current view as a PNG blob at a fixed size (independent of the pane, which may be hidden),
 	// rendered fresh so it does not need preserveDrawingBuffer.
-	capture(width = 1600, height = 1200) {
+	capture(width = this.photo ? this.photo.size[0] : 1600, height = this.photo ? this.photo.size[1] : 1200) {
 		const r = this.renderer, cam = this.camera, aspect = cam.aspect;
 		r.setPixelRatio(1); r.setSize(width, height, false);
 		this.composer.setPixelRatio(1); this.composer.setSize(width, height);
@@ -142,6 +156,47 @@ export class Viewport {
 		for (const fn of this.onResize) fn(width, height);
 		this.render();
 		return new Promise((resolve) => r.domElement.toBlob((b) => { cam.aspect = aspect; this.resize(); resolve(b); }, 'image/png'));
+	}
+
+	// Look through a reference photo's solved camera, the photo over the view at `opacity`
+	// (p = { url, size: [w, h], cam: { position, quaternion, fov }, opacity, mode: over|under|off }), or leave it (null).
+	setPhoto(p) {
+		if (!this.photoImg) {
+			const wrap = this.photoWrap = document.createElement('div');
+			Object.assign(wrap.style, { position: 'absolute', pointerEvents: 'none', display: 'none', zIndex: 1, overflow: 'hidden' });
+			const img = this.photoImg = document.createElement('img');
+			Object.assign(img.style, { position: 'absolute', maxWidth: 'none' });
+			wrap.appendChild(img);
+			this.container.appendChild(wrap);
+		}
+		const img = this.photoImg, wrap = this.photoWrap, cam = this.camera;
+		if (!p) {
+			if (this.photo) {
+				this.photo = null; wrap.style.display = 'none';
+				this.world.matrix.identity(); this.world.matrixWorldNeedsUpdate = true;
+				cam.fov = this.savedFov ?? cam.fov; cam.near = 0.01; cam.far = 40; cam.updateProjectionMatrix();
+				this.controls.enabled = true; if (this.savedView) this.setCamera(this.savedView); this.resize();
+			}
+			return;
+		}
+		if (!this.photo) { this.savedView = this.getCamera(); this.savedFov = cam.fov; }
+		this.photo = p;
+		if (img.getAttribute('src') !== p.url) img.src = p.url;
+		wrap.style.display = p.mode === 'off' ? 'none' : 'block';
+		img.style.opacity = String(p.opacity ?? 0.5);
+		// the solved camera sees the body scaled by the photo's proportion correction about a pivot
+		const c = p.cam, S = new THREE.Vector3(c.scale?.[0] ?? 1, c.scale?.[1] ?? 1, c.scale?.[0] ?? 1), C = new THREE.Vector3(...(c.pivot ?? [0, 0, 0]));
+		this.world.matrixAutoUpdate = false;
+		this.world.matrix.makeTranslation(C.x, C.y, C.z).multiply(new THREE.Matrix4().makeScale(S.x, S.y, S.z)).multiply(new THREE.Matrix4().makeTranslation(-C.x, -C.y, -C.z));
+		this.world.matrixWorldNeedsUpdate = true;
+		const pos = new THREE.Vector3(...c.position);
+		cam.position.copy(pos);
+		cam.quaternion.fromArray(c.quaternion);
+		cam.fov = c.fov;
+		cam.far = Math.max(40, pos.length() * 2); cam.near = Math.max(0.01, pos.length() * 0.002);
+		cam.updateMatrixWorld(true);
+		this.controls.enabled = false;
+		this.resize();
 	}
 
 	setCamera({ position, target, fov }) {
