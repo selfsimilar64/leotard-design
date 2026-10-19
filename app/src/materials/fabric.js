@@ -101,6 +101,7 @@ uniform float uBumpAmp;    // crinkle / crushed-pile bump
 uniform float uBumpScale;
 uniform float uKnit;
 
+uniform float uChecker;    // > 0: debug checker of this size (metres) in pattern space, for checking UVs
 uniform float uOmbre;
 uniform vec3 uOmbreColor;
 uniform vec2 uOmbreY;
@@ -178,6 +179,13 @@ const FABRIC_FRAGMENT = /* glsl */`
 	float fp = length( fwidth( vObjPos ) );
 	vec3 viewDir = normalize( vViewPosition );
 
+	if ( uChecker > 0. ) {
+		vec2 cq = floor( q / uChecker );
+		float ck = mod( cq.x + cq.y, 2. );
+		vec2 fq = fract( q / uChecker );
+		float arrow = step( abs( fq.x - .5 ), .06 ) * step( .2, fq.y ) * step( fq.y, .8 ); // grain line up each cell
+		diffuseColor.rgb = mix( diffuseColor.rgb * mix( .55, 1., ck ), vec3( 1. ), arrow * .8 );
+	}
 	float ombre = 1.;
 	if ( uOmbre > .5 ) {
 		ombre = smoothstep( uOmbreY.x, uOmbreY.y, vRef.y + .025 * sin( vRef.x * 11. ) ); // reference body: the fade lands at the same place on every size
@@ -316,7 +324,7 @@ export function createFabricMaterial(zone) {
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
-		uOmbre: { value: 0 }, uOmbreColor: { value: new THREE.Color(0, 0, 0) }, uOmbreY: { value: new THREE.Vector2(0.82, 1.32) },
+		uChecker: { value: 0 }, uOmbre: { value: 0 }, uOmbreColor: { value: new THREE.Color(0, 0, 0) }, uOmbreY: { value: new THREE.Vector2(0.82, 1.32) },
 	};
 	const m = new THREE.MeshPhysicalMaterial({ transparent: zone !== 3 });
 	m.userData.u = u;
@@ -340,6 +348,7 @@ export function createFabricMaterial(zone) {
 // Flake fields: pitch (m), dotR (cells), presence, tilt, rough, colorVar, holo, holoFreq, holoJit.
 export const FABRICS = {
 	matte: { label: 'Matte lycra', roughness: 0.8, sheen: 0.4, sheenRoughness: 0.6, knit: 1 },
+	checker: { label: 'UV checker (debug)', roughness: 0.8, checker: 0.02 },
 	shiny: { label: 'Shiny tricot', roughness: 0.4, sheen: 0.2, sheenRoughness: 0.5, anisotropy: 0.6, knit: 1 },
 	wet: { label: 'Wet look (cire)', roughness: 0.36, clearcoat: 1, clearcoatRoughness: 0.1, anisotropy: 0.3 },
 	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.22, rough: 0.27, colorVar: 0.3 } },
@@ -398,6 +407,7 @@ export function applyFabric(m, key, colour, second) {
 	u.uBumpAmp.value = f.bump?.amp ?? 0;
 	if (f.bump) u.uBumpScale.value = f.bump.scale;
 	u.uKnit.value = f.knit ?? 0;
+	u.uChecker.value = f.checker ?? 0;
 	u.uOmbre.value = f.ombre ? 1 : 0;
 	if (f.ombre) secondColour(base, second, true, u.uOmbreColor.value);
 	// Opaque fabrics are drawn before the skin with alpha-to-coverage edges, so the skin beneath

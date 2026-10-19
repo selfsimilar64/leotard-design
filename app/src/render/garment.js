@@ -5,6 +5,10 @@
 // (zone 5: no region discards, cloth-space UVs). Changing body only re-interpolates.
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric } from '../materials/fabric.js';
+import { cellPiece, cellSignature } from '../garment/pieces.js';
+import { Flattener } from '../garment/flattener.js';
+
+function sameSign(a, b) { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if ((a[i] > 0) !== (b[i] > 0)) return false; return true; }
 
 export class GarmentView {
 	constructor(scene, man) {
@@ -14,6 +18,7 @@ export class GarmentView {
 		this.cells = [];          // { cell, panelId, mesh, hosts: { i: Uint32Array(n*3), w: Float32Array(n*3) } }
 		this.materials = new Map(); // panel id -> material
 		this.g = null;
+		this.flattener = new Flattener();
 	}
 
 	dispose() {
@@ -33,50 +38,63 @@ export class GarmentView {
 		return { cover, garment };
 	}
 
-	setGarment(g, doc, uvs = null) {
+	setGarment(g, doc) {
 		this.dispose();
 		this.g = g;
 		const man = this.man, arr = g.arr, V = man.vertices, idx = man.idx;
 		const { cover, garment } = this.coverFor(g, doc);
-		man.setCover(cover);
-		const map = new Int32Array(arr.nV).fill(-1);
+		this.garmentCells = garment;
+		// the lift only depends on where fabric is: moving a seam inside the garment keeps it
+		if (!this.cover || !sameSign(this.cover, cover)) { man.setCover(cover); this.cover = cover; }
+		const gen = this.gen = (this.gen ?? 0) + 1;
 		for (let c = 0; c < arr.cells.length; c++) {
 			if (!garment[c]) continue;
 			const panel = doc.panels[g.cellPanel[c]];
-			const tris = arr.cells[c].tris, index = new Uint32Array(tris.length * 3), verts = [];
-			for (let q = 0; q < tris.length; q++) for (let k = 0; k < 3; k++) {
-				const v = arr.tris[tris[q] * 3 + k];
-				let l = map[v];
-				if (l < 0) { l = map[v] = verts.length; verts.push(v); }
-				index[q * 3 + k] = l;
-			}
-			for (const v of verts) map[v] = -1;
-			const n = verts.length, hi = new Uint32Array(n * 3), hw = new Float32Array(n * 3);
+			// the cell opened up into a pattern piece (vertices repeat along slits), so UVs can tear
+			const piece = cellPiece(arr, c), verts = piece.verts, n = verts.length;
+			const hi = new Uint32Array(n * 3), hw = new Float32Array(n * 3);
 			for (let l = 0; l < n; l++) {
 				const v = verts[l];
 				if (v < V) { hi[l * 3] = hi[l * 3 + 1] = hi[l * 3 + 2] = v; hw[l * 3] = 1; continue; }
 				const k = v - V, f = arr.hostF[k];
 				for (let j = 0; j < 3; j++) { hi[l * 3 + j] = idx[f * 3 + j]; hw[l * 3 + j] = arr.hostB[k * 3 + j]; }
 			}
-			const local = verts;
 			const geo = new THREE.BufferGeometry();
 			const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
 			A('position', 3); A('normal', 3); A('aLift', 1); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2);
 			geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
-			geo.setIndex(new THREE.BufferAttribute(index, 1));
-			const uv = uvs?.get(c);
-			if (uv) geo.attributes.aUV.array.set(uv.uv.length === n * 2 ? uv.uv : uv.uv.subarray(0, n * 2));
+			geo.setIndex(new THREE.BufferAttribute(piece.I, 1));
 			const mesh = new THREE.Mesh(geo, this.material(panel.id));
 			mesh.renderOrder = -1;
 			mesh.frustumCulled = false;
 			mesh.userData = { cell: c, panel: panel.id };
 			this.group.add(mesh);
-			const rec = { cell: c, panelId: panel.id, mesh, hosts: { i: hi, w: hw }, local };
+			const sig = cellSignature(arr, c);
+			const rec = { cell: c, panelId: panel.id, mesh, hosts: { i: hi, w: hw }, piece, sig, hasUV: false };
 			this.cells.push(rec);
 			this.interpolate(rec);
+			const done = (r) => {
+				if (this.gen !== gen) return;
+				geo.attributes.aUV.array.set(r.uv); geo.attributes.aUV.needsUpdate = true;
+				rec.hasUV = true; rec.stretch = r.stretch;
+				this.updateUVFlags();
+			};
+			const hit = this.flattener.get(sig);
+			if (hit) done(hit); else this.flattener.request(sig, piece).then(done, (e) => console.warn('flatten failed', e));
 		}
 		this.applyMaterials(doc);
 	}
+
+	// A panel draws in cloth space once all its cells have UVs (tri-planar until then).
+	updateUVFlags() {
+		for (const [id, m] of this.materials) {
+			const cs = this.cells.filter((c) => c.panelId === id);
+			m.userData.u.uUV.value = cs.length && cs.every((c) => c.hasUV) ? 1 : 0;
+		}
+	}
+
+	// Resolves when every current piece has its UVs (for captures and tests).
+	whenFlat() { return Promise.all(this.cells.map((c) => this.flattener.request(c.sig, c.piece))); }
 
 	material(id) {
 		let m = this.materials.get(id);
@@ -90,9 +108,8 @@ export class GarmentView {
 			const s = p.stack[0], m = this.material(p.id);
 			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone');
 			m.userData.u.uGrain.value = s.grain ?? 0;
-			const hasUV = this.cells.some((c) => c.panelId === p.id && c.hasUV);
-			m.userData.u.uUV.value = hasUV ? 1 : 0;
 		}
+		this.updateUVFlags();
 	}
 
 	// Re-interpolate every attribute from the mannequin's current arrays (after a body change).
@@ -100,23 +117,27 @@ export class GarmentView {
 
 	interpolate(rec) {
 		const man = this.man, geo = rec.mesh.geometry, { i: hi, w: hw } = rec.hosts, n = hw.length / 3;
-		const src = [
-			[man.aPos.array, geo.attributes.position, 3], [man.aNrm.array, geo.attributes.normal, 3], [man.aLift.array, geo.attributes.aLift, 1],
-			[man.aGNormal.array, geo.attributes.aGNormal, 3], [man.aAO.array, geo.attributes.aAO, 1], [man.ref, geo.attributes.aRef, 3],
-			[man.keep, geo.attributes.aKeep, 1], [man.form, geo.attributes.aForm, 2],
-		];
-		for (const [S, attr, k] of src) {
+		const lerp3 = (S, attr, normalise) => {
 			const D = attr.array;
-			for (let l = 0; l < n; l++) for (let c = 0; c < k; c++) {
-				D[l * k + c] = hw[l * 3] * S[hi[l * 3] * k + c] + hw[l * 3 + 1] * S[hi[l * 3 + 1] * k + c] + hw[l * 3 + 2] * S[hi[l * 3 + 2] * k + c];
+			for (let l = 0; l < n; l++) {
+				const a = hi[l * 3] * 3, b = hi[l * 3 + 1] * 3, c = hi[l * 3 + 2] * 3, wa = hw[l * 3], wb = hw[l * 3 + 1], wc = hw[l * 3 + 2];
+				let x = wa * S[a] + wb * S[b] + wc * S[c], y = wa * S[a + 1] + wb * S[b + 1] + wc * S[c + 1], z = wa * S[a + 2] + wb * S[b + 2] + wc * S[c + 2];
+				if (normalise) { const L = Math.hypot(x, y, z) || 1; x /= L; y /= L; z /= L; } // interpolated normals are short inside a triangle
+				D[l * 3] = x; D[l * 3 + 1] = y; D[l * 3 + 2] = z;
 			}
 			attr.needsUpdate = true;
-		}
-		// interpolated normals are shorter than 1 inside a triangle
-		for (const attr of [geo.attributes.normal, geo.attributes.aGNormal]) {
+		};
+		const lerp1 = (S, attr, k = 1) => {
 			const D = attr.array;
-			for (let l = 0; l < n; l++) { const x = D[l * 3], y = D[l * 3 + 1], z = D[l * 3 + 2], L = Math.hypot(x, y, z) || 1; D[l * 3] = x / L; D[l * 3 + 1] = y / L; D[l * 3 + 2] = z / L; }
-		}
+			for (let l = 0; l < n; l++) {
+				const a = hi[l * 3] * k, b = hi[l * 3 + 1] * k, c = hi[l * 3 + 2] * k, wa = hw[l * 3], wb = hw[l * 3 + 1], wc = hw[l * 3 + 2];
+				for (let q = 0; q < k; q++) D[l * k + q] = wa * S[a + q] + wb * S[b + q] + wc * S[c + q];
+			}
+			attr.needsUpdate = true;
+		};
+		const A = geo.attributes;
+		lerp3(man.aPos.array, A.position, false); lerp3(man.aNrm.array, A.normal, true); lerp3(man.aGNormal.array, A.aGNormal, true);
+		lerp3(man.ref, A.aRef, false); lerp1(man.aLift.array, A.aLift); lerp1(man.aAO.array, A.aAO); lerp1(man.keep, A.aKeep); lerp1(man.form, A.aForm, 2);
 		geo.computeBoundingSphere();
 	}
 

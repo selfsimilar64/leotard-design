@@ -1,3 +1,4 @@
+// (The cut garment's rims, render/rims.js, reuse TRIMS, resample, smoothLoop and buildGeometry.)
 // Finished edges: the raised rim every real leotard opening has (neck, armholes, legs, cuffs,
 // strap edges). Openings are finished with ~1 cm elastic turned under and coverstitched, or
 // wrapped in a binding strip (knowledge/domain/construction/edge-finishing-elastic-and-binding.md).
@@ -27,7 +28,7 @@ const INSET = 0.004; // fabric cut pulled back under the rim (must stay inside e
 const STEP = 0.0015; // sample spacing along an edge
 
 // Smooth a closed loop of numbers or vectors with a box filter of +-r samples, `passes` times.
-function smoothLoop(a, r, passes, isVec) {
+export function smoothLoop(a, r, passes, isVec) {
 	const n = a.length;
 	for (let p = 0; p < passes; p++) {
 		const src = isVec ? a.map((v) => v.clone()) : a.slice();
@@ -39,7 +40,7 @@ function smoothLoop(a, r, passes, isVec) {
 }
 
 // Resample a closed loop of edge records at a fixed spacing, interpolating every attribute.
-function resample(loop) {
+export function resample(loop) {
 	const n = loop.length, cum = [0];
 	for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + loop[i - 1].p.distanceTo(loop[i % n].p));
 	const total = cum[n], m = Math.max(Math.round(total / STEP), 8), out = [];
@@ -154,7 +155,7 @@ export class Trim {
 	}
 }
 
-function buildGeometry(loops, prof) {
+export function buildGeometry(loops, prof) {
 	const M = prof.length;
 	// Profile normals in the (u, v) plane, from the profile's own tangent.
 	const pn = prof.map((_, k) => {

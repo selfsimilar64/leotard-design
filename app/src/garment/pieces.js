@@ -5,28 +5,37 @@
 // The renderer (render/garment.js) and the flattener use the same piece, so UVs line up.
 
 // -> { verts: arrangement vertex id per local vertex (repeats along slits), I, P, cut: [[a, b]] }
+let scratch = new Int32Array(0);
 export function cellPiece(arr, cell) {
 	// local mesh, vertices shared
-	const tris = arr.cells[cell].tris, map = new Map(), I = new Uint32Array(tris.length * 3), verts = [];
+	const tris = arr.cells[cell].tris, I = new Uint32Array(tris.length * 3), verts = [];
+	if (scratch.length < arr.nV) scratch = new Int32Array(arr.nV).fill(-1);
+	const map = scratch;
 	for (let q = 0; q < tris.length; q++) for (let k = 0; k < 3; k++) {
 		const v = arr.tris[tris[q] * 3 + k];
-		let l = map.get(v);
-		if (l === undefined) { l = verts.length; map.set(v, l); verts.push(v); }
+		let l = map[v];
+		if (l < 0) { l = map[v] = verts.length; verts.push(v); }
 		I[q * 3 + k] = l;
 	}
+	for (const v of verts) map[v] = -1;
 	const n = verts.length, nt = tris.length;
 	const ek = (a, b) => (a < b ? a * n + b : b * n + a);
-	// edge -> incident local triangles
-	const edgeTris = new Map();
-	for (let t = 0; t < nt; t++) for (let e = 0; e < 3; e++) {
-		const k = ek(I[t * 3 + e], I[t * 3 + (e + 1) % 3]);
-		const l = edgeTris.get(k);
-		if (l) l.push(t); else edgeTris.set(k, [t]);
+	// edge -> number of incident triangles: sort the 3 nt edge keys and count runs
+	const keys = new Float64Array(nt * 3);
+	for (let t = 0; t < nt; t++) for (let e = 0; e < 3; e++) keys[t * 3 + e] = ek(I[t * 3 + e], I[t * 3 + (e + 1) % 3]);
+	const sorted = Float64Array.from(keys).sort();
+	const count = new Map(); // only edges not shared by exactly two triangles are stored
+	const twice = [];
+	for (let i = 0; i < sorted.length;) {
+		let j = i + 1;
+		while (j < sorted.length && sorted[j] === sorted[i]) j++;
+		if (j - i !== 2) count.set(sorted[i], j - i); else twice.push(sorted[i]);
+		i = j;
 	}
+	const edgeTris = { get: (k) => ({ length: count.get(k) ?? 2 }) };
 	// slits: constraint edges with the cell on both sides
 	const cut = new Set();
-	for (const [k, ts] of edgeTris) {
-		if (ts.length !== 2) continue;
+	for (const k of twice) {
 		const a = Math.floor(k / n), b = k % n;
 		if (arr.constraint.has(arr.ekey(verts[a], verts[b]))) cut.add(k);
 	}
@@ -94,14 +103,22 @@ function shortestBetween(n, I, nt, P, from, targets, ek, isOpen) {
 }
 
 // Give every vertex one copy per group of its triangles that stay connected without crossing a cut.
-function splitAlong({ verts, I, P, n, nt, cut, ek, edgeTris }) {
-	// vertex -> incident triangles
-	const vt = Array.from({ length: n }, () => []);
-	for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) vt[I[t * 3 + k]].push(t);
-	const outVerts = [], outP = [], I2 = new Uint32Array(I.length);
+function splitAlong({ verts, I, P, n, nt, cut, ek }) {
+	if (!cut.size) return { verts, I, P, cut: [] };
+	// only vertices on a cut need their fan split; the rest keep one copy
+	const onCut = new Uint8Array(n);
+	for (const k of cut) { onCut[Math.floor(k / n)] = 1; onCut[k % n] = 1; }
+	const vt = new Map();
+	for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) { const v = I[t * 3 + k]; if (onCut[v]) { const l = vt.get(v); if (l) l.push(t); else vt.set(v, [t]); } }
+	const outVerts = [], outP = [], I2 = new Uint32Array(I.length), plain = new Int32Array(n).fill(-1);
 	const corner = (t, v) => (I[t * 3] === v ? 0 : I[t * 3 + 1] === v ? 1 : 2);
-	for (let v = 0; v < n; v++) {
-		const ts = vt[v];
+	for (let i = 0; i < I.length; i++) {
+		const v = I[i];
+		if (onCut[v]) continue;
+		if (plain[v] < 0) { plain[v] = outVerts.length; outVerts.push(verts[v]); outP.push(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]); }
+		I2[i] = plain[v];
+	}
+	for (const [v, ts] of vt) {
 		// union triangles around v that share an uncut edge (v, w)
 		const par = ts.map((_, i) => i);
 		const find = (x) => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };

@@ -266,6 +266,7 @@ class Mannequin {
 		this.area = total;
 
 		for (const a of [this.aAO, this.aLift, this.aGNormal]) a.needsUpdate = true;
+		for (const fn of this.onGarment ?? []) fn();
 	}
 
 	// Outward-only membrane: h_i = clamp(mean_j <P_j + h_j N_j - P_i, N_i>, 0, LIFT_MAX). On convex

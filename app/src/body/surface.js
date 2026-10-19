@@ -24,7 +24,7 @@ export class Surface {
 		this.buildAdjacency();
 	}
 
-	update(P) { this.P.set(P); this.geometry.attributes.position.needsUpdate = true; this.bvh.refit(); }
+	update(P) { this.P.set(P); this.geometry.attributes.position.needsUpdate = true; this.bvh.refit(); this.faceAreas = null; }
 
 	buildAdjacency() {
 		const { idx, F, V } = this;

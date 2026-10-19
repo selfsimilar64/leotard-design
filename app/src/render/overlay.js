@@ -79,19 +79,34 @@ export class Overlay {
 			this.group.add(line);
 			this.lines.set(key, line);
 		}
-		this.setPoints(showPoints && selected ? doc.curves.find((c) => c.id === selected) : null, evaluated.get(selected));
+		const cur = showPoints && selected ? doc.curves.find((c) => c.id === selected) : null;
+		this.setPoints(cur, cur ? [evaluated.get(selected), evaluated.get(selected + '~m')].filter(Boolean) : []);
+	}
+
+	// Pen preview: the curve being drawn (evaluated), drawn bright and dashed.
+	setPreview(e) {
+		if (this.preview) { this.group.remove(this.preview); this.preview.geometry.dispose(); this.preview = null; }
+		if (!e || e.sps.length < 2) return;
+		const pos = [], v = new THREE.Vector3();
+		for (const sp of e.sps) { this.place(sp, v); pos.push(v.x, v.y, v.z); }
+		const g = new LineGeometry();
+		g.setPositions(pos);
+		this.preview = new Line2(g, this.material(0xffffff, 2.4, true));
+		this.preview.computeLineDistances();
+		this.preview.renderOrder = 12;
+		this.group.add(this.preview);
 	}
 
 	// Control points of the selected curve (and of its mirror image, dimmed).
-	setPoints(curve, e) {
+	setPoints(curve, evals) {
 		if (this.points) { this.group.remove(this.points); this.points.geometry.dispose(); this.points = null; }
-		if (!curve || !e) return;
+		if (!curve || !evals.length) return;
 		const pos = [], col = [], v = new THREE.Vector3();
-		e.ctrlIndex.forEach((si, i) => {
+		evals.forEach((e, k) => e.ctrlIndex.forEach((si, i) => {
 			this.place(e.sps[si], v); pos.push(v.x, v.y, v.z);
-			const corner = curve.points[i]?.kind === 'corner';
-			col.push(...(corner ? [1, 0.55, 0.2] : [1, 1, 1]));
-		});
+			const corner = curve.points[i]?.kind === 'corner', on = !!curve.points[i]?.on, dim = k > 0 ? 0.6 : 1;
+			col.push(...(corner ? [1, 0.55, 0.2] : on ? [0.3, 1, 0.5] : [1, 1, 1]).map((c) => c * dim));
+		}));
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
 		g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));

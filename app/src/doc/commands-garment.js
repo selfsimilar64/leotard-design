@@ -17,12 +17,19 @@ function ctxOf(tx) {
 }
 function oneOf(name, v, list) { if (!list.includes(v)) throw new Error(`${name} must be one of: ${list.join(', ')} (got ${JSON.stringify(v)})`); }
 
-// A control point from { at: spec, kind } or a bare spec.
+// A control point from { at: spec, kind, on? } or a bare spec. on: { curve, t, mirror? } attaches
+// the point to another line (it then follows that line); the position is still stored as a fallback.
 function controlPoint(tx, pt) {
-	const spec = pt.at ?? pt;
+	const bare = !pt.at && !pt.sp && !pt.p && !pt.front && !pt.back && !pt.lm && !pt.curve && !pt.mirror;
+	const spec = pt.at ?? (pt.on && bare ? { curve: pt.on.curve, t: pt.on.t } : pt);
 	const kind = pt.kind ?? 'smooth';
 	oneOf('point kind', kind, ['smooth', 'corner']);
-	return { sp: toSP(resolvePoint(spec, ctxOf(tx))), kind };
+	const out = { sp: toSP(resolvePoint(spec, ctxOf(tx))), kind };
+	if (pt.on) {
+		if (!tx.doc.curves.some((c) => c.id === pt.on.curve)) throw new Error('Cannot attach to ' + pt.on.curve + ': no such line');
+		out.on = { curve: pt.on.curve, t: Math.min(Math.max(+pt.on.t || 0, 0), 1), ...(pt.on.mirror ? { mirror: true } : {}) };
+	}
+	return out;
 }
 
 function findCurve(tx, id) {
@@ -181,6 +188,26 @@ defineCommand('panel.add', {
 		const sp = toSP(resolvePoint(a.at, ctxOf(tx)));
 		const id = tx.newId('p');
 		tx.insert('panels', { id, layer: 'L0', name: a.name ?? '', seed: sp, mirror: a.mirror ?? 'none', stack: [{ fabric: a.fabric ?? 'matte', colour: a.colour ?? '#888888', second: a.second ?? 'Tone-on-tone' }] });
+		return id;
+	},
+});
+
+// --- edge finishes -------------------------------------------------------------------------------
+
+defineCommand('trim.set', {
+	label: 'Edge finish', args: '{ on: curveId | [curveIds], kind: elastic|binding|none, fabric?: { fabric, colour, second } }',
+	run(tx, a) {
+		const on = Array.isArray(a.on) ? a.on : [a.on];
+		for (const id of on) findCurve(tx, id);
+		oneOf('kind', a.kind, ['elastic', 'binding', 'none']);
+		if (a.fabric?.fabric) oneOf('fabric', a.fabric.fabric, Object.keys(FABRICS));
+		// one finish per curve: drop the curves from other trims first
+		for (const t of tx.doc.trims) {
+			const keep = t.on.filter((c) => !on.includes(c));
+			if (keep.length !== t.on.length) { if (keep.length) tx.set(['trims', t.id, 'on'], keep); else tx.remove('trims', t.id); }
+		}
+		const id = tx.newId('t');
+		tx.insert('trims', { id, on, kind: a.kind, ...(a.fabric ? { fabric: { fabric: a.fabric.fabric ?? 'matte', colour: a.fabric.colour ?? '#ffffff', second: a.fabric.second ?? 'Tone-on-tone' } } : {}) });
 		return id;
 	},
 });

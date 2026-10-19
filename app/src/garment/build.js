@@ -1,11 +1,11 @@
 // From the document's curves and panel seeds to the cut garment: evaluate every curve (and its
 // mirror image), snap curve ends onto the curves they end on, build the arrangement, and give
 // each cell its panel. Pure data, no three.js scene objects (render/garment.js draws the result).
-import * as THREE from 'three';
 import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP, pointAlong } from '../curves/points.js';
 import { fromSP, toSP } from '../body/surface.js';
-import { buildArrangement, locate, vertexPos, baryOfVertexInFace } from './arrangement.js';
+import { buildArrangement, locate, baryOfVertexInFace } from './arrangement.js';
+import { cellSignature } from './pieces.js';
 
 // Curve roles that cut the garment into cells. Guides, strap and trim paths do not.
 export const CUTTING = new Set(['seam', 'edge', 'print']);
@@ -132,11 +132,12 @@ export function buildGarment(doc, surf, { prev = null } = {}) {
 // A surface point inside a cell: the centroid of its largest triangle.
 export function cellSeed(arr, surf, cell) {
 	let best = -1, ba = -1;
-	const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
+	const VP = arr.VP;
 	for (const t of arr.cells[cell].tris) {
-		vertexPos(surf, arr.tris[t * 3], arr.hostF, arr.hostB, A); vertexPos(surf, arr.tris[t * 3 + 1], arr.hostF, arr.hostB, B); vertexPos(surf, arr.tris[t * 3 + 2], arr.hostF, arr.hostB, C);
-		const a = B.sub(A).cross(C.sub(A)).lengthSq();
-		if (a > ba) { ba = a; best = t; }
+		const a = arr.tris[t * 3] * 3, b = arr.tris[t * 3 + 1] * 3, c = arr.tris[t * 3 + 2] * 3;
+		const ux = VP[b] - VP[a], uy = VP[b + 1] - VP[a + 1], uz = VP[b + 2] - VP[a + 2], vx = VP[c] - VP[a], vy = VP[c + 1] - VP[a + 1], vz = VP[c + 2] - VP[a + 2];
+		const x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx, ar = x * x + y * y + z * z;
+		if (ar > ba) { ba = ar; best = t; }
 	}
 	const f = arr.triFace[best], b = [0, 0, 0];
 	for (let k = 0; k < 3; k++) { const q = baryOfVertexInFace(arr, surf, arr.tris[best * 3 + k], f); for (let j = 0; j < 3; j++) b[j] += q[j] / 3; }
@@ -149,8 +150,12 @@ export function cellSeed(arr, surf, cell) {
 export function inheritPanels(g, prev, doc, surf) {
 	if (!prev) return [];
 	const out = [], claimed = new Set();
+	// cells that were already openings stay openings: skip them by their (unchanged) shape
+	const prevOpen = new Set();
+	for (let c = 0; c < prev.arr.cells.length; c++) if (prev.cellPanel[c] < 0) prevOpen.add(cellSignature(prev.arr, c));
 	for (let c = 0; c < g.arr.cells.length; c++) {
 		if (g.cellPanel[c] >= 0 || claimed.has(c)) continue;
+		if (prevOpen.has(cellSignature(g.arr, c))) continue;
 		const seed = cellSeed(g.arr, surf, c);
 		const from = panelAt(prev, doc, surf, seed);
 		const src = from && doc.panels.find((p) => p.id === from);

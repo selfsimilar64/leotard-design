@@ -6,6 +6,8 @@ import { Viewport } from './render/viewport.js';
 import { Engine } from './render/engine.js';
 import { loadMannequins } from './body/mannequin.js';
 import { buildReference } from './body/reference.js';
+import { ToolController } from './ui/tools.js';
+import './ui/inspect-garment.jsx';
 import './ui/styles.css';
 
 app.onChange(() => { rev.value++; });
@@ -20,6 +22,7 @@ async function start(el) {
 	const engine = new Engine(viewport, body, buildReference(body));
 	engine.timing.load = performance.now() - t0;
 	app.attach(engine);
+	app.tools = new ToolController(app, engine);
 	rev.value++;
 	setInterval(() => { stats.value = { ...viewport.stats, stones: engine.stoneCount?.() ?? 0 }; }, 500);
 }

@@ -8,6 +8,9 @@ import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
 import { inspectors } from './inspectors.js';
+import { ToolOptions } from './inspect-garment.jsx';
+import { BLOCK_OPTIONS } from '../garment/blocks.js';
+import { tool } from './state.js';
 
 const fabricOptions = Object.entries(FABRICS).map(([k, f]) => [k, f.label]);
 
@@ -15,8 +18,10 @@ export function Inspector() {
 	rev.value; // re-render on document change
 	const sel = selection.value, doc = app.doc;
 	const Custom = sel && inspectors[sel.kind];
+	tool.value;
 	return (
 		<div class="inspector">
+			<ToolOptions />
 			{Custom ? <Custom sel={sel} doc={doc} /> : <DesignProps doc={doc} />}
 		</div>
 	);
@@ -41,6 +46,7 @@ function DesignProps({ doc }) {
 				<Row label="Exposure"><Slider value={s.exposure} min={0.3} max={2.5} onChange={(v, g) => run({ op: 'scene.set', exposure: v, gesture: g })} /></Row>
 				<Row label="Sparkle glow"><Slider value={s.bloom} min={0} max={1.2} onChange={(v, g) => run({ op: 'scene.set', bloom: v, gesture: g })} /></Row>
 			</Section>
+			<BlockPicker doc={doc} />
 			{L ? <LegacyProps L={L} /> : null}
 		</>
 	);
@@ -78,5 +84,20 @@ function LegacyProps({ L }) {
 				<Row label="Type"><Select value={L.finish} options={Object.keys(FINISHES)} onChange={(v) => run({ op: 'legacy.set', finish: v })} /></Row>
 			</Section>
 		</>
+	);
+}
+
+// Start a new garment from a block: each choice re-applies the block (one undo step).
+function BlockPicker({ doc }) {
+	const cur = { neck: 'scoop', back: 'scoop', sleeves: 'long', leg: 'high', ...(doc.meta.block ?? {}) };
+	const apply = (patch) => run({ op: 'block.apply', ...cur, ...patch });
+	const label = { neck: 'Neckline', back: 'Back', sleeves: 'Sleeves', leg: 'Leg' };
+	return (
+		<Section title="Block (starting shape)" open={!doc.curves.length}>
+			{Object.entries(BLOCK_OPTIONS).map(([k, opts]) => (
+				<Row key={k} label={label[k]}><Select value={cur[k]} options={opts} onChange={(v) => apply({ [k]: v })} /></Row>
+			))}
+			<div class="dim">Changing a block replaces the garment's lines and panels.</div>
+		</Section>
 	);
 }

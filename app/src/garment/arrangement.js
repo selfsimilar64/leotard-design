@@ -386,7 +386,8 @@ export function buildArrangement(surf, curves) {
 	const idx = surf.idx, F = surf.F, NK = nV;
 	const tris = [], triFace = [], constraint = new Map(); // edge key -> Set(curve ids)
 	const ekey = (a, b) => (a < b ? a * NK + b : b * NK + a);
-	const addC = (a, b, cs) => { const k = ekey(a, b); let s = constraint.get(k); if (!s) constraint.set(k, s = new Set()); for (const c of cs) s.add(c); };
+	const onC = new Uint8Array(nV); // vertices at the end of some constraint edge
+	const addC = (a, b, cs) => { const k = ekey(a, b); let s = constraint.get(k); if (!s) constraint.set(k, s = new Set()); for (const c of cs) s.add(c); onC[a] = onC[b] = 1; };
 	const faceTris = new Map(); // f -> [tri indices] for split faces, for locate()
 	const faceTri0 = new Int32Array(F).fill(-1); // f -> its own triangle when not split
 	for (let f = 0; f < F; f++) {
@@ -410,7 +411,7 @@ export function buildArrangement(surf, curves) {
 			const g = fa[f * 3 + e];
 			if (g < 0 || g < f || faceTri0[g] < 0) continue;
 			const a = idx[f * 3 + e], b = idx[f * 3 + (e + 1) % 3];
-			if (!constraint.has(ekey(a, b))) tuf.union(t, faceTri0[g]);
+			if (!(onC[a] && onC[b] && constraint.has(ekey(a, b)))) tuf.union(t, faceTri0[g]);
 			else across.push(t, faceTri0[g], a, b);
 		}
 	}
@@ -436,16 +437,23 @@ export function buildArrangement(surf, curves) {
 		const i0 = idx[f * 3] * 3, i1 = idx[f * 3 + 1] * 3, i2 = idx[f * 3 + 2] * 3, o = (surf.V + k) * 3;
 		for (let c = 0; c < 3; c++) VP[o + c] = b0 * surf.P[i0 + c] + b1 * surf.P[i1 + c] + b2 * surf.P[i2 + c];
 	}
-	const cellOf = new Int32Array(nT), cellIds = new Map(), cells = [];
+	const cellOf = new Int32Array(nT), rootCell = new Int32Array(nT).fill(-1), cells = [];
+	const fArea = surf.faceAreas ??= faceAreas(surf);
+	const counts = [];
 	for (let t = 0; t < nT; t++) {
 		const r = tuf.find(t);
-		let c = cellIds.get(r);
-		if (c === undefined) { c = cells.length; cellIds.set(r, c); cells.push({ id: c, tris: [], area: 0 }); }
-		cellOf[t] = c; cells[c].tris.push(t);
+		let c = rootCell[r];
+		if (c < 0) { c = rootCell[r] = cells.length; cells.push({ id: c, tris: null, area: 0 }); counts.push(0); }
+		cellOf[t] = c; counts[c]++;
+		const f = triFace[t];
+		if (faceTri0[f] === t) { cells[c].area += fArea[f]; continue; }
 		const a = tris[t * 3] * 3, b = tris[t * 3 + 1] * 3, d = tris[t * 3 + 2] * 3;
 		const ux = VP[b] - VP[a], uy = VP[b + 1] - VP[a + 1], uz = VP[b + 2] - VP[a + 2], vx = VP[d] - VP[a], vy = VP[d + 1] - VP[a + 1], vz = VP[d + 2] - VP[a + 2];
 		cells[c].area += Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
 	}
+	for (let c = 0; c < cells.length; c++) cells[c].tris = new Int32Array(counts[c]);
+	const fill = new Int32Array(cells.length);
+	for (let t = 0; t < nT; t++) { const c = cellOf[t]; cells[c].tris[fill[c]++] = t; }
 
 	// cell adjacency: shared boundary length between neighbouring cells
 	const cellAdj = cells.map(() => new Map());
@@ -466,6 +474,16 @@ export function buildArrangement(surf, curves) {
 		phases: { walk: tA - t0, merge: tB - tA, intersect: tC - tB, prune: tD - tC, triangulate: tE - tD, cells: performance.now() - tE, touched: touched.size },
 		segments: segs.map((s) => ({ a: vIndex(s.p), b: vIndex(s.q), c: [...s.c] })),
 	};
+}
+
+function faceAreas(surf) {
+	const A = new Float64Array(surf.F), P = surf.P, idx = surf.idx;
+	for (let f = 0; f < surf.F; f++) {
+		const a = idx[f * 3] * 3, b = idx[f * 3 + 1] * 3, d = idx[f * 3 + 2] * 3;
+		const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[d] - P[a], vy = P[d + 1] - P[a + 1], vz = P[d + 2] - P[a + 2];
+		A[f] = Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+	}
+	return A;
 }
 
 function vertexPos(surf, v, hostF, hostB, out = new THREE.Vector3()) {

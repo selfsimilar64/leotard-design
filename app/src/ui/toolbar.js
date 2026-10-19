@@ -1,14 +1,12 @@
-// The tool rail. Each entry is one interaction mode of the viewport (tools/*.js implement them).
+// The tool rail. Each entry is one interaction mode of the viewport (ui/tools.js implements them).
 // Tools not built yet are listed disabled so the layout is stable while phases land.
 export const tools = [
 	{ id: 'orbit', label: 'Orbit', icon: '◎', key: 'O' },
 	{ id: 'select', label: 'Select', icon: '➤', key: 'V' },
 	{ sep: 1 },
-	{ id: 'block', label: 'Blocks', icon: '▣', key: 'B', disabled: true },
-	{ id: 'pen', label: 'Pen', icon: '✎', key: 'P', disabled: true },
-	{ id: 'edit', label: 'Edit points', icon: '◇', key: 'E', disabled: true },
-	{ id: 'fabric', label: 'Fabric', icon: '▦', key: 'F', disabled: true },
-	{ id: 'cut', label: 'Cut out', icon: '✂', key: 'X', disabled: true },
+	{ id: 'pen', label: 'Pen', icon: '✎', key: 'P' },
+	{ id: 'fabric', label: 'Fabric', icon: '▦', key: 'F' },
+	{ id: 'cut', label: 'Cut out', icon: '✂', key: 'X' },
 	{ id: 'strap', label: 'Strap', icon: '⌇', key: 'S', disabled: true },
 	{ id: 'trim', label: 'Edges', icon: '▭', key: 'T', disabled: true },
 	{ sep: 2 },

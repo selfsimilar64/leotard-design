@@ -83,7 +83,8 @@ function fileBridge() {
 export default defineConfig({
 	plugins: [fileBridge()],
 	oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
+	optimizeDeps: { rolldownOptions: { transform: { jsx: { runtime: 'automatic', importSource: 'preact' } } } },
 	server: { port: 5174, strictPort: true },
 	build: { target: 'es2022' },
-	test: { environment: 'node', include: ['test/**/*.test.js'], exclude: ['test/debug/**'], testTimeout: 120000 },
+	test: { environment: 'node', include: ['test/**/*.test.js'], exclude: process.env.DEBUG_TESTS ? [] : ['test/debug/**'], testTimeout: 120000 },
 });
