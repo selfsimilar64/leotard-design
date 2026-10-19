@@ -22,6 +22,10 @@ sources:
   - id: vmod-news
     resource: https://persportaal.anp.nl/artikel/CSN-170822090/swatchon-launches-a-digital-twin-3d-fabric-library-to-forge-fashions-future
     title: SwatchOn launches a digital-twin 3D fabric library (materials for Adobe Substance 3D, CLO3D, Marvelous Designer)
+  - id: samples
+    resource: "assets/textures/vmod/ (nine VMOD PNG map sets downloaded by the owner, inspected with scratch scripts 2026-10-18)"
+    title: Inspection of nine VMOD downloads
+    author: claude-code/claude-opus-5-5
   - id: tex-faq
     resource: https://www.textures.com/faq-license
     title: Textures.com licence FAQ (bundling textures with models, scenes and game levels)
@@ -93,6 +97,31 @@ So glitter, reflective and hologram textures are used as **inputs to the existin
 7. **First step:** one sample each of lace, glitter and a reflective/foil fabric, downloaded in the
    Blender format, so the actual contents can be checked before the import code is written.
 
+# What a VMOD download actually contains (9 samples inspected 2026-10-18)
+
+The owner downloaded nine fabrics on the free plan as PNG zips; they are unpacked under
+`assets/textures/vmod/<id>_<name>/` with `assets/textures/vmod/manifest.json` (tile size and map
+list per fabric).[^samples]
+
+- **Maps per fabric:** `base_map` (RGBA, sRGB), `normal_map`, `rough_map`, `mtl_map` (an image: a
+  metallic mask, e.g. the foil dots of the swiss-dot fabric), `alpha_map` (stored as RGB; holes in
+  tulle and organza), `ao_map`, `displ_map` (8-bit), `colormaskmap_1..N` (3-9 per fabric) and a
+  2000x2000 `render_image.png` preview. **No JSON or text metadata.**
+- **Colour masks** split the fabric into separately colourable parts (on the swiss dot: knit base,
+  foil dots, dot rims), matching CLO-style colourways. They are what lets the app recolour the
+  base to a team colour while keeping the foil.
+- **Real-world scale is embedded:** every map carries a PNG `pHYs` chunk of ~26,117 px/m (663 dpi,
+  38.3 µm per pixel), consistent across all nine and confirmed by the swiss dot's ~2.4 mm dot pitch.
+  Tile sizes therefore come free: 0.9-15.8 cm per side.
+- **Normals are OpenGL (+Y up)**, the three.js default: verified by correlating each normal map
+  with the gradient of its displacement map (x corr -0.12 to -0.61, y +0.09 to +0.56, all fabrics).
+- **Tiles are seamless** (wrap-around difference 0.97-1.47x the in-image neighbour difference).
+- **Iridescence is not in the maps.** The pearl taffeta, oil-slick vegan leather and opal interlock
+  show strong thin-film colour shift in VMOD's previews, but only base, metallic and roughness are
+  supplied; the shift must come from the app's own iridescence layer, tuned against the preview.
+- **Sizes:** up to 4096x4096 per map; about 590 MB unpacked for nine fabrics, so the import must
+  downsample (2K is ~77 µm per pixel, ample for a body-scale view) and compress to KTX2.
+
 # Import pipeline
 
 0. If the download is a `.blend`: a headless Blender script in `pipeline/` lists the material's
@@ -137,6 +166,7 @@ prices were not readable.[^vmod-terms] The app's import pipeline does not
 depend on the source, so licensed, CC0 or the maker's own scans all go through the same steps.
 
 [^owner]: Product owner, 2026-10-18
+[^samples]: Inspection of nine VMOD downloads, 2026-10-18
 [^tex-faq]: Textures.com licence FAQ
 [^texmax]: TextureMax licensing
 [^ue-forum]: Unreal Engine forum, "Can I Sell This?"
