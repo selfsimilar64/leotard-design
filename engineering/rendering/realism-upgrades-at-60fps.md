@@ -74,6 +74,7 @@ the athlete's skin**, not from more expensive shading. All upgrades below fit a 
 | R8 | **Seams and construction** | Seam groove + slight ridge from distance to the seam polyline; coverstitch at hems; piping as rims | +0.2 ms |
 | R9 | **Tension wrinkles** | Procedural fold normals in authored zones (crotch, hip crease, armpit, strap ends), strength per pose | +0.1 ms |
 | R10 | **Idle refinement** | When camera and lights are still, accumulate 16 jittered frames (supersampled, sparkle-stable) for compare and capture; interactive frames unchanged[^temporal] | 0 interactive |
+| R12 | **Optional path-traced stills** (later) | When idle, hand the scene to a GPU path tracer (e.g. three-gpu-pathtracer) for presentation and photo-compare images; the owner has built one before and considers it a modest addition | 0 interactive |
 | R11 | **Dynamic resolution** | Hold 16.6 ms by scaling 0.7-1.0, refine when idle | saves |
 
 Estimated total ~10.5-11.5 ms at 2.4 MP. Every phase that adds an upgrade re-runs the POC's

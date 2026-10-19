@@ -120,7 +120,10 @@ parallel once P1 lands (different modules, shared document).
 
 - Fabric library as base cloth x finish x colours, covering the taxonomy's fabric axis (including
   duochrome, oil-slick and glitter-grain foils, liquid/opal hologram, crushed velvet, mirror chrome);
-  foil-print masks; colourway swap; lining stacks; mesh over skin/lining in one shader; lace,
+  foil-print masks; colourway swap; swatch previews in the fabric picker (a rippled or
+  pinched-and-twisted cloth shape made once in Blender, rendered to cached thumbnails per fabric and
+  colour, slowly turning on hover so sparkle and colour shift show); iridescence variation maps for
+  oil-slick/opal fabrics, tuned by eye against the source's preview; lining stacks; mesh over skin/lining in one shader; lace,
   printed lace, flocked/foil mesh, sublimation prints, ombre along any curve; decals (logo,
   lettering) as print/foil/embroidery looks; seams in the shader.
 - Photo-studio rigs with area lights and matching environment; athlete skin display.
