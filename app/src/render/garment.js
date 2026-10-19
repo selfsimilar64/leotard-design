@@ -147,10 +147,14 @@ export class GarmentView {
 				u.uPrintSize.value.fromArray(s.print.size ?? [0.2, 0.2]); u.uPrintOffset.value.fromArray(s.print.offset ?? [0, 0]);
 			} else u.uPrint.value = 0;
 			this.applyDecals(m);
+			if (this.wrinkles) { u.uWrinkle.value = this.wrinkles.Z; u.uWrinkleN.value = this.wrinkles.N; }
 			if (s.texture && this.textures) {
 				const opts = { scale: s.texScale ?? 1, recolour: s.texMode === 'recolour', colour: s.colour, masks: s.masks, normal: s.texNormal };
 				this.textures.get(s.texture).then((set) => applyTexture(m, set, opts), (e) => console.warn('texture', s.texture, e.message));
 			} else applyTexture(m, null);
+			// opaque panels take shadows (and so cast them: variance shadow maps); sheer ones do
+			// neither, so a lining under lace or mesh is not blacked out by it
+			for (const c of this.cells) if (c.panelId === p.id) c.mesh.castShadow = c.mesh.receiveShadow = !m.transparent;
 		}
 		this.updateUVFlags();
 	}

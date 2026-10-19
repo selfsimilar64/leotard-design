@@ -5,6 +5,8 @@ import { createFabricMaterial } from '../materials/fabric.js';
 import { fullBodyStand, dressFormStand } from './stand.js';
 import { MANNEQUIN_FINISHES } from './presets.js';
 import { DecalSet } from './decals.js';
+import { surfaceLandmarks } from '../body/landmarks.js';
+import { poseSpec } from '../body/pose.js';
 import { LegacyGarment } from '../garment/legacy.js';
 import { GarmentView, sameSign } from './garment.js';
 import { buildGarment, evaluateAll, panelAt } from '../garment/build.js';
@@ -29,6 +31,7 @@ export class Engine {
 		this.skin.side = THREE.DoubleSide;
 		this.skinMesh = new THREE.Mesh(body.geometry, this.skin);
 		this.skinMesh.frustumCulled = false; // the geometry's positions change when the body is swapped
+		this.skinMesh.castShadow = this.skinMesh.receiveShadow = true; // arms shade the torso
 		scene.add(this.skinMesh);
 		this.capMaterial = new THREE.MeshPhysicalMaterial();
 		this.stand = null;
@@ -171,6 +174,7 @@ export class Engine {
 				if (!L) {
 					L = { layer, view: new GarmentView(scene, this.body, layer), rims: new Rims(scene, this.body), g: null };
 					L.view.textures = this.textures;
+					L.view.wrinkles = this.wrinkleZones();
 					this.layers.set(layer.id, L);
 				}
 				L.layer = layer; L.view.layer = layer; L.rims.kind = layer.kind; L.rims.layerId = layer.id;
@@ -195,6 +199,25 @@ export class Engine {
 			if (trimSig !== this.trimSig) { this.trimSig = trimSig; for (const L of this.layers.values()) L.rims.build(L.g, doc, L.view.garmentCells, this.evaluated, layerLift(L.layer)); }
 			this.syncStraps(doc);
 		}
+	}
+
+	// Tension wrinkle zones on the reference body (shared by every panel material): the crotch,
+	// folds fanning up the front, and each armpit, folds fanning over the side; an arm raised
+	// pulls its armpit smooth.
+	wrinkleZones() {
+		if (!this.wrinkles) {
+			const lm = surfaceLandmarks(this.body, this.surf), P = (k) => this.surf.pos(lm[k]);
+			const c = P('crotch'), ul = P('underarm-l'), ur = P('underarm-r');
+			this.wrinkles = {
+				Z: [new THREE.Vector4(c.x, c.y + 0.015, c.z, 0.12), new THREE.Vector4(ul.x, ul.y - 0.01, 0.0, 0.08), new THREE.Vector4(ur.x, ur.y - 0.01, 0.0, 0.08)],
+				N: [new THREE.Vector4(0, 0, 1, 1), new THREE.Vector4(1, 0, 0, 1), new THREE.Vector4(-1, 0, 0, 1)],
+			};
+		}
+		return this.wrinkles;
+	}
+	setWrinklePose(pose) {
+		const p = poseSpec(pose), W = this.wrinkleZones();
+		W.N[1].w = p.left === 'up' ? 0.3 : 1; W.N[2].w = p.right === 'up' ? 0.3 : 1;
 	}
 
 	// Logos and lettering: every layer's views get that layer's decal atlas and boxes.
@@ -242,12 +265,14 @@ export class Engine {
 	// Which body, full figure or dress form, its finish, its stand.
 	applyBody(b, force) {
 		this.applyFinish(b.finish);
-		const key = b.size + '|' + b.form;
+		const key = b.size + '|' + b.form + '|' + JSON.stringify(b.pose ?? 'a-pose');
 		if (!force && key === this.bodyKey) return;
-		const reframe = this.bodyKey !== null;
-		this.bodyKey = key;
+		// a new size or form reframes the camera; a new pose keeps it
+		const shape = b.size + '|' + b.form, reframe = this.bodyKey !== null && this.shapeKey !== shape;
+		this.bodyKey = key; this.shapeKey = shape;
 		const t = performance.now(), body = this.body, scene = this.viewport.world;
-		if (body.key !== b.size || !body.key) body.setBody(b.size);
+		if (body.key !== b.size || body.poseKey !== JSON.stringify(b.pose ?? 'a-pose') || !body.key) body.setBody(b.size, b.pose);
+		this.setWrinklePose(b.pose);
 		const torso = b.form === 'torso';
 		body.clip = torso;
 		const fl = body.formLines;

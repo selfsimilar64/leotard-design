@@ -19,13 +19,13 @@
   "L": 2,
   "t": 3,
   "g": 3,
-  "d": 2
+  "d": 6
  },
  "body": {
   "size": "young",
   "form": "full",
   "finish": "Athlete skin, light",
-  "pose": "a-pose"
+  "pose": "hands-in-front"
  },
  "scene": {
   "rig": "White seamless (photo studio)",

@@ -5,6 +5,7 @@ import { LOOKS, RIGS, MANNEQUIN_FINISHES } from '../render/presets.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
+import { poseSpec } from '../body/pose.js';
 
 const SIZES = ['child', 'teen', 'young', 'adult'];
 
@@ -43,13 +44,13 @@ defineCommand('meta.set', {
 });
 
 defineCommand('body.set', {
-	label: 'Change body', args: '{ size?: child|teen|young|adult, form?: full|torso, finish?, pose? }',
+	label: 'Change body', args: '{ size?: child|teen|young|adult, form?: full|torso, finish?, pose?: a-pose|arms-down|hands-in-front|hands-on-hips|hands-on-thighs|left-hand-on-hip|right-hand-on-hip|left-arm-up|right-arm-up | { left, right } (arms: rest|down|front|thigh|hip|up) }',
 	run(tx, a) {
 		setFields(tx, 'body', a, {
 			size: (v) => oneOf('size', v, SIZES),
 			form: (v) => oneOf('form', v, ['full', 'torso']),
 			finish: (v) => oneOf('finish', v, Object.keys(MANNEQUIN_FINISHES)),
-			pose: null,
+			pose: (v) => { poseSpec(v); },
 		});
 	},
 });

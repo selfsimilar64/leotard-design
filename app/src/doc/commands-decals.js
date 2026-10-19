@@ -4,7 +4,7 @@ import { resolvePoint } from '../curves/points.js';
 import { toSP } from '../body/surface.js';
 import { DECAL_LOOKS } from '../render/decals.js';
 
-const FIELDS = ['text', 'font', 'weight', 'src', 'size', 'rotate', 'colour', 'look', 'rough', 'layer', 'name', 'hidden'];
+const FIELDS = ['text', 'font', 'weight', 'src', 'size', 'aspect', 'rotate', 'colour', 'look', 'rough', 'layer', 'name', 'hidden'];
 
 function check(a, doc) {
 	if (a.look && !(a.look in DECAL_LOOKS)) throw new Error('look must be one of: ' + Object.keys(DECAL_LOOKS).join(', '));
@@ -13,10 +13,11 @@ function check(a, doc) {
 }
 
 defineCommand('decal.add', {
-	label: 'Add logo or lettering', args: '{ at: point spec, text? (\\n for lines) | src? (image URL), font?, weight?, size?: width m (0.08), rotate?: degrees, colour?, look?: print|foil|holo|glitter|flock, rough?, layer?, name? }',
+	label: 'Add logo, lettering or stamp', args: '{ at: point spec, text? (\\n for lines) | src? (image URL), font?, weight?, size?: width m (0.08), aspect? (stamps: height / width), rotate?: degrees, colour?, look?: print|foil|holo|glitter|flock | gather|ruche|twist (surface stamps: folds, no art), rough?, layer?, name? }',
 	run(tx, a) {
 		if (!a.at) throw new Error('decal.add needs at: a point on the body');
-		if (!a.text && !a.src) throw new Error('decal.add needs text or src');
+		const stamp = ['gather', 'ruche', 'twist'].includes(a.look);
+		if (!a.text && !a.src && !stamp) throw new Error('decal.add needs text or src (or a stamp look: gather, ruche, twist)');
 		check(a, tx.doc);
 		const id = tx.newId('d');
 		const d = { id, at: { sp: toSP(resolvePoint(a.at, tx.ctx)) }, size: 0.08, rotate: 0, colour: '#ffffff', look: 'print', layer: 'L0' };

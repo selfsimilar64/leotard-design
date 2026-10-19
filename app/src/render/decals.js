@@ -6,7 +6,9 @@
 import * as THREE from 'three';
 import { fromSP } from '../body/surface.js';
 
-export const DECAL_LOOKS = { print: 0, foil: 1, holo: 2, glitter: 3, flock: 4 };
+// gather / ruche / twist are surface stamps (folds in the cloth: T14), not printed art
+export const DECAL_LOOKS = { print: 0, foil: 1, holo: 2, glitter: 3, flock: 4, gather: 5, ruche: 6, twist: 7 };
+const STAMP = (look) => (DECAL_LOOKS[look] ?? 0) >= 5;
 const ROUGH = { print: 0.55, foil: 0.2, holo: 0.2, glitter: 0.3, flock: 0.9 };
 const AT = 2048, SLOT = 512, MAX = 4, DEPTH = 0.03;
 
@@ -38,12 +40,12 @@ export class DecalSet {
 		}
 		L.count = list.length;
 		const ctx = L.canvas.getContext('2d');
-		const artSig = JSON.stringify(list.map((d) => [d.text, d.font, d.weight, d.src, this.images.has(d.src)]));
+		const artSig = JSON.stringify(list.map((d) => [STAMP(d.look) ? null : [d.text, d.font, d.weight, d.src], this.images.has(d.src)]));
 		const redraw = artSig !== L.sig;
 		if (redraw) ctx.clearRect(0, 0, AT, AT);
 		list.forEach((d, i) => {
 			const y0 = i * SLOT;
-			const art = redraw ? this.drawArt(ctx, d, y0) : L.art?.[i];
+			const art = STAMP(d.look) ? { x: 0, y: 0, w: 100, h: 100 * (d.aspect ?? 1) } : redraw ? this.drawArt(ctx, d, y0) : L.art?.[i];
 			if (redraw) (L.art ??= [])[i] = art;
 			// rect with v flipped: the shader's +y (up the art) reads towards the slot's top row
 			L.rect[i].set(art.x / AT, (y0 + art.y + art.h) / AT, art.w / AT, -art.h / AT);

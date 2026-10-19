@@ -52,7 +52,7 @@ function studioRig(backdrop, room, k, glow) {
 	return {
 		fixed: true, env: 0.5 * k, bg: 1, backdrop, room, glow, bloomK: 0.4, // catalogue photos show little glow
 		areas: [
-			{ p: [-1.7, 2.2, 2.3], s: [1.2, 1.6], at: [0, 1.15, 0], L: 9.5 * k, c: 0xffffff }, // key: front left, above
+			{ p: [-1.7, 2.2, 2.3], s: [1.2, 1.6], at: [0, 1.15, 0], L: 5.5 * k, c: 0xffffff }, // key: front left, above (part of it, see shadow)
 			{ p: [2.0, 1.5, 2.1], s: [1.0, 1.4], at: [0, 1.0, 0], L: 5 * k, c: 0xffffff },    // fill: front right
 			{ p: [0, 2.6, -1.3], s: [1.4, 0.5], at: [0, 1.2, 0], L: 7 * k, c: 0xffffff },     // hair light behind, for the rim
 		],
@@ -60,6 +60,8 @@ function studioRig(backdrop, room, k, glow) {
 		// the crystals' mirror backs reflect when they face the lens (as in catalogue photos)
 		envLights: [{ p: [0.3, 1.3, 3.4], s: [3.0, 2.2], at: [0, 1.1, 0], L: 2.5 * k, c: 0xffffff }],
 		lights: [{ p: [-1.7, 2.2, 2.3], cd: 7 * k, c: 0xffffff }, { p: [2.0, 1.5, 2.1], cd: 3 * k, c: 0xffffff }, ...ring(0).slice(2)],
+		// the rest of the key, from the same direction, as a directional light that casts soft shadows
+		shadow: { from: [-1.7, 2.2, 2.3], E: 0.75 * k },
 	};
 }
 

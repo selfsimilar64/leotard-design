@@ -18,6 +18,9 @@ export class Viewport {
 		// HDR, 4x MSAA, bloom, Khronos PBR Neutral tone mapping (keeps fabric colours true)
 		const renderer = this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
 		renderer.toneMapping = THREE.NeutralToneMapping;
+		// soft shadows from the studio key (variance shadow maps blur into a softbox-like penumbra)
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMap.type = THREE.VSMShadowMap;
 		renderer.info.autoReset = false;
 		container.appendChild(renderer.domElement);
 		renderer.domElement.style.display = 'block';
@@ -35,6 +38,11 @@ export class Viewport {
 		controls.zoomToCursor = true;
 		controls.minDistance = 0.03;
 		controls.maxDistance = 6;
+		// dynamic resolution (realism upgrade R11): while the view moves and frames run late, render
+		// at down to 70%; full resolution again as soon as it is still
+		this.dynScale = 1; this.moving = false; this.stillAt = 0;
+		controls.addEventListener('start', () => { this.moving = true; });
+		controls.addEventListener('end', () => { this.moving = false; this.stillAt = performance.now(); });
 
 		const pmrem = this.pmrem = new THREE.PMREMGenerator(renderer);
 		this.envs = new Map(); // rig name -> PMREM texture (studio rigs reflect their own softboxes)
@@ -56,6 +64,14 @@ export class Viewport {
 		this.lights = Array.from({ length: 8 }, () => { const l = new THREE.PointLight(0xffffff, 0, 0, 2); this.rig.add(l); return l; });
 		// Softboxes of the photo-studio rigs (created on first use: the LTC tables are 130 kB)
 		this.areas = [];
+		// The shadowing part of a studio key: area lights cannot cast shadows in three.js, so part
+		// of the key's light comes from this directional light instead (rig.shadow).
+		const sun = this.sun = new THREE.DirectionalLight(0xffffff, 0);
+		sun.visible = false; sun.castShadow = true;
+		sun.shadow.mapSize.set(1024, 1024);
+		Object.assign(sun.shadow.camera, { left: -0.9, right: 0.9, top: 1.0, bottom: -1.05, near: 0.5, far: 9 });
+		sun.shadow.radius = 9; sun.shadow.blurSamples = 16; sun.shadow.bias = -0.0004;
+		this.world.add(sun); this.world.add(sun.target);
 
 		// Dark studio floor with a soft contact shadow under the stand.
 		const floor = this.floor = new THREE.Mesh(new THREE.CircleGeometry(4, 96), new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.85 }));
@@ -72,7 +88,7 @@ export class Viewport {
 		this.cyc.visible = false;
 		this.world.add(this.cyc);
 
-		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: true, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1 };
+		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: true, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1, dynamicRes: true };
 		this.onFrame = new Set();
 		this.onResize = new Set();
 		this.stats = { fps: 0, cpuMs: 0, triangles: 0, width: 0, height: 0 };
@@ -98,7 +114,7 @@ export class Viewport {
 			Object.assign(this.photoWrap.style, { left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px' });
 			Object.assign(this.photoImg.style, { left: -c[0] * k + 'px', top: -c[1] * k + 'px', width: this.photo.size[0] * k + 'px', height: this.photo.size[1] * k + 'px' });
 		} else Object.assign(el.style, { position: '', left: '', top: '' });
-		const pr = Math.min(window.devicePixelRatio, 2) * this.settings.renderScale;
+		const pr = Math.min(window.devicePixelRatio, 2) * this.settings.renderScale * this.dynScale;
 		this.camera.aspect = w / h;
 		this.camera.updateProjectionMatrix();
 		this.renderer.setPixelRatio(pr);
@@ -128,6 +144,14 @@ export class Viewport {
 			l.position.fromArray(a.p); l.width = a.s[0]; l.height = a.s[1]; l.intensity = a.L; l.color.set(a.c ?? 0xffffff);
 			l.lookAt(new THREE.Vector3().fromArray(a.at ?? [0, 1, 0]));
 		});
+		const sh = r.shadow, sun = this.sun;
+		sun.visible = !!sh;
+		if (sh) {
+			sun.target.position.set(0, 1.0, 0);
+			sun.position.fromArray(sh.from).sub(sun.target.position).normalize().multiplyScalar(4).add(sun.target.position);
+			sun.intensity = sh.E; sun.color.set(sh.c ?? 0xffffff);
+			sun.shadow.camera.updateProjectionMatrix();
+		}
 		this.rigFixed = !!r.fixed;
 		this.bloomK = r.bloomK ?? 1;
 		if (r.fixed) this.rig.rotation.y = 0;
@@ -164,9 +188,11 @@ export class Viewport {
 		this._frames++; this._acc += dt;
 		if (this._acc >= 0.5) {
 			const sz = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-			Object.assign(this.stats, { fps: this._frames / this._acc, cpuMs: this._cpu / this._frames, triangles: this.renderer.info.render.triangles, width: sz.x, height: sz.y });
+			Object.assign(this.stats, { fps: this._frames / this._acc, cpuMs: this._cpu / this._frames, triangles: this.renderer.info.render.triangles, width: sz.x, height: sz.y, scale: this.dynScale });
 			this._frames = 0; this._acc = 0; this._cpu = 0;
+			if (s.dynamicRes && this.moving && this.stats.fps < 52 && this.dynScale > 0.7) { this.dynScale = Math.max(0.7, this.dynScale - 0.1); this.resize(); }
 		}
+		if (this.dynScale < 1 && !this.moving && performance.now() - this.stillAt > 350) { this.dynScale = 1; this.resize(); }
 	}
 
 	render() {

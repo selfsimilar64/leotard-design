@@ -4,7 +4,7 @@ import { Section, Row, Select, Colour, Slider, run } from './controls.jsx';
 import { selection } from './state.js';
 import { toolOptions } from './tools.js';
 
-export const LOOKS = [['print', 'Print'], ['foil', 'Foil'], ['holo', 'Holographic foil'], ['glitter', 'Glitter'], ['flock', 'Flock / embroidery']];
+export const LOOKS = [['print', 'Print'], ['foil', 'Foil'], ['holo', 'Holographic foil'], ['glitter', 'Glitter'], ['flock', 'Flock / embroidery'], ['gather', 'Stamp: gathers to a knot'], ['ruche', 'Stamp: ruching'], ['twist', 'Stamp: twist knot']];
 // Script and display faces installed on Windows; any CSS font name works (falls back to cursive).
 export const FONTS = ['Segoe Script', 'Brush Script MT', 'Lucida Handwriting', 'Ink Free', 'Gabriola', 'Monotype Corsiva', 'Georgia', 'Arial Black', 'Impact', 'Segoe UI'];
 const mm = (v) => (v * 1000).toFixed(0) + ' mm';

@@ -160,6 +160,10 @@ uniform vec4 uDecalRect[ 4 ]; // the art's rectangle in the atlas (x, y, w, h)
 uniform vec4 uDecalLook[ 4 ]; // x look (0 print, 1 foil, 2 holo foil, 3 glitter, 4 flock), y roughness, z 1 = the art's own colours
 uniform vec3 uDecalCol[ 4 ];
 uniform sampler2D tDecal;
+// Tension wrinkles (realism upgrade R9): radial folds round a few zones of the reference body
+// (crotch, armpits); xyz centre + w radius, and the plane's normal + w strength (0 = off)
+uniform vec4 uWrinkle[ 3 ];
+uniform vec4 uWrinkleN[ 3 ];
 
 vec3 hash32( vec2 p ) {
 	vec3 p3 = fract( vec3( p.xyx ) * vec3( .1031, .1030, .0973 ) );
@@ -194,7 +198,8 @@ vec3 bumpN( vec3 n, float hgt ) {
 	vec3 r1 = cross( dpdy, n ), r2 = cross( n, dpdx );
 	float det = dot( dpdx, r1 );
 	vec3 g = sign( det ) * ( dFdx( hgt ) * r1 + dFdy( hgt ) * r2 );
-	return normalize( abs( det ) * n - g );
+	vec3 r = abs( det ) * n - g;
+	return dot( r, r ) > 1e-30 ? normalize( r ) : n;
 }
 `;
 
@@ -393,15 +398,21 @@ const FABRIC_FRAGMENT = /* glsl */`
 		diffuseColor.a *= max( a, flakeMask );
 	}
 
+	// Heights from flock, stamps, wrinkles and seams are summed and bumped once, after the loops:
+	// screen-space derivatives inside loops with per-pixel branches are undefined on GPUs (on
+	// Windows they shaded whole wrinkle zones black).
+	float bumpH = 0.;
+
 	// --- decals: logos and lettering as print, foil, holographic foil, glitter or flock
 	for ( int i = 0; i < 4; i ++ ) {
 		if ( i >= uDecals ) break;
 		vec3 dp = ( uDecalM[ i ] * vec4( vRef, 1. ) ).xyz;
 		vec4 rc = uDecalRect[ i ];
 		vec4 tx = texture2D( tDecal, rc.xy + clamp( dp.xy + .5, 0., 1. ) * rc.zw );
-		float m = tx.a * step( abs( dp.x ), .5 ) * step( abs( dp.y ), .5 ) * step( abs( dp.z ), 1. );
-		if ( m < .004 ) continue;
 		vec4 lk = uDecalLook[ i ];
+		// stamps (look 5-7) have no art: their box is the mask
+		float m = ( lk.x > 4.5 ? 1. : tx.a ) * step( abs( dp.x ), .5 ) * step( abs( dp.y ), .5 ) * step( abs( dp.z ), 1. );
+		if ( m < .004 ) continue;
 		vec3 col = lk.z > .5 ? tx.rgb : uDecalCol[ i ];
 		float kind = lk.x, met = 0.;
 		vec3 nD = normal;
@@ -414,7 +425,18 @@ const FABRIC_FRAGMENT = /* glsl */`
 			vec3 tl = hash32( floor( q / .0004 ) ) * 2. - 1.;
 			nD = normalize( normal + ( tl - normal * dot( tl, normal ) ) * .45 );
 			met = 1.;
-		} else if ( kind > 3.5 ) nD = bumpN( normal, m * .0003 );
+		} else if ( kind > 3.5 && kind < 4.5 ) bumpH += m * .0003;
+		else if ( kind > 4.5 ) {
+			// surface stamps (T14): folds in the cloth itself, no colour of their own.
+			// 5 gathers into a knot, 6 ruching across a gathered line, 7 a twist knot
+			vec2 s = dp.xy; float r = length( s ), an = atan( s.y, s.x ), h, env;
+			if ( kind < 5.5 ) { env = 1. - smoothstep( .3, .5, r ); h = sin( an * 14. ) * smoothstep( .03, .16, r ) * env + ( 1. - smoothstep( 0., .09, r ) ) * .8; }
+			else if ( kind < 6.5 ) { env = ( 1. - smoothstep( .35, .5, abs( s.x ) ) ) * ( 1. - smoothstep( .42, .5, abs( s.y ) ) ); h = sin( s.y * 57. ) * ( 1. - abs( s.x ) * 1.6 ) * env; }
+			else { env = 1. - smoothstep( .3, .5, r ); h = sin( an * 6. + r * 34. ) * smoothstep( .02, .12, r ) * env + ( 1. - smoothstep( 0., .07, r ) ) * .7; }
+			bumpH += h * .0012 * env; // folds about a millimetre deep
+			gTrimAO *= 1. - .22 * env * clamp( - h, 0., 1. );
+			continue;
+		}
 		diffuseColor.rgb = mix( diffuseColor.rgb, col, m );
 		metalnessFactor = mix( metalnessFactor, met, m );
 		roughnessFactor = mix( roughnessFactor, lk.y, m );
@@ -422,14 +444,29 @@ const FABRIC_FRAGMENT = /* glsl */`
 		diffuseColor.a = max( diffuseColor.a, m );
 	}
 
+	// --- tension wrinkles: radial folds fanning out of the crotch and the armpits
+	if ( uZone == 5 ) for ( int i = 0; i < 3; i ++ ) {
+		vec4 Z = uWrinkle[ i ], ZN = uWrinkleN[ i ];
+		if ( ZN.w <= 0. ) continue;
+		vec3 d = vRef - Z.xyz;
+		float rr = length( d );
+		if ( rr > Z.w ) continue;
+		vec3 ax = normalize( ZN.xyz ), u = normalize( cross( vec3( 0., 1., 0. ), ax ) ), v = cross( ax, u );
+		float an = atan( dot( d, v ), dot( d, u ) );
+		float env = smoothstep( .03, .065, rr ) * ( 1. - smoothstep( .45 * Z.w, Z.w, rr ) ) * ( 1. - smoothstep( .0015, .004, fp ) );
+		float h = sin( an * 11. + sin( rr * 60. ) * .6 ) * env * ZN.w;
+		bumpH += h * .00035;
+		gTrimAO *= 1. - .1 * env * ZN.w * clamp( - h, 0., 1. );
+	}
+
 	// --- seams: a groove where the stitches pull the panels together, a soft ridge over the
 	// allowance pressed to one side; the groove's shadow carries the line at a distance
-	if ( uSeam > .5 && vSeam < .012 ) {
+	if ( uSeam > .5 ) {
 		float d = vSeam, fx = max( fwidth( d ), 1e-6 ), fade = 1. - smoothstep( .0004, .0016, fx );
-		float h = - .0003 * exp( - d * d / 4.9e-7 ) + .00012 * smoothstep( .0006, .003, d ) * ( 1. - smoothstep( .005, .01, d ) );
-		normal = bumpN( normal, h * fade );
+		bumpH += ( - .0003 * exp( - d * d / 4.9e-7 ) + .00012 * smoothstep( .0006, .003, d ) * ( 1. - smoothstep( .005, .01, d ) ) ) * fade;
 		gTrimAO *= mix( .8, 1., smoothstep( 0., .0012 + fx, d ) );
 	}
+	if ( uZone == 5 ) normal = bumpN( normal, bumpH );
 
 	// --- topstitching on a finished edge: coverstitch rows of ~3 mm straight stitches, each
 	// thread sitting in a slight groove where it pulls the layers together. Fades to the groove's
@@ -512,6 +549,7 @@ export function createFabricMaterial(zone) {
 		uPrint: { value: 0 }, tPrint: { value: null }, uPrintSize: { value: new THREE.Vector2(0.2, 0.2) }, uPrintOffset: { value: new THREE.Vector2() },
 		uDecals: { value: 0 }, uDecalM: { value: [0, 1, 2, 3].map(() => new THREE.Matrix4()) }, uDecalRect: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
 		uDecalLook: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uDecalCol: { value: [0, 1, 2, 3].map(() => new THREE.Color()) }, tDecal: { value: null },
+		uWrinkle: { value: [0, 1, 2].map(() => new THREE.Vector4()) }, uWrinkleN: { value: [0, 1, 2].map(() => new THREE.Vector4()) },
 	};
 	const m = new THREE.MeshPhysicalMaterial({ transparent: zone !== 3 });
 	m.userData.u = u;

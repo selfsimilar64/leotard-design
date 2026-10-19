@@ -13,6 +13,7 @@
 // the same per-vertex values through surface points so stones only land on fabric.
 import * as THREE from 'three';
 import { regions } from '../garment/legacy-regions.js';
+import { applyPose, isRest } from './pose.js';
 
 const abs = Math.abs, min = Math.min, max = Math.max, sq = Math.sqrt;
 const clamp = (x, a, b) => min(max(x, a), b);
@@ -56,7 +57,7 @@ class Mannequin {
 		this.bodies = bodies;
 		this.keys = manifest.bodies.map((b) => b.key);
 		const idx = this.idx = new Uint32Array(shared, 0, I);
-		const pw = new Uint8Array(shared, I * 4, N * 8);
+		const pw = this.parts = new Uint8Array(shared, I * 4, N * 8); // body-part weights, 8 per vertex (body/pose.js skins with them)
 		this.triangles = I / 3;
 
 		// Part weights (0..1): arm = upper arm + forearm + hand, the side of the armhole seam.
@@ -215,10 +216,19 @@ class Mannequin {
 	// -------------------------------------------------------------------------------------------
 	// Switching bodies: positions, normals, the fabric's lift over hollows, AO, sampling tables.
 
-	setBody(key) {
+	// pose: a preset name or { left, right } (body/pose.js); the rest pose when absent.
+	setBody(key, pose = this.pose) {
 		const N = this.vertices, idx = this.idx, src = this.bodies[key].pos;
 		this.key = key; this.body = this.bodies[key];
+		this.pose = pose ?? null; this.poseKey = JSON.stringify(pose ?? 'a-pose');
 		const P = this.aPos.array; P.set(src);
+		if (pose && !isRest(pose)) {
+			// where hands go is measured on the rest body: crotch height, waist height, front of the belly
+			const L = this.body.landmarks, crotchY = this.measureCrotch().y;
+			let frontZ = 0;
+			for (let i = 0; i < N; i++) if (abs(P[i * 3]) < 0.03 && abs(P[i * 3 + 1] - L.waist[1]) < 0.04 && this.wArm[i] < 0.1) frontZ = max(frontZ, P[i * 3 + 2]);
+			applyPose(P, this.parts, this.body, pose, { crotchY, waistY: L.waist[1], frontZ });
+		}
 		const Nn = this.aNrm.array;
 		vertexNormals(P, idx, Nn);
 
@@ -235,6 +245,7 @@ class Mannequin {
 		this.geometry.computeBoundingSphere();
 		this.geometry.computeBoundingBox();
 		this.crotch = this.measureCrotch();
+		this.contact = this.contactOcclusion(P, Nn); // depends on the body and pose only
 		this.updateGarment();
 	}
 
@@ -255,6 +266,7 @@ class Mannequin {
 		// Ambient occlusion from how deep the vertex sits under the fabric bridge: crevices
 		// (armpit, between the legs, under the bust) are exactly where the lift is large.
 		for (let i = 0; i < N; i++) ao[i] = clamp(1 - h[i] * 16, 0.4, 1);
+		if (this.contact) for (let i = 0; i < N; i++) ao[i] *= this.contact[i];
 
 		// Area-weighted sampling table on the garment surface.
 		let total = 0;
@@ -297,6 +309,37 @@ class Mannequin {
 			[h, h2] = [h2, h];
 		}
 		return h;
+	}
+
+	// Contact shadow between an arm and the torso (a posed arm resting against the side, a hand on
+	// the hip): each torso vertex is darkened by the nearest arm vertex in front of it within R,
+	// and each arm vertex by the nearest torso vertex in front of it. Grid of R-sized cells.
+	contactOcclusion(P, Nn, R = 0.045) {
+		const N = this.vertices, ao = new Float32Array(N).fill(1), grid = new Map(), key = (x, y, z) => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0;
+		const isArm = (i) => this.wArm[i] > 0.6, isTorso = (i) => this.wArm[i] < 0.15 && this.wHead[i] < 0.5 && this.wLeg[i] < 0.5;
+		for (let i = 0; i < N; i++) {
+			if (!isArm(i) && !isTorso(i)) continue;
+			const k = key(Math.floor(P[i * 3] / R), Math.floor(P[i * 3 + 1] / R), Math.floor(P[i * 3 + 2] / R));
+			let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i);
+		}
+		for (let i = 0; i < N; i++) {
+			const arm = isArm(i);
+			if (!arm && !isTorso(i)) continue;
+			const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2], gx = Math.floor(x / R), gy = Math.floor(y / R), gz = Math.floor(z / R);
+			let best = R;
+			for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+				const b = grid.get(key(gx + dx, gy + dy, gz + dz));
+				if (b) for (const j of b) {
+					if (isArm(j) === arm) continue;
+					const ex = P[j * 3] - x, ey = P[j * 3 + 1] - y, ez = P[j * 3 + 2] - z;
+					if (ex * Nn[i * 3] + ey * Nn[i * 3 + 1] + ez * Nn[i * 3 + 2] <= 0) continue; // behind this surface
+					const d = Math.hypot(ex, ey, ez);
+					if (d < best) best = d;
+				}
+			}
+			if (best < R) { const o = (1 - best / R) ** 2; ao[i] *= 1 - 0.55 * o; }
+		}
+		return ao;
 	}
 
 	measureCrotch() {
