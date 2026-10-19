@@ -182,7 +182,9 @@ parallel once P1 lands (different modules, shared document).
 
 The same steps are used for the owner's test.[^owner] **[INFERRED]**
 
-1. Import the photo; pin landmarks; solve camera; choose body size, skin and pose to match.
+1. Import the front and back photos (the owner's test supplies both); pin landmarks and solve a
+   camera for each; choose body size and pose to match. The test may use the mannequin (owner,
+   2026-10-18); use a skin-tone finish so mesh panels read as they do over skin.
 2. Pick the nearest block; trace edges, seams and print lines; mirror unless asymmetric.
 3. Assign fabric stacks; pick colours from the photo; set prints and lace.
 4. Cut-outs, straps, trims, bands.

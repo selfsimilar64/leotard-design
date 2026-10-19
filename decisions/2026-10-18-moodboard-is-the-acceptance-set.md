@@ -22,6 +22,15 @@ plan yet**. After it has been executed, the owner will hand over one specific le
 recreated with the app's tools, judged on how accurately it is recreated in **form and visual
 appearance**.[^owner]
 
+# Test conditions (owner, 2026-10-18)
+
+- The owner supplies **front and back photos** of one leotard; the agent may analyse and describe
+  them in any way to turn them into tool uses.
+- The result may be shown **on the mannequin**; more realistic bodies are wanted eventually, not for
+  the test.
+- **No time limit.**
+- The agent may **drive the app through its command interface** (`app.exec`) rather than the mouse.[^owner]
+
 # Context
 
 The owner stressed the degree of variation between designs: unique stone patterns, fabric
