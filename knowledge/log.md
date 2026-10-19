@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-19
+* **Creation**: [Poses, shadows and surface folds](/engineering/app/poses-and-shading.md) (P7): pose presets skinned with dual quaternions, soft studio shadow, contact darkening, tension wrinkles, fold stamps, dynamic resolution; gate designs posed as in their photos. Build status and scripting surface updated.
 * **Creation**: [Studio lighting and fabric looks](/engineering/app/studio-and-fabric-looks.md) (P3): photo-studio rigs, athlete skin, liquid hologram / oil-slick / duochrome / chrome / lace looks, sheerness, gradients, prints, logos, seam shading, swatch picker, colour match; B4, B8, B12 rebuilt and compared with their photos at 8.9-10.1 ms. [Scripting surface](/engineering/app/scripting-surface.md) brought up to date. [Build status](/engineering/app/build-status.md) updated.
 * **Update**: [Build status](/engineering/app/build-status.md): P2 (layers, straps, bands, piping, hardware), P6 core (photo tracing with camera solve and warp; B5 back rebuilt) and the stone system (P4-P5 core; 21k stones at 8.4 ms/frame) done.
 * **Creation**: [Designer app](/engineering/app/about.md) section: [build status](/engineering/app/build-status.md) (P0 done, P1 core done), [garment cutting from curves](/engineering/app/garment-cutting.md), [pattern pieces and flattening](/engineering/app/pattern-pieces-and-flattening.md) (cylinder unroll + ARAP with envelope Cholesky; LSCM alone left ~30% stretch), [scripting surface](/engineering/app/scripting-surface.md).

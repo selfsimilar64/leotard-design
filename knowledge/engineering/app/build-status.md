@@ -23,14 +23,14 @@ sources:
 
 The owner gave the go-ahead to implement the whole plan on 2026-10-19.[^owner] Work happens on
 branch `build/designer-app` (pushed to GitHub); `main` only changes when the owner is happy.
-**P0, P1 core, P2, P3 (pending the owner's review), P6 core and the stone system (P4-P5 core) are done** (curves cut real panels, pieces flatten, cloth-space textures,
+**P0, P1 core, P2, P3 (pending the owner's review), P4-P5 core, P6 core and P7 are done** (curves cut real panels, pieces flatten, cloth-space textures,
 finished edges, printable pattern).[^build]
 
 # How to run and test
 
 - Dev server: `npm --prefix app run dev` (port 5174; `.claude/launch.json` entry
   `leotard-designer`). The app autosaves to localStorage; designs save to `app/designs/`.
-- Unit tests: `npm --prefix app test` (vitest; 31 tests: document/undo, arrangement on a sphere
+- Unit tests: `npm --prefix app test` (vitest; 33 tests: document/undo, posing, arrangement on a sphere
   and on the body, block options including raglan, flattening, camera solve, seam distance and
   gradient fields). Debug scripts in `app/test/debug/` run with
   `DEBUG_TESTS=1 npx vitest run test/debug/<file>`.
@@ -48,7 +48,8 @@ finished edges, printable pattern).[^build]
 | P6 Photo tracing | core done | Body landmarks, reference photos with pins, camera solve (lens prior, body-proportion scale, TPS warp for residuals), look-through overlay, compare sheets (photo / render / blend), photo point specs for curves (`{ref, px}`), `nearestOn` attach helper. B5's back rebuilt by tracing |
 | P4-P5 Stones | core done | Stone library (ss sizes, ~50 colours, coatings, cuts), generators (row, fill random/contour, scatter, rays, motif, lattice, cluster), single stones and eraser marks, mirror, keep-out of edges, release-to-singles, instanced crystal shader with per-stone finish, stone tools and live counts |
 | P3 Materials and studio realism | done, owner review pending | [Studio rigs, skin, fabric looks, logos, seams, swatches, colour match](/engineering/app/studio-and-fabric-looks.md); raglan block option; B4, B8, B12 rebuilt (`app/designs/b4-*`, `b8-*`, `b12-*`) and compared side by side with their photos |
-| P7, P8 | not started | |
+| P7 Poses and realism II | done | [Poses, soft shadow, contact darkening, tension wrinkles, fold stamps, dynamic resolution](/engineering/app/poses-and-shading.md); gate designs posed as in their photos at 9.8-10.9 ms |
+| P8 | not started | |
 
 # Measured (GTX 1650, 2026-10-19)
 

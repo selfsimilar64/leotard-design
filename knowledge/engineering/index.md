@@ -4,7 +4,7 @@
 
 # Sections
 
-* [app/](app/) - What the designer app in app/ implements, module by module: build status per roadmap phase, the scripting surface (app.exec), garment cutting from curves, pattern pieces and flattening, studio lighting and fabric looks.
+* [app/](app/) - What the designer app in app/ implements, module by module: build status per roadmap phase, the scripting surface (app.exec), garment cutting from curves, pattern pieces and flattening, studio lighting and fabric looks, poses and shading.
 * [architecture/](architecture/) - System-level structure of the product: what the POC provides, the garment data model, and how role views sit on one design.
 * [geometry/](geometry/) - Geometry techniques for designing a leotard directly on the body and turning it into production pattern pieces: surface layer instead of cloth simulation, body models, curves and panels on surfaces, flattening with stretch compensation, surface addresses, stone distribution, collision checks, size transfer and library options.
 * [pipeline/](pipeline/) - Offline tooling that produces the POC's assets: the Blender + MPFB 2 script that bakes the shared-topology mannequin bodies from the CC0 MakeHuman base mesh.

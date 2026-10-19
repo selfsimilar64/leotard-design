@@ -53,7 +53,7 @@ mirror? } }` (attached ends follow their line).
 # Commands (2026-10-19)
 
 - Design: `meta.set`, `body.set { size: child|teen|young|adult, form: full|torso, finish, pose }`
-  (finishes include athlete skin tones), `scene.set { rig, exposure, bloom, envRotation,
+  (finishes include athlete skin tones; poses in [poses and shading](/engineering/app/poses-and-shading.md)), `scene.set { rig, exposure, bloom, envRotation,
   rotateLights }` (rigs include white and grey seamless photo studios and a gym).
 - Garment: `block.apply { neck, back, sleeves, leg, armhole: set-in|raglan, fabric, colour, second }`;
   `curve.add { points, role: seam|edge|print|guide|strap-path|trim-path, closed, mirror, shape, layer }`;
@@ -68,8 +68,8 @@ mirror? } }` (attached ends follow their line).
 - Edges and construction: `trim.set { on, kind: elastic|binding (edges) | piping|tape (seams) | none, fabric }`,
   `band.add { on, height, fabric, colour }`, `strap.add`, `strap.set`, `strap.remove`,
   `hardware.add { kind: clear-hook|hook-and-bar|zip-pull, at }`, `hardware.remove`.
-- Logos and lettering: `decal.add { at, text | src, font, weight, size, rotate, colour, look:
-  print|foil|holo|glitter|flock, layer }`, `decal.set`, `decal.remove`.
+- Logos, lettering and fold stamps: `decal.add { at, text | src, font, weight, size, aspect, rotate,
+  colour, look: print|foil|holo|glitter|flock | gather|ruche|twist, layer }`, `decal.set`, `decal.remove`.
 - Stones: `stones.add { kind: row|fill|scatter|rays|motif|lattice|cluster, on, at, params, stone |
   palette | colourRamp, shape, mirror }`, `stones.set`, `stones.remove`, `stones.erase`,
   `stone.place`, `stone.remove`, `stones.release`.
