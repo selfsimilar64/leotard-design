@@ -6,7 +6,8 @@
 
 * [Garment cutting from curves (arrangement)](garment-cutting.md) - How app/src/garment/ turns the document's curves into panels: projected surface splines, attached end points, insertion of every polyline into the canonical mesh, per-face planar subdivision, pruning, sliver merging, cells and panel seeds, with the tolerances and failure fallbacks that make it robust.
 * [Pattern pieces and flattening](pattern-pieces-and-flattening.md) - How the app opens each cut cell into a flat pattern piece (slits along internal seams, automatic cuts for tubes), flattens it (cylinder unroll then ARAP with an envelope Cholesky solve), uses the result as cloth-space UVs and as the printable PDF pattern with ease and seam allowance.
-* [Scripting surface (window.app)](scripting-surface.md) - The designer app's command API, window.app: every designer action as an undoable command (app.exec), point specs for naming places on the body, saving and capturing; the surface an agent uses to rebuild a photographed leotard with the designer's own tools.
+* [Scripting surface (window.app)](scripting-surface.md) - The designer app's command API, window.app: every designer action as an undoable command (app.exec), point specs for naming places on the body, reference photos and colour matching, saving, capturing and comparing; the surface an agent uses to rebuild a photographed leotard with the designer's own tools.
+* [Studio lighting and fabric looks (P3)](studio-and-fabric-looks.md) (draft) - How the designer app renders catalogue-photo realism: photo-studio light rigs, athlete skin, the moodboard's fabric looks (liquid hologram, oil-slick, duochrome, chrome, glitter foil, lace on net, illusion mesh), sheerness, gradients, prints, logos, linings, seam shading, swatch thumbnails and matching a panel's colour to a photo. Includes the measured gate results and the pitfalls found.
 
 # Roadmap
 
@@ -14,4 +15,4 @@
 
 # Section
 
-* [Designer app](about.md) - What the designer app in app/ implements, module by module: build status per roadmap phase, the scripting surface (app.exec), garment cutting from curves, pattern pieces and flattening.
+* [Designer app](about.md) - What the designer app in app/ implements, module by module: build status per roadmap phase, the scripting surface (app.exec), garment cutting from curves, pattern pieces and flattening, studio lighting and fabric looks.

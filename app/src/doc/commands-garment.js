@@ -189,7 +189,7 @@ defineCommand('panel.restore', {
 });
 
 defineCommand('panel.add', {
-	label: 'Fill area', args: '{ at: spec, fabric?, colour?, second?, mirror?: none|both, name? }',
+	label: 'Fill area', args: '{ at: spec, fabric?, colour?, second?, mirror?: none|both, name?, layer? (layer id: a lining or overlay shape) }',
 	run(tx, a) {
 		const sp = toSP(resolvePoint(a.at, ctxOf(tx)));
 		const layer = a.layer ?? 'L0';

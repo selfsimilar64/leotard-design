@@ -23,15 +23,16 @@ sources:
 
 The owner gave the go-ahead to implement the whole plan on 2026-10-19.[^owner] Work happens on
 branch `build/designer-app` (pushed to GitHub); `main` only changes when the owner is happy.
-**P0, P1 core, P2, P6 core and the stone system (P4-P5 core) are done** (curves cut real panels, pieces flatten, cloth-space textures,
+**P0, P1 core, P2, P3 (pending the owner's review), P6 core and the stone system (P4-P5 core) are done** (curves cut real panels, pieces flatten, cloth-space textures,
 finished edges, printable pattern).[^build]
 
 # How to run and test
 
 - Dev server: `npm --prefix app run dev` (port 5174; `.claude/launch.json` entry
   `leotard-designer`). The app autosaves to localStorage; designs save to `app/designs/`.
-- Unit tests: `npm --prefix app test` (vitest; 24 tests: document/undo, arrangement on a sphere
-  and on the body, block options, flattening). Debug scripts in `app/test/debug/` run with
+- Unit tests: `npm --prefix app test` (vitest; 31 tests: document/undo, arrangement on a sphere
+  and on the body, block options including raglan, flattening, camera solve, seam distance and
+  gradient fields). Debug scripts in `app/test/debug/` run with
   `DEBUG_TESTS=1 npx vitest run test/debug/<file>`.
 - Scripting: `window.app` in the browser, see [scripting surface](/engineering/app/scripting-surface.md).
   `app.capture(name, { view })` writes `app/captures/<name>.png` at 1600x1200 even when the
@@ -46,7 +47,8 @@ finished edges, printable pattern).[^build]
 | P2 Layers, straps, edges | done | Layers (shell, overlays at +0.9 mm per step, linings), straps as surface ribbons with profile, topstitch and contact shadow, bands (edge offset into the opening), piping along seams, hardware (clear hook, hook-and-bar, zip pull), strap and edges tools |
 | P6 Photo tracing | core done | Body landmarks, reference photos with pins, camera solve (lens prior, body-proportion scale, TPS warp for residuals), look-through overlay, compare sheets (photo / render / blend), photo point specs for curves (`{ref, px}`), `nearestOn` attach helper. B5's back rebuilt by tracing |
 | P4-P5 Stones | core done | Stone library (ss sizes, ~50 colours, coatings, cuts), generators (row, fill random/contour, scatter, rays, motif, lattice, cluster), single stones and eraser marks, mirror, keep-out of edges, release-to-singles, instanced crystal shader with per-stone finish, stone tools and live counts |
-| P3, P7, P8 | not started | |
+| P3 Materials and studio realism | done, owner review pending | [Studio rigs, skin, fabric looks, logos, seams, swatches, colour match](/engineering/app/studio-and-fabric-looks.md); raglan block option; B4, B8, B12 rebuilt (`app/designs/b4-*`, `b8-*`, `b12-*`) and compared side by side with their photos |
+| P7, P8 | not started | |
 
 # Measured (GTX 1650, 2026-10-19)
 
@@ -55,6 +57,8 @@ finished edges, printable pattern).[^build]
 - Re-cut of the full block after a line edit: arrangement 110-180 ms in node, ~0.5 s end to end
   in the browser (arrangement, panel inheritance, pieces, meshes); flattening runs in a worker.
 - Flattening: front piece 4,650 vertices, 6% mean area-weighted stretch, 0.2 s.
+- P3 gate designs in the white studio at 1792x1344: B4 10.1 ms (5,241 stones), B8 9.5 ms
+  (4,433 stones), B12 8.9 ms (853 spangles); gate 14 ms.
 - Stones: 21,000 stones render at 8.4 ms a frame at 1792x1344; generating them takes 1.45 s
   (big pavé fills), small row generators are instant.
 
