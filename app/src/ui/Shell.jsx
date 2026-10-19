@@ -82,7 +82,7 @@ function ToolRail() {
 function Outliner() {
 	rev.value;
 	const d = app.doc, sel = selection.value;
-	const groups = [['layers', 'Layers'], ['curves', 'Lines'], ['panels', 'Panels'], ['straps', 'Straps'], ['trims', 'Edge finishes'], ['stones', 'Stone generators'], ['placed', 'Single stones'], ['hardware', 'Hardware'], ['reference', 'Reference photos']];
+	const groups = [['layers', 'Layers'], ['curves', 'Lines'], ['panels', 'Panels'], ['straps', 'Straps'], ['trims', 'Edge finishes'], ['stones', 'Stone generators'], ['placed', 'Single stones'], ['decals', 'Logos and lettering'], ['hardware', 'Hardware'], ['reference', 'Reference photos']];
 	return (
 		<details class="section" open>
 			<summary><span>Outliner</span></summary>
@@ -92,7 +92,7 @@ function Outliner() {
 						<div class="ol-head">{label} <span class="count">{d[k].length}</span></div>
 						{d[k].slice(0, 200).map((o) => (
 							<div key={o.id} class={`ol-item ${sel?.id === o.id ? 'sel' : ''}`} onClick={() => { selection.value = { kind: k, id: o.id }; }}>
-								{o.name || o.role || o.kind || o.id} <span class="dim">{o.id}</span>
+								{o.name || o.text?.split('\n')[0] || o.role || o.kind || o.id} <span class="dim">{o.id}</span>
 							</div>
 						))}
 					</div>

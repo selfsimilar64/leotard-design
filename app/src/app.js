@@ -9,12 +9,14 @@
 //   app.capture(name, { view })                     captures/<name>.png
 //   app.view(name | { position, target, fov })      named cameras: front, back, left, right, three-quarter
 //   app.benchmark()                                 true GPU cost of a frame, ms
+import * as THREE from 'three';
 import { DocumentStore, commandList } from './doc/store.js';
 import { newDocument } from './doc/schema.js';
 import './doc/commands-core.js';
 import './doc/commands-garment.js';
 import './doc/commands-reference.js';
 import './doc/commands-stones.js';
+import './doc/commands-decals.js';
 import { surfaceLandmarks } from './body/landmarks.js';
 import { resolvePoint } from './curves/points.js';
 import { defineCommand } from './doc/store.js';
@@ -23,6 +25,8 @@ import { buildGarment, inheritPanels, evaluateAll } from './garment/build.js';
 import { showCells } from './render/debug.js';
 import { patternPieces } from './garment/pattern.js';
 import { patternPDF } from './export/pdf.js';
+import { FABRICS } from './materials/fabric.js';
+import { swatch } from './materials/swatches.js';
 
 // Ends a drag: touches the curves so the garment is re-cut and new cells get their panels, inside
 // the drag's own history entry.
@@ -164,13 +168,56 @@ export class App {
 		return vp.getCamera();
 	}
 
+	// opts: { view, width, height, overlay: true to keep the editing lines }
 	async capture(name, opts = {}) {
 		if (opts.view) this.view(opts.view);
-		const blob = await this.engine.viewport.capture(opts.width ?? 1600, opts.height ?? 1200);
+		const blob = await this.withoutOverlay(() => this.engine.viewport.capture(opts.width ?? 1600, opts.height ?? 1200), opts.overlay);
 		const file = safeName(name) + '.png';
 		const r = await fetch('/__fs/captures/' + file, { method: 'POST', body: blob }).catch(() => null);
 		if (!r || !r.ok) { download(file, blob); return 'downloaded ' + file; }
 		return 'captures/' + file;
+	}
+
+	// Contact sheet of fabric swatches (every fabric, or `fabrics`) in one colour: captures/<name>.png
+	async swatchSheet(name = 'swatches', { colour = '#2a6fd6', second = 'Tone-on-tone', colour2 = null, fabrics = Object.keys(FABRICS), cols = 6 } = {}) {
+		const P = 96, rows = Math.ceil(fabrics.length / cols), cv = document.createElement('canvas');
+		cv.width = cols * (P + 8) + 8; cv.height = rows * (P + 24) + 8;
+		const x = cv.getContext('2d');
+		x.fillStyle = '#1b1b1f'; x.fillRect(0, 0, cv.width, cv.height);
+		x.font = '10px sans-serif'; x.fillStyle = '#ddd';
+		for (let i = 0; i < fabrics.length; i++) {
+			const [url] = swatch(this.engine.viewport, { fabric: fabrics[i], colour, second, colour2 });
+			const img = await loadImage(url), cx = 8 + (i % cols) * (P + 8), cy = 8 + Math.floor(i / cols) * (P + 24);
+			x.drawImage(img, cx, cy);
+			x.fillText(FABRICS[fabrics[i]].label.slice(0, 18), cx, cy + P + 13);
+		}
+		const blob = await new Promise((r) => cv.toBlob(r, 'image/png')), file = safeName(name) + '.png';
+		const r = await fetch('/__fs/captures/' + file, { method: 'POST', body: blob }).catch(() => null);
+		return r?.ok ? 'captures/' + file : 'failed';
+	}
+
+	// A photo (or a crop of it) beside a render from a chosen view, same height: captures/<name>.png.
+	// No camera solve needed: for judging fabrics and colour, not alignment (use compare for that).
+	async sideBySide(name, { src, crop = null, view = null, height = 1200 } = {}) {
+		const photo = await loadImage(src), c = crop ?? [0, 0, photo.naturalWidth, photo.naturalHeight];
+		const pw = c[2] - c[0], ph = c[3] - c[1], w = Math.round(height * pw / ph);
+		if (view) this.view(view);
+		const blob = await this.withoutOverlay(() => this.engine.viewport.capture(w, height));
+		const render = await loadImage(URL.createObjectURL(blob)), cv = document.createElement('canvas');
+		cv.width = w * 2; cv.height = height;
+		const x = cv.getContext('2d');
+		x.drawImage(photo, c[0], c[1], pw, ph, 0, 0, w, height);
+		x.drawImage(render, w, 0, w, height);
+		const out = await new Promise((res) => cv.toBlob(res, 'image/png')), file = safeName(name) + '.png';
+		await fetch('/__fs/captures/' + file, { method: 'POST', body: out });
+		return 'captures/' + file;
+	}
+
+	// Run fn with the editing overlay (lines, control points) hidden, unless keep.
+	async withoutOverlay(fn, keep = false) {
+		const o = this.engine.overlay, was = o.group.visible;
+		if (!keep) o.group.visible = false;
+		try { return await fn(); } finally { o.group.visible = was; }
 	}
 
 	// Pattern pieces of the current garment (mm), once every piece is flattened.
@@ -227,7 +274,7 @@ export class App {
 		const was = this.looking, wasOpts = this.lookOpts;
 		this.lookThrough(id, { mode: 'off' });
 		const cr = r.camera.crop ?? [0, 0, r.size[0], r.size[1]], w = cr[2] - cr[0], h = cr[3] - cr[1];
-		const blob = await this.engine.viewport.capture(w, h);
+		const blob = await this.withoutOverlay(() => this.engine.viewport.capture(w, h));
 		if (was) this.lookThrough(was, wasOpts); else this.lookThrough(null);
 		const [photo, render] = await Promise.all([loadImage(r.src), loadImage(URL.createObjectURL(blob))]);
 		const c = document.createElement('canvas');
@@ -241,9 +288,73 @@ export class App {
 		return 'captures/' + file;
 	}
 
+	// Colour of a reference photo around pixel px (median of a (2r+1)-pixel square), '#rrggbb'.
+	async pickColour(id, px, r = 4) {
+		const R = this.doc.reference.find((x) => x.id === id);
+		if (!R) throw new Error('No reference photo ' + id);
+		return '#' + srgbColour(median(await photoPatch(R.src, px, r))).getHexString();
+	}
+
+	// Give a panel the colour that renders like the photo at px under the current rig, seen through
+	// the photo's solved camera. Per channel (linear light) the render is close to a straight line
+	// in the panel's colour, render = k * colour + b (b: highlights and sparkle that do not follow
+	// the colour), so two renders fit it and a third checks; one more step refines. If the panel is
+	// not what the camera sees there, its colour is left as it was and `note` says so. If the colour would have to be
+	// brighter than white (or darker than black), it is clamped and `note` says to change the
+	// lights or exposure instead. One undo step.
+	async matchColour({ panel, ref, px, layer = 0, r = 4, iterations = 3 }) {
+		const R = this.doc.reference.find((x) => x.id === ref);
+		if (!R?.camera) throw new Error('Solve the camera of ' + ref + ' first');
+		if (!this.doc.panels.some((p) => p.id === panel)) throw new Error('No panel ' + panel);
+		const target = srgbColour(median(await photoPatch(R.src, px, r)));
+		const crop = R.camera.crop ?? [0, 0, ...R.size], w = crop[2] - crop[0], h = crop[3] - crop[1];
+		const was = this.looking, wasOpts = this.lookOpts, overlay = this.engine.overlay, ov = overlay.group?.visible ?? true;
+		const gesture = 'match-colour-' + Date.now();
+		const set = (c) => this.exec({ op: 'panel.set', id: panel, layer, colour: '#' + c.getHexString(), gesture });
+		const render = () => srgbColour(median(this.engine.viewport.samplePatch(px[0] - crop[0], px[1] - crop[1], w, h, r)));
+		this.lookThrough(ref, { mode: 'off' });
+		overlay.setVisible(false);
+		const P = this.doc.panels.find((p) => p.id === panel), original = P.stack?.[layer]?.colour ?? '#888888';
+		let c = target.clone(), seen = null, note = null;
+		const K = ['r', 'g', 'b'];
+		try {
+			// fit render = k * colour + b from two renders, per channel
+			let c0 = c.clone().multiplyScalar(0.5);
+			set(c); let r1 = render();
+			set(c0); let r0 = render();
+			const sum = (x) => x.r + x.g + x.b;
+			const follows = sum(r1) - sum(r0) > 0.1 * sum(r1) && sum(r1) > 1e-4;
+			if (follows) for (let i = 0; i < Math.max(1, iterations - 1); i++) {
+				const next = c.clone();
+				for (const k of K) {
+					const kk = (r1[k] - r0[k]) / Math.max(c[k] - c0[k], 1e-6), b = r1[k] - kk * c[k];
+					let v = kk > 1e-5 ? (target[k] - b) / kk : c[k];
+					if (v > 1) { note = 'The lights are too dark for this colour: even white renders darker than the photo. Pick a brighter light rig or raise the exposure, then match again.'; v = 1; }
+					if (v < 0.0005) { note = 'The lights are too bright for this colour: even black renders lighter than the photo. Pick a darker rig or lower the exposure, then match again.'; v = 0.0005; }
+					next[k] = v;
+				}
+				c0 = c; r0 = r1; c = next;
+				set(c); r1 = render();
+			}
+			seen = follows ? r1 : null;
+			if (follows) set(c);
+			else {
+				c = new THREE.Color(original);
+				set(c);
+				note = 'That spot of the photo does not show this panel (or something covers it there): click inside the panel, away from stones and straps.';
+			}
+		} finally {
+			overlay.setVisible(ov);
+			if (was) this.lookThrough(was, wasOpts); else this.lookThrough(null);
+			this.endGesture();
+		}
+		return { colour: '#' + c.getHexString(), photo: '#' + target.getHexString(), rendered: seen ? '#' + seen.getHexString() : null, ...(note ? { note } : {}) };
+	}
+
 	get debug() { return { cells: (on = true) => showCells(this.engine, on) }; }
 
-	benchmark(n = 60) { return +this.engine.viewport.benchmark(n).toFixed(2); }
+	// ms per frame; { width, height } for a fixed size (gates: 1792x1344)
+	benchmark(n = 60, size = null) { return +this.engine.viewport.benchmark(n, size).toFixed(2); }
 	stats() { return { ...this.engine.viewport.stats, ...this.engine.timing, legacy: this.engine.legacy.timing }; }
 	// stone counts by size (mm) and colour, and generator problems
 	stoneStats() { return { ...this.engine.stoneView.stats(), dropped: this.engine.stoneRun.dropped, errors: this.engine.stoneRun.errors }; }
@@ -258,6 +369,27 @@ function download(file, blob) {
 	a.href = URL.createObjectURL(blob); a.download = file; a.click();
 	setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+// Pixels of a photo around px: Uint8ClampedArray RGBA of the (2r+1)-pixel square.
+const photoCanvases = new Map();
+async function photoPatch(src, px, r) {
+	let cv = photoCanvases.get(src);
+	if (!cv) {
+		const img = await loadImage(src);
+		cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+		cv.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0);
+		photoCanvases.set(src, cv);
+	}
+	return cv.getContext('2d', { willReadFrequently: true }).getImageData(Math.round(px[0]) - r, Math.round(px[1]) - r, 2 * r + 1, 2 * r + 1).data;
+}
+// Per-channel median of RGBA bytes (sparkle and stones in the patch do not drag it).
+function median(d) {
+	const ch = [[], [], []];
+	for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) ch[k].push(d[i + k]);
+	return ch.map((a) => a.sort((x, y) => x - y)[a.length >> 1]);
+}
+// sRGB bytes to a three.js colour (linear inside)
+const srgbColour = ([r, g, b]) => new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
 
 function loadImage(src) {
 	return new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => reject(new Error('Cannot load ' + src)); i.src = src; });

@@ -28,6 +28,19 @@ describe('blocks on the body', () => {
 		for (const c of [front, back]) { expect(c.area).toBeGreaterThan(0.12); expect(c.area).toBeLessThan(0.3); }
 		console.log('ms', g.ms, 'cells', g.arr.cells.map((c) => +c.area.toFixed(4)));
 	});
+	it('raglan sleeves run up to the neckline (no shoulder seam) and keep four pieces', () => {
+		for (const neck of ['high', 'crew', 'scoop']) {
+			const g = buildGarment(docFor({ armhole: 'raglan', neck }), B.surf), names = g.seeds.map((s) => s.panel);
+			expect(g.arr.warn, neck).toEqual([]);
+			expect(new Set(g.seeds.map((s) => s.cell)).size, neck).toBe(4);
+			const set = buildGarment(docFor({ neck }), B.surf);
+			// the raglan sleeve takes the shoulder: larger than the set-in sleeve, front smaller
+			const area = (gg, i) => gg.arr.cells[gg.seeds[i].cell].area;
+			expect(area(g, 2), neck).toBeGreaterThan(area(set, 2) * 1.08);
+			expect(area(g, 0), neck).toBeLessThan(area(set, 0));
+			expect(names.length).toBe(4);
+		}
+	});
 	it('every block option builds a closed, warning-free arrangement', () => {
 		for (const [k, vals] of Object.entries(BLOCK_OPTIONS)) for (const v of vals) {
 			const g = buildGarment(docFor({ [k]: v }), B.surf);

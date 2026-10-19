@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { createFabricMaterial } from '../materials/fabric.js';
 import { fullBodyStand, dressFormStand } from './stand.js';
 import { MANNEQUIN_FINISHES } from './presets.js';
+import { DecalSet } from './decals.js';
 import { LegacyGarment } from '../garment/legacy.js';
 import { GarmentView, sameSign } from './garment.js';
 import { buildGarment, evaluateAll, panelAt } from '../garment/build.js';
@@ -140,6 +141,7 @@ export class Engine {
 			else if (t('straps')) this.syncStraps(doc);
 			if (t('hardware') || t('curves') || t('panels')) this.hardware.build(doc);
 			if (t('stones') || t('placed') || t('curves') || t('panels') || t('straps') || t('trims') || t('layers')) this.syncStones(doc);
+			if (t('decals') || t('layers') || t('curves') || t('panels')) this.syncDecals(doc);
 			if (t('body')) this.applyBody(doc.body, all);
 		}
 		if (!legacy && why !== 'gesture') this.drawOverlay(doc);
@@ -176,6 +178,9 @@ export class Engine {
 				L.g = buildGarment(doc, this.surf, { prev, layer: layer.id, evaluated });
 				L.view.setGarment(L.g, doc);
 			}
+			// linings show only where the shell has fabric
+			const shell = this.layers.get('L0')?.view;
+			for (const L of this.layers.values()) if ((L.layer.z ?? 0) < 0) L.view.setClip(shell?.cover ?? null);
 			this.pending = null;
 			this.evaluated = evaluated;
 			this.g = this.layers.get('L0')?.g ?? null;
@@ -190,6 +195,13 @@ export class Engine {
 			if (trimSig !== this.trimSig) { this.trimSig = trimSig; for (const L of this.layers.values()) L.rims.build(L.g, doc, L.view.garmentCells, this.evaluated, layerLift(L.layer)); }
 			this.syncStraps(doc);
 		}
+	}
+
+	// Logos and lettering: every layer's views get that layer's decal atlas and boxes.
+	syncDecals(doc) {
+		if (!this.decals) { this.decals = new DecalSet(); this.decals.onChange = () => this.app && this.syncDecals(this.app.doc); }
+		this.decals.build(doc, this.surf);
+		for (const [id, L] of this.layers) L.view.setDecals(this.decals.forLayer(id));
 	}
 
 	// Straps alone changed (or the garment did): new grids, cover (they bridge hollows like fabric), meshes.
@@ -220,6 +232,7 @@ export class Engine {
 		skin.sheen = f.sheen ?? 0; skin.sheenRoughness = 0.7; skin.sheenColor.set(0xffffff);
 		u.uKnit.value = f.knit ?? 0;
 		u.uTape.value = f.tape ? 1 : 0;
+		u.uSkin.value = f.skin ?? 0;
 		skin.needsUpdate = true;
 		const cm = this.capMaterial;
 		cm.color.set(f.colour); cm.roughness = f.roughness; cm.clearcoat = f.clearcoat ?? 0; cm.sheen = f.sheen ?? 0;

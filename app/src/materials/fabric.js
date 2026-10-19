@@ -10,6 +10,7 @@
 // own geometry, already placed, carrying topstitching. Every zone honours the dress-form cut
 // (aKeep < 0 is discarded when uClip is on).
 import * as THREE from 'three';
+import { laceTexture } from './lace.js';
 
 const PARS_VERTEX = /* glsl */`
 attribute float aCover;
@@ -24,6 +25,10 @@ attribute vec2 aRim;
 varying vec2 vRim;
 attribute vec2 aUV;
 varying vec2 vUV;
+attribute float aGrad;     // panels: 0..1 position in the panel's colour gradient (render/garment.js)
+varying float vGrad;
+attribute float aSeam;     // panels: metres to the nearest seam (render/garment.js)
+varying float vSeam;
 uniform float uOffset;
 uniform float uGarment;
 varying vec3 vObjPos;
@@ -48,6 +53,8 @@ vKeep = aKeep;
 vForm = aForm;
 vRim = aRim;
 vUV = aUV;
+vGrad = aGrad;
+vSeam = aSeam;
 `;
 
 const BEGIN_NORMAL = /* glsl */`
@@ -119,9 +126,40 @@ mat3 cotangentFrame( vec3 N, vec3 p, vec2 uv ) {
 	float invmax = inversesqrt( max( max( dot( T, T ), dot( B, B ) ), 1e-20 ) );
 	return mat3( T * invmax, B * invmax, N );
 }
-uniform float uOmbre;
+uniform float uOmbre;      // 1 = POC fade up the reference body, 2 = along the panel's gradient (vGrad)
 uniform vec3 uOmbreColor;
 uniform vec2 uOmbreY;
+varying float vGrad;
+
+uniform float uSkin;       // > 0: athlete skin, wrap lighting (used in RE_Direct_Physical, see SKIN_DIFFUSE)
+uniform float uSeam;       // 1 = vSeam is valid: seam groove and ridge, mesh doubled over the allowance
+uniform float uClipShell;  // 1 = a lining: only where the shell has fabric (aCover carries the shell's cover)
+uniform float uSeamAllow;  // seam allowance, metres (folded under the seam: mesh shows it as a darker band)
+varying float vSeam;
+uniform float uDuo;        // duochrome: share of uDuoColor at grazing angles
+uniform vec3 uDuoColor;
+uniform float uDuoPow;
+uniform float uFilm;       // 1 = thin-film thickness varies over the cloth (oil-slick, liquid hologram)
+uniform float uFilmScale;  // metres per swirl
+uniform vec2 uFilmRange;   // film thickness, nm
+uniform float uFilmWarp;   // how much the swirls fold over each other
+uniform float uFilmTint;   // share of the film's colour shown in the cloth's own colour (hologram prints)
+float gFilm = .5;
+uniform float uLace;       // 1 = lace motifs (tLace: 0 net, ~.7 dense toile, 1 cord) over the mesh net
+uniform sampler2D tLace;
+uniform float uLaceSize;   // metres per repeat
+uniform vec3 uLaceColor;   // colour of the motifs and cord (the fabric colour is the net's)
+uniform float uPrint;      // 1 = sublimation print (tPrint, rgba) tiled in pattern space
+uniform sampler2D tPrint;
+uniform vec2 uPrintSize;   // metres per repeat
+uniform vec2 uPrintOffset;
+// Decals (logos, lettering): up to 4 per panel, planar projections on the reference body
+uniform int uDecals;
+uniform mat4 uDecalM[ 4 ];    // reference space -> decal box (x, y in -.5...5 across the art, z +-1 depth)
+uniform vec4 uDecalRect[ 4 ]; // the art's rectangle in the atlas (x, y, w, h)
+uniform vec4 uDecalLook[ 4 ]; // x look (0 print, 1 foil, 2 holo foil, 3 glitter, 4 flock), y roughness, z 1 = the art's own colours
+uniform vec3 uDecalCol[ 4 ];
+uniform sampler2D tDecal;
 
 vec3 hash32( vec2 p ) {
 	vec3 p3 = fract( vec3( p.xyx ) * vec3( .1031, .1030, .0973 ) );
@@ -173,6 +211,11 @@ const FABRIC_FRAGMENT = /* glsl */`
 		float aa = max( fwidth( d ), 1e-5 ), w = .0028;
 		diffuseColor.rgb = mix( diffuseColor.rgb, uTapeColor, 1. - smoothstep( w - aa, w + aa, d ) );
 	}
+	// skin is not evenly glossy: a little roughness variation at the centimetre scale
+	if ( uZone == 3 && uSkin > 0. ) roughnessFactor = clamp( roughnessFactor * ( .82 + .36 * vnoise( vObjPos.xy * 90. + vObjPos.z * 40. ) ), .3, .8 );
+
+	// a lining never shows past the shell's openings
+	if ( uClipShell > .5 && vCover < 0. ) discard;
 
 	// --- which pixels belong to this zone
 	if ( uZone < 3 ) {
@@ -217,6 +260,10 @@ const FABRIC_FRAGMENT = /* glsl */`
 			normal = normalize( cotangentFrame( normal, - vViewPosition, tuv ) * tn );
 		}
 	}
+	if ( uPrint > .5 ) {
+		vec4 pc = texture2D( tPrint, ( q - uPrintOffset ) / uPrintSize );
+		diffuseColor.rgb = mix( diffuseColor.rgb, pc.rgb, pc.a );
+	}
 	if ( uChecker > 0. ) {
 		vec2 cq = floor( q / uChecker );
 		float ck = mod( cq.x + cq.y, 2. );
@@ -226,8 +273,23 @@ const FABRIC_FRAGMENT = /* glsl */`
 	}
 	float ombre = 1.;
 	if ( uOmbre > .5 ) {
-		ombre = smoothstep( uOmbreY.x, uOmbreY.y, vRef.y + .025 * sin( vRef.x * 11. ) ); // reference body: the fade lands at the same place on every size
+		ombre = uOmbre > 1.5 ? 1. - smoothstep( 0., 1., vGrad ) // along a line or a direction (render/garment.js)
+			: smoothstep( uOmbreY.x, uOmbreY.y, vRef.y + .025 * sin( vRef.x * 11. ) ); // reference body: the fade lands at the same place on every size
 		diffuseColor.rgb = mix( uOmbreColor, diffuseColor.rgb, ombre );
+	}
+	// duochrome foil: the colour turns towards a second hue as the surface turns away
+	if ( uDuo > 0. ) diffuseColor.rgb = mix( diffuseColor.rgb, uDuoColor, uDuo * pow( 1. - saturate( dot( normal, viewDir ) ), uDuoPow ) );
+	// thin-film thickness swirls: folded value noise (oil-slick, liquid hologram), read in lights_physical_fragment
+	if ( uFilm > 0. ) {
+		vec2 fq = q / uFilmScale;
+		vec2 wq = fq + ( vec2( vnoise( fq * .6 + 3.1 ), vnoise( fq * .6 + 8.7 ) ) - .5 ) * uFilmWarp;
+		gFilm = clamp( vnoise( wq ) * .7 + vnoise( wq * 2.7 + 1.3 ) * .3, 0., 1. );
+		// a hologram print shows its colours in the cloth itself, shifting as the surface turns
+		if ( uFilmTint > 0. ) {
+			vec3 hd = normalize( ( viewMatrix * vec4( uHoloDirW, 0. ) ).xyz );
+			vec3 ft = spectrum( gFilm * 1.6 + dot( reflect( - viewDir, normal ), hd ) * .45 );
+			diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * ( .62 + .5 * ft ), uFilmTint );
+		}
 	}
 
 	if ( uKnit > 0. ) {
@@ -282,12 +344,17 @@ const FABRIC_FRAGMENT = /* glsl */`
 			rvFar = ta.z;
 		}
 		float coverage = min( 3.6276 * uDotR * uDotR, 1. ) * uPresence;
+		// sparse flakes stay sparse far away: only a coverage share of the pixel-sized cells carry one
+		// (denser foils, coverage over 0.3, keep every cell sparkling as in the POC)
+		float farOn = coverage > .3 ? coverage : step( fract( rvFar * 7.31 ), coverage );
 
-		flakeMask = mix( nearMask, coverage, w );
+		flakeMask = mix( nearMask, farOn, w );
 		vec3 tilt = mix( nearTilt, farTilt, w );
 		float rv = mix( rvNear, rvFar, w );
 
 		vec3 nF = normalize( normal + ( tilt - normal * dot( tilt, normal ) ) * uTilt );
+		// a sparse flake turned away from the camera would shade black: keep it facing us a little
+		if ( coverage <= .3 ) { float fv = dot( nF, viewDir ); if ( fv < .2 ) nF = normalize( nF + viewDir * ( .2 - fv ) ); }
 		// On an ombre the foil is printed with the same gradient as the cloth under it.
 		vec3 fc = mix( uOmbreColor * 1.8 + .05, uFoilColor, ombre ) * ( 1. + uColorVar * ( rv - .5 ) );
 		if ( uHolo > 0. ) {
@@ -300,7 +367,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 		diffuseColor.rgb = mix( diffuseColor.rgb, fc, flakeMask );
 		metalnessFactor = mix( metalnessFactor, 1., flakeMask );
 		roughnessFactor = mix( roughnessFactor, uFoilRough, flakeMask );
-		normal = normalize( mix( normal, nF, mix( nearMask, 1., w ) ) );
+		normal = normalize( mix( normal, nF, mix( nearMask, coverage > .3 ? 1. : farOn, w ) ) );
 	}
 
 	if ( uMesh > .5 ) {
@@ -309,9 +376,59 @@ const FABRIC_FRAGMENT = /* glsl */`
 		float hole = 1. - smoothstep( uHoleR - r * .7, uHoleR + r * .7, length( hc.xy ) );
 		// Holes foreshorten at glancing angles, so mesh reads more opaque towards the silhouette.
 		float ndv = saturate( dot( normal, viewDir ) );
-		float farAlpha = 1. - 3.6276 * uHoleR * uHoleR * pow( ndv, .6 );
-		float a = mix( 1. - hole, farAlpha, smoothstep( .16, .45, r ) );
+		float openK = 3.6276 * uHoleR * uHoleR * pow( ndv, .6 ); // share of light through the net
+		float a = mix( 1. - hole, 1. - openK, smoothstep( .16, .45, r ) );
+		// what is under the net is lit through it too: light crosses the net on the way in and
+		// again on the way out, so skin or lining shows at openK^2 (a dark net darkens it twice)
+		a = 1. - ( 1. - a ) * openK;
+		// lace: dense toile and raised cord motifs over the net
+		if ( uLace > .5 ) {
+			float lm = texture2D( tLace, q / uLaceSize ).r;
+			a = max( a, lm );
+			normal = bumpN( normal, lm * .00025 );
+			diffuseColor.rgb = mix( diffuseColor.rgb, uLaceColor, smoothstep( .3, .9, lm ) );
+		}
+		// two layers of mesh over the seam allowance
+		if ( uSeam > .5 ) a = mix( 1. - ( 1. - a ) * ( 1. - a ), a, smoothstep( uSeamAllow - .0006, uSeamAllow + .0006, vSeam ) );
 		diffuseColor.a *= max( a, flakeMask );
+	}
+
+	// --- decals: logos and lettering as print, foil, holographic foil, glitter or flock
+	for ( int i = 0; i < 4; i ++ ) {
+		if ( i >= uDecals ) break;
+		vec3 dp = ( uDecalM[ i ] * vec4( vRef, 1. ) ).xyz;
+		vec4 rc = uDecalRect[ i ];
+		vec4 tx = texture2D( tDecal, rc.xy + clamp( dp.xy + .5, 0., 1. ) * rc.zw );
+		float m = tx.a * step( abs( dp.x ), .5 ) * step( abs( dp.y ), .5 ) * step( abs( dp.z ), 1. );
+		if ( m < .004 ) continue;
+		vec4 lk = uDecalLook[ i ];
+		vec3 col = lk.z > .5 ? tx.rgb : uDecalCol[ i ];
+		float kind = lk.x, met = 0.;
+		vec3 nD = normal;
+		if ( kind > .5 && kind < 1.5 ) met = 1.;
+		else if ( kind > 1.5 && kind < 2.5 ) {
+			vec3 hd = normalize( ( viewMatrix * vec4( uHoloDirW, 0. ) ).xyz );
+			col = mix( col, spectrum( dot( reflect( - viewDir, normal ), hd ) * 2. + dp.x * 3. ), .75 );
+			met = 1.;
+		} else if ( kind > 2.5 && kind < 3.5 ) {
+			vec3 tl = hash32( floor( q / .0004 ) ) * 2. - 1.;
+			nD = normalize( normal + ( tl - normal * dot( tl, normal ) ) * .45 );
+			met = 1.;
+		} else if ( kind > 3.5 ) nD = bumpN( normal, m * .0003 );
+		diffuseColor.rgb = mix( diffuseColor.rgb, col, m );
+		metalnessFactor = mix( metalnessFactor, met, m );
+		roughnessFactor = mix( roughnessFactor, lk.y, m );
+		normal = normalize( mix( normal, nD, m ) );
+		diffuseColor.a = max( diffuseColor.a, m );
+	}
+
+	// --- seams: a groove where the stitches pull the panels together, a soft ridge over the
+	// allowance pressed to one side; the groove's shadow carries the line at a distance
+	if ( uSeam > .5 && vSeam < .012 ) {
+		float d = vSeam, fx = max( fwidth( d ), 1e-6 ), fade = 1. - smoothstep( .0004, .0016, fx );
+		float h = - .0003 * exp( - d * d / 4.9e-7 ) + .00012 * smoothstep( .0006, .003, d ) * ( 1. - smoothstep( .005, .01, d ) );
+		normal = bumpN( normal, h * fade );
+		gTrimAO *= mix( .8, 1., smoothstep( 0., .0012 + fx, d ) );
 	}
 
 	// --- topstitching on a finished edge: coverstitch rows of ~3 mm straight stitches, each
@@ -350,6 +467,26 @@ reflectedLight.directDiffuse *= mix( 1., aoT, .35 );
 #endif
 `;
 
+// Athlete skin: diffuse light wraps past the terminator, further in red than in blue (light
+// scattered under the skin comes out a little way off), instead of three's plain N.L.
+const DIFFUSE_LINE = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );';
+const SKIN_DIFFUSE = /* glsl */`
+	vec3 irradianceD = irradiance;
+	if ( uSkin > 0. ) {
+		vec3 wr = vec3( .5, .28, .22 ) * uSkin;
+		irradianceD = clamp( ( dot( geometryNormal, directLight.direction ) + wr ) / ( 1. + wr ), 0., 1. ) * directLight.color;
+	}
+	reflectedLight.directDiffuse += irradianceD * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );`;
+if (!THREE.ShaderChunk.lights_physical_pars_fragment.includes(DIFFUSE_LINE)) console.warn('fabric: three.js changed RE_Direct_Physical; skin wrap lighting is off');
+const LIGHTS_PARS = THREE.ShaderChunk.lights_physical_pars_fragment.replace(DIFFUSE_LINE, SKIN_DIFFUSE);
+
+// Thin-film thickness from the fabric's swirl field instead of one value (oil-slick, liquid hologram).
+const FILM_FRAGMENT = /* glsl */`
+#ifdef USE_IRIDESCENCE
+	if ( uFilm > 0. ) material.iridescenceThickness = mix( uFilmRange.x, uFilmRange.y, gFilm );
+#endif
+`;
+
 export function createFabricMaterial(zone) {
 	const panel = zone === 5;
 	const u = {
@@ -368,6 +505,13 @@ export function createFabricMaterial(zone) {
 		uTexFlags: { value: new THREE.Vector4() }, uMaskOn: { value: new THREE.Vector4() },
 		uMaskCol0: { value: new THREE.Color() }, uMaskCol1: { value: new THREE.Color() }, uMaskCol2: { value: new THREE.Color() }, uMaskCol3: { value: new THREE.Color() },
 		uOmbre: { value: 0 }, uOmbreColor: { value: new THREE.Color(0, 0, 0) }, uOmbreY: { value: new THREE.Vector2(0.82, 1.32) },
+		uSkin: { value: 0 }, uSeam: { value: 0 }, uSeamAllow: { value: 0.006 }, uClipShell: { value: 0 },
+		uDuo: { value: 0 }, uDuoColor: { value: new THREE.Color() }, uDuoPow: { value: 2 },
+		uFilm: { value: 0 }, uFilmScale: { value: 0.04 }, uFilmRange: { value: new THREE.Vector2(250, 700) }, uFilmWarp: { value: 1.5 }, uFilmTint: { value: 0 },
+		uLace: { value: 0 }, tLace: { value: null }, uLaceSize: { value: 0.16 }, uLaceColor: { value: new THREE.Color() },
+		uPrint: { value: 0 }, tPrint: { value: null }, uPrintSize: { value: new THREE.Vector2(0.2, 0.2) }, uPrintOffset: { value: new THREE.Vector2() },
+		uDecals: { value: 0 }, uDecalM: { value: [0, 1, 2, 3].map(() => new THREE.Matrix4()) }, uDecalRect: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
+		uDecalLook: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uDecalCol: { value: [0, 1, 2, 3].map(() => new THREE.Color()) }, tDecal: { value: null },
 	};
 	const m = new THREE.MeshPhysicalMaterial({ transparent: zone !== 3 });
 	m.userData.u = u;
@@ -380,7 +524,9 @@ export function createFabricMaterial(zone) {
 		shader.fragmentShader = shader.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + PARS_FRAGMENT)
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + FABRIC_FRAGMENT)
-			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + AO_FRAGMENT);
+			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + AO_FRAGMENT)
+			.replace('#include <lights_physical_pars_fragment>', LIGHTS_PARS)
+			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n' + FILM_FRAGMENT);
 	};
 	m.customProgramCacheKey = () => 'leotard-fabric';
 	return m;
@@ -407,6 +553,16 @@ export const FABRICS = {
 	glittermesh: { label: 'Glitter mesh', roughness: 0.75, mesh: { pitch: 0.0007, holeR: 0.35 }, flake: { pitch: 0.0005, dotR: 0.5, presence: 0.1, tilt: 0.5, rough: 0.1, colorVar: 0.5 } },
 	ombre: { label: 'Sublimated ombré', roughness: 0.74, sheen: 0.35, sheenRoughness: 0.6, knit: 1, ombre: true },
 	ombremystique: { label: 'Ombré mystique', roughness: 0.62, knit: 1, ombre: true, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.22, rough: 0.27, colorVar: 0.3 } },
+	// Moodboard looks added in P3 (realism upgrade R7b). film: thin-film swirls { scale m, range nm, warp };
+	// duo: { pow } shift towards the second colour at grazing angles; lace: { size m per repeat }.
+	liquidholo: { label: 'Liquid hologram (opal)', roughness: 0.3, metalness: 0.25, iridescence: 1, film: { scale: 0.08, range: [300, 820], warp: 2.5, tint: 0.32 },
+		flake: { pitch: 0.0005, dotR: 0.45, presence: 0.025, tilt: 0.5, rough: 0.1, colorVar: 0.3, holo: 0.35, holoFreq: 2.5, holoJit: 1.2 } },
+	oilslick: { label: 'Oil-slick foil', metalness: 1, roughness: 0.22, iridescence: 1, film: { scale: 0.05, range: [320, 980], warp: 1.6 }, bump: { amp: 0.3, scale: 0.004 } },
+	duochrome: { label: 'Duochrome foil', metalness: 1, roughness: 0.24, duo: { pow: 2.2 }, bump: { amp: 0.3, scale: 0.0035 } },
+	chrome: { label: 'Mirror chrome', metalness: 1, roughness: 0.06, bump: { amp: 0.12, scale: 0.02 } },
+	glitterfoil: { label: 'Glitter-grain foil', metalness: 1, roughness: 0.3, flake: { pitch: 0.00035, dotR: 0.58, presence: 1, tilt: 0.35, rough: 0.18, colorVar: 0.25 } },
+	lace: { label: 'Lace (floral, on net)', roughness: 0.7, sheen: 0.3, sheenRoughness: 0.6, mesh: { pitch: 0.0011, holeR: 0.28 }, lace: { size: 0.3 } },
+	illusion: { label: 'Illusion mesh (very sheer)', roughness: 0.8, sheen: 0.2, sheenRoughness: 0.6, mesh: { pitch: 0.0006, holeR: 0.46 } },
 };
 
 export const SECOND = ['Tone-on-tone', 'Silver', 'Gold', 'White', 'Black'];
@@ -424,14 +580,17 @@ function secondColour(base, mode, forOmbre, out) {
 }
 
 const _c = new THREE.Color();
-export function applyFabric(m, key, colour, second) {
-	const f = FABRICS[key], u = m.userData.u, fl = f.flake, base = _c.set(colour).clone();
+// colour2: an explicit second colour (hex) for the foil, the ombre's far end or the duochrome
+// shift, instead of the `second` choice.
+export function applyFabric(m, key, colour, second, colour2 = null) {
+	const f = FABRICS[key] ?? FABRICS.matte, u = m.userData.u, fl = f.flake, base = _c.set(colour).clone();
+	const two = (forOmbre, out) => (colour2 ? out.set(colour2) : secondColour(base, second, forOmbre, out));
 	m.color.copy(base).multiplyScalar(f.velvet ? 0.42 : 1);
 	m.roughness = f.roughness ?? 0.7;
 	m.metalness = f.metalness ?? 0;
 	m.sheen = f.sheen ?? 0;
 	m.sheenRoughness = f.sheenRoughness ?? 0.6;
-	m.sheenColor.copy(base).lerp(_c.set(0xffffff), f.velvet ? 0.25 : 0.6);
+	m.sheenColor.copy(base).lerp(_c.set(0xffffff), f.velvet ? 0.25 : 0.35); // a knit's sheen carries its own colour
 	m.clearcoat = f.clearcoat ?? 0;
 	m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
 	m.anisotropy = f.anisotropy ?? 0;
@@ -443,8 +602,19 @@ export function applyFabric(m, key, colour, second) {
 	if (fl) {
 		u.uPitch.value = fl.pitch; u.uDotR.value = fl.dotR; u.uPresence.value = fl.presence; u.uTilt.value = fl.tilt;
 		u.uFoilRough.value = fl.rough; u.uColorVar.value = fl.colorVar ?? 0; u.uHolo.value = fl.holo ?? 0; u.uHoloFreq.value = fl.holoFreq ?? 3; u.uHoloJit.value = fl.holoJit ?? 0.2;
-		secondColour(base, second, false, u.uFoilColor.value);
+		two(false, u.uFoilColor.value);
 	}
+	u.uDuo.value = f.duo ? 1 : 0;
+	if (f.duo) {
+		u.uDuoPow.value = f.duo.pow;
+		if (colour2 || second !== 'Tone-on-tone') two(false, u.uDuoColor.value);
+		else { base.getHSL(_hsl); u.uDuoColor.value.setHSL((_hsl.h + 0.22) % 1, Math.min(_hsl.s * 1.1, 1), _hsl.l); }
+	}
+	u.uFilm.value = f.film ? 1 : 0;
+	if (f.film) { u.uFilmScale.value = f.film.scale; u.uFilmRange.value.fromArray(f.film.range); u.uFilmWarp.value = f.film.warp; u.uFilmTint.value = f.film.tint ?? 0; }
+	u.uLace.value = f.lace ? 1 : 0;
+	// lace: the second colour (custom) is the motifs' and cord's; otherwise a lighter tone of the net
+	if (f.lace) { u.tLace.value = laceTexture(); u.uLaceSize.value = f.lace.size; if (colour2) u.uLaceColor.value.set(colour2); else u.uLaceColor.value.copy(base).multiplyScalar(1.12); }
 	u.uMesh.value = f.mesh ? 1 : 0;
 	if (f.mesh) { u.uMeshPitch.value = f.mesh.pitch; u.uHoleR.value = f.mesh.holeR; }
 	u.uBumpAmp.value = f.bump?.amp ?? 0;
@@ -452,7 +622,7 @@ export function applyFabric(m, key, colour, second) {
 	u.uKnit.value = f.knit ?? 0;
 	u.uChecker.value = f.checker ?? 0;
 	u.uOmbre.value = f.ombre ? 1 : 0;
-	if (f.ombre) secondColour(base, second, true, u.uOmbreColor.value);
+	if (f.ombre) two(true, u.uOmbreColor.value);
 	// Opaque fabrics are drawn before the skin with alpha-to-coverage edges, so the skin beneath
 	// them fails the depth test and is never shaded. Only sheer fabrics take the blended path.
 	m.transparent = !!f.mesh;

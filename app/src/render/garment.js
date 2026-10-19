@@ -7,6 +7,19 @@ import * as THREE from 'three';
 import { createFabricMaterial, applyFabric, applyTexture } from '../materials/fabric.js';
 import { cellPiece, cellSignature } from '../garment/pieces.js';
 import { Flattener } from '../garment/flattener.js';
+import { seamKeys, seamDistance, gradientField } from '../garment/fields.js';
+
+// Print images by source (moodboard/, designs/, references/ or any URL the dev bridge serves).
+const prints = new Map();
+function printTexture(src) {
+	let t = prints.get(src);
+	if (!t) {
+		t = new THREE.TextureLoader().load(src);
+		t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+		prints.set(src, t);
+	}
+	return t;
+}
 
 export function sameSign(a, b) { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if ((a[i] > 0) !== (b[i] > 0)) return false; return true; }
 
@@ -45,6 +58,8 @@ export class GarmentView {
 		const man = this.man, arr = g.arr, V = man.vertices, idx = man.idx;
 		const { cover, garment } = this.coverFor(g, doc);
 		this.garmentCells = garment;
+		const roles = new Map(doc.curves.map((c) => [c.id, c.role]));
+		const seams = seamKeys(arr, garment, (id) => roles.get(id.replace(/~m$/, '')));
 		this.cover = cover; // the engine merges every layer's cover into the lift solve
 		const gen = this.gen = (this.gen ?? 0) + 1;
 		for (let c = 0; c < arr.cells.length; c++) {
@@ -61,7 +76,8 @@ export class GarmentView {
 			}
 			const geo = new THREE.BufferGeometry();
 			const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
-			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 1); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2);
+			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 1); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
+			geo.setAttribute('aSeam', new THREE.BufferAttribute(seamDistance(arr, man, c, verts, seams), 1));
 			geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
 			geo.setIndex(new THREE.BufferAttribute(piece.I, 1));
 			const mesh = new THREE.Mesh(geo, this.material(panel.id));
@@ -73,6 +89,7 @@ export class GarmentView {
 			const rec = { cell: c, panelId: panel.id, mesh, hosts: { i: hi, w: hw }, piece, sig, hasUV: false };
 			this.cells.push(rec);
 			this.interpolate(rec);
+			if (this.clip) this.fillClip(rec);
 			const done = (r) => {
 				if (this.gen !== gen) return;
 				geo.attributes.aUV.array.set(r.uv); geo.attributes.aUV.needsUpdate = true;
@@ -103,6 +120,8 @@ export class GarmentView {
 			// overlays sit 0.9 mm per step above the shell, linings 0.5 mm below it
 			const z = this.layer.z ?? 0;
 			m.userData.u.uOffset.value = z >= 0 ? 0.0012 + 0.0009 * z : 0.0007;
+			m.userData.u.uSeam.value = 1; // panels carry aSeam
+			m.userData.u.uClipShell.value = z < 0 ? 1 : 0; // linings: aCover is the shell's cover (setClip)
 			this.materials.set(id, m);
 		}
 		return m;
@@ -111,15 +130,65 @@ export class GarmentView {
 	applyMaterials(doc) {
 		for (const p of doc.panels) {
 			if (p.removed || !p.stack?.length) continue;
-			const s = p.stack[0], m = this.material(p.id);
-			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone');
-			m.userData.u.uGrain.value = s.grain ?? 0;
+			const s = p.stack[0], m = this.material(p.id), u = m.userData.u;
+			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone', s.colour2 ?? null);
+			// effect strength: how strongly a hologram, film or duochrome shows (1 = the fabric's own)
+			if (s.effect !== undefined && s.effect !== 1) { const e = s.effect; u.uFilmTint.value *= e; u.uHolo.value = Math.min(u.uHolo.value * e, 1); u.uDuo.value *= e; m.iridescence = Math.min(m.iridescence * e, 1); }
+			// sheerness of a mesh or lace net: the share of skin (or lining) seen through it, face on
+			// (light crosses the net twice, so the open share is its square root; materials/fabric.js)
+			if (s.sheer !== undefined && u.uMesh.value > 0.5) u.uHoleR.value = Math.sqrt(Math.sqrt(Math.min(Math.max(s.sheer, 0), 0.95)) / 3.6276);
+			u.uGrain.value = s.grain ?? 0;
+			// a gradient along a line or a direction: { colour, curve | axis, start, end } (metres)
+			if (s.ombre) { u.uOmbre.value = 2; u.uOmbreColor.value.set(s.ombre.colour ?? '#000000'); }
+			this.gradient(p.id, s.ombre);
+			// a sublimation print tiled in pattern space: { src, size: [w, h] m, offset }
+			if (s.print?.src) {
+				u.uPrint.value = 1; u.tPrint.value = printTexture(s.print.src);
+				u.uPrintSize.value.fromArray(s.print.size ?? [0.2, 0.2]); u.uPrintOffset.value.fromArray(s.print.offset ?? [0, 0]);
+			} else u.uPrint.value = 0;
+			this.applyDecals(m);
 			if (s.texture && this.textures) {
 				const opts = { scale: s.texScale ?? 1, recolour: s.texMode === 'recolour', colour: s.colour, masks: s.masks, normal: s.texNormal };
 				this.textures.get(s.texture).then((set) => applyTexture(m, set, opts), (e) => console.warn('texture', s.texture, e.message));
 			} else applyTexture(m, null);
 		}
 		this.updateUVFlags();
+	}
+
+	// Fill aGrad on a panel's cells for its gradient (none: leave zeros). Cached per spec.
+	gradient(id, spec) {
+		const key = spec ? JSON.stringify([spec.curve, spec.axis, spec.start, spec.end]) : '';
+		for (const c of this.cells) {
+			if (c.panelId !== id || c.gradKey === key) continue;
+			c.gradKey = key;
+			const A = c.mesh.geometry.attributes.aGrad;
+			if (!spec) { A.array.fill(0); A.needsUpdate = true; continue; }
+			const ev = this.g?.evaluated, pts = spec.curve ? [...(ev?.get(spec.curve)?.pts ?? []), ...(ev?.get(spec.curve + '~m')?.pts ?? [])] : null;
+			A.array.set(gradientField(c.mesh.geometry.attributes.aRef.array, { pts, axis: spec.axis ?? (spec.curve ? null : [0, -1, 0]), start: spec.start ?? 0, end: spec.end ?? 0.2 }));
+			A.needsUpdate = true;
+		}
+	}
+
+	// Logos and lettering (render/decals.js): every panel of the layer shows the layer's decals.
+	setDecals(d) { this.decals = d; for (const m of this.materials.values()) this.applyDecals(m); }
+	applyDecals(m) {
+		const u = m.userData.u, d = this.decals;
+		u.uDecals.value = d?.count ?? 0;
+		if (!d?.count) return;
+		u.tDecal.value = d.texture; u.uDecalM.value = d.M; u.uDecalRect.value = d.rect; u.uDecalLook.value = d.look; u.uDecalCol.value = d.colour;
+	}
+
+	// A lining is clipped to where the shell has fabric: the shell's per-vertex cover (+1 fabric,
+	// -1 opening) interpolated into aCover; the shader discards below zero.
+	setClip(cover) {
+		this.clip = cover;
+		for (const c of this.cells) this.fillClip(c);
+	}
+	fillClip(rec) {
+		const A = rec.mesh.geometry.attributes.aCover, C = this.clip, { i: hi, w: hw } = rec.hosts, n = hw.length / 3;
+		if (!C) { A.array.fill(1); A.needsUpdate = true; return; }
+		for (let l = 0; l < n; l++) A.array[l] = hw[l * 3] * C[hi[l * 3]] + hw[l * 3 + 1] * C[hi[l * 3 + 1]] + hw[l * 3 + 2] * C[hi[l * 3 + 2]];
+		A.needsUpdate = true;
 	}
 
 	// Re-interpolate every attribute from the mannequin's current arrays (after a body change).

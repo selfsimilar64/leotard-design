@@ -86,7 +86,9 @@ function crystalMaterial() {
 const FAMILY_MATS = () => ({
 	pearl: new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.28, sheen: 0.6, sheenColor: new THREE.Color(0xfff2e6), clearcoat: 0.6, clearcoatRoughness: 0.2, iridescence: 0.35, iridescenceIOR: 1.5 }),
 	spangle: new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 1, roughness: 0.14, iridescenceIOR: 2.1, iridescenceThicknessRange: [300, 760] }),
-	'holo-dot': new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 1, roughness: 0.2, iridescence: 1, iridescenceIOR: 2.2, iridescenceThicknessRange: [250, 900] }),
+	// a holographic film scatters light over a wide cone (a diffraction grating), so it reads bright
+	// from most angles: rough metal, a little rainbow
+	'holo-dot': new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 1, roughness: 0.42, iridescence: 0.55, iridescenceIOR: 2.2, iridescenceThicknessRange: [250, 900] }),
 	nailhead: new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 1, roughness: 0.16 }),
 });
 

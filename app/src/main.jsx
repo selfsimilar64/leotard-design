@@ -8,6 +8,7 @@ import { loadMannequins } from './body/mannequin.js';
 import { buildReference } from './body/reference.js';
 import { ToolController } from './ui/tools.js';
 import './ui/inspect-garment.jsx';
+import './ui/inspect-decals.jsx';
 import './ui/styles.css';
 
 app.onChange(() => { rev.value++; });

@@ -57,11 +57,11 @@ function findPanel(tx, a) {
 }
 
 defineCommand('block.apply', {
-	label: 'Start from block', args: `{ neck?: ${BLOCK_OPTIONS.neck.join('|')}, back?: ${BLOCK_OPTIONS.back.join('|')}, sleeves?: ${BLOCK_OPTIONS.sleeves.join('|')}, leg?: ${BLOCK_OPTIONS.leg.join('|')}, fabric?, colour?, second? }`,
+	label: 'Start from block', args: `{ neck?: ${BLOCK_OPTIONS.neck.join('|')}, back?: ${BLOCK_OPTIONS.back.join('|')}, sleeves?: ${BLOCK_OPTIONS.sleeves.join('|')}, leg?: ${BLOCK_OPTIONS.leg.join('|')}, armhole?: ${BLOCK_OPTIONS.armhole.join('|')}, fabric?, colour?, second? }`,
 	run(tx, a) {
 		const ctx = ctxOf(tx);
 		const stack = [{ fabric: a.fabric ?? 'mystique', colour: a.colour ?? '#2b1d6e', second: a.second ?? 'Tone-on-tone' }];
-		const blk = makeBlock(ctx.man, ctx.surf, { neck: a.neck, back: a.back, sleeves: a.sleeves, leg: a.leg }, stack);
+		const blk = makeBlock(ctx.man, ctx.surf, { neck: a.neck, back: a.back, sleeves: a.sleeves, leg: a.leg, armhole: a.armhole }, stack);
 		tx.set('legacy', null);
 		for (const c of tx.doc.curves.filter((c) => (c.layer ?? 'L0') === 'L0').map((c) => c.id)) tx.remove('curves', c);
 		for (const p of tx.doc.panels.filter((p) => (p.layer ?? 'L0') === 'L0').map((p) => p.id)) tx.remove('panels', p);
@@ -72,7 +72,7 @@ defineCommand('block.apply', {
 			tx.insert('curves', { id: ids.get(key), layer: 'L0', ...c });
 		}
 		for (const p of blk.panels) tx.insert('panels', { id: tx.newId('p'), layer: 'L0', mirror: 'none', ...p });
-		tx.set('meta/block', { neck: a.neck, back: a.back, sleeves: a.sleeves, leg: a.leg });
+		tx.set('meta/block', { neck: a.neck, back: a.back, sleeves: a.sleeves, leg: a.leg, armhole: a.armhole });
 	},
 });
 
@@ -162,11 +162,14 @@ function setStackFields(tx, p, a, layer = 0) {
 	const base = ['panels', p.id, 'stack', String(layer)];
 	if (!p.stack[layer]) tx.insert(['panels', p.id, 'stack'], { fabric: 'matte', colour: '#888888', second: 'Tone-on-tone' }, layer);
 	if (a.texMode !== undefined) oneOf('texMode', a.texMode, ['original', 'recolour']);
-	for (const k of ['fabric', 'colour', 'second', 'grain', 'print', 'texture', 'texMode', 'texScale', 'texNormal', 'masks']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
+	if (a.ombre && !a.ombre.colour) throw new Error('ombre needs a colour: { colour, curve | axis: [x, y, z], start, end } (metres)');
+	if (a.ombre?.curve && !tx.doc.curves.some((c) => c.id === a.ombre.curve)) throw new Error('ombre: no line ' + a.ombre.curve);
+	if (a.print && !a.print.src) throw new Error('print needs src (an image URL) and size [w, h] in metres');
+	for (const k of ['fabric', 'colour', 'second', 'colour2', 'effect', 'sheer', 'grain', 'print', 'ombre', 'texture', 'texMode', 'texScale', 'texNormal', 'masks']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
 }
 
 defineCommand('panel.set', {
-	label: 'Change panel', args: '{ id | at: spec, fabric?, colour?, second?, grain?, texture? (scan id or null), texMode?: original|recolour, texScale?, texNormal?, masks?: [colours], name?, layer? (0 = outer) }',
+	label: 'Change panel', args: '{ id | at: spec, fabric?, colour?, second?, colour2? (hex: foil, ombre end, duochrome shift), effect? (0..2: hologram / film / duochrome strength), sheer? (0..0.95: share seen through a mesh or lace net), grain?, ombre?: { colour, curve | axis, start, end } | null, print?: { src, size: [w, h] m, offset } | null, texture? (scan id or null), texMode?: original|recolour, texScale?, texNormal?, masks?: [colours], name?, layer? (0 = outer) }',
 	run(tx, a) {
 		const p = findPanel(tx, a);
 		setStackFields(tx, p, a, a.layer ?? 0);
@@ -200,11 +203,11 @@ defineCommand('panel.add', {
 // --- edge finishes -------------------------------------------------------------------------------
 
 defineCommand('trim.set', {
-	label: 'Edge finish', args: '{ on: curveId | [curveIds], kind: elastic|binding|piping (on seams)|none, fabric?: { fabric, colour, second } }',
+	label: 'Edge finish', args: '{ on: curveId | [curveIds], kind: elastic|binding (edges)|piping|tape (seams)|none, fabric?: { fabric, colour, second } }',
 	run(tx, a) {
 		const on = Array.isArray(a.on) ? a.on : [a.on];
 		for (const id of on) findCurve(tx, id);
-		oneOf('kind', a.kind, ['elastic', 'binding', 'piping', 'none']);
+		oneOf('kind', a.kind, ['elastic', 'binding', 'piping', 'tape', 'none']);
 		if (a.fabric?.fabric) oneOf('fabric', a.fabric.fabric, Object.keys(FABRICS));
 		// one finish per curve: drop the curves from other trims first
 		for (const t of tx.doc.trims) {

@@ -71,8 +71,8 @@ export class Rims {
 			if (!gr) groups.set(key, gr = { fin, loops: [] });
 			gr.loops.push(recs);
 		}
-		// piping: a corded trim along a seam line, on this layer's seams
-		if (evaluated) for (const t of doc.trims.filter((x) => x.kind === 'piping')) {
+		// piping (corded) or tape (flat) along a seam line, on this layer's seams
+		if (evaluated) for (const t of doc.trims.filter((x) => x.kind === 'piping' || x.kind === 'tape')) {
 			for (const id of t.on) {
 				const c = doc.curves.find((x) => x.id === id);
 				if (!c || (c.layer ?? 'L0') !== (this.layerId ?? 'L0')) continue;
@@ -87,7 +87,7 @@ export class Rims {
 						const inside = new THREE.Vector3().crossVectors(nn, tt).normalize();
 						recs.push({ p, n: nn, inside, kappa: 0, ref: atSp(R, sp, new THREE.Vector3()), keep: 1, sleeve: 0 });
 					}
-					const fin = { kind: 'piping', fabric: t.fabric?.fabric ?? 'satin', colour: t.fabric?.colour ?? '#ffffff', second: t.fabric?.second ?? 'Tone-on-tone' };
+					const fin = { kind: t.kind, fabric: t.fabric?.fabric ?? 'satin', colour: t.fabric?.colour ?? '#ffffff', second: t.fabric?.second ?? 'Tone-on-tone' };
 					const key2 = JSON.stringify(fin);
 					let gr = groups.get(key2);
 					if (!gr) groups.set(key2, gr = { fin, loops: [] });

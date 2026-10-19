@@ -21,8 +21,9 @@ export const BLOCK_OPTIONS = {
 	back: ['crew', 'scoop', 'low', 'v', 'keyhole', 'open'],
 	sleeves: ['tank', 'cap', 'short', 'three-quarter', 'long'],
 	leg: ['standard', 'high'],
+	armhole: ['set-in', 'raglan'],
 };
-export const DEFAULT_BLOCK = { neck: 'scoop', back: 'scoop', sleeves: 'long', leg: 'high' };
+export const DEFAULT_BLOCK = { neck: 'scoop', back: 'scoop', sleeves: 'long', leg: 'high', armhole: 'set-in' };
 
 // Opening fields: negative inside the opening, positive on the fabric. Reference-body metres.
 function frontNeck(x, y, kind) {
@@ -114,15 +115,18 @@ export function makeBlock(man, surf, opts = {}, stack = [{ fabric: 'mystique', c
 	const leg = loopsOf(man, surf, F.leg).filter((l) => centroid(surf, l).x > 0.02)[0];
 	add('leg', curveOf(surf, leg, 'edge', 'both', 0.03, 'Leg line'));
 	const left = (loops) => loops.filter((l) => centroid(surf, l).x > 0.05);
-	const tank = opts.sleeves === 'tank';
+	const tank = opts.sleeves === 'tank', raglan = !tank && opts.armhole === 'raglan';
+	let setIn = null; // a raglan block still finds its armpit on the set-in line, which it does not keep
 	if (tank) add('arm', curveOf(surf, left(loopsOf(man, surf, F.arm))[0], 'edge', 'both', 0.025, 'Armhole'));
 	else {
-		add('arm', curveOf(surf, left(loopsOf(man, surf, F.seam))[0], 'seam', 'both', 0.025, 'Sleeve seam'));
+		setIn = curveOf(surf, left(loopsOf(man, surf, F.seam))[0], 'seam', 'both', 0.025, 'Sleeve seam');
+		if (!raglan) add('arm', setIn);
 		add('cuff', curveOf(surf, left(loopsOf(man, surf, F.cuff))[0], 'edge', 'both', 0.02, 'Cuff'));
 	}
 
 	// --- construction seams: shoulder, side, crotch and underarm, so every piece lies flat ------
 	const ev = new Map(curves.map((c) => [c.key, evaluateCurve(c, surf)]));
+	if (raglan) ev.set('arm', evaluateCurve(setIn, surf));
 	const R = man.ref, N = man.vertices, zr = (i) => man.form[i * 2];
 	const vsp = (i) => { const f = surf.vf[surf.vfStart[i]], c = [surf.idx[f * 3], surf.idx[f * 3 + 1], surf.idx[f * 3 + 2]]; return { f, b0: c[0] === i ? 1 : 0, b1: c[1] === i ? 1 : 0, b2: c[2] === i ? 1 : 0 }; };
 	const vpos = (i) => new THREE.Vector3(R[i * 3], R[i * 3 + 1], R[i * 3 + 2]);
@@ -147,19 +151,37 @@ export function makeBlock(man, surf, opts = {}, stack = [{ fabric: 'mystique', c
 	const seam = (key, name, points, mirror = 'both') => add(key, { name, role: 'seam', closed: false, mirror, shape: { mod: 'none', amp: 0, period: 0 }, points: points.map(({ p, ...rest }) => rest) });
 
 	// side seam: from the armpit (lowest point of the armhole on the left) down to the leg line at the hip
-	const armpit = attach('arm', (p) => (p.x < 0.02 ? Infinity : p.y + abs(p.z - man.zMid(p.y)) * 0.5));
+	let armpit = attach('arm', (p) => (p.x < 0.02 ? Infinity : p.y + abs(p.z - man.zMid(p.y)) * 0.5));
+	if (raglan) {
+		// raglan: two seams from the neckline diagonally to the armpit, front and back, instead of
+		// the set-in line and the shoulder seam; the sleeve piece runs up to the neck
+		const { on, ...free } = armpit, rag = (key, name, back) => {
+			const side = (p) => (back ? man.zMid(p.y) - p.z : p.z - man.zMid(p.y));
+			const neckPt = attach('neck', (p) => (p.x < 0.02 || side(p) < 0 ? Infinity : abs(p.x - 0.07) - side(p) * 0.2));
+			const crease = attach('arm', (p) => (p.x < 0.02 ? Infinity : abs(p.y - (free.p.y + 0.06)) * 3 - side(p)));
+			const midP = surf.closest(neckPt.p.clone().lerp(crease.p, 0.5));
+			const strip = ({ on: _, p, ...r }) => r;
+			seam(key, name, [neckPt, { sp: toSP(midP), kind: 'smooth' }, strip(crease), strip(free)].map((q) => ({ p: null, ...q })));
+		};
+		rag('ragF', 'Raglan seam (front)', false);
+		armpit = { ...free, on: { curve: 'ragF', t: 1 } };
+		rag('ragB', 'Raglan seam (back)', true);
+		curves[curves.length - 1].points[3] = { sp: armpit.sp, on: armpit.on, kind: 'smooth' };
+	}
 	const hip = attach('leg', (p) => (p.x < 0.05 ? Infinity : abs(p.z - man.zMid(p.y)) - p.y * 0.05));
 	const sides = [];
 	for (let y = armpit.p.y - 0.045; y > hip.p.y + 0.03; y -= 0.035) sides.push(pt(sideAt(y)));
 	seam('side', 'Side seam', [armpit, ...sides, hip]);
 
 	// shoulder seam: from the neckline at the side to the armhole at the top of the shoulder
-	const neckSide = attach('neck', (p) => (p.x < 0.02 ? Infinity : abs(p.z - man.zMid(p.y)) + abs(p.x - 0.07) * 0.2));
-	const shoulderTop = attach('arm', (p) => (p.x < 0.02 ? Infinity : -p.y + abs(p.z - man.zMid(p.y)) * 0.5));
-	const mid = neckSide.p.clone().lerp(shoulderTop.p, 0.5);
-	let mi = -1, md = Infinity;
-	for (let i = 0; i < N; i++) { if (R[i * 3] < 0.02 || man.wHead[i] > 0.3) continue; const d = vpos(i).distanceTo(mid) + abs(zr(i)); if (d < md) { md = d; mi = i; } }
-	seam('shoulder', 'Shoulder seam', [neckSide, pt(mi), shoulderTop]);
+	if (!raglan) {
+		const neckSide = attach('neck', (p) => (p.x < 0.02 ? Infinity : abs(p.z - man.zMid(p.y)) + abs(p.x - 0.07) * 0.2));
+		const shoulderTop = attach('arm', (p) => (p.x < 0.02 ? Infinity : -p.y + abs(p.z - man.zMid(p.y)) * 0.5));
+		const mid = neckSide.p.clone().lerp(shoulderTop.p, 0.5);
+		let mi = -1, md = Infinity;
+		for (let i = 0; i < N; i++) { if (R[i * 3] < 0.02 || man.wHead[i] > 0.3) continue; const d = vpos(i).distanceTo(mid) + abs(zr(i)); if (d < md) { md = d; mi = i; } }
+		seam('shoulder', 'Shoulder seam', [neckSide, pt(mi), shoulderTop]);
+	}
 
 	// crotch seam: across the gusset, joining the two leg lines where front meets back
 	const crotchL = attach('leg', (p) => (p.x < 0 ? Infinity : abs(p.z - man.zMid(p.y)) * 2 + p.y));

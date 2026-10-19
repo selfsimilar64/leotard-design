@@ -1,0 +1,1672 @@
+{
+ "format": "leotard-design",
+ "version": 1,
+ "meta": {
+  "name": "B12 lace over hologram",
+  "author": "",
+  "created": "2026-10-19T06:40:34.816Z",
+  "notes": "",
+  "block": {
+   "neck": "crew",
+   "back": "keyhole",
+   "sleeves": "tank",
+   "leg": "standard"
+  }
+ },
+ "ids": {
+  "c": 12,
+  "p": 7,
+  "L": 2,
+  "t": 3,
+  "g": 3,
+  "d": 2
+ },
+ "body": {
+  "size": "young",
+  "form": "full",
+  "finish": "Athlete skin, light",
+  "pose": "a-pose"
+ },
+ "scene": {
+  "rig": "White seamless (photo studio)",
+  "rotateLights": true,
+  "exposure": 1,
+  "bloom": 0.18,
+  "envRotation": 0,
+  "glare": "plain"
+ },
+ "legacy": null,
+ "layers": [
+  {
+   "id": "L0",
+   "kind": "shell",
+   "z": 0
+  },
+  {
+   "id": "L1",
+   "kind": "lining",
+   "z": -1,
+   "name": "Hologram lining"
+  }
+ ],
+ "curves": [
+  {
+   "id": "c1",
+   "layer": "L0",
+   "name": "Neckline",
+   "role": "seam",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 32,
+      "b": [
+       0.731894,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 264,
+      "b": [
+       0.712964,
+       0.287036
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 346,
+      "b": [
+       0.801441,
+       0.198559
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 428,
+      "b": [
+       0.525301,
+       0.474699
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 1517,
+      "b": [
+       0.635033,
+       0.364967
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41448,
+      "b": [
+       0,
+       0.675324
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37345,
+      "b": [
+       0.4747,
+       0.5253
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37267,
+      "b": [
+       0.198568,
+       0.801432
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37181,
+      "b": [
+       0.287046,
+       0.712954
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37130,
+      "b": [
+       0,
+       0.276273
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37784,
+      "b": [
+       0,
+       0.065918
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37706,
+      "b": [
+       0,
+       0.040431
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37026,
+      "b": [
+       0,
+       0.256777
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 130,
+      "b": [
+       0,
+       0.256751
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 570,
+      "b": [
+       0.039167,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 165,
+      "b": [
+       0.068307,
+       0.931693
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c2",
+   "layer": "L0",
+   "name": "Back opening",
+   "role": "edge",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 2105,
+      "b": [
+       0.82478,
+       0.17522
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2313,
+      "b": [
+       0,
+       0.635941
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2333,
+      "b": [
+       0,
+       0.380911
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 19782,
+      "b": [
+       0,
+       0.883406
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2304,
+      "b": [
+       0.977333,
+       0.022667
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 2324,
+      "b": [
+       0,
+       0.662365
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 20778,
+      "b": [
+       0,
+       0.648885
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 20800,
+      "b": [
+       0.680982,
+       0.319018
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 60910,
+      "b": [
+       0,
+       0.163199
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42241,
+      "b": [
+       0.536271,
+       0.463729
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42226,
+      "b": [
+       0,
+       0.022633
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 59906,
+      "b": [
+       0,
+       0.952389
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42248,
+      "b": [
+       0,
+       0.455739
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42228,
+      "b": [
+       0.635941,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42020,
+      "b": [
+       0.316995,
+       0
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c3",
+   "layer": "L0",
+   "name": "Leg line",
+   "role": "edge",
+   "closed": true,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 63250,
+      "b": [
+       0.14949,
+       0.85051
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63308,
+      "b": [
+       0,
+       0.406709
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64712,
+      "b": [
+       0,
+       0.36611
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63290,
+      "b": [
+       0,
+       0.667798
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63336,
+      "b": [
+       0,
+       0.748974
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64914,
+      "b": [
+       0,
+       0.784684
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 81932,
+      "b": [
+       0.237648,
+       0.762352
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 79230,
+      "b": [
+       0.468453,
+       0.531547
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 75888,
+      "b": [
+       0,
+       0.549848
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64828,
+      "b": [
+       0,
+       0.697842
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 79140,
+      "b": [
+       0.47618,
+       0.52382
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64115,
+      "b": [
+       0.200437,
+       0.799563
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64121,
+      "b": [
+       0.92703,
+       0.07297
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64066,
+      "b": [
+       0,
+       0.803731
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64406,
+      "b": [
+       0.107038,
+       0.892962
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63646,
+      "b": [
+       0,
+       0.476763
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63656,
+      "b": [
+       0,
+       0.203888
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63603,
+      "b": [
+       0,
+       0.47943
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63595,
+      "b": [
+       0,
+       0.62773
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63832,
+      "b": [
+       0,
+       0.511706
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c4",
+   "layer": "L0",
+   "name": "Armhole",
+   "role": "edge",
+   "closed": true,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 40705,
+      "b": [
+       0.367273,
+       0.632727
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42364,
+      "b": [
+       0,
+       0.952
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41916,
+      "b": [
+       0,
+       0.705185
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42047,
+      "b": [
+       0.001482,
+       0.998518
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61712,
+      "b": [
+       0.284286,
+       0.715714
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42513,
+      "b": [
+       0.601475,
+       0.398525
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42828,
+      "b": [
+       0,
+       0.110308
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 58901,
+      "b": [
+       0.790167,
+       0.209833
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42452,
+      "b": [
+       0.706365,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42957,
+      "b": [
+       0,
+       0.51352
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41104,
+      "b": [
+       0,
+       0.811783
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41094,
+      "b": [
+       0,
+       0.672669
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 42888,
+      "b": [
+       0,
+       0.245395
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41014,
+      "b": [
+       0.63,
+       0.37
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 40932,
+      "b": [
+       0.436522,
+       0.563478
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 40859,
+      "b": [
+       0,
+       0.348
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 58320,
+      "b": [
+       0.217778,
+       0
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c5",
+   "layer": "L0",
+   "name": "Side seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 41102,
+      "b": [
+       0.096751,
+       0.691946
+      ]
+     },
+     "on": {
+      "curve": "c4",
+      "t": 0.6051793450707441
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 60920,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61118,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61312,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61486,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61670,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 64347,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63494,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 63604,
+      "b": [
+       0.434338,
+       0.464038
+      ]
+     },
+     "on": {
+      "curve": "c3",
+      "t": 0.8591342178131389
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c6",
+   "layer": "L0",
+   "name": "Shoulder seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "both",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 37140,
+      "b": [
+       0.470334,
+       0.410387
+      ]
+     },
+     "on": {
+      "curve": "c1",
+      "t": 0.5328298083662284
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41532,
+      "b": [
+       1,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 41981,
+      "b": [
+       0.499543,
+       0.495338
+      ]
+     },
+     "on": {
+      "curve": "c4",
+      "t": 0.08281395283579973
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c7",
+   "layer": "L0",
+   "name": "Crotch seam",
+   "role": "seam",
+   "closed": false,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 75888,
+      "b": [
+       0.505783,
+       0.247469
+      ]
+     },
+     "on": {
+      "curve": "c3",
+      "t": 0.3948663926554036
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 29692,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 29701,
+      "b": [
+       0.247469,
+       0.505784
+      ]
+     },
+     "on": {
+      "curve": "c3",
+      "t": 0.3948663926554036,
+      "mirror": true
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c8",
+   "layer": "L0",
+   "role": "seam",
+   "name": "Waist seam",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 61834,
+      "b": [
+       0.317701,
+       0.682299
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 62377,
+      "b": [
+       0,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 83079,
+      "b": [
+       0.237425,
+       0.70705
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 22273,
+      "b": [
+       0,
+       1
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c9",
+   "layer": "L1",
+   "role": "edge",
+   "name": "Lining top",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 21879,
+      "b": [
+       0.130596,
+       0.869404
+      ]
+     },
+     "kind": "corner"
+    },
+    {
+     "sp": {
+      "f": 44352,
+      "b": [
+       0.082445,
+       0.903732
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 44006,
+      "b": [
+       0.394205,
+       0.472597
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 43216,
+      "b": [
+       0.578534,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 61137,
+      "b": [
+       0.185086,
+       0.031313
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 21002,
+      "b": [
+       0.770659,
+       0
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 21014,
+      "b": [
+       0.031312,
+       0.185087
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 3301,
+      "b": [
+       0,
+       0.578502
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 4095,
+      "b": [
+       0.472583,
+       0.394164
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 4437,
+      "b": [
+       0.903716,
+       0.082516
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c10",
+   "layer": "L1",
+   "role": "edge",
+   "name": "Lining bottom",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 62181,
+      "b": [
+       0,
+       0.80329
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 62333,
+      "b": [
+       0.833986,
+       0.029091
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 62405,
+      "b": [
+       0,
+       0.68946
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 22226,
+      "b": [
+       0.029101,
+       0.833985
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  },
+  {
+   "id": "c11",
+   "layer": "L0",
+   "role": "edge",
+   "name": "Neckline band",
+   "closed": true,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 188,
+      "b": [
+       0.416181,
+       0.583819
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 252,
+      "b": [
+       0.338051,
+       0.59008
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 402,
+      "b": [
+       0.178382,
+       0.401471
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 697,
+      "b": [
+       0.079321,
+       0.346188
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 494,
+      "b": [
+       0.616875,
+       0.196305
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37407,
+      "b": [
+       0.154283,
+       0.419741
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 38376,
+      "b": [
+       0.321067,
+       0.119713
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37323,
+      "b": [
+       0.399277,
+       0.171971
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37190,
+      "b": [
+       0.51936,
+       0.088837
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37105,
+      "b": [
+       0.713943,
+       0.286057
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 38528,
+      "b": [
+       0.415246,
+       0.584754
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 37030,
+      "b": [
+       0.127088,
+       0.138137
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 36991,
+      "b": [
+       0.093438,
+       0.253959
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 102,
+      "b": [
+       0.218195,
+       0.06796
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 143,
+      "b": [
+       0.14163,
+       0.165272
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 593,
+      "b": [
+       0.007985,
+       0.346824
+      ]
+     },
+     "kind": "smooth"
+    }
+   ]
+  }
+ ],
+ "panels": [
+  {
+   "id": "p1",
+   "layer": "L0",
+   "mirror": "none",
+   "name": "Front",
+   "seed": {
+    "f": 64653,
+    "b": [
+     0.925466,
+     0.074534
+    ]
+   },
+   "stack": [
+    {
+     "fabric": "matte",
+     "colour": "#4a1029",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p2",
+   "layer": "L0",
+   "mirror": "none",
+   "name": "Back",
+   "seed": {
+    "f": 62678,
+    "b": [
+     0.033503,
+     0
+    ]
+   },
+   "stack": [
+    {
+     "fabric": "matte",
+     "colour": "#4a1029",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p3",
+   "layer": "L0",
+   "name": "Lace bodice front",
+   "seed": {
+    "f": 40846,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "lace",
+     "colour": "#3a2242",
+     "second": "Tone-on-tone",
+     "colour2": "#7c70c8",
+     "sheer": 0.12
+    }
+   ]
+  },
+  {
+   "id": "p4",
+   "layer": "L0",
+   "name": "Lace bodice back",
+   "seed": {
+    "f": 2159,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "lace",
+     "colour": "#3a2242",
+     "second": "Tone-on-tone",
+     "colour2": "#7c70c8",
+     "sheer": 0.12
+    }
+   ]
+  },
+  {
+   "id": "p5",
+   "layer": "L1",
+   "name": "Hologram lining",
+   "seed": {
+    "f": 62083,
+    "b": [
+     0.780987,
+     0.121456
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "glitterfoil",
+     "colour": "#b45ad2",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p6",
+   "layer": "L0",
+   "name": "Neck band",
+   "seed": {
+    "f": 201,
+    "b": [
+     0.519073,
+     0.172699
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "matte",
+     "colour": "#4a1029",
+     "second": "Tone-on-tone"
+    }
+   ]
+  }
+ ],
+ "straps": [],
+ "trims": [
+  {
+   "id": "t1",
+   "on": [
+    "c4",
+    "c2"
+   ],
+   "kind": "binding",
+   "fabric": {
+    "fabric": "matte",
+    "colour": "#4a1029",
+    "second": "Tone-on-tone"
+   }
+  },
+  {
+   "id": "t2",
+   "on": [
+    "c3"
+   ],
+   "kind": "elastic",
+   "fabric": {
+    "fabric": "matte",
+    "colour": "#4a1029",
+    "second": "Tone-on-tone"
+   }
+  }
+ ],
+ "bands": [],
+ "decals": [
+  {
+   "id": "d1",
+   "at": {
+    "sp": {
+     "f": 63538,
+     "b": [
+      0.154979,
+      0.178833
+     ]
+    }
+   },
+   "size": 0.065,
+   "rotate": 0,
+   "colour": "#eeeeee",
+   "look": "print",
+   "layer": "L0",
+   "text": "Dulcy\nSp ♡",
+   "font": "Ink Free",
+   "weight": "bold"
+  }
+ ],
+ "details": [],
+ "hardware": [],
+ "stones": [
+  {
+   "id": "g1",
+   "kind": "scatter",
+   "name": "",
+   "on": {
+    "panel": "p1"
+   },
+   "params": {
+    "from": {
+     "curve": "c8"
+    },
+    "near": 1,
+    "far": 0,
+    "distance": 0.1,
+    "sizes": [
+     {
+      "size": "ss30",
+      "weight": 1
+     },
+     {
+      "size": "ss20",
+      "weight": 2
+     },
+     {
+      "size": "ss12",
+      "weight": 2
+     }
+    ],
+    "gap": 1.3
+   },
+   "stone": "Silver",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "holo-dot",
+   "mirror": "none",
+   "seed": 13
+  },
+  {
+   "id": "g2",
+   "kind": "scatter",
+   "name": "",
+   "on": {
+    "panel": "p2"
+   },
+   "params": {
+    "from": {
+     "curve": "c8"
+    },
+    "near": 1,
+    "far": 0,
+    "distance": 0.1,
+    "sizes": [
+     {
+      "size": "ss30",
+      "weight": 1
+     },
+     {
+      "size": "ss20",
+      "weight": 2
+     },
+     {
+      "size": "ss12",
+      "weight": 2
+     }
+    ],
+    "gap": 1.3
+   },
+   "stone": "Silver",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "holo-dot",
+   "mirror": "none",
+   "seed": 7932
+  }
+ ],
+ "placed": [],
+ "reference": [],
+ "locks": {}
+}

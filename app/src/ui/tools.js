@@ -9,6 +9,9 @@
 //           Esc cancels
 //   fabric  click a panel to give it the swatch chosen in the inspector
 //   cut     click a panel to cut it out, click an opening to fill it again
+//   decal   click the body to place a logo or lettering (options in the inspector)
+//   eyedrop (from the panel inspector's Pick) while looking through a reference photo, click
+//           the photo where the panel is: the panel's colour is matched to it under the rig
 // In every tool but orbit, right-drag orbits, middle-drag pans and the wheel zooms.
 import * as THREE from 'three';
 import { signal } from '@preact/signals';
@@ -21,6 +24,7 @@ export const toolOptions = signal({
 	penRole: 'seam', penMirror: 'auto', strapWidth: 0.01,
 	swatch: { fabric: 'mystique', colour: '#2b1d6e', second: 'Tone-on-tone' },
 	stone: { stone: 'Crystal AB', size: 'ss12', shape: 'round', rows: 1, offset: 0.004, gap: 1.15, fill: 'random', eraseR: 0.004 },
+	decal: { text: 'Name', font: 'Segoe Script', size: 0.08, look: 'print', colour: '#ffffff', rotate: 0 },
 });
 
 export class ToolController {
@@ -48,7 +52,7 @@ export class ToolController {
 			? { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
 			: { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
 		if (t !== 'pen' && t !== 'strap') this.cancelPen();
-		this.el.style.cursor = t === 'orbit' ? 'grab' : t === 'pen' || t === 'strap' ? 'crosshair' : 'default';
+		this.el.style.cursor = t === 'orbit' ? 'grab' : t === 'pen' || t === 'strap' || t === 'eyedrop' ? 'crosshair' : 'default';
 		this.refreshOverlay();
 	}
 
@@ -104,6 +108,14 @@ export class ToolController {
 			return;
 		}
 		if (t === 'pen' || t === 'strap') { this.penClick(x, y, e.shiftKey); return; }
+		if (t === 'eyedrop') { this.eyedrop(x, y); return; }
+		if (t === 'decal') {
+			const h = this.engine.pickAt(x, y);
+			if (!h?.sp) return;
+			const d = toolOptions.value.decal, id = this.run({ op: 'decal.add', at: { sp: toSP(h.sp) }, ...d, layer: h.layer ?? 'L0' });
+			if (id) { selection.value = { kind: 'decals', id }; tool.value = 'select'; }
+			return;
+		}
 		if (t === 'stones' || t === 'single' || t === 'erase') {
 			const st = toolOptions.value.stone, h = this.engine.pickAt(x, y);
 			if (t === 'stones') {
@@ -134,6 +146,19 @@ export class ToolController {
 				else this.run({ op: 'panel.add', at: { sp: toSP(h.sp) }, ...sw });
 			}
 		}
+	}
+
+	async eyedrop(x, y) {
+		const vp = this.engine.viewport, ph = vp.photo, o = toolOptions.value.eyedrop;
+		if (!ph || !o) { notify('Look through a reference photo first (Outliner, Reference photos), then click the panel on the photo'); return; }
+		const r = this.el.getBoundingClientRect(), c = ph.cam.crop ?? [0, 0, ...ph.size];
+		const px = [c[0] + (x / r.width) * (c[2] - c[0]), c[1] + (y / r.height) * (c[3] - c[1])];
+		try {
+			const m = await this.app.matchColour({ panel: o.panel, ref: this.app.looking, px, layer: o.layer ?? 0 });
+			notify(m.note ?? `Colour ${m.colour} (photo ${m.photo}${m.rendered ? ', matched under the lights' : ''})`, m.note ? 'error' : undefined);
+		} catch (err) { notify(err.message, 'error'); }
+		tool.value = 'select';
+		selection.value = { kind: 'panels', id: o.panel };
 	}
 
 	cellAt(sp) { const g = this.engine.g; if (!g) return -1; const t = locateIn(g, this.engine.surf, sp); return t >= 0 ? g.arr.cellOf[t] : -1; }

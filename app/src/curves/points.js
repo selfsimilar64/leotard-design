@@ -3,7 +3,8 @@
 //   { sp: { f, b: [b1, b2] } }        exact surface point
 //   { p: [x, y, z] }                  reference-body position (metres, y up, +z front) -> closest point
 //   { front: [x, y] } / { back: [x, y] }   frontal-plane position on the front or back of the torso
-//   { lm: 'shoulder_l', d: [dx, dy, dz] }  a rig landmark (+ offset) -> closest point
+//   { lm: 'shoulder_l', d: [dx, dy, dz] }  a rig landmark (+ offset) -> closest point, or a skin
+//                                     landmark such as 'navel', 'waist-l', 'bust-l' (body/landmarks.js)
 //   { curve: 'c3', t: 0.25 }          a point along an evaluated curve (0..1 of its length)
 //   { mirror: <spec> }                the mirror image (x -> -x) of another spec
 //   { photo: { ref: 'r1', px: [x, y], part?: torso|arm|any } }  the body under a pixel of a
@@ -28,7 +29,14 @@ export function resolvePoint(spec, ctx) {
 	}
 	if (spec.lm) {
 		const l = ctx.man.refLm[spec.lm];
-		if (!l) throw new Error(`No landmark ${spec.lm}. Landmarks: ${Object.keys(ctx.man.refLm).join(', ')}`);
+		// surface landmarks (body/landmarks.js: navel, waist-l, bust-l, cf-neck, ...) are points on the skin
+		const s = !l && ctx.landmarks?.[spec.lm];
+		if (s) {
+			if (!spec.d) return { f: s.f, b0: s.b0, b1: s.b1, b2: s.b2 };
+			const p = S.pos(s), d = spec.d;
+			return strip(S.closest(_v.set(p.x + d[0], p.y + d[1], p.z + d[2])));
+		}
+		if (!l) throw new Error(`No landmark ${spec.lm}. Landmarks: ${[...Object.keys(ctx.man.refLm), ...Object.keys(ctx.landmarks ?? {})].join(', ')}`);
 		const d = spec.d ?? [0, 0, 0];
 		return strip(S.closest(_v.set(l[0] + d[0], l[1] + d[1], l[2] + d[2])));
 	}

@@ -9,6 +9,7 @@ export const tools = [
 	{ id: 'cut', label: 'Cut out', icon: '✂', key: 'X' },
 	{ id: 'strap', label: 'Strap', icon: '⌇', key: 'S' },
 	{ id: 'trim', label: 'Edges', icon: '▭', key: 'T' },
+	{ id: 'decal', label: 'Logo / lettering', icon: 'A', key: 'L' },
 	{ sep: 2 },
 	{ id: 'stones', label: 'Stones', icon: '✦', key: 'G' },
 	{ id: 'single', label: 'Single stone', icon: '•', key: '1' },

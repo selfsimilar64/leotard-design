@@ -8,7 +8,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { SCENE, RIGS } from './presets.js';
+import { studioEnvironment, cyclorama } from './studio.js';
 
 export class Viewport {
 	constructor(container) {
@@ -35,7 +37,9 @@ export class Viewport {
 		controls.maxDistance = 6;
 
 		const pmrem = this.pmrem = new THREE.PMREMGenerator(renderer);
-		scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
+		this.envs = new Map(); // rig name -> PMREM texture (studio rigs reflect their own softboxes)
+		this.roomEnv = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
+		scene.environment = this.roomEnv;
 		scene.background = scene.environment;
 		scene.backgroundBlurriness = 0.7;
 
@@ -50,6 +54,8 @@ export class Viewport {
 		this.rig = new THREE.Group();
 		scene.add(this.rig);
 		this.lights = Array.from({ length: 8 }, () => { const l = new THREE.PointLight(0xffffff, 0, 0, 2); this.rig.add(l); return l; });
+		// Softboxes of the photo-studio rigs (created on first use: the LTC tables are 130 kB)
+		this.areas = [];
 
 		// Dark studio floor with a soft contact shadow under the stand.
 		const floor = this.floor = new THREE.Mesh(new THREE.CircleGeometry(4, 96), new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.85 }));
@@ -62,6 +68,9 @@ export class Viewport {
 		const blob = this.blob = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
 		blob.rotation.x = -Math.PI / 2; blob.position.y = -0.0082;
 		this.world.add(blob);
+		this.cyc = cyclorama();
+		this.cyc.visible = false;
+		this.world.add(this.cyc);
 
 		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: true, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1 };
 		this.onFrame = new Set();
@@ -107,16 +116,46 @@ export class Viewport {
 		r.lights.forEach((d, i) => { const l = this.lights[i]; l.position.fromArray(d.p); l.intensity = d.cd; l.color.set(d.c); l.visible = d.cd > 0; });
 		this.scene.environmentIntensity = r.env;
 		this.scene.backgroundIntensity = r.bg;
+		const areas = r.areas ?? [];
+		if (areas.length && !this.areas.length) {
+			RectAreaLightUniformsLib.init();
+			for (let i = 0; i < 4; i++) { const l = new THREE.RectAreaLight(0xffffff, 0, 1, 1); l.visible = false; this.scene.add(l); this.areas.push(l); }
+		}
+		this.areas.forEach((l, i) => {
+			const a = areas[i];
+			l.visible = !!a;
+			if (!a) return;
+			l.position.fromArray(a.p); l.width = a.s[0]; l.height = a.s[1]; l.intensity = a.L; l.color.set(a.c ?? 0xffffff);
+			l.lookAt(new THREE.Vector3().fromArray(a.at ?? [0, 1, 0]));
+		});
+		this.rigFixed = !!r.fixed;
+		this.bloomK = r.bloomK ?? 1;
+		if (r.fixed) this.rig.rotation.y = 0;
+		let env = this.envs.get(this.settings.rig);
+		if (!env) {
+			env = r.room ? this.pmrem.fromScene(studioEnvironment(r), 0.01).texture : this.roomEnv;
+			this.envs.set(this.settings.rig, env);
+		}
+		this.scene.environment = env;
+		// a backdrop rig shows its seamless paper; the others the blurred room and the dark floor
+		const bd = r.backdrop != null;
+		this.cyc.visible = bd; this.floor.visible = !bd;
+		if (bd) {
+			this.cyc.material.color.set(r.backdrop);
+			this.cyc.material.emissive.set(r.backdrop).multiplyScalar(r.glow ?? 0);
+			this.scene.background = this.cyc.material.color.clone();
+		}
+		else this.scene.background = env;
 	}
 
 	frame() {
 		this.timer.update();
 		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
 		if (!this.container.clientWidth) return; // pane not laid out yet
-		if (s.rotateLights && !this.photo) this.rig.rotation.y += dt * SCENE.lightSpin;
+		if (s.rotateLights && !this.photo && !this.rigFixed) this.rig.rotation.y += dt * SCENE.lightSpin;
 		this.scene.environmentRotation.y = this.scene.backgroundRotation.y = s.envRotation + this.rig.rotation.y * SCENE.envFollow;
 		this.renderer.toneMappingExposure = s.exposure;
-		this.bloom.strength = s.bloom;
+		this.bloom.strength = s.bloom * (this.bloomK ?? 1);
 		this.lights[0].getWorldPosition(this.keyDir).sub(this.controls.target).normalize();
 		for (const fn of this.onFrame) fn(dt);
 		if (!this.photo) this.controls.update();
@@ -137,12 +176,24 @@ export class Viewport {
 
 	// Renders frames back to back and waits for the GPU each time, so the number is the true cost
 	// of a frame, not the display's refresh interval. Same method as the POC's "Measure frame cost".
-	benchmark(n = 60) {
-		const gl = this.renderer.getContext(), px = new Uint8Array(4);
+	// size: { width, height } renders at that fixed size (the gates are measured at 1792x1344)
+	benchmark(n = 60, size = null) {
+		const gl = this.renderer.getContext(), px = new Uint8Array(4), cam = this.camera, aspect = cam.aspect;
+		if (size) {
+			const { width, height } = size;
+			this.renderer.setPixelRatio(1); this.renderer.setSize(width, height, false);
+			this.composer.setPixelRatio(1); this.composer.setSize(width, height);
+			this.bloom.setSize(width / 2, height / 2);
+			cam.aspect = width / height; cam.updateProjectionMatrix();
+		}
 		const run = () => { for (let i = 0; i < n; i++) { this.rig.rotation.y += 0.01; this.render(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); } };
+		const r0 = this.rig.rotation.y;
 		run(); // warm up: compiles any shader variant not yet seen
 		const t = performance.now(); run();
-		return (performance.now() - t) / n;
+		const ms = (performance.now() - t) / n;
+		if (this.rigFixed) this.rig.rotation.y = r0; // studio lights stay where they were
+		if (size) { cam.aspect = aspect; this.resize(); }
+		return ms;
 	}
 
 	// The current view as a PNG blob at a fixed size (independent of the pane, which may be hidden),
@@ -156,6 +207,22 @@ export class Viewport {
 		for (const fn of this.onResize) fn(width, height);
 		this.render();
 		return new Promise((resolve) => r.domElement.toBlob((b) => { cam.aspect = aspect; this.resize(); resolve(b); }, 'image/png'));
+	}
+
+	// Render once at a fixed size and read back the (2r+1)-pixel square around (x, y) (pixels from
+	// the top left), as sRGB bytes: how a panel's colour comes out under the rig, to match a photo.
+	samplePatch(x, y, width, height, r = 4) {
+		const R = this.renderer, cam = this.camera, aspect = cam.aspect, n = 2 * r + 1, buf = new Uint8Array(n * n * 4);
+		R.setPixelRatio(1); R.setSize(width, height, false);
+		this.composer.setPixelRatio(1); this.composer.setSize(width, height);
+		this.bloom.setSize(width / 2, height / 2);
+		cam.aspect = width / height; cam.updateProjectionMatrix();
+		for (const fn of this.onResize) fn(width, height);
+		this.render();
+		const gl = R.getContext();
+		gl.readPixels(Math.round(x) - r, height - 1 - Math.round(y) - r, n, n, gl.RGBA, gl.UNSIGNED_BYTE, buf); // GL rows run bottom up
+		cam.aspect = aspect; this.resize();
+		return buf;
 	}
 
 	// Look through a reference photo's solved camera, the photo over the view at `opacity`
