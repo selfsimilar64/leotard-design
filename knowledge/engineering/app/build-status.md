@@ -23,7 +23,7 @@ sources:
 
 The owner gave the go-ahead to implement the whole plan on 2026-10-19.[^owner] Work happens on
 branch `build/designer-app` (pushed to GitHub); `main` only changes when the owner is happy.
-**P0, P1 core, P2, P3 (pending the owner's review), P4-P5 core, P6 core and P7 are done** (curves cut real panels, pieces flatten, cloth-space textures,
+**Every phase P0-P8 has been built; P8's rehearsal of all 13 benchmark designs is done and waits for the owner's scoring** (curves cut real panels, pieces flatten, cloth-space textures,
 finished edges, printable pattern).[^build]
 
 # How to run and test
@@ -49,7 +49,7 @@ finished edges, printable pattern).[^build]
 | P4-P5 Stones | core done | Stone library (ss sizes, ~50 colours, coatings, cuts), generators (row, fill random/contour, scatter, rays, motif, lattice, cluster, fringe/rain, lettering in any font), single stones and eraser marks, mirror, keep-out of edges, release-to-singles, instanced crystal shader with per-stone finish, stone tools and live counts, star-filter glare presets (4, 6, 8 rays; about +1.3 ms) |
 | P3 Materials and studio realism | done, owner review pending | [Studio rigs, skin, fabric looks, logos, seams, swatches, colour match](/engineering/app/studio-and-fabric-looks.md); raglan block option; B4, B8, B12 rebuilt (`app/designs/b4-*`, `b8-*`, `b12-*`) and compared side by side with their photos |
 | P7 Poses and realism II | done | [Poses, soft shadow, contact darkening, tension wrinkles, fold stamps, dynamic resolution](/engineering/app/poses-and-shading.md); gate designs posed as in their photos at 9.8-10.9 ms |
-| P8 | not started | |
+| P8 Rehearsal | rehearsed, owner sign-off pending | [All 13 benchmarks rebuilt from their photos and compared; tool coverage audit](/engineering/app/rehearsal-and-coverage.md); 9.8-15.2 ms a frame. The image-by-image pass over the 138 photos is not done |
 
 # Measured (GTX 1650, 2026-10-19)
 

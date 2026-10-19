@@ -1,7 +1,7 @@
 ---
 type: Section
 title: Designer app
-description: "What the designer app in app/ implements, module by module: build status per roadmap phase, the scripting surface (app.exec), garment cutting from curves, pattern pieces and flattening, studio lighting and fabric looks, poses and shading."
+description: "What the designer app in app/ implements, module by module: build status per roadmap phase, the scripting surface (app.exec), garment cutting from curves, pattern pieces and flattening, studio lighting and fabric looks, poses and shading, the benchmark rehearsal and coverage audit."
 tags: [app]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-19T08:00:00Z }
 ---
