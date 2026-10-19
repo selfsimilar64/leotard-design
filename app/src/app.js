@@ -27,6 +27,8 @@ import { patternPieces } from './garment/pattern.js';
 import { patternPDF } from './export/pdf.js';
 import { FABRICS } from './materials/fabric.js';
 import { swatch } from './materials/swatches.js';
+import { SS as SS_TABLE, COLOURS as STONE_COLOURS } from './stones/library.js';
+import { toSP as toSPLocal } from './body/surface.js';
 
 // Ends a drag: touches the curves so the garment is re-cut and new cells get their panels, inside
 // the drag's own history entry.
@@ -349,6 +351,79 @@ export class App {
 			this.endGesture();
 		}
 		return { colour: '#' + c.getHexString(), photo: '#' + target.getHexString(), rendered: seen ? '#' + seen.getHexString() : null, ...(note ? { note } : {}) };
+	}
+
+	// Stones picked off a photo: the bright highlights of rhinestones inside `region` ([x0, y0, x1,
+	// y1] photo pixels) are found (brightness above the local background, local peaks a stone
+	// apart), each mapped onto the body through the solved camera and placed as a single stone,
+	// all in one undo step. size: 'ss8' or 'auto' (from the highlight's size and the photo's scale);
+	// stone: a name, or 'auto' (the nearest colour in the library to the highlight's surround).
+	// Returns { found, placed, skipped }.
+	async pickStones(ref, { region, size = 'auto', stone = 'Crystal AB', threshold = 0.12, minLum = 0.5, minDist = 4, max = 2000, part } = {}) {
+		const R = this.doc.reference.find((x) => x.id === ref);
+		if (!R?.camera) throw new Error('Solve the camera of ' + ref + ' first');
+		const [x0, y0, x1, y1] = region ?? R.camera.crop ?? [0, 0, ...R.size], w = Math.round(x1 - x0), h = Math.round(y1 - y0);
+		await photoPatch(R.src, [0, 0], 0); // loads the photo into its canvas
+		const d = photoCanvases.get(R.src).getContext('2d', { willReadFrequently: true }).getImageData(Math.round(x0), Math.round(y0), w, h).data;
+		const L = new Float32Array(w * h);
+		for (let i = 0; i < w * h; i++) L[i] = (0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255;
+		// local background: box mean over 13 px (integral image)
+		const I = new Float64Array((w + 1) * (h + 1)), rb = 6;
+		for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += L[y * w + x]; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + row; } }
+		const mean = (x, y) => { const a = Math.max(0, x - rb), b = Math.max(0, y - rb), c = Math.min(w, x + rb + 1), e = Math.min(h, y + rb + 1); return (I[e * (w + 1) + c] - I[b * (w + 1) + c] - I[e * (w + 1) + a] + I[b * (w + 1) + a]) / ((c - a) * (e - b)); };
+		const T = new Float32Array(w * h), peaks = [];
+		for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) T[y * w + x] = L[y * w + x] - mean(x, y);
+		for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+			const t = T[y * w + x];
+			if (t < threshold || L[y * w + x] < minLum) continue;
+			let peak = true;
+			for (let j = -1; j <= 1 && peak; j++) for (let i = -1; i <= 1; i++) if ((i || j) && T[(y + j) * w + x + i] > t) { peak = false; break; }
+			if (peak) peaks.push([x, y, t]);
+		}
+		peaks.sort((a, b) => b[2] - a[2]);
+		const kept = [];
+		for (const p of peaks) { if (kept.length >= max) break; if (kept.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) >= minDist)) kept.push(p); }
+		const { resolvePoint: rp } = await import('./curves/points.js');
+		const ctx = this.store.ctx, cmds = [];
+		const SSK = Object.keys(SS_TABLE).map(Number);
+		// straps: a picked point under a strap's ribbon sits on the strap (lifted by its height)
+		const strapLines = this.doc.straps.flatMap((s) => [s.path, s.path + '~m'].map((k) => this.engine.evaluated?.get(k)).filter(Boolean).map((e) => ({ e, s })));
+		const strapLift = (p) => {
+			for (const { e, s } of strapLines) for (const q of e.pts) if (q.distanceTo(p) < s.width / 2) return 0.0009 + 0.0013 * (s.layer ?? 0) + 0.0019 * Math.min(s.width / 0.01, 1.4);
+			return 0;
+		};
+		let skipped = 0;
+		for (const [x, y, t] of kept) {
+			const px = [x0 + x, y0 + y];
+			let sp; try { sp = rp({ photo: { ref, px, ...(part ? { part } : {}) } }, ctx); } catch { skipped++; continue; }
+			let ss = size;
+			if (size === 'auto') {
+				// the highlight's radius: where it falls to half its peak, averaged over four
+				// directions (a window would merge neighbours in a dense row); metres per pixel
+				// from a neighbouring pixel
+				let rr = 0;
+				for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { let k = 1; while (k < 6 && x + dx * k >= 0 && y + dy * k >= 0 && x + dx * k < w && y + dy * k < h && T[(y + dy * k) * w + x + dx * k] > t * 0.5) k++; rr += k - 0.5; }
+				const area = Math.PI * (rr / 4) ** 2;
+				let mpp = 0.0015;
+				try { const q = rp({ photo: { ref, px: [px[0] + 4, px[1]] } }, ctx); mpp = ctx.surf.pos(q).distanceTo(ctx.surf.pos(sp)) / 4 || mpp; } catch { /* keep the guess */ }
+				const mm = 2 * Math.sqrt(area / Math.PI) * mpp * 1000 * 1.15; // the sparkle is a little smaller than the stone
+				// leotard stones are ss5 to ss20; a glint read bigger is usually two merged, or a bright band
+				ss = 'ss' + SSK.filter((k) => k >= 5 && k <= 20).reduce((a, b) => (Math.abs(SS_TABLE[b] - mm) < Math.abs(SS_TABLE[a] - mm) ? b : a));
+			}
+			let name = stone;
+			if (stone === 'auto') {
+				// colour from the ring round the highlight (the stone's body, not its white glint)
+				const ring = [];
+				for (let a = 0; a < 8; a++) { const xx = Math.round(x + Math.cos(a * Math.PI / 4) * 2), yy = Math.round(y + Math.sin(a * Math.PI / 4) * 2); if (xx >= 0 && yy >= 0 && xx < w && yy < h) ring.push([d[(yy * w + xx) * 4], d[(yy * w + xx) * 4 + 1], d[(yy * w + xx) * 4 + 2]]); }
+				const avg = [0, 1, 2].map((k) => ring.reduce((s, c) => s + c[k], 0) / Math.max(ring.length, 1));
+				const sat = Math.max(...avg) - Math.min(...avg);
+				name = sat < 30 ? 'Crystal' : Object.entries(STONE_COLOURS).reduce((best, [n, hex]) => { const c = new THREE.Color(hex), dd = (c.r * 255 - avg[0]) ** 2 + (c.g * 255 - avg[1]) ** 2 + (c.b * 255 - avg[2]) ** 2; return dd < best[1] ? [n, dd] : best; }, ['Crystal', Infinity])[0];
+			}
+			const lift = strapLift(ctx.surf.pos(sp));
+			cmds.push({ op: 'stone.place', at: { sp: toSPLocal(sp) }, size: ss, stone: name, ...(lift ? { lift } : {}) });
+		}
+		if (cmds.length) this.exec(cmds);
+		return { found: kept.length, placed: cmds.length, skipped };
 	}
 
 	get debug() { return { cells: (on = true) => showCells(this.engine, on) }; }

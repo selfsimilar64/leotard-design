@@ -46,6 +46,7 @@ function DesignProps({ doc }) {
 				<Row label="Turn environment"><Slider value={s.envRotation} min={0} max={6.283} onChange={(v, g) => run({ op: 'scene.set', envRotation: v, gesture: g })} /></Row>
 				<Row label="Exposure"><Slider value={s.exposure} min={0.3} max={2.5} onChange={(v, g) => run({ op: 'scene.set', exposure: v, gesture: g })} /></Row>
 				<Row label="Sparkle glow"><Slider value={s.bloom} min={0} max={1.2} onChange={(v, g) => run({ op: 'scene.set', bloom: v, gesture: g })} /></Row>
+				<Row label="Glare"><Select value={s.glare ?? 'plain'} options={[['plain', 'Plain photo'], ['star', 'Star filter (4 points)'], ['star6', 'Star filter (6 points)'], ['arena', 'Arena eye (8 points)']]} onChange={(v) => run({ op: 'scene.set', glare: v })} /></Row>
 			</Section>
 			<StoneCounts />
 			<BlockPicker doc={doc} />

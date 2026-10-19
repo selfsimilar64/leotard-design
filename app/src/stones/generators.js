@@ -193,6 +193,37 @@ function angleAt(ctx, sp, dir) {
 	return Math.atan2(dir.dot(b0), dir.dot(t0));
 }
 
+// A straight walk on the body from sp: each step goes in dir(p, n) (a direction, re-projected into
+// the tangent plane), so the line follows the surface. -> path [{ p, sp }]
+function march(ctx, sp, dir, L, step = 0.0015) {
+	const path = [];
+	let f = sp.f, prev = ctx.surf.pos(sp);
+	path.push({ p: prev.clone(), sp: { f: sp.f, b0: sp.b0, b1: sp.b1, b2: sp.b2 } });
+	for (let s = step; s <= L + 1e-9; s += step) {
+		const n = ctx.surf.faceNormal(f, new THREE.Vector3()), d = dir(prev, n).clone();
+		d.sub(n.clone().multiplyScalar(d.dot(n)));
+		if (d.lengthSq() < 1e-12) break;
+		const q = projectNear(ctx.surf, prev.clone().addScaledVector(d.normalize(), step), f, {});
+		const p = ctx.surf.pos(q);
+		path.push({ p, sp: { f: q.f, b0: q.b0, b1: q.b1, b2: q.b2 } });
+		prev = p; f = q.f;
+	}
+	return path;
+}
+
+// Text as a mask: canvas pixels of the glyphs (white on transparent), for lettering in stones.
+function textMask(text, font, weight) {
+	const lines = String(text).split('\n'), px = 200, cv = document.createElement('canvas'), x = cv.getContext('2d');
+	const css = `${weight ?? 'normal'} ${px}px ${font ? JSON.stringify(font) + ', ' : ''}cursive`;
+	x.font = css;
+	const w = Math.ceil(Math.max(...lines.map((l) => x.measureText(l).width))) + 40, lh = px * 1.2;
+	cv.width = w; cv.height = Math.ceil(lh * lines.length + 40);
+	x.font = css; x.fillStyle = '#fff'; x.textBaseline = 'middle'; x.textAlign = 'center';
+	lines.forEach((l, k) => x.fillText(l, w / 2, 20 + lh * (k + 0.5)));
+	const d = x.getImageData(0, 0, cv.width, cv.height).data;
+	return { w: cv.width, h: cv.height, px, a: (i, j) => (i < 0 || j < 0 || i >= cv.width || j >= cv.height ? 0 : d[(j * cv.width + i) * 4 + 3]) };
+}
+
 const GENERATORS = {
 	// rows along a line (or a strap's middle): offset, several rows, graded sizes, ramps
 	row(gen, ctx, rand) {
@@ -333,6 +364,70 @@ const GENERATORS = {
 				out.push({ sp: q.sp, size: fillSize, stone: gen.fillStone ?? pick(), angle: 0, lift: 0 });
 			}
 		}
+		return out;
+	},
+
+	// fringe: strands of stones hanging from a line (a waistband fringe, crystal rain): one strand
+	// every `spacing` metres along the line, `lengths` cycled (or random between min and max),
+	// sizes graded from `sizeFrom` at the line to `sizeTo` at the tip; `direction` 'down' (straight
+	// down the body) or 'away' (square off the line, on `side`)
+	fringe(gen, ctx, rand) {
+		const P = gen.params ?? {}, pick = picker(gen, rand), out = [];
+		const id = gen.on?.curve;
+		if (!id) throw new Error('A fringe needs on: { curve }');
+		const srcs = [ctx.evaluated.get(id), gen.followMirror !== false ? ctx.evaluated.get(id + '~m') : null].filter(Boolean);
+		if (!srcs.length) throw new Error('No line ' + id);
+		const spacing = P.spacing ?? 0.008, lens = P.lengths ?? [0.02, 0.035], from = P.sizeFrom ?? P.size ?? 'ss10', to = P.sizeTo ?? P.size ?? 'ss6';
+		const down = new THREE.Vector3(0, -1, 0), side = P.side === 'right' ? -1 : 1;
+		srcs.forEach((e, si) => {
+			const starts = alongPath(offsetPath(e, P.offset ?? 0, ctx.surf), () => spacing, 1, ctx.surf, { start: P.t?.[0] ?? 0, end: P.t?.[1] ?? 1 });
+			starts.forEach((s0, k) => {
+				const L = P.random ? (P.min ?? 0.02) + rand() * ((P.max ?? 0.08) - (P.min ?? 0.02)) : lens[k % lens.length];
+				const away = (p, n) => n.clone().cross(s0.tangent).multiplyScalar(si ? -side : side);
+				const path = march(ctx, s0.sp, P.direction === 'away' ? away : () => down, L);
+				const sizeAt = (u) => lerpSize(from, to, u);
+				for (const q of alongPath(path, sizeAt, P.gap ?? 1.3, ctx.surf)) out.push({ sp: q.sp, size: sizeAt(q.u), stone: ramp(gen.colourRamp, q.u) ?? pick(), angle: angleAt(ctx, q.sp, q.tangent), lift: 0 });
+			});
+		});
+		return out;
+	},
+
+	// lettering: text in any installed font laid out in stones around a point: `mode` 'fill' (the
+	// strokes filled, which gives a single line of stones for a thin script), 'outline' or 'both';
+	// `height` is the letter height in metres
+	lettering(gen, ctx, rand) {
+		const P = gen.params ?? {}, pick = picker(gen, rand), out = [];
+		if (typeof document === 'undefined') throw new Error('Lettering needs a browser (fonts)');
+		const csp = resolvePoint(gen.at, ctx), c = ctx.surf.pos(csp), n = ctx.surf.faceNormal(csp.f, new THREE.Vector3());
+		const t0 = new THREE.Vector3(0, 1, 0).cross(n).normalize(), b0 = n.clone().cross(t0);
+		const M = textMask(P.text ?? 'Name', P.font, P.weight), k = (P.height ?? 0.03) / M.px, rot = P.angle ?? 0;
+		const size = sizeOf(P.stoneSize ?? 'ss6'), gapPx = (size * (P.gap ?? 1.2)) / k;
+		const to3 = (i, j) => {
+			const x = (i - M.w / 2) * k, y = (M.h / 2 - j) * k;
+			const xr = x * Math.cos(rot) - y * Math.sin(rot), yr = x * Math.sin(rot) + y * Math.cos(rot);
+			const q = projectNear(ctx.surf, c.clone().addScaledVector(t0, xr).addScaledVector(b0, yr), csp.f, {});
+			return { f: q.f, b0: q.b0, b1: q.b1, b2: q.b2 };
+		};
+		// candidate pixels (inside the strokes, or on their edge), shuffled, then kept a stone apart
+		const mode = P.mode ?? 'fill', cand = [], st = Math.max(1, Math.floor(gapPx / 4));
+		for (let j = 0; j < M.h; j += st) for (let i = 0; i < M.w; i += st) {
+			const inside = M.a(i, j) > 127;
+			if (!inside) continue;
+			const edge = M.a(i - st, j) <= 127 || M.a(i + st, j) <= 127 || M.a(i, j - st) <= 127 || M.a(i, j + st) <= 127;
+			if (mode === 'fill' || (mode === 'outline' && edge) || mode === 'both') cand.push([i, j, edge]);
+		}
+		for (let i = cand.length - 1; i > 0; i--) { const r = Math.floor(rand() * (i + 1)); [cand[i], cand[r]] = [cand[r], cand[i]]; }
+		if (mode === 'both') cand.sort((a, b) => b[2] - a[2]); // the outline first, then the inside
+		const kept = [], cell = gapPx, grid = new Map();
+		for (const [i, j] of cand) {
+			const gx = Math.floor(i / cell), gy = Math.floor(j / cell);
+			let ok = true;
+			for (let dx = -1; dx <= 1 && ok; dx++) for (let dy = -1; dy <= 1 && ok; dy++) for (const [a, b] of grid.get((gx + dx) + ',' + (gy + dy)) ?? []) if (Math.hypot(a - i, b - j) < gapPx) { ok = false; break; }
+			if (!ok) continue;
+			const key = gx + ',' + gy; if (!grid.has(key)) grid.set(key, []); grid.get(key).push([i, j]);
+			kept.push([i, j]);
+		}
+		for (const [i, j] of kept) out.push({ sp: to3(i, j), size, stone: pick(), angle: 0, lift: 0 });
 		return out;
 	},
 

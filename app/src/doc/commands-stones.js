@@ -19,7 +19,7 @@ function checkStones(a) {
 }
 
 defineCommand('stones.add', {
-	label: 'Add stones', args: '{ kind: row|fill|scatter|rays|motif|lattice|cluster, on?: { curve | strap | panel }, at?: spec, params: {...}, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, seed?, name? }',
+	label: 'Add stones', args: '{ kind: row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...}, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, seed?, name? }',
 	run(tx, a) {
 		if (!GENERATOR_KINDS.includes(a.kind)) throw new Error('kind must be one of: ' + GENERATOR_KINDS.join(', '));
 		checkStones(a);
@@ -64,11 +64,11 @@ defineCommand('stones.erase', {
 const fromSPc = (sp) => ({ f: sp.f, b0: 1 - sp.b[0] - sp.b[1], b1: sp.b[0], b2: sp.b[1] });
 
 defineCommand('stone.place', {
-	label: 'Place stone', args: '{ at: spec, size?: ss16, stone?: name, shape?, angle? (radians), mirror?: none|both }',
+	label: 'Place stone', args: '{ at: spec, size?: ss16, stone?: name, shape?, angle? (radians), lift? (m: on a strap), mirror?: none|both }',
 	run(tx, a) {
 		parseStone(a.stone ?? 'Crystal AB'); sizeOf(a.size ?? 'ss16');
 		const sp = toSP(resolvePoint(a.at, tx.ctx)), ids = [];
-		const add = (s) => { const id = tx.newId('x'); tx.insert('placed', { id, sp: s, size: a.size ?? 'ss16', stone: a.stone ?? 'Crystal AB', shape: a.shape ?? 'round', angle: a.angle ?? 0 }); ids.push(id); };
+		const add = (s) => { const id = tx.newId('x'); tx.insert('placed', { id, sp: s, size: a.size ?? 'ss16', stone: a.stone ?? 'Crystal AB', shape: a.shape ?? 'round', angle: a.angle ?? 0, ...(a.lift ? { lift: a.lift } : {}) }); ids.push(id); };
 		add(sp);
 		if (a.mirror === 'both') add(toSP(resolvePoint({ mirror: { sp } }, tx.ctx)));
 		return ids.length === 1 ? ids[0] : ids;

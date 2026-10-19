@@ -11,6 +11,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { SCENE, RIGS } from './presets.js';
 import { studioEnvironment, cyclorama } from './studio.js';
+import { GlarePass } from './glare.js';
 
 export class Viewport {
 	constructor(container) {
@@ -56,6 +57,8 @@ export class Viewport {
 		composer.addPass(new RenderPass(scene, camera));
 		this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.18, 0.1, 1.6);
 		composer.addPass(this.bloom);
+		this.glare = new GlarePass(); // star-filter streaks (scene.glare), off for 'plain'
+		composer.addPass(this.glare);
 		composer.addPass(new OutputPass());
 
 		// Eight point lights, re-aimed per preset (see RIGS in presets.js).
@@ -152,6 +155,7 @@ export class Viewport {
 			sun.intensity = sh.E; sun.color.set(sh.c ?? 0xffffff);
 			sun.shadow.camera.updateProjectionMatrix();
 		}
+		this.glare.setPreset(this.settings.glare ?? 'plain');
 		this.rigFixed = !!r.fixed;
 		this.bloomK = r.bloomK ?? 1;
 		if (r.fixed) this.rig.rotation.y = 0;

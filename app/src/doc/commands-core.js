@@ -6,6 +6,7 @@ import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
 import { poseSpec } from '../body/pose.js';
+import { GLARE } from '../render/glare.js';
 
 const SIZES = ['child', 'teen', 'young', 'adult'];
 
@@ -56,13 +57,13 @@ defineCommand('body.set', {
 });
 
 defineCommand('scene.set', {
-	label: 'Change lighting', args: '{ rig?, exposure?, bloom?, envRotation?, rotateLights?, glare? }',
+	label: 'Change lighting', args: '{ rig?, exposure?, bloom?, envRotation?, rotateLights?, glare?: plain|star|star6|arena }',
 	run(tx, a) {
 		setFields(tx, 'scene', a, {
 			rig: (v) => oneOf('rig', v, Object.keys(RIGS)),
 			exposure: num('exposure', 0.05, 5), bloom: num('bloom', 0, 3), envRotation: num('envRotation', -100, 100),
 			rotateLights: (v) => { if (typeof v !== 'boolean') throw new Error('rotateLights must be true or false'); },
-			glare: null,
+			glare: (v) => oneOf('glare', v, Object.keys(GLARE)),
 		});
 	},
 });
