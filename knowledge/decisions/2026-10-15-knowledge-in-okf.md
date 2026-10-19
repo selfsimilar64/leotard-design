@@ -20,7 +20,8 @@ repository in its own subdirectory of the project.[^owner]
 
 # Consequences / how to apply
 
-- The bundle lives at `knowledge/` and is its own git repository. Its rules are in
+- The bundle lives at `knowledge/`. It was its own git repository until 2026-10-18, when the owner
+  had it folded (with history) into the project repository. Its rules are in
   [bundle conventions](/bundle-conventions.md).
 - Existing research notes and the report were distilled into the bundle on 2026-10-15; the
   originals stay in place and are mirrored under [/references/research/](/references/research/about.md).

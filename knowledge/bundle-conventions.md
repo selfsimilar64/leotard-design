@@ -129,4 +129,6 @@ python scripts/okf.py index
 `check` enforces SPEC §11 conformance (errors) and the house rules above (warnings: missing
 recommended keys, broken links, footnotes without a source, stale concepts). `index` rewrites
 every `index.md`; never edit those by hand. After a meaningful change, add a dated entry to the
-root [log](/log.md) and commit (the bundle is its own git repository).
+root [log](/log.md) and commit. Since 2026-10-18 the bundle is part of the project repository
+(`knowledge/` inside `selfsimilar64/leotard-design` on GitHub, private), with its earlier history
+folded in; commit from the project root.

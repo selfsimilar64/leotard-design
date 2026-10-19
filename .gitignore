@@ -9,6 +9,3 @@ dist/
 
 # Local Claude Code settings
 .claude/settings.local.json
-
-# Temporary copy used while folding the knowledge history in
-knowledge_tmp/

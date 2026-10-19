@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-18
+* **Update**: The bundle is now part of the project repository (`selfsimilar64/leotard-design`, private, on GitHub), history kept; [conventions](/bundle-conventions.md) updated. `tools/`, `assets/` and `moodboard/` are not tracked.
 * **Update**: Nine owner-downloaded VMOD fabrics unpacked to `assets/textures/vmod/` with a manifest; findings (PNG pHYs gives real tile size, OpenGL normals, seamless, colour masks per fabric part, iridescence not in maps) recorded in the [texture import pipeline](/engineering/rendering/fabric-shading/texture-import-pipeline.md).
 * **Creation**: [Fabric texture sources compared](/engineering/rendering/fabric-shading/fabric-texture-sources.md): CC0 (3dtextures.me, ShareTextures, ambientCG) first, Adobe Substance 3D Assets for parametric variety, VMOD after written permission.
 * **Creation**: [Texture import pipeline](/engineering/rendering/fabric-shading/texture-import-pipeline.md): owner will supply scanned fabrics from VMOD; take the Blender download, extract/bake PBR maps at real size, compress to KTX2, apply in cloth-space UVs; textures drive structure, shaders keep sparkle; VMOD licence caveat for shipping. Roadmap P1 and the fidelity-inputs question updated.
