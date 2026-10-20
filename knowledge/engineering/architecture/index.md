@@ -5,6 +5,7 @@
 # Architecture
 
 * [Editor architecture for the designer tool](editor-architecture.md) (draft) - Module layout and core algorithms for turning the POC into the designer tool: command-driven document, projected surface splines, explicit curve insertion into the canonical mesh, per-panel flattening for cloth-space UVs, swept rims and straps, generator-driven stones, and the frame budget.
+* [Genesis 9 as the canonical mesh (feasibility)](genesis9-as-canonical-mesh.md) (draft) - Feasibility of replacing the MakeHuman mannequin (41,595 vertices) with Daz Genesis 9 subdivided once (99,688 vertices) as the canonical topology every design is anchored to: exactly symmetric, one piece, all quads, 116 joint correctives; removes the wrap; costs a one-time migration, ~2.4x triangles and a hard dependency on Daz Interactive Licenses. Recommendation: switch, after a performance spike.
 * [POC-to-product gap - the garment must become data](poc-to-product-gap.md) (draft) - What the three.js POC can be reused for and what must change: the garment's shape is hard-coded as analytic fields, and the professional tool needs it as an editable, serialisable panel model that flattens to patterns.
 
 # Data Model
