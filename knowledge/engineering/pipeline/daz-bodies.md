@@ -68,6 +68,20 @@ derived from Daz content licensed to the owner.
    egg head get no data term; the egg is then moved rigidly by the neck's mean displacement.
    The small Tikhonov term must act on D alone: putting it in the data block pulled every
    unmatched vertex towards the origin (the egg drifted 0.5 m before this was fixed).
+6b. **Leotard fit points** (`fit_points`, added 2026-10-20 after the owner saw leg openings
+   creeping onto the upper thigh of the fuller bodies): joints alone left the groin up to 16-17 mm
+   off (p90 tangential slide), so the leg line sat where MakeHuman's crease was, not on the Daz
+   body's. Now found on both bodies from their shape and pinned (`PIN_W` = 200; misses < 0.05 mm):
+   the crotch (lowest mid-plane torso point), the front hip crease (greatest concavity of the
+   front silhouette, on planes 10/20/30% across the thigh measured 4 cm below the crotch), the
+   fold under the seat (back silhouette, planes 15/30/45%), and the seat's most posterior point.
+   Planes are thigh-relative because the two rigs place the hip joint 6-15 mm apart. Survey
+   (2026-10-20): the smooth MakeHuman mannequin's creases fade beyond ~30% (front) / ~45% (back)
+   across the thigh, where the search hits its window edge, so points weaker than `MIN_CONCAVITY`
+   (7 /m) or on the window edge on either body are not pinned (petite: 13 of 15 pinned). The
+   points also join the thin-plate-spline warp. `daz-adult` and `daz-broad` now start from the
+   MakeHuman `young` body (the `adult` mannequin's seat fold is too faint to read). Result: leg
+   openings follow each Daz body's own crease (before/after captures in `app/captures/beforeafter-*`).
 7. **Landmarks** for the manifest come from the posed Daz joints (`neck1`, `l_upperarm`, …);
    `chest`/`waist` sit at the same fractions between pelvis and neck base as on the MakeHuman body.
 
