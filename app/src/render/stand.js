@@ -34,10 +34,11 @@ function calfBack(body) {
 	return new THREE.Vector3(x, y, z);
 }
 
-// capMaterial: given for the headless form, which gets the dress form's neck cap.
+// capMaterial: given for the headless form: the neck ends in a flat cap in the body's own finish,
+// with no wooden fitting (owner, 2026-10-20: the mannequin neck piece looked out of place).
 export function fullBodyStand(body, capMaterial = null) {
 	const g = new THREE.Group(), r = body.body.stature < 1.4 ? 0.175 : 0.203, t = 0.008;
-	if (capMaterial) neckCaps(body, capMaterial, g);
+	if (capMaterial) neckCaps(body, capMaterial, g, false);
 	const plate = cyl(r, r, t, glass, 96);
 	plate.position.y = -t / 2;
 	plate.renderOrder = 2; // after the opaque scene: it is see-through
@@ -85,8 +86,8 @@ export function dressFormStand(body, capMaterial) {
 }
 
 // Flat caps over every cut loop of the body's keep field, and on the highest (the neck) a turned
-// wooden disc and knob.
-function neckCaps(body, capMaterial, g) {
+// wooden disc and knob unless fitting is false.
+function neckCaps(body, capMaterial, g, fitting = true) {
 	const loops = body.cutLoops().map((l) => ({ loop: l, ...capGeometry(l) }));
 	loops.sort((a, b) => b.centre.y - a.centre.y);
 	for (const L of loops) {
@@ -96,7 +97,7 @@ function neckCaps(body, capMaterial, g) {
 	}
 	// Neck cap: the highest loop. A turned wooden disc a little wider than the neck, and a knob.
 	const neck = loops[0];
-	if (neck) {
+	if (neck && fitting) {
 		const rad = neck.loop.reduce((a, p) => a + Math.hypot(p.x - neck.centre.x, p.z - neck.centre.z), 0) / neck.loop.length;
 		const top = neck.loop.reduce((a, p) => Math.max(a, p.y), -9);
 		const disc = cyl(rad * 1.12, rad * 1.18, 0.022, wood, 48);

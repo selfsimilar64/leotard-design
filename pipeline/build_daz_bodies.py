@@ -373,7 +373,51 @@ def daz_body(spec, fig, morphs, verbose=True):
 	Cp = {k: (c - [0, ymin, 0]) * sc for k, c in Cp.items()}
 	S1, q1 = catmull_clark(P, Tg)
 	S2, q2 = catmull_clark(S1, q1)
-	return P, Cp, S2, triangles(q2)
+	arm = sum(w for j, w in weights.items() if any(j[2:].startswith(a) for a in ARM_JOINTS))
+	_, near = cKDTree(P).query(S2)
+	return P, Cp, S2, triangles(q2), arm[near] > 0.3
+
+
+ARM_JOINTS = ('upperarm', 'forearm', 'hand', 'thumb', 'index', 'mid', 'ring', 'pinky')
+TORSO_FRACS = (0.25, 0.5, 0.75, 1.0)
+
+
+def torso_anchors(P, T, arm):
+	"""Surface anchors that pin the torso's heights between the crotch and the natural waist, the
+	same way on every body: the crotch (lowest mid-plane point), the natural waist height (narrowest
+	torso, 12-45 cm above the crotch) and, at TORSO_FRACS of the crotch-to-waist height, the front
+	and back mid-line points and the side-seam point (outermost at mid-depth).
+	Why (2026-10-20): anchored on the rigs' hip joints, the MakeHuman hip region landed ~13 mm high
+	on Genesis 9 (crotch and waist heights agree to 4 mm on both bodies, the leg-opening apex did
+	not), so every leg opening on a Daz body climbed higher up the hip than designed.
+	arm: per-vertex mask of arm/hand vertices (left out: the hands hang at hip height)."""
+	S, _, tri, _ = surface_samples(P, T, vertex_normals(P, T), 0.002, ids=True)
+	S = S[~arm[T[tri]].any(1)]
+	H = S[:, 1].max()
+	mid = np.abs(S[:, 0]) < 0.003
+	m2 = mid & (S[:, 1] > 0.3 * H) & (S[:, 1] < 0.65 * H)
+	crotch = S[m2][np.argmin(S[m2, 1])]
+	cy = crotch[1]
+	slab = lambda y: np.abs(S[:, 1] - y) < 0.002
+	ys = np.arange(cy + 0.12, cy + 0.45, 0.004)
+	half = [S[slab(y) & (S[:, 0] > 0), 0].max() for y in ys]
+	wy = ys[int(np.argmin(half))]
+	out = {'crotch': crotch}
+	for f in TORSO_FRACS:
+		y = cy + f * (wy - cy)
+		m = slab(y)
+		md = S[m & mid]
+		out['front%.2f' % f] = md[np.argmax(md[:, 2])]
+		out['back%.2f' % f] = md[np.argmin(md[:, 2])]
+		# side seam: the outermost point at mid-depth (half-way between the front and back mid-line
+		# points), not the widest point. The widest point sits ~2 cm forward of mid-depth on the
+		# Daz hips but at mid-depth on MakeHuman; anchoring the two sheared the side front-to-back
+		# and put a bump where the front and back of a leg opening meet (owner, 2026-10-20).
+		zm = (out['front%.2f' % f][2] + out['back%.2f' % f][2]) / 2
+		side = S[m & (S[:, 0] > 0) & (np.abs(S[:, 2] - zm) < 0.003)]
+		out['side%.2f_l' % f] = side[np.argmax(side[:, 0])]
+		out['side%.2f_r' % f] = out['side%.2f_l' % f] * [-1, 1, 1]
+	return out
 
 
 def transfer(Q, src_S, T2, dst_S):
@@ -393,7 +437,7 @@ def transfer(Q, src_S, T2, dst_S):
 
 
 def build(spec, fig, morphs, mh):
-	P, Cp, S2, T2 = daz_body(spec, fig, morphs)
+	P, Cp, S2, T2, arm2 = daz_body(spec, fig, morphs)
 	src, T, pw, mh_lm = mh[spec['mh']]
 	Ld = daz_landmarks(Cp, P, mh_lm)
 	head, hand = pw[:, 5] / 255.0, pw[:, 6] / 255.0
@@ -403,7 +447,7 @@ def build(spec, fig, morphs, mh):
 		# bodies anew (even with crease points pinned) left the line kinked. Transferring through Daz's
 		# own topology keeps the young adult's fit and follows Daz's anatomy for the new shape.
 		via = next(b for b in BODIES if b['key'] == spec['via'])
-		_, _, Sv, _ = daz_body(via, fig, morphs, verbose=False)
+		_, _, Sv, _, _ = daz_body(via, fig, morphs, verbose=False)
 		Qv = np.fromfile(os.path.join(OUT, via['key'] + '.bin'), dtype='<f4').reshape(-1, 3).astype(np.float64)
 		Q = transfer(Qv, Sv, T2, S2)
 		# Hands: the mannequin's smoothed hands are not on the Daz hand surface, and point-by-point
@@ -419,12 +463,19 @@ def build(spec, fig, morphs, mh):
 		print('   transferred from', via['key'])
 	else:
 		# --- wrap the MakeHuman mannequin of the same label onto it -----------------------------------
-		names = ['neck_base', 'shoulder_l', 'elbow_l', 'wrist_l', 'hip_l', 'knee_l', 'ankle_l', 'head_top']
+		# Joints place the limbs; the torso between crotch and waist is placed by surface anchors
+		# (torso_anchors) instead of the hip joint, which the two rigs put in different places.
+		names = ['neck_base', 'shoulder_l', 'elbow_l', 'wrist_l', 'knee_l', 'ankle_l', 'head_top']
 		A, B = [], []
 		for k in names:
 			a, b = np.array(mh_lm[k]), np.array(Ld[k])
 			A.append(a); B.append(b)
 			if k.endswith('_l'): A.append(a * [-1, 1, 1]); B.append(b * [-1, 1, 1])
+		ta = torso_anchors(src, T, (pw[:, 1].astype(int) + pw[:, 2] + pw[:, 6]) / 255 > 0.3)
+		tb = torso_anchors(S2, T2, arm2)
+		for k in ta: A.append(ta[k]); B.append(tb[k])
+		print('   torso anchors: waist %+.0f mm above the crotch on the source, %+.0f on Daz' % (
+			(ta['front1.00'][1] - ta['crotch'][1]) * 1000, (tb['front1.00'][1] - tb['crotch'][1]) * 1000))
 		A, B = np.array(A), np.array(B)
 		tps = RBFInterpolator(A, B - A, kernel='thin_plate_spline', smoothing=1e-4, degree=1)
 		Q = src + tps(src)

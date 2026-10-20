@@ -68,6 +68,19 @@ derived from Daz content licensed to the owner.
    egg head get no data term; the egg is then moved rigidly by the neck's mean displacement.
    The small Tikhonov term must act on D alone: putting it in the data block pulled every
    unmatched vertex towards the origin (the egg drifted 0.5 m before this was fixed).
+6a. **Torso anchors** (`torso_anchors`, 2026-10-20): the thin-plate spline no longer uses the
+   hip joint. Joints place the limbs; the torso between crotch and natural waist (narrowest
+   torso, 12-45 cm above the crotch) is placed by surface anchors found the same way on both
+   bodies: the crotch, and at 25/50/75/100% of the crotch-to-waist height the front and back
+   mid-line points and the **side-seam point** (outermost point at mid-depth, half-way between the
+   front and back mid-line points). The widest point was tried first: on the Daz hips it sits
+   ~2 cm forward of mid-depth (on MakeHuman at mid-depth), which sheared the side front-to-back
+   and left a bump where the front and back of a leg opening meet at the hip (owner, 2026-10-20);
+   the side-seam definition removed it (before/after: `app/captures/hipsheet-*`). Why: with the hip joint as anchor the MakeHuman
+   hip region landed ~13 mm high on Genesis 9 (crotch and waist heights agreed to 4 mm, yet the
+   leg-opening apex sat 141-145 mm above the crotch on every Daz body vs 128 on MakeHuman young;
+   owner: "too high cut at the hip"). After: Daz young 125, adult 125, broad 127, petite 133
+   (its waist sits 16 mm higher relative to the crotch than its MakeHuman teen source's).
 6b. **Transfer through Daz topology** (`transfer()`, recipes with `via`): only the reference fits
    are wrapped (`daz-young` from MakeHuman `young`, `daz-petite` from `teen`); `daz-adult` and
    `daz-broad` take the young adult's wrapped mesh and carry it over: each vertex stored as
@@ -98,8 +111,9 @@ differ by up to ~2 cm (the mannequin's smoothed feet against Daz toes).
   `young`, so region fields and design anchors are unchanged.
 - New body form **`headless`** (`body.set { form: 'headless' }`, Inspector "Full body, no head"):
   the full body cut just under the egg head's opening (`keepHeadless`, swapped into the shared
-  keep array by `setCut`), capped with the dress form's neck cap. Added at the owner's request: the
-  egg head distracted from the body proportions.[^owner]
+  keep array by `setCut`), closed by a flat cap in the body's own finish. Added at the owner's
+  request: the egg head distracted from the body proportions; the dress form's wooden disc and
+  knob were dropped from this form too ("looks like part of a mannequin").[^owner]
 
 # Licensing (summary, 2026-10-20)
 
