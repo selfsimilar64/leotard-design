@@ -68,19 +68,23 @@ derived from Daz content licensed to the owner.
    egg head get no data term; the egg is then moved rigidly by the neck's mean displacement.
    The small Tikhonov term must act on D alone: putting it in the data block pulled every
    unmatched vertex towards the origin (the egg drifted 0.5 m before this was fixed).
-6a. **Torso anchors** (`torso_anchors`, 2026-10-20): the thin-plate spline no longer uses the
-   hip joint. Joints place the limbs; the torso between crotch and natural waist (narrowest
-   torso, 12-45 cm above the crotch) is placed by surface anchors found the same way on both
-   bodies: the crotch, and at 25/50/75/100% of the crotch-to-waist height the front and back
-   mid-line points and the **side-seam point** (outermost point at mid-depth, half-way between the
-   front and back mid-line points). The widest point was tried first: on the Daz hips it sits
-   ~2 cm forward of mid-depth (on MakeHuman at mid-depth), which sheared the side front-to-back
-   and left a bump where the front and back of a leg opening meet at the hip (owner, 2026-10-20);
-   the side-seam definition removed it (before/after: `app/captures/hipsheet-*`). Why: with the hip joint as anchor the MakeHuman
-   hip region landed ~13 mm high on Genesis 9 (crotch and waist heights agreed to 4 mm, yet the
-   leg-opening apex sat 141-145 mm above the crotch on every Daz body vs 128 on MakeHuman young;
-   owner: "too high cut at the hip"). After: Daz young 125, adult 125, broad 127, petite 133
-   (its waist sits 16 mm higher relative to the crotch than its MakeHuman teen source's).
+6a. **Two fits, blended** (2026-10-20). The *groin fit* is the wrap above (thin-plate spline on
+   the joints, hip joint included): its crotch and inner leg line are the ones the owner approved.
+   Alone it puts the leg opening's apex at the hip ~13 mm high (141-145 mm above the crotch on every
+   Daz body vs 128 on MakeHuman young: the two rigs place the hip joint differently; owner: "too high
+   cut at the hip"). The *hip fit* replaces the hip joint with surface anchors (`torso_anchors`):
+   the crotch, the natural waist (narrowest torso, 12-45 cm above the crotch) and, at 25/50/75/100%
+   of the crotch-to-waist height, the front and back mid-line points and the **side-seam point**
+   (outermost point at mid-depth). The widest point was tried first: on the Daz hips it sits ~2 cm
+   forward of mid-depth (on MakeHuman at mid-depth), which sheared the side and left a bump where
+   the front and back of a leg opening meet at the hip (owner); the side-seam definition removed it.
+   Alone, the hip fit widened the crotch and flattened the front of the leg line (owner: "the groin
+   looks wrong again"). So both fits are computed and blended by distance from the mid-line on the
+   source body (`BLEND_X` = 3-15 cm, smoothstep; a 6-13 cm blend left an S-wave in the front leg
+   line), then settled back onto the Daz surface (two short ICP rounds). Result: apex 126-129 mm on
+   young/adult/broad (petite 142), crotch as approved. **Trade-off, owner to choose (2026-10-20):**
+   with the apex lower, the front diagonal from crotch to hip is gentler than the approved version's;
+   the line now follows the design as drawn on MakeHuman.
 6b. **Transfer through Daz topology** (`transfer()`, recipes with `via`): only the reference fits
    are wrapped (`daz-young` from MakeHuman `young`, `daz-petite` from `teen`); `daz-adult` and
    `daz-broad` take the young adult's wrapped mesh and carry it over: each vertex stored as
@@ -109,11 +113,22 @@ differ by up to ~2 cm (the mannequin's smoothed feet against Daz toes).
   when present (same vertex count required) and appends its bodies; `bodyKeys` feeds the
   `body.set` size check (`app/src/doc/commands-core.js`). The reference body stays MakeHuman
   `young`, so region fields and design anchors are unchanged.
-- New body form **`headless`** (`body.set { form: 'headless' }`, Inspector "Full body, no head"):
-  the full body cut just under the egg head's opening (`keepHeadless`, swapped into the shared
-  keep array by `setCut`), closed by a flat cap in the body's own finish. Added at the owner's
-  request: the egg head distracted from the body proportions; the dress form's wooden disc and
-  knob were dropped from this form too ("looks like part of a mannequin").[^owner]
+- New body form **`headless`** (`body.set { form: 'headless' }`, Inspector "Full body, no head"),
+  at the owner's request (the egg head distracted from the body proportions). The mannequin mesh
+  has no neck above the egg's opening (throat ~3 cm above the neck base at the front, base of the
+  skull at the back), so the egg's 4,402 vertices are reused as the rest of the neck:
+  - **Daz bodies:** `neck_positions` in the build script lays them onto the Daz body's real neck,
+    from the opening up to a level cut just under the chin (`chin_height`: where the front
+    mid-line profile jumps forward), closed flat; written as `<key>.neck.bin` with `neckCut` in
+    the manifest. In the app, `neckExtension` swaps them in and sets the keep field to
+    `neckCut - y`, so the back of the neck (higher than the chin) is trimmed to the same plane.
+    Owner: "take the full Daz body with the head and cut it flat at the top of the neck".
+  - **MakeHuman bodies:** a tube continuing the opening's outline up to a near-level line under the
+    jaw, flat top (`neckExtension`, procedural; the egg is parameterised along its own tilted axis).
+  - Tried and dropped: a flat cut at the opening's lowest point (a 2-3 cm stub); a wooden disc and
+    knob on the cap ("looks like part of a mannequin"); straightening the top of the neck into a
+    cylinder (the section at the neck-base joint still includes the shoulders on Genesis 9, so the
+    neck came out shoulder-wide).[^owner]
 
 # Licensing (summary, 2026-10-20)
 

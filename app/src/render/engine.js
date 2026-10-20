@@ -271,10 +271,10 @@ export class Engine {
 		const shape = b.size + '|' + b.form, reframe = this.bodyKey !== null && this.shapeKey !== shape;
 		this.bodyKey = key; this.shapeKey = shape;
 		const t = performance.now(), body = this.body, scene = this.viewport.world;
-		if (body.key !== b.size || body.poseKey !== JSON.stringify(b.pose ?? 'a-pose') || !body.key) body.setBody(b.size, b.pose);
-		this.setWrinklePose(b.pose);
 		const torso = b.form === 'torso', headless = b.form === 'headless';
-		body.setCut(b.form);
+		body.setCut(b.form); // before setBody: the headless form reshapes the egg into a neck
+		if (body.key !== b.size || body.poseKey !== JSON.stringify(b.pose ?? 'a-pose') || !body.key || body.headlessKey !== body.headless) body.setBody(b.size, b.pose);
+		this.setWrinklePose(b.pose);
 		body.clip = torso || headless;
 		const fl = body.formLines;
 		for (const m of this.fabricMaterials) {
@@ -282,7 +282,7 @@ export class Engine {
 			m.userData.u.uTapeY.value.set(fl.waist, fl.bust, fl.hip, fl.neck);
 		}
 		if (this.stand) { scene.remove(this.stand); this.stand.traverse((o) => o.geometry?.dispose()); }
-		this.stand = torso ? dressFormStand(body, this.capMaterial) : fullBodyStand(body, headless ? this.capMaterial : null);
+		this.stand = torso ? dressFormStand(body, this.capMaterial) : fullBodyStand(body);
 		scene.add(this.stand);
 		const s = torso ? 0.9 : 0.75, blob = this.viewport.blob;
 		blob.scale.set(s, s, 1); blob.position.z = torso ? body.crotch.z : 0;

@@ -380,6 +380,7 @@ def daz_body(spec, fig, morphs, verbose=True):
 
 ARM_JOINTS = ('upperarm', 'forearm', 'hand', 'thumb', 'index', 'mid', 'ring', 'pinky')
 TORSO_FRACS = (0.25, 0.5, 0.75, 1.0)
+BLEND_X = (0.03, 0.15)  # m from the mid-line (1.61 m body): groin fit inside, hip fit outside (0.06-0.13 left an S-wave in the front leg line)
 
 
 def torso_anchors(P, T, arm):
@@ -390,7 +391,8 @@ def torso_anchors(P, T, arm):
 	Why (2026-10-20): anchored on the rigs' hip joints, the MakeHuman hip region landed ~13 mm high
 	on Genesis 9 (crotch and waist heights agree to 4 mm on both bodies, the leg-opening apex did
 	not), so every leg opening on a Daz body climbed higher up the hip than designed.
-	arm: per-vertex mask of arm/hand vertices (left out: the hands hang at hip height)."""
+	arm: per-vertex mask of arm/hand vertices (left out: the hands hang at hip height).
+	Used by the hip fit only (see build: blended with the joint-anchored groin fit, BLEND_X)."""
 	S, _, tri, _ = surface_samples(P, T, vertex_normals(P, T), 0.002, ids=True)
 	S = S[~arm[T[tri]].any(1)]
 	H = S[:, 1].max()
@@ -436,6 +438,120 @@ def transfer(Q, src_S, T2, dst_S):
 	return pd + d[:, None] * nd
 
 
+# --- Headless neck --------------------------------------------------------------------------------
+# The mannequin mesh has no neck above the opening its egg head sits on (throat ~3 cm above the
+# neck base at the front, base of the skull at the back). For the app's headless form the egg's
+# vertices are laid onto the Daz body's real neck instead, from that opening up to a flat cut just
+# under the chin (owner, 2026-10-20: "take the full Daz body with the head and cut it flat at the top
+# of the neck"). Written per body as <key>.neck.bin: Float32 xyz of the egg vertices (head part
+# weight > 0.5, ascending index order); the app swaps them in when the body is shown headless.
+
+def egg_frame(ref, egg):
+	"""Per egg vertex: height t along the egg's long axis (0 bottom, 1 top) and azimuth around it
+	(0 = front, positive towards +x). Mirrors buildNeckParams in app/src/body/mannequin.js."""
+	E = ref[egg]
+	c = E.mean(0)
+	d = E - c
+	w, v = np.linalg.eigh(d.T @ d)
+	ax = v[:, -1] * (1 if v[1, -1] > 0 else -1)
+	e1 = np.array([0, -ax[2], ax[1]]); e1 /= np.linalg.norm(e1)
+	e2 = np.cross(ax, e1)
+	h = d @ ax
+	t = (h - h.min()) / (h.max() - h.min())
+	az = np.arctan2(d @ e2, d @ e1)
+	return t, az
+
+
+def chin_height(S, lo, hi):
+	"""Underside of the chin on the front mid-line: where the front profile jumps forward fastest
+	going up (between the neck base and a little above the head joint)."""
+	m = (np.abs(S[:, 0]) < 0.003) & (S[:, 1] > lo) & (S[:, 1] < hi)
+	ys = np.arange(lo, hi, 0.002)
+	z = np.full(len(ys), np.nan)
+	b = ((S[m, 1] - lo) / 0.002).astype(int)
+	for k, zz in zip(b, S[m, 2]):
+		if k < len(ys) and (np.isnan(z[k]) or zz > z[k]): z[k] = zz
+	ok = ~np.isnan(z)
+	z = np.interp(ys, ys[ok], z[ok])
+	z = np.convolve(np.pad(z, 3, mode='edge'), np.ones(7) / 7, mode='valid')
+	dz = np.gradient(z)
+	return ys[int(np.argmax(dz))]
+
+
+def neck_positions(Q, T, pw, ref, S2, T2, Cp, stature):
+	"""Egg vertices laid onto the Daz neck: a tube from the opening's outline up to a flat cut under
+	the chin, following the Daz surface, closed by a flat top (see the section comment)."""
+	head = pw[:, 5] / 255.0
+	egg = np.where(head > 0.5)[0]
+	t, az = egg_frame(ref, egg)
+	# the opening: boundary vertices of the body (not the egg) above the neck base
+	e = np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1)
+	u, c = np.unique(e, axis=0, return_counts=True)
+	hole = np.unique(u[c == 1].ravel())
+	hole = hole[(head[hole] < 0.5) & (Q[hole, 1] > Cp['neck1'][1])]
+	hc = Q[hole].mean(0)
+	ha = np.arctan2(Q[hole, 0] - hc[0], Q[hole, 2] - hc[2])
+	o = np.argsort(ha); ha, hp = ha[o], Q[hole][o]
+	ha2 = np.concatenate([ha - 2 * np.pi, ha, ha + 2 * np.pi]); hp2 = np.concatenate([hp, hp, hp])
+	outline = lambda a: np.stack([np.interp(a, ha2, hp2[:, k]) for k in range(3)], 1)
+	# the cut: a level plane just under the chin
+	Ss, _ = surface_samples(S2, T2, vertex_normals(S2, T2), 0.0015)
+	y_cut = chin_height(Ss, Cp['neck1'][1], Cp['head'][1] + 0.08 * stature / 1.61) - 0.004 * stature / 1.61
+	# the Daz neck's surface by height and angle: innermost sample per (2 mm, 4 deg) cell around the
+	# neck's axis (outer samples would be the jaw, ears or shoulders)
+	lo_y = hp[:, 1].min() - 0.02
+	sl = (Ss[:, 1] > lo_y) & (Ss[:, 1] < y_cut + 0.004)
+	N = Ss[sl]
+	nc = np.array([hc[0], hc[2]])
+	ang = np.arctan2(N[:, 0] - nc[0], N[:, 2] - nc[1])
+	rad = np.hypot(N[:, 0] - nc[0], N[:, 2] - nc[1])
+	yb = ((N[:, 1] - lo_y) / 0.002).astype(int); ab = ((ang + np.pi) / np.radians(4)).astype(int) % 90
+	ny = yb.max() + 1
+	R = np.full((ny, 90), np.inf)
+	np.minimum.at(R, (yb, ab), rad)
+	for k in range(ny):  # fill empty cells around the ring
+		row = R[k]
+		if np.isinf(row).all(): R[k] = R[k - 1] if k else 0.05
+		else:
+			good = ~np.isinf(row); idx = np.arange(90)
+			R[k] = np.interp(idx, np.concatenate([idx[good] - 90, idx[good], idx[good] + 90]), np.tile(row[good], 3))
+	def surf(y, a):
+		k = np.clip(((y - lo_y) / 0.002).astype(int), 0, ny - 1)
+		j = ((a + np.pi) / np.radians(4))
+		j0 = np.floor(j).astype(int) % 90; j1 = (j0 + 1) % 90; f = j - np.floor(j)
+		r = R[k, j0] * (1 - f) + R[k, j1] * f
+		return np.stack([nc[0] + np.sin(a) * r, y, nc[1] + np.cos(a) * r], 1)
+	base = outline(az)
+	out = np.zeros((len(egg), 3))
+	low = t < 0.15  # below the opening, just inside the neck (hidden)
+	uu = t[low] / 0.15
+	out[low] = hc + (base[low] - hc) * (0.985 * np.minimum(1, uu * 1.6))[:, None]
+	out[low, 1] = base[low, 1] - 0.012 * (1 - uu)
+	tube = (t >= 0.15) & (t < 0.85)
+	uu = (t[tube] - 0.15) / 0.7
+	yy = base[tube, 1] + (y_cut - base[tube, 1]) * uu
+	out[tube] = surf(yy, az[tube])
+	# keep the first part of the tube on the opening itself so the two meet exactly
+	f0 = np.clip(uu / 0.08, 0, 1)[:, None]
+	out[tube] = base[tube] * (1 - f0) + out[tube] * f0
+	# towards the back the opening is above the cut (base of the skull): there the body's own neck is
+	# trimmed by the cut, and the tube is folded flat just inside the neck at the cut (hidden)
+	above = base[tube, 1] > y_cut
+	if above.any():
+		rimb = surf(np.full(above.sum(), y_cut - 0.002), az[tube][above])
+		ctr = np.array([nc[0], 0, nc[1]])
+		rimb = ctr + (rimb - ctr) * [0.98, 1, 0.98]; rimb[:, 1] = y_cut - 0.002
+		tt = out[tube]; tt[above] = rimb; out[tube] = tt
+	top = t >= 0.85
+	uu = (t[top] - 0.85) / 0.15
+	rim = surf(np.full(top.sum(), y_cut), az[top])
+	cxz = rim.mean(0)
+	out[top] = cxz + (rim - cxz) * (1 - uu)[:, None]
+	out[top, 1] = y_cut - 0.0005  # just inside the cut (the app discards everything above it)
+	print('   headless neck: cut %.0f mm above the throat (under the chin), %d vertices' % ((y_cut - hp[:, 1].min()) * 1000, len(egg)))
+	return out.astype(np.float32), float(y_cut)
+
+
 def build(spec, fig, morphs, mh):
 	P, Cp, S2, T2, arm2 = daz_body(spec, fig, morphs)
 	src, T, pw, mh_lm = mh[spec['mh']]
@@ -463,24 +579,36 @@ def build(spec, fig, morphs, mh):
 		print('   transferred from', via['key'])
 	else:
 		# --- wrap the MakeHuman mannequin of the same label onto it -----------------------------------
-		# Joints place the limbs; the torso between crotch and waist is placed by surface anchors
-		# (torso_anchors) instead of the hip joint, which the two rigs put in different places.
-		names = ['neck_base', 'shoulder_l', 'elbow_l', 'wrist_l', 'knee_l', 'ankle_l', 'head_top']
-		A, B = [], []
-		for k in names:
-			a, b = np.array(mh_lm[k]), np.array(Ld[k])
-			A.append(a); B.append(b)
-			if k.endswith('_l'): A.append(a * [-1, 1, 1]); B.append(b * [-1, 1, 1])
+		# Two fits, blended across the body (owner, 2026-10-20). The groin fit anchors on the joints
+		# (including the hip joint): its crotch and the inner leg line are the ones the owner approved.
+		# The hip fit replaces the hip joint with surface anchors (torso_anchors): it puts the leg
+		# opening's apex at the hip ~1.5 cm lower, as on MakeHuman, but alone it widened the crotch and
+		# flattened the front of the leg line. The groin fit is used near the mid-line, the hip fit at
+		# the sides (BLEND_X, by distance from the mid-line on the source body), then the blend is
+		# settled back onto the Daz surface.
+		data = (head < 0.3) & (hand < 0.15)
+		def joints(with_hip):
+			A, B = [], []
+			for k in ['neck_base', 'shoulder_l', 'elbow_l', 'wrist_l'] + (['hip_l'] if with_hip else []) + ['knee_l', 'ankle_l', 'head_top']:
+				a, b = np.array(mh_lm[k]), np.array(Ld[k])
+				A.append(a); B.append(b)
+				if k.endswith('_l'): A.append(a * [-1, 1, 1]); B.append(b * [-1, 1, 1])
+			return A, B
+		def fit(A, B):
+			tps = RBFInterpolator(np.array(A), np.array(B) - np.array(A), kernel='thin_plate_spline', smoothing=1e-4, degree=1)
+			return wrap(src + tps(src), T, data, S2, T2)
+		A, B = joints(True)
+		Qg = fit(A, B)
+		A, B = joints(False)
 		ta = torso_anchors(src, T, (pw[:, 1].astype(int) + pw[:, 2] + pw[:, 6]) / 255 > 0.3)
 		tb = torso_anchors(S2, T2, arm2)
 		for k in ta: A.append(ta[k]); B.append(tb[k])
-		print('   torso anchors: waist %+.0f mm above the crotch on the source, %+.0f on Daz' % (
-			(ta['front1.00'][1] - ta['crotch'][1]) * 1000, (tb['front1.00'][1] - tb['crotch'][1]) * 1000))
-		A, B = np.array(A), np.array(B)
-		tps = RBFInterpolator(A, B - A, kernel='thin_plate_spline', smoothing=1e-4, degree=1)
-		Q = src + tps(src)
-		data = (head < 0.3) & (hand < 0.15)
-		Q = wrap(Q, T, data, S2, T2)
+		Qh = fit(A, B)
+		sc = spec['stature'] / 1.61
+		x = np.abs(src[:, 0]) / sc
+		w = np.clip((x - BLEND_X[0]) / (BLEND_X[1] - BLEND_X[0]), 0, 1); w = (w * w * (3 - 2 * w))[:, None]
+		Q = Qg * (1 - w) + Qh * w
+		Q = wrap(Q, T, data, S2, T2, rounds=((0.01, 0.12), (0.006, 0.06)))
 	# Egg head: the source egg moved as one piece by the neck's mean displacement (warping it with
 	# the body tilted it), blended in over the neck by the head weight.
 	neck = (head > 0.05) & (head < 0.5)
@@ -488,7 +616,9 @@ def build(spec, fig, morphs, mh):
 	k = np.clip((head - 0.3) / 0.4, 0, 1)[:, None]; k = k * k * (3 - 2 * k)
 	Q = Q * (1 - k) + (src + t) * k
 	Ld['head_top'] = np.array([0, Q[:, 1].max(), Ld['head_top'][2]])
-	return Q.astype(np.float32), {k: [round(float(c), 5) for c in v] for k, v in Ld.items()}
+	ref = mh['young'][0]
+	neck, cut = neck_positions(Q, T, pw, ref, S2, T2, Cp, spec['stature'])
+	return Q.astype(np.float32), {k: [round(float(c), 5) for c in v] for k, v in Ld.items()}, neck, cut
 
 
 def main():
@@ -515,10 +645,11 @@ def main():
 	for spec in BODIES:
 		if only and spec['key'] not in only: continue
 		print('BUILD', spec['key'], flush=True)
-		Q, lm = build(spec, fig, morphs, mh)
+		Q, lm, neck, cut = build(spec, fig, morphs, mh)
 		Q.tofile(os.path.join(OUT, spec['key'] + '.bin'))
+		neck.tofile(os.path.join(OUT, spec['key'] + '.neck.bin'))
 		out['bodies'].append({'key': spec['key'], 'label': spec['label'], 'years': spec['years'],
-			'stature': round(float(Q[:, 1].max() - Q[:, 1].min()), 4), 'file': spec['key'] + '.bin', 'landmarks': lm})
+			'stature': round(float(Q[:, 1].max() - Q[:, 1].min()), 4), 'file': spec['key'] + '.bin', 'neck': spec['key'] + '.neck.bin', 'neckCut': round(cut, 5), 'landmarks': lm})
 	order = [b['key'] for b in BODIES]
 	out['bodies'].sort(key=lambda b: order.index(b['key']))
 	json.dump(out, open(mp, 'w'), indent=1)

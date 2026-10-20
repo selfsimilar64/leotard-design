@@ -49,10 +49,11 @@ export async function loadMannequins(onProgress, get = fetchFile) {
 	let extra = null;
 	try { extra = await get(EXTRA + 'manifest.json', 'json'); } catch { /* no extra bodies */ }
 	if (extra?.vertices !== manifest.vertices) extra = null;
-	const list = [...manifest.bodies, ...(extra?.bodies ?? []).map((b) => ({ ...b, file: EXTRA + b.file }))];
+	const list = [...manifest.bodies, ...(extra?.bodies ?? []).map((b) => ({ ...b, file: EXTRA + b.file, neck: b.neck && EXTRA + b.neck }))];
 	const bodies = {};
 	await Promise.all(list.map(async (b) => {
 		bodies[b.key] = { ...b, pos: new Float32Array(await get(b.file, 'arrayBuffer')) };
+		if (b.neck) bodies[b.key].neckPos = new Float32Array(await get(b.neck, 'arrayBuffer'));
 		onProgress?.(b.key);
 	}));
 	bodyKeys.splice(0, bodyKeys.length, ...list.map((b) => b.key));
@@ -96,6 +97,7 @@ class Mannequin {
 		this.refLm = bodies[REF].landmarks;
 		this.buildRefFields();
 		this.buildFrontRaster();
+		this.buildNeckParams();
 
 		const g = this.geometry = new THREE.BufferGeometry();
 		g.setIndex(new THREE.BufferAttribute(idx, 1));
@@ -142,24 +144,10 @@ class Mannequin {
 		};
 
 		const crotchY = this.crotchY = this.refCrotch();
-		// Headless cut: just under the open edge the egg head sits on (its lowest point, the throat),
-		// so mock necks and halter straps keep their neck.
-		const edgeUse = new Map();
-		for (let t = 0; t < this.idx.length; t += 3) for (let e = 0; e < 3; e++) {
-			const a = this.idx[t + e], b = this.idx[t + (e + 1) % 3], k = a < b ? a * N + b : b * N + a;
-			edgeUse.set(k, (edgeUse.get(k) ?? 0) + 1);
-		}
-		let holeY = L.head_base[1];
-		for (const [k, c] of edgeUse) {
-			if (c !== 1) continue;
-			const a = Math.floor(k / N);
-			if (this.wHead[a] < 0.5 && R[a * 3 + 1] > L.neck_base[1]) holeY = min(holeY, R[a * 3 + 1]);
-		}
-		const headlessY = holeY - 0.006;
 		this.armT = new Float32Array(N);
 		this.armF = new Float32Array(N);
 		this.keep = new Float32Array(N);
-		this.keepHeadless = new Float32Array(N); // the neck cut alone (form 'headless')
+		this.keepHeadless = new Float32Array(N).fill(1); // form 'headless': nothing cut (see neckExtension)
 		this.form = new Float32Array(N * 2);
 		const p = [0, 0, 0];
 		for (let i = 0; i < N; i++) {
@@ -174,7 +162,6 @@ class Mannequin {
 			const fLeg = y - (crotchY - FORM.thigh);
 			const fArm = mix(1, (FORM.armT - t) * (L1 + L2), smoothstep(0.3, 0.6, this.wArm[i]));
 			this.keep[i] = this.wHead[i] > 0.5 ? -1 : min(fNeck, fLeg, fArm);
-			this.keepHeadless[i] = this.wHead[i] > 0.5 ? -1 : headlessY - y;
 
 			// Dress-form style tape fields: x = side-seam distance (z from the mid-plane), y = princess
 			// line distance (|x| from a line through mid-shoulder and the bust point, waisted below).
@@ -258,6 +245,8 @@ class Mannequin {
 			for (let i = 0; i < N; i++) if (abs(P[i * 3]) < 0.03 && abs(P[i * 3 + 1] - L.waist[1]) < 0.04 && this.wArm[i] < 0.1) frontZ = max(frontZ, P[i * 3 + 2]);
 			applyPose(P, this.parts, this.body, pose, { crotchY, waistY: L.waist[1], frontZ });
 		}
+		this.headlessKey = this.headless;
+		if (this.headless) this.neckExtension(P);
 		const Nn = this.aNrm.array;
 		vertexNormals(P, idx, Nn);
 
@@ -513,10 +502,123 @@ class Mannequin {
 		return loops;
 	}
 
+	// -------------------------------------------------------------------------------------------
+	// Headless form: the egg head is reshaped into the rest of the neck. The mannequin mesh has no
+	// neck above the opening the egg sits on, and that opening is steeply tilted (throat ~3 cm above
+	// the neck base at the front, base of the skull at the back), so cutting there left a stub
+	// (owner, 2026-10-20: "the neck should go up until it becomes the chin"). The egg is a separate
+	// closed surface of 4.4k vertices; here it becomes a tube continuing the opening's outline up to
+	// about chin height, closed by a flat top. Same mesh, so designs are unaffected.
+
+	// Per egg vertex: polar position t (0 = bottom, 1 = top) and azimuth around the egg's centre, on
+	// the reference body; and the opening's boundary vertices.
+	buildNeckParams() {
+		const N = this.vertices, R = this.ref, idx = this.idx, egg = [];
+		for (let i = 0; i < N; i++) if (this.wHead[i] > 0.5) egg.push(i);
+		let cx = 0, cy = 0, cz = 0;
+		for (const i of egg) { cx += R[i * 3]; cy += R[i * 3 + 1]; cz += R[i * 3 + 2]; }
+		cx /= egg.length; cy /= egg.length; cz /= egg.length;
+		// The egg was built as rings around its own long axis, tilted 14 deg (chin forward): measure
+		// height along that axis (0 = bottom, 1 = top) and azimuth around it, so a constant t is one
+		// ring of the egg (measured against plain vertical, the rings near the top scrambled).
+		const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+		for (const i of egg) {
+			const d = [R[i * 3] - cx, R[i * 3 + 1] - cy, R[i * 3 + 2] - cz];
+			for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) C[a][b] += d[a] * d[b];
+		}
+		let ax = [0, 1, 0]; // power iteration: the long axis, oriented upwards
+		for (let it = 0; it < 50; it++) {
+			const n = [0, 1, 2].map((a) => C[a][0] * ax[0] + C[a][1] * ax[1] + C[a][2] * ax[2]), l = Math.hypot(...n);
+			ax = n.map((v) => v / l);
+		}
+		if (ax[1] < 0) ax = ax.map((v) => -v);
+		const e1 = [0, -ax[2], ax[1]].map((v, _, a) => v / Math.hypot(...a)); // towards the front (+z), across the axis
+		const e2 = [ax[1] * e1[2] - ax[2] * e1[1], ax[2] * e1[0] - ax[0] * e1[2], ax[0] * e1[1] - ax[1] * e1[0]];
+		const h = egg.map((i) => (R[i * 3] - cx) * ax[0] + (R[i * 3 + 1] - cy) * ax[1] + (R[i * 3 + 2] - cz) * ax[2]);
+		const h0 = Math.min(...h), h1 = Math.max(...h);
+		const t = new Float32Array(egg.length), az = new Float32Array(egg.length);
+		egg.forEach((i, k) => {
+			const d = [R[i * 3] - cx, R[i * 3 + 1] - cy, R[i * 3 + 2] - cz];
+			t[k] = (h[k] - h0) / (h1 - h0);
+			// azimuth: 0 = front (e1 ~ +z), positive towards +x, matching atan2(x, z) of the outline
+			az[k] = Math.atan2(d[0] * e2[0] + d[1] * e2[1] + d[2] * e2[2], d[0] * e1[0] + d[1] * e1[1] + d[2] * e1[2]);
+		});
+		const use = new Map();
+		for (let f = 0; f < idx.length; f += 3) for (let e = 0; e < 3; e++) {
+			const a = idx[f + e], b = idx[f + (e + 1) % 3], k = a < b ? a * N + b : b * N + a;
+			use.set(k, (use.get(k) ?? 0) + 1);
+		}
+		const hole = new Set(), ny = this.refLm.neck_base[1];
+		for (const [k, c] of use) {
+			if (c !== 1) continue;
+			const a = Math.floor(k / N), b = k - a * N;
+			for (const v of [a, b]) if (this.wHead[v] < 0.5 && R[v * 3 + 1] > ny) hole.add(v);
+		}
+		this.neck = { egg: Uint32Array.from(egg), t, az, hole: Uint32Array.from(hole) };
+	}
+
+	// Reshape the egg (positions P of the current body, in place) into the neck extension.
+	// Daz bodies bring their own: the egg laid onto the Daz body's real neck up to a flat cut under
+	// the chin (pipeline/build_daz_bodies.py, neck_positions); everything above that cut height is
+	// discarded through the keep field. The MakeHuman bodies have no real neck to borrow: their egg
+	// becomes a tube continuing the opening's outline, as below.
+	neckExtension(P) {
+		const { egg, t, az, hole } = this.neck, s = this.body.stature / 1.61;
+		if (this.body.neckPos) {
+			const Q = this.body.neckPos, K = this.keepNeck ??= new Float32Array(this.vertices), cut = this.body.neckCut;
+			for (let k = 0; k < egg.length; k++) for (let c = 0; c < 3; c++) P[egg[k] * 3 + c] = Q[k * 3 + c];
+			for (let i = 0; i < this.vertices; i++) K[i] = cut - P[i * 3 + 1];
+			this.keepNeckBody = this.key;
+			this.keep.set(K);
+			this.geometry.getAttribute('aKeep').needsUpdate = true;
+			return;
+		}
+		// the opening's outline on this body, by angle around its centre (0 = front, +x = left)
+		let hx = 0, hz = 0;
+		for (const v of hole) { hx += P[v * 3]; hz += P[v * 3 + 2]; }
+		hx /= hole.length; hz /= hole.length;
+		const ring = [...hole].map((v) => ({ a: Math.atan2(P[v * 3] - hx, P[v * 3 + 2] - hz), x: P[v * 3], y: P[v * 3 + 1], z: P[v * 3 + 2] }));
+		ring.sort((p, q) => p.a - q.a);
+		const at = (a) => { // linear interpolation around the closed outline
+			let j = ring.findIndex((r) => r.a > a); if (j < 0) j = 0;
+			const r1 = ring[j], r0 = ring[(j - 1 + ring.length) % ring.length];
+			let span = r1.a - r0.a, d = a - r0.a;
+			if (span <= 0) span += 2 * Math.PI;
+			if (d < 0) d += 2 * Math.PI;
+			const w = clamp(d / span, 0, 1);
+			return [mix(r0.x, r1.x, w), mix(r0.y, r1.y, w), mix(r0.z, r1.z, w)];
+		};
+		// The opening's front (throat) is ~7 cm lower than its back (base of the skull). The top of the
+		// extension is a smooth, nearly level line under the jaw: NECK_FRONT above the opening at the
+		// front, NECK_BACK above it at the back, blended by cos(azimuth) around the sides.
+		let yf = -9, yb = -9; // opening height at the front and back
+		{ const f = at(0), b = at(Math.PI); yf = f[1]; yb = b[1]; }
+		const NECK_FRONT = 0.05 * s, NECK_BACK = 0.004 * s, TAPER = 0.04, DOME = 0.004 * s;
+		const topF = yf + NECK_FRONT, topB = yb + NECK_BACK;
+		for (let k = 0; k < egg.length; k++) {
+			const i = egg[k], [x, y, z] = at(az[k]), c = Math.cos(az[k]);
+			const top = Math.max((topF + topB) / 2 + (topF - topB) / 2 * c, y + 0.004 * s);
+			const tt = t[k];
+			let r, yy; // radial scale towards the outline's centre; height
+			if (tt < 0.15) { // below the opening, just inside the neck (hidden): continues the tube down
+				const u = tt / 0.15; r = 0.985 * Math.min(1, u * 1.6); yy = y - 0.012 * s * (1 - u);
+			} else if (tt < 0.85) { // the tube, from the opening up to the top line
+				const u = (tt - 0.15) / 0.7; r = 1 - TAPER * u; yy = mix(y, top, u);
+			} else { // flat top, slightly domed
+				const u = (tt - 0.85) / 0.15; r = (1 - TAPER) * (1 - u); yy = mix(top, (topF + topB) / 2, u) + DOME * Math.sin(u * Math.PI / 2); // one height at the centre: no crease
+			}
+			P[i * 3] = hx + (x - hx) * r;
+			P[i * 3 + 1] = yy;
+			P[i * 3 + 2] = hz + (z - hz) * r;
+		}
+	}
+
 	// Which cut the keep field describes: the dress form's (neck, upper arms, mid-thigh) or the neck
 	// alone (the full body without its head). Swapped in place: aKeep and the garment share the array.
 	setCut(form) {
-		this.keep.set(form === 'headless' ? this.keepHeadless : this.keepTorso);
+		this.headless = form === 'headless';
+		const neckCut = this.headless && this.body?.neckPos && this.keepNeckBody === this.key; // a Daz body's flat neck cut
+		this.keep.set(!this.headless ? this.keepTorso : neckCut ? this.keepNeck : this.keepHeadless);
 		this.geometry.getAttribute('aKeep').needsUpdate = true;
 	}
 

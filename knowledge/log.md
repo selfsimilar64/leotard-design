@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-20
+* **Update**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): groin and hip fits blended across the body (approved crotch, lower hip); headless form shows the real Daz neck up to a flat cut under the chin (MakeHuman bodies: a procedural neck tube).
 * **Update**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): torso anchors (crotch, natural waist, side seam, front/back mid-line) replace the hip joint in the wrap: leg openings no longer cut ~13 mm higher at the hip than on MakeHuman, and the bump where the front and back of the leg line meet is gone. Headless form: no wooden neck fitting.
 * **Update**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): crease pins tried and removed (kinked leg lines); the fuller Daz bodies now take the young adult's fit through Daz's shared topology, and the young adult and petite keep their plain wraps.
 * **Update**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): leotard fit points (crotch, hip crease, seat fold, seat) found on both bodies and pinned in the wrap, so leg openings follow each Daz body's own crease.
