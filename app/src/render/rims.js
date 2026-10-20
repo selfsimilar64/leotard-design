@@ -116,6 +116,8 @@ export class Rims {
 			}
 			for (const b of built) if (this.lift) for (const f of b.frames) f.p.addScaledVector(f.n, this.lift);
 			const mat = this.material(fin);
+			// cut like the body (dress form, headless neck): the engine sets body.clip before rebuilding us
+			mat.userData.u.uClip.value = this.man.clip ? 1 : 0;
 			const mesh = new THREE.Mesh(buildGeometry(built, prof), mat);
 			mesh.renderOrder = -4; // outermost layer: drawn first, so the fabric under it fails the depth test
 			mesh.frustumCulled = false;

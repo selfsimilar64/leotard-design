@@ -56,7 +56,7 @@ mirror? } }` (attached ends follow their line).
 - Design: `meta.set`, `body.set { size: child|teen|young|adult (+ daz-petite|daz-young|daz-adult|daz-broad when [built locally](/engineering/pipeline/daz-bodies.md)), form: full|headless|torso, finish, pose }`
   (finishes include athlete skin tones; poses in [poses and shading](/engineering/app/poses-and-shading.md)), `scene.set { rig, exposure, bloom, envRotation,
   rotateLights, glare: plain|star|star6|arena }` (rigs include white and grey seamless photo studios and a gym).
-- Garment: `block.apply { neck, back, sleeves, leg, armhole: set-in|raglan, fabric, colour, second }`;
+- Garment: `block.apply { neck, back, sleeves, leg: standard|high|competition, armhole: set-in|raglan, fabric, colour, second }` (leg-line peak at the side, above the crotch on the reference body: standard 12.8 cm, high 16 cm, competition 20 cm = about 2 cm under the hip bone);
   `curve.add { points, role: seam|edge|print|guide|strap-path|trim-path, closed, mirror, shape, layer }`;
   `curve.set`, `curve.points`, `curve.movePoint { id, i, to }`, `curve.insertPoint`,
   `curve.removePoint`, `curve.setKind`, `curve.remove`.

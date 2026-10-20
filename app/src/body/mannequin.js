@@ -559,15 +559,16 @@ class Mannequin {
 
 	// Reshape the egg (positions P of the current body, in place) into the neck extension.
 	// Daz bodies bring their own: the egg laid onto the Daz body's real neck up to a flat cut under
-	// the chin (pipeline/build_daz_bodies.py, neck_positions); everything above that cut height is
+	// the chin at the front and the base of the skull at the back (pipeline/build_daz_bodies.py,
+	// neck_positions; the cut is the plane y = a + b z, neckPlane [a, b]); everything above it is
 	// discarded through the keep field. The MakeHuman bodies have no real neck to borrow: their egg
 	// becomes a tube continuing the opening's outline, as below.
 	neckExtension(P) {
 		const { egg, t, az, hole } = this.neck, s = this.body.stature / 1.61;
 		if (this.body.neckPos) {
-			const Q = this.body.neckPos, K = this.keepNeck ??= new Float32Array(this.vertices), cut = this.body.neckCut;
+			const Q = this.body.neckPos, K = this.keepNeck ??= new Float32Array(this.vertices), [a, b] = this.body.neckPlane;
 			for (let k = 0; k < egg.length; k++) for (let c = 0; c < 3; c++) P[egg[k] * 3 + c] = Q[k * 3 + c];
-			for (let i = 0; i < this.vertices; i++) K[i] = cut - P[i * 3 + 1];
+			for (let i = 0; i < this.vertices; i++) K[i] = a + b * P[i * 3 + 2] - P[i * 3 + 1];
 			this.keepNeckBody = this.key;
 			this.keep.set(K);
 			this.geometry.getAttribute('aKeep').needsUpdate = true;

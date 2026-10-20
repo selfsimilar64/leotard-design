@@ -441,10 +441,13 @@ def transfer(Q, src_S, T2, dst_S):
 # --- Headless neck --------------------------------------------------------------------------------
 # The mannequin mesh has no neck above the opening its egg head sits on (throat ~3 cm above the
 # neck base at the front, base of the skull at the back). For the app's headless form the egg's
-# vertices are laid onto the Daz body's real neck instead, from that opening up to a flat cut just
-# under the chin (owner, 2026-10-20: "take the full Daz body with the head and cut it flat at the top
-# of the neck"). Written per body as <key>.neck.bin: Float32 xyz of the egg vertices (head part
-# weight > 0.5, ascending index order); the app swaps them in when the body is shown headless.
+# vertices are laid onto the Daz body's real neck instead, from that opening up to a flat cut where
+# the neck meets the head (owner, 2026-10-20: "take the full Daz body with the head and cut it flat
+# at the top of the neck"). The cut plane is tilted: just under the chin at the front, at the base
+# of the skull at the back (a level cut at chin height took ~4 cm of real neck off the back, and a
+# mock-neck collar then stood above it). Written per body as <key>.neck.bin: Float32 xyz of the egg
+# vertices (head part weight > 0.5, ascending index order), plus neckPlane [a, b] in the manifest
+# (the cut is y = a + b z, level from side to side); the app swaps them in when shown headless.
 
 def egg_frame(ref, egg):
 	"""Per egg vertex: height t along the egg's long axis (0 bottom, 1 top) and azimuth around it
@@ -478,9 +481,35 @@ def chin_height(S, lo, hi):
 	return ys[int(np.argmax(dz))]
 
 
+def skull_base_height(S, lo, hi, z_behind):
+	"""Where the back of the neck meets the head on the back mid-line: the back profile's most
+	forward point (the nape's hollow) before it turns back out over the skull. Returns (y, z).
+	z_behind: only samples behind this depth count (low in the window the mid-line slab otherwise
+	holds only the underside of the chin, which read as the back profile)."""
+	m = (np.abs(S[:, 0]) < 0.003) & (S[:, 1] > lo) & (S[:, 1] < hi) & (S[:, 2] < z_behind)
+	ys = np.arange(lo, hi, 0.002)
+	z = np.full(len(ys), np.nan)
+	b = ((S[m, 1] - lo) / 0.002).astype(int)
+	for k, zz in zip(b, S[m, 2]):
+		if k < len(ys) and (np.isnan(z[k]) or zz < z[k]): z[k] = zz
+	ok = ~np.isnan(z)
+	z = np.interp(ys, ys[ok], z[ok])
+	z = np.convolve(np.pad(z, 3, mode='edge'), np.ones(7) / 7, mode='valid')
+	# the nape is a near-flat stretch: take its top end (the highest point within 1.5 mm of the most
+	# forward one), where the profile turns back out over the skull; argmax alone was ambiguous on
+	# the flat stretch (it jumped 9 cm between bodies)
+	top = np.where(z >= z.max() - 0.0015)[0].max()
+	return ys[top] - 0.005, z[top]
+
+
+def front_z(S, y):
+	m = (np.abs(S[:, 0]) < 0.003) & (np.abs(S[:, 1] - y) < 0.002)
+	return S[m, 2].max()
+
+
 def neck_positions(Q, T, pw, ref, S2, T2, Cp, stature):
-	"""Egg vertices laid onto the Daz neck: a tube from the opening's outline up to a flat cut under
-	the chin, following the Daz surface, closed by a flat top (see the section comment)."""
+	"""Egg vertices laid onto the Daz neck: a tube from the opening's outline up to a flat cut where
+	the neck meets the head, following the Daz surface, closed by a flat top (see the section comment)."""
 	head = pw[:, 5] / 255.0
 	egg = np.where(head > 0.5)[0]
 	t, az = egg_frame(ref, egg)
@@ -494,9 +523,15 @@ def neck_positions(Q, T, pw, ref, S2, T2, Cp, stature):
 	o = np.argsort(ha); ha, hp = ha[o], Q[hole][o]
 	ha2 = np.concatenate([ha - 2 * np.pi, ha, ha + 2 * np.pi]); hp2 = np.concatenate([hp, hp, hp])
 	outline = lambda a: np.stack([np.interp(a, ha2, hp2[:, k]) for k in range(3)], 1)
-	# the cut: a level plane just under the chin
+	# the cut: a plane through the underside of the chin (front) and the base of the skull (back)
 	Ss, _ = surface_samples(S2, T2, vertex_normals(S2, T2), 0.0015)
-	y_cut = chin_height(Ss, Cp['neck1'][1], Cp['head'][1] + 0.08 * stature / 1.61) - 0.004 * stature / 1.61
+	sc = stature / 1.61
+	y_f = chin_height(Ss, Cp['neck1'][1], Cp['head'][1] + 0.08 * sc) - 0.004 * sc
+	z_f = front_z(Ss, y_f)
+	y_b, z_b = skull_base_height(Ss, Cp['head'][1] - 0.05 * sc, Cp['head'][1] + 0.04 * sc, Cp['head'][2])
+	pb = (y_b - y_f) / (z_b - z_f); pa = y_f - pb * z_f
+	cut = lambda z: pa + pb * z
+	y_cut = max(y_f, y_b)  # highest point of the cut, for the surface grid below
 	# the Daz neck's surface by height and angle: innermost sample per (2 mm, 4 deg) cell around the
 	# neck's axis (outer samples would be the jaw, ears or shoulders)
 	lo_y = hp[:, 1].min() - 0.02
@@ -529,27 +564,35 @@ def neck_positions(Q, T, pw, ref, S2, T2, Cp, stature):
 	out[low, 1] = base[low, 1] - 0.012 * (1 - uu)
 	tube = (t >= 0.15) & (t < 0.85)
 	uu = (t[tube] - 0.15) / 0.7
-	yy = base[tube, 1] + (y_cut - base[tube, 1]) * uu
+	# top of the tube at each azimuth: where the neck surface meets the cut plane
+	def on_cut(a):
+		y = np.full(len(a), y_f)
+		for _ in range(6): y = cut(surf(y, a)[:, 2])
+		return y
+	top_y = on_cut(az[tube])
+	yy = base[tube, 1] + (top_y - base[tube, 1]) * uu
 	out[tube] = surf(yy, az[tube])
 	# keep the first part of the tube on the opening itself so the two meet exactly
 	f0 = np.clip(uu / 0.08, 0, 1)[:, None]
 	out[tube] = base[tube] * (1 - f0) + out[tube] * f0
 	# towards the back the opening is above the cut (base of the skull): there the body's own neck is
 	# trimmed by the cut, and the tube is folded flat just inside the neck at the cut (hidden)
-	above = base[tube, 1] > y_cut
+	above = base[tube, 1] > cut(base[tube, 2])
 	if above.any():
-		rimb = surf(np.full(above.sum(), y_cut - 0.002), az[tube][above])
+		ya = top_y[above] - 0.002
+		rimb = surf(ya, az[tube][above])
 		ctr = np.array([nc[0], 0, nc[1]])
-		rimb = ctr + (rimb - ctr) * [0.98, 1, 0.98]; rimb[:, 1] = y_cut - 0.002
+		rimb = ctr + (rimb - ctr) * [0.98, 1, 0.98]; rimb[:, 1] = ya
 		tt = out[tube]; tt[above] = rimb; out[tube] = tt
 	top = t >= 0.85
 	uu = (t[top] - 0.85) / 0.15
-	rim = surf(np.full(top.sum(), y_cut), az[top])
+	rim = surf(on_cut(az[top]), az[top])
 	cxz = rim.mean(0)
 	out[top] = cxz + (rim - cxz) * (1 - uu)[:, None]
-	out[top, 1] = y_cut - 0.0005  # just inside the cut (the app discards everything above it)
-	print('   headless neck: cut %.0f mm above the throat (under the chin), %d vertices' % ((y_cut - hp[:, 1].min()) * 1000, len(egg)))
-	return out.astype(np.float32), float(y_cut)
+	out[top, 1] = cut(out[top, 2]) - 0.0005  # just inside the cut (the app discards everything above it)
+	print('   headless neck: cut from %.0f mm above the throat at the front (under the chin) to %.0f at the back (base of the skull)' % (
+		(y_f - hp[:, 1].min()) * 1000, (y_b - hp[:, 1].min()) * 1000))
+	return out.astype(np.float32), [round(float(pa), 5), round(float(pb), 5)]
 
 
 def build(spec, fig, morphs, mh):
@@ -649,7 +692,7 @@ def main():
 		Q.tofile(os.path.join(OUT, spec['key'] + '.bin'))
 		neck.tofile(os.path.join(OUT, spec['key'] + '.neck.bin'))
 		out['bodies'].append({'key': spec['key'], 'label': spec['label'], 'years': spec['years'],
-			'stature': round(float(Q[:, 1].max() - Q[:, 1].min()), 4), 'file': spec['key'] + '.bin', 'neck': spec['key'] + '.neck.bin', 'neckCut': round(cut, 5), 'landmarks': lm})
+			'stature': round(float(Q[:, 1].max() - Q[:, 1].min()), 4), 'file': spec['key'] + '.bin', 'neck': spec['key'] + '.neck.bin', 'neckPlane': cut, 'landmarks': lm})
 	order = [b['key'] for b in BODIES]
 	out['bodies'].sort(key=lambda b: order.index(b['key']))
 	json.dump(out, open(mp, 'w'), indent=1)

@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-20
+* **Update**: `competition` leg cut (side peak ~2 cm under the hip bone) added to the block library and used by B2 ([how a leotard sits](/domain/sizing/how-a-leotard-sits-on-the-body.md)); headless Daz neck cut tilted from chin to skull base; finished edges honour the cut ([Daz bodies](/engineering/pipeline/daz-bodies.md)).
 * **Creation**: [Genesis 9 as the canonical mesh](/engineering/architecture/genesis9-as-canonical-mesh.md): feasibility study. G9 is exactly symmetric, one piece, all quads; subdivided once it is 99,688 vertices (5.9 mm torso edges vs 9.2 mm on MakeHuman, ~2.4x triangles); 116 joint correctives; Growing Up offers an Interactive License ($35). Recommendation: switch after a performance spike.
 * **Update**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): groin and hip fits blended across the body (approved crotch, lower hip); headless form shows the real Daz neck up to a flat cut under the chin (MakeHuman bodies: a procedural neck tube).
 * **Update**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): torso anchors (crotch, natural waist, side seam, front/back mid-line) replace the hip joint in the wrap: leg openings no longer cut ~13 mm higher at the hip than on MakeHuman, and the bump where the front and back of the leg line meet is gone. Headless form: no wooden neck fitting.

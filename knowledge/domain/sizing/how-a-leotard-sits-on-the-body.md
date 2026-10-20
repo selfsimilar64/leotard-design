@@ -70,7 +70,14 @@ competition garments.[^fit] Taut fabric spans hollows rather than following them
 | Seams | Side seams (sometimes replaced by princess/panel seams), shoulder seams, crotch/gusset seam, centre-back seam on some styles, set-in sleeve seams |
 | Edges | Elastic turned under and coverstitched, about 8-10 mm wide, or bound (about 1 cm) |
 
-All from the mannequins research note, marked there as inferred.[^fit] Default presets the POC
+All from the mannequins research note, marked there as inferred.[^fit]
+
+**In the app (2026-10-20):** the block library's `competition` leg cut puts the side peak about
+2 cm under the hip bone (20 cm above the crotch on the reference body; the crest line taken as
+1 cm under the navel, since the line across the iliac crests sits at about L4, at or just below the
+navel **[INFERRED]**). The owner chose it "to be more in line with a typical competition cut";
+`standard` (12.8 cm) and `high` (16 cm) remain for designs matched to photos with lower cuts.
+B2 uses it; see [build status](/engineering/app/build-status.md). Default presets the POC
 used: side peak at iliac-crest height minus 1 cm, a "moderate" preset at the midpoint between crest
 and crotch, neck scoop 10 cm below the sternal notch (scaled by height for the child), back scoop at
 mid-scapula, tank strap 4 cm.[^fit]

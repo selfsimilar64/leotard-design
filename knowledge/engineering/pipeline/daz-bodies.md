@@ -118,11 +118,16 @@ differ by up to ~2 cm (the mannequin's smoothed feet against Daz toes).
   has no neck above the egg's opening (throat ~3 cm above the neck base at the front, base of the
   skull at the back), so the egg's 4,402 vertices are reused as the rest of the neck:
   - **Daz bodies:** `neck_positions` in the build script lays them onto the Daz body's real neck,
-    from the opening up to a level cut just under the chin (`chin_height`: where the front
-    mid-line profile jumps forward), closed flat; written as `<key>.neck.bin` with `neckCut` in
-    the manifest. In the app, `neckExtension` swaps them in and sets the keep field to
-    `neckCut - y`, so the back of the neck (higher than the chin) is trimmed to the same plane.
-    Owner: "take the full Daz body with the head and cut it flat at the top of the neck".
+    from the opening up to a flat cut where the neck meets the head, closed flat. The cut plane
+    is tilted: just under the chin at the front (`chin_height`: where the front mid-line profile
+    jumps forward) and at the base of the skull at the back (`skull_base_height`: top of the
+    nape's flat stretch, 54-60 mm above the throat), level from side to side. Written as
+    `<key>.neck.bin` with `neckPlane` [a, b] (y = a + b z) in the manifest; in the app
+    `neckExtension` swaps them in and sets the keep field to `a + b z - y`. A level cut at chin
+    height (first try) took ~4 cm of real neck off the back and left mock-neck collars standing
+    above it. Owner: "take the full Daz body with the head and cut it flat at the top of the neck".
+  - Finished edges (rims) are cut too: their materials now get `uClip` from `body.clip` when they
+    are rebuilt (before, bindings floated above the dress-form and headless cuts).
   - **MakeHuman bodies:** a tube continuing the opening's outline up to a near-level line under the
     jaw, flat top (`neckExtension`, procedural; the egg is parameterised along its own tilted axis).
   - Tried and dropped: a flat cut at the opening's lowest point (a 2-3 cm stub); a wooden disc and

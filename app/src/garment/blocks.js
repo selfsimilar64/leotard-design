@@ -20,7 +20,7 @@ export const BLOCK_OPTIONS = {
 	neck: ['crew', 'scoop', 'v', 'high', 'boat'],
 	back: ['crew', 'scoop', 'low', 'v', 'keyhole', 'open'],
 	sleeves: ['tank', 'cap', 'short', 'three-quarter', 'long'],
-	leg: ['standard', 'high'],
+	leg: ['standard', 'high', 'competition'],
 	armhole: ['set-in', 'raglan'],
 };
 export const DEFAULT_BLOCK = { neck: 'scoop', back: 'scoop', sleeves: 'long', leg: 'high', armhole: 'set-in' };
@@ -51,7 +51,13 @@ const SLEEVE_END = { cap: 0.09, short: 0.24, 'three-quarter': 0.7, long: 0.95 };
 function fields(man, opts) {
 	const N = man.vertices, R = man.ref;
 	const neck = new Float32Array(N), leg = new Float32Array(N), arm = new Float32Array(N), cuff = new Float32Array(N), seam = new Float32Array(N);
-	const slope = opts.leg === 'standard' ? 0.95 : 1.5;
+	// Leg cuts, by where the opening peaks at the side (reference body, crotch at 0.765): standard
+	// ~0.893 (12.8 cm above the crotch), high ~0.926 (16 cm), competition ~0.976 (21 cm): 1 cm under
+	// the hip bone. Competition dress codes keep the leg opening below the hip bone (iliac crest);
+	// the crest line sits at about L4, at or just below the navel (navel 0.996 on the reference
+	// body), taken here as navel - 1 cm (owner, 2026-10-20: "a typical competition cut").
+	const LEG = { standard: [0.95, 0.15], high: [1.5, 0.195], competition: [2.3, 0.34] };
+	const [slope, backRise] = LEG[opts.leg];
 	for (let i = 0; i < N; i++) {
 		const x = R[i * 3], y = R[i * 3 + 1], ax = abs(x), zr = man.form[i * 2], a = man.armF[i], armT = man.armT[i];
 		const front = smoothstep(-0.03, 0.015, zr);
@@ -62,7 +68,7 @@ function fields(man, opts) {
 		const bN = opts.neck === 'high' ? min(mix(1.395, 1.372, front) - y, opts.back === 'crew' ? 1 : max(backNeck(x, y, opts.back), y - 1.3)) : backNeck(x, y, opts.back);
 		neck[i] = man.wHead[i] > 0.5 ? -1 : min(mix(bN, fN, front), NECK_TOP - y);
 		const yFront = 0.765 + slope * max(ax - 0.03, 0);
-		const yBack = 0.765 + (opts.leg === 'standard' ? 0.15 : 0.195) * Math.pow(min(ax / 0.16, 1.3), 2.3);
+		const yBack = 0.765 + backRise * Math.pow(min(ax / 0.16, 1.3), 2.3);
 		leg[i] = mix((y - mix(yBack, yFront, smoothstep(-0.02, 0.035, zr))) * 0.6, 1, smoothstep(0, 0.02, a));
 		arm[i] = -a - 0.018;                 // tank armhole, 1.8 cm into the torso from the arm seam
 		seam[i] = -a;                        // the arm's own seam (sleeve set-in line)

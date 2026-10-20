@@ -11,9 +11,11 @@ export async function build(app, o = {}) {
 	app.new('B2 ombre with crossover bands');
 	X({ op: 'body.set', finish: 'Athlete skin, light', pose: 'arms-down' });
 	X({ op: 'scene.set', rig: 'White seamless (photo studio)' });
-	X({ op: 'block.apply', neck: 'high', back: 'crew', sleeves: 'long', leg: 'standard', armhole: 'raglan', fabric: 'matte', colour: black });
+	X({ op: 'block.apply', neck: 'high', back: 'crew', sleeves: 'long', leg: o.leg ?? 'competition', armhole: 'raglan', fabric: 'matte', colour: black });
 	await settle();
-	const side = id('Side seam'), neck = id('Neckline'), yc = o.yc ?? 0.995, dy = o.dy ?? 0.044;
+	// competition leg cut (2026-10-20): the bands sit 3.5 cm higher so their side ends stay on the
+	// fabric above the leg opening's peak (yc 0.995 with the old standard cut)
+	const side = id('Side seam'), neck = id('Neckline'), yc = o.yc ?? 1.03, dy = o.dy ?? 0.044;
 	const A = X({ op: 'curve.add', role: 'seam', mirror: 'both', name: 'Cross band', points: [on(side, { p: [-0.14, yc + dy, 0.0] }), { front: [-0.065, yc + dy * 0.5] }, { front: [0, yc] }, { front: [0.065, yc - dy * 0.5] }, on(side, { p: [0.14, yc - dy, 0.0] })] });
 	await settle();
 	X({ op: 'curve.add', role: 'seam', mirror: 'both', name: 'Centre strip', points: [on(neck, { front: [0.025, 1.36] }), { front: [0.024, 1.2] }, on(A, { front: [0.014, yc] })] });
@@ -30,7 +32,7 @@ export async function build(app, o = {}) {
 	X({ op: 'trim.set', on: id('Cuff'), kind: 'elastic', fabric: { fabric: 'matte', colour: black } });
 	X({ op: 'stones.add', kind: 'rays', at: { front: [0, 1.325] }, stone: 'Crystal', name: 'Neck rays', params: { count: o.rays ?? 25, spread: 2.1, angle: -Math.PI / 2, lengths: [0.33, 0.29, 0.31, 0.27, 0.3], sizeFrom: 'ss20', sizeTo: 'ss5', start: 0.036, gap: 2.4, centre: false } });
 	X({ op: 'stones.add', kind: 'fill', on: { panel: P.sleeve }, stone: 'Crystal', params: { size: 'ss8', pattern: 'random', gap: 9 } });
-	X({ op: 'stones.add', kind: 'lettering', at: { front: [-0.095, 0.9] }, stone: 'Crystal', params: { text: 'P', font: 'Brush Script MT', height: 0.03, stoneSize: 'ss5', mode: 'outline' } });
+	X({ op: 'stones.add', kind: 'lettering', at: { front: [-0.08, 0.95] }, stone: 'Crystal', params: { text: 'P', font: 'Brush Script MT', height: 0.03, stoneSize: 'ss5', mode: 'outline' } });
 	await settle();
 	return { P, stones: app.stoneStats().total, errors: app.stoneStats().errors, log };
 }
