@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-10-20
+* **Creation**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): the owner chose Daz 3D as the body/pose direction; four adult Daz builds wrapped onto the mannequin mesh (designs work unchanged), new `headless` body form, Interactive License summary. No Daz child/teen without the paid age pack.
+
 ## 2026-10-19
 * **Creation**: [Benchmark rehearsal and tool coverage](/engineering/app/rehearsal-and-coverage.md) (P8): all 13 benchmarks rebuilt from their photos with the app's commands, per-design gaps, frame costs 9.8-15.2 ms, tool-space audit. [Build status](/engineering/app/build-status.md) updated: all phases built, owner sign-off pending.
 * **Update**: [Build status](/engineering/app/build-status.md): fringe and lettering stone generators, stones picked off photos, star-filter glare; [scripting surface](/engineering/app/scripting-surface.md) updated.

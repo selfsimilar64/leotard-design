@@ -53,7 +53,7 @@ mirror? } }` (attached ends follow their line).
 
 # Commands (2026-10-19)
 
-- Design: `meta.set`, `body.set { size: child|teen|young|adult, form: full|torso, finish, pose }`
+- Design: `meta.set`, `body.set { size: child|teen|young|adult (+ daz-petite|daz-young|daz-adult|daz-broad when [built locally](/engineering/pipeline/daz-bodies.md)), form: full|headless|torso, finish, pose }`
   (finishes include athlete skin tones; poses in [poses and shading](/engineering/app/poses-and-shading.md)), `scene.set { rig, exposure, bloom, envRotation,
   rotateLights, glare: plain|star|star6|arena }` (rigs include white and grey seamless photo studios and a gym).
 - Garment: `block.apply { neck, back, sleeves, leg, armhole: set-in|raglan, fabric, colour, second }`;

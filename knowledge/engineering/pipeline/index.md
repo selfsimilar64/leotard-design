@@ -4,6 +4,7 @@
 
 # Component
 
+* [Daz Genesis 9 bodies (build_daz_bodies.py)](daz-bodies.md) (draft) - pipeline/build_daz_bodies.py evaluates Daz 3D Genesis 9 shapes from the owner's local Daz library (morph formula graph, arm stance by linear blend skinning, two Catmull-Clark levels) and shrink-wraps the MakeHuman mannequin mesh onto them, so the app gets Daz-shaped bodies on its existing topology; output is git-ignored.
 * [Mannequin pipeline (build_mannequins.py)](mannequin-pipeline.md) - pipeline/build_mannequins.py runs headless in the portable Blender 4.5 with MPFB 2 to bake four same-topology mannequin bodies from the CC0 MakeHuman base mesh into manifest.json, shared.bin and per-body position files; it fails if any body's triangle list differs.
 
 # Section

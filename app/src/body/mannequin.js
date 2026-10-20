@@ -35,16 +35,28 @@ const FORM = { neck: 0.022, thigh: 0.13, armT: 0.1 };
 
 // ---------------------------------------------------------------------------------------------
 
+// Keys of the loaded bodies, for validating body.set (commands-core.js).
+export const bodyKeys = [];
+
+// Optional extra bodies on the same mesh, kept out of git: Daz 3D Genesis 9 shapes built from the
+// owner's licensed Daz library by pipeline/build_daz_bodies.py. Missing folder = no extra bodies.
+const EXTRA = '../mannequins-daz/';
+
 // get(file, 'json' | 'arrayBuffer') can be replaced (tests read the files from disk).
 export async function loadMannequins(onProgress, get = fetchFile) {
 	const manifest = await get('manifest.json', 'json');
 	const shared = await get('shared.bin', 'arrayBuffer');
+	let extra = null;
+	try { extra = await get(EXTRA + 'manifest.json', 'json'); } catch { /* no extra bodies */ }
+	if (extra?.vertices !== manifest.vertices) extra = null;
+	const list = [...manifest.bodies, ...(extra?.bodies ?? []).map((b) => ({ ...b, file: EXTRA + b.file }))];
 	const bodies = {};
-	await Promise.all(manifest.bodies.map(async (b) => {
+	await Promise.all(list.map(async (b) => {
 		bodies[b.key] = { ...b, pos: new Float32Array(await get(b.file, 'arrayBuffer')) };
 		onProgress?.(b.key);
 	}));
-	return new Mannequin(manifest, shared, bodies);
+	bodyKeys.splice(0, bodyKeys.length, ...list.map((b) => b.key));
+	return new Mannequin({ ...manifest, bodies: list }, shared, bodies);
 }
 
 async function fetchFile(f, kind) { const r = await fetch(BASE + f); if (!r.ok) throw new Error(`${f}: ${r.status}`); return r[kind](); }
@@ -130,9 +142,24 @@ class Mannequin {
 		};
 
 		const crotchY = this.crotchY = this.refCrotch();
+		// Headless cut: just under the open edge the egg head sits on (its lowest point, the throat),
+		// so mock necks and halter straps keep their neck.
+		const edgeUse = new Map();
+		for (let t = 0; t < this.idx.length; t += 3) for (let e = 0; e < 3; e++) {
+			const a = this.idx[t + e], b = this.idx[t + (e + 1) % 3], k = a < b ? a * N + b : b * N + a;
+			edgeUse.set(k, (edgeUse.get(k) ?? 0) + 1);
+		}
+		let holeY = L.head_base[1];
+		for (const [k, c] of edgeUse) {
+			if (c !== 1) continue;
+			const a = Math.floor(k / N);
+			if (this.wHead[a] < 0.5 && R[a * 3 + 1] > L.neck_base[1]) holeY = min(holeY, R[a * 3 + 1]);
+		}
+		const headlessY = holeY - 0.006;
 		this.armT = new Float32Array(N);
 		this.armF = new Float32Array(N);
 		this.keep = new Float32Array(N);
+		this.keepHeadless = new Float32Array(N); // the neck cut alone (form 'headless')
 		this.form = new Float32Array(N * 2);
 		const p = [0, 0, 0];
 		for (let i = 0; i < N; i++) {
@@ -147,6 +174,7 @@ class Mannequin {
 			const fLeg = y - (crotchY - FORM.thigh);
 			const fArm = mix(1, (FORM.armT - t) * (L1 + L2), smoothstep(0.3, 0.6, this.wArm[i]));
 			this.keep[i] = this.wHead[i] > 0.5 ? -1 : min(fNeck, fLeg, fArm);
+			this.keepHeadless[i] = this.wHead[i] > 0.5 ? -1 : headlessY - y;
 
 			// Dress-form style tape fields: x = side-seam distance (z from the mid-plane), y = princess
 			// line distance (|x| from a line through mid-shoulder and the bust point, waisted below).
@@ -157,6 +185,7 @@ class Mannequin {
 			this.form[i * 2 + 1] = abs(x) - px;
 		}
 		this.zMid = zMid;
+		this.keepTorso = this.keep.slice();
 
 		// Armhole seam: where the arm's skinning weight crosses one half. Divided by the weight's
 		// local gradient so the field reads as metres from the seam (what the tank's armhole offset
@@ -482,6 +511,13 @@ class Mannequin {
 			if (loop.length > 8) loops.push(loop);
 		}
 		return loops;
+	}
+
+	// Which cut the keep field describes: the dress form's (neck, upper arms, mid-thigh) or the neck
+	// alone (the full body without its head). Swapped in place: aKeep and the garment share the array.
+	setCut(form) {
+		this.keep.set(form === 'headless' ? this.keepHeadless : this.keepTorso);
+		this.geometry.getAttribute('aKeep').needsUpdate = true;
 	}
 
 	// Dress form: the boundary loops of the keep field on the current body, for the end caps.

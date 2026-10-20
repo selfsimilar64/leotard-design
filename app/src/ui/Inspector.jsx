@@ -36,7 +36,7 @@ function DesignProps({ doc }) {
 		<>
 			<Section title="Body">
 				<Row label="Body"><Select value={b.size} options={sizes} onChange={(v) => run({ op: 'body.set', size: v })} /></Row>
-				<Row label="Style"><Select value={b.form} options={[['full', 'Full-body mannequin'], ['torso', 'Dress form (torso)']]}
+				<Row label="Style"><Select value={b.form} options={[['full', 'Full-body mannequin'], ['headless', 'Full body, no head'], ['torso', 'Dress form (torso)']]}
 					onChange={(v) => run({ op: 'body.set', form: v, finish: v === 'torso' ? 'Linen dress form' : 'Matte white fibreglass' })} /></Row>
 				<Row label="Finish"><Select value={b.finish} options={Object.keys(MANNEQUIN_FINISHES)} onChange={(v) => run({ op: 'body.set', finish: v })} /></Row>
 			</Section>

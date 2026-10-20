@@ -34,8 +34,10 @@ function calfBack(body) {
 	return new THREE.Vector3(x, y, z);
 }
 
-export function fullBodyStand(body) {
+// capMaterial: given for the headless form, which gets the dress form's neck cap.
+export function fullBodyStand(body, capMaterial = null) {
 	const g = new THREE.Group(), r = body.body.stature < 1.4 ? 0.175 : 0.203, t = 0.008;
+	if (capMaterial) neckCaps(body, capMaterial, g);
 	const plate = cyl(r, r, t, glass, 96);
 	plate.position.y = -t / 2;
 	plate.renderOrder = 2; // after the opaque scene: it is see-through
@@ -66,6 +68,25 @@ function capGeometry(loop) {
 
 export function dressFormStand(body, capMaterial) {
 	const g = new THREE.Group();
+	neckCaps(body, capMaterial, g);
+	// Pole from the crotch to the caster base, with a height-adjust collar.
+	const c = body.crotch, footY = 0.075;
+	g.add(rod(new THREE.Vector3(0, footY, c.z), new THREE.Vector3(0, c.y + 0.02, c.z), 0.0125, chrome));
+	g.add(at(cyl(0.022, 0.022, 0.05, blackMetal), 0, footY + (c.y - footY) * 0.45, c.z));
+	g.add(at(cyl(0.035, 0.045, 0.06, blackMetal), 0, footY, c.z));
+	for (let k = 0; k < 5; k++) {
+		const a = k / 5 * Math.PI * 2 + Math.PI / 10, end = new THREE.Vector3(Math.sin(a) * 0.27, 0.05, c.z + Math.cos(a) * 0.27);
+		g.add(rod(new THREE.Vector3(0, footY, c.z), end, 0.011, blackMetal));
+		const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 12), blackMetal);
+		wheel.position.set(end.x, 0.022, end.z);
+		g.add(wheel);
+	}
+	return g;
+}
+
+// Flat caps over every cut loop of the body's keep field, and on the highest (the neck) a turned
+// wooden disc and knob.
+function neckCaps(body, capMaterial, g) {
 	const loops = body.cutLoops().map((l) => ({ loop: l, ...capGeometry(l) }));
 	loops.sort((a, b) => b.centre.y - a.centre.y);
 	for (const L of loops) {
@@ -84,17 +105,4 @@ export function dressFormStand(body, capMaterial) {
 		knob.position.set(neck.centre.x, top + 0.028, neck.centre.z);
 		g.add(disc, knob);
 	}
-	// Pole from the crotch to the caster base, with a height-adjust collar.
-	const c = body.crotch, footY = 0.075;
-	g.add(rod(new THREE.Vector3(0, footY, c.z), new THREE.Vector3(0, c.y + 0.02, c.z), 0.0125, chrome));
-	g.add(at(cyl(0.022, 0.022, 0.05, blackMetal), 0, footY + (c.y - footY) * 0.45, c.z));
-	g.add(at(cyl(0.035, 0.045, 0.06, blackMetal), 0, footY, c.z));
-	for (let k = 0; k < 5; k++) {
-		const a = k / 5 * Math.PI * 2 + Math.PI / 10, end = new THREE.Vector3(Math.sin(a) * 0.27, 0.05, c.z + Math.cos(a) * 0.27);
-		g.add(rod(new THREE.Vector3(0, footY, c.z), end, 0.011, blackMetal));
-		const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 12), blackMetal);
-		wheel.position.set(end.x, 0.022, end.z);
-		g.add(wheel);
-	}
-	return g;
 }

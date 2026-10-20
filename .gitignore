@@ -14,3 +14,6 @@ dist/
 app/captures/
 app/references/
 app/exports/
+
+# Daz-derived bodies (owner-licensed Daz content; built locally by pipeline/build_daz_bodies.py)
+app/public/mannequins-daz/
