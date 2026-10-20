@@ -68,20 +68,21 @@ derived from Daz content licensed to the owner.
    egg head get no data term; the egg is then moved rigidly by the neck's mean displacement.
    The small Tikhonov term must act on D alone: putting it in the data block pulled every
    unmatched vertex towards the origin (the egg drifted 0.5 m before this was fixed).
-6b. **Leotard fit points** (`fit_points`, added 2026-10-20 after the owner saw leg openings
-   creeping onto the upper thigh of the fuller bodies): joints alone left the groin up to 16-17 mm
-   off (p90 tangential slide), so the leg line sat where MakeHuman's crease was, not on the Daz
-   body's. Now found on both bodies from their shape and pinned (`PIN_W` = 200; misses < 0.05 mm):
-   the crotch (lowest mid-plane torso point), the front hip crease (greatest concavity of the
-   front silhouette, on planes 10/20/30% across the thigh measured 4 cm below the crotch), the
-   fold under the seat (back silhouette, planes 15/30/45%), and the seat's most posterior point.
-   Planes are thigh-relative because the two rigs place the hip joint 6-15 mm apart. Survey
-   (2026-10-20): the smooth MakeHuman mannequin's creases fade beyond ~30% (front) / ~45% (back)
-   across the thigh, where the search hits its window edge, so points weaker than `MIN_CONCAVITY`
-   (7 /m) or on the window edge on either body are not pinned (petite: 13 of 15 pinned). The
-   points also join the thin-plate-spline warp. `daz-adult` and `daz-broad` now start from the
-   MakeHuman `young` body (the `adult` mannequin's seat fold is too faint to read). Result: leg
-   openings follow each Daz body's own crease (before/after captures in `app/captures/beforeafter-*`).
+6b. **Transfer through Daz topology** (`transfer()`, recipes with `via`): only the reference fits
+   are wrapped (`daz-young` from MakeHuman `young`, `daz-petite` from `teen`); `daz-adult` and
+   `daz-broad` take the young adult's wrapped mesh and carry it over: each vertex stored as
+   (triangle, barycentric weights, offset along the normal) on the subdivided Daz young surface
+   and re-evaluated on the target Daz surface. Every recipe is the same Genesis 9 mesh, so this is
+   Daz's own anatomical correspondence: the leg line sits on the fuller body exactly where it sits
+   on the young adult. Hands (mannequin hands are off the Daz surface; point-wise transfer
+   crumpled them onto Daz's fingers) take the harmonic continuation of the forearm displacement;
+   the egg head moves rigidly with the neck as before. **New Daz shapes (age packs, body packs)
+   should use `via` from a well-fitted body rather than a fresh wrap.**
+   *History (2026-10-20):* fresh wraps of the fuller bodies left the leg opening on the upper
+   thigh (groin slid 16-17 mm p90: the wrap knew only joints). Pinning crease points found from
+   silhouette concavity (crotch, hip crease, seat fold, seat; weight 200) put the line on the
+   crease but kinked it between pins (owner: "jagged"), and made the young adult and petite worse;
+   pins were removed and replaced by the transfer, which the owner's comparison asked for.
 7. **Landmarks** for the manifest come from the posed Daz joints (`neck1`, `l_upperarm`, …);
    `chest`/`waist` sit at the same fractions between pelvis and neck base as on the MakeHuman body.
 
@@ -117,8 +118,8 @@ they ship. Until then the files stay local (git-ignored).
 |---|---|---|---|
 | `daz-petite` | Petite athlete | 1.53 m | BaseFeminine 0.5, shoulders −0.35, chest width −0.3, breasts flatten 0.5, athletic flex |
 | `daz-young` | Young adult, athletic (Kat) | 1.61 m | Kat character body (BaseFeminine 0.75, longer legs), athletic flex |
-| `daz-adult` | Adult (about 30) | 1.64 m | BaseFeminine 1, athletic flex × 0.8 |
-| `daz-broad` | Adult, broader build (Amala) | 1.66 m | Amala character body (broader shoulders, fuller chest) |
+| `daz-adult` | Adult (about 30) | 1.64 m | BaseFeminine 1, athletic flex × 0.8 (transferred from `daz-young`) |
+| `daz-broad` | Adult, broader build (Amala) | 1.66 m | Amala character body (broader shoulders, fuller chest; transferred from `daz-young`) |
 
 "Athletic flex" = the flexion morphs (glute clench 0.35, quads 0.3, calves 0.3, hamstrings 0.2).
 

@@ -48,7 +48,8 @@ OUT = os.path.join(ROOT, 'app', 'public', 'mannequins-daz')
 # old's stature still reads as a small woman (tried 2026-10-20), so there are no Daz child/teen
 # bodies yet, only adults of different size and build. "Athletic" comes from the flexion morphs
 # (glutes, quads, calves, hamstrings) at partial strength. `mh`: the MakeHuman body wrapped (the
-# closest in size, which only matters as the wrap's starting point).
+# closest in size, which only matters as the wrap's starting point). `via`: instead of a wrap, take
+# that already-built Daz body's fit through Daz's shared topology (see transfer(); built after it).
 ATHLETIC = {'body_bs_FlexGluteClenchL': 0.35, 'body_bs_FlexGluteClenchR': 0.35, 'body_bs_FlexQuadL': 0.3,
 	'body_bs_FlexQuadR': 0.3, 'body_bs_FlexCalfL': 0.3, 'body_bs_FlexCalfR': 0.3,
 	'body_bs_FlexHamstringL': 0.2, 'body_bs_FlexHamstringR': 0.2}
@@ -58,9 +59,9 @@ BODIES = [
 			'body_ctrl_BreastsFlatten': 0.5, **ATHLETIC}),
 	dict(key='daz-young', mh='young', label='Daz · Young adult, athletic (Kat)', years=18, stature=1.61,
 		morphs={'Kat_body_bs_body': 1.0, **ATHLETIC}),
-	dict(key='daz-adult', mh='young', label='Daz · Adult (about 30)', years=30, stature=1.64,
+	dict(key='daz-adult', mh='young', via='daz-young', label='Daz · Adult (about 30)', years=30, stature=1.64,
 		morphs={'BaseFeminine_body_bs_Body': 1.0, **{k: v * 0.8 for k, v in ATHLETIC.items()}}),
-	dict(key='daz-broad', mh='young', label='Daz · Adult, broader build (Amala)', years=30, stature=1.66,
+	dict(key='daz-broad', mh='young', via='daz-young', label='Daz · Adult, broader build (Amala)', years=30, stature=1.66,
 		morphs={'Amala_body_bs_body': 1.0}),
 ]
 
@@ -281,93 +282,6 @@ def surface_samples(P, T, N, spacing, ids=False):
 	return (pts, nrm, np.concatenate(tri), np.concatenate(bar)) if ids else (pts, nrm)
 
 
-# --- Leotard fit points ----------------------------------------------------------------------
-# Where a real leotard's leg opening sits is set by the body's own creases, not by its joints, so
-# the wrap is anchored there too. Found on each body from its shape, the same way on the MakeHuman
-# source and on the Daz target:
-#   crotch    lowest point of the torso on the mid-plane (x = 0)
-#   front_k   front hip crease (inguinal fold): on vertical planes at FRONT_X[k] of the way across
-#             the thigh (inner to outer edge, measured 4 cm below the crotch), the point of greatest
-#             concavity of the front profile z(y) just above the crotch
-#   back_k    fold under the seat (gluteal fold): same on planes at BACK_X[k] across the thigh, on
-#             the back profile, around crotch height
-#   seat      the seat's most posterior point on the plane half-way across the thigh
-# Planes are placed across the thigh, not from the hip joint: MakeHuman and Genesis 9 put the hip
-# joint in different places (a joint-relative plane landed 6-15 mm apart on the two bodies).
-# Left side found, right side mirrored (the bodies are symmetric).
-# Plane positions where the creases are well defined on every body (2026-10-20 survey: the smooth
-# MakeHuman mannequin's crease fades beyond ~30-45% across the thigh, where its search hit the
-# window edge; the Daz bodies have a clear crease all the way out).
-FRONT_X = (0.1, 0.2, 0.3)
-BACK_X = (0.15, 0.3, 0.45)
-MIN_CONCAVITY = 7.0  # 1/m: a crease point weaker than this (on either body) is not pinned (MakeHuman teen and young: 8-17 inside 30% of the thigh, 5-6 where the search fails)
-FRONT_WIN = (-0.005, 0.09)   # metres relative to the crotch height
-BACK_WIN = (-0.05, 0.03)
-BIN = 0.002
-
-
-def _profile(S, x, ylo, yhi, front):
-	"""Front (max z) or back (min z) silhouette of the slab |x_s - x| < 1.5 mm, 2 mm bins, smoothed."""
-	m = (np.abs(S[:, 0] - x) < 0.0015) & (S[:, 1] > ylo) & (S[:, 1] < yhi)
-	ys = np.arange(ylo, yhi, BIN)
-	bins = ((S[m, 1] - ylo) / BIN).astype(int)
-	z = np.full(len(ys), np.nan)
-	for b, v in zip(bins, S[m, 2]):
-		if b < len(ys) and (np.isnan(z[b]) or (v > z[b] if front else v < z[b])): z[b] = v
-	ok = ~np.isnan(z)
-	z = np.interp(ys, ys[ok], z[ok])
-	g = np.exp(-0.5 * (np.arange(-6, 7) / 2.0) ** 2); g /= g.sum()
-	zs = np.convolve(np.pad(z, 6, mode='edge'), g, mode='valid')
-	return ys, zs
-
-
-def _concavity(ys, zs, sign):
-	"""Second derivative over +-6 mm (sign +1: valley of z, -1: valley of -z)."""
-	h = 3
-	d2 = np.full(len(zs), -np.inf)
-	d2[h:-h] = sign * (zs[2 * h:] + zs[:-2 * h] - 2 * zs[h:-h]) / (h * BIN) ** 2
-	return d2
-
-
-def fit_points(P, T, skip):
-	"""Fit points (dict name -> xyz) on a body. skip: per-vertex mask of arm/hand vertices to ignore.
-	Also returns the profiles for debugging."""
-	N = vertex_normals(P, T)
-	S, _, tri, _ = surface_samples(P, T, N, 0.0015, ids=True)
-	keep = ~skip[T[tri]].any(1)
-	S = S[keep]
-	H = P[:, 1].max()
-	mid = (np.abs(S[:, 0]) < 0.003) & (S[:, 1] > 0.3 * H) & (S[:, 1] < 0.65 * H)
-	cz = S[mid][np.argmin(S[mid, 1])]
-	cy = cz[1]
-	ring = (np.abs(S[:, 1] - (cy - 0.04)) < 0.0015) & (S[:, 0] > 0.002)
-	x_in, x_out = S[ring, 0].min(), S[ring, 0].max()
-	across = lambda f: x_in + f * (x_out - x_in)
-	pts, dbg = {'crotch': cz}, {'thigh': (x_in, x_out)}
-	for k, f in enumerate(FRONT_X):
-		x = across(f)
-		ys, zs = _profile(S, x, cy - 0.12, cy + 0.16, True)
-		d2 = _concavity(ys, zs, 1)
-		win = (ys > cy + FRONT_WIN[0]) & (ys < cy + FRONT_WIN[1])
-		idx = np.where(win)[0]; i = idx[np.argmax(d2[win])]
-		pts['front%d_l' % k] = np.array([x, ys[i], zs[i]]); dbg['front%d' % k] = (ys, zs, i)
-		dbg['ok_front%d_l' % k] = d2[i] >= MIN_CONCAVITY and idx[2] < i < idx[-3]
-	for k, f in enumerate(BACK_X):
-		x = across(f)
-		ys, zs = _profile(S, x, cy - 0.12, cy + 0.16, False)
-		d2 = _concavity(ys, zs, -1)
-		win = (ys > cy + BACK_WIN[0]) & (ys < cy + BACK_WIN[1])
-		idx = np.where(win)[0]; i = idx[np.argmax(d2[win])]
-		pts['back%d_l' % k] = np.array([x, ys[i], zs[i]]); dbg['back%d' % k] = (ys, zs, i)
-		dbg['ok_back%d_l' % k] = d2[i] >= MIN_CONCAVITY and idx[2] < i < idx[-3]
-	ys, zs = _profile(S, across(0.5), cy, cy + 0.16, False)
-	i = np.argmin(zs)
-	pts['seat_l'] = np.array([across(0.5), ys[i], zs[i]]); dbg['seat'] = (ys, zs, i)
-	for k in list(pts):
-		if k.endswith('_l'): pts[k[:-2] + '_r'] = pts[k] * [-1, 1, 1]; dbg['ok_' + k[:-2] + '_r'] = dbg.get('ok_' + k, True)
-	return pts, dbg
-
-
 def laplacian(n, T):
 	e = np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]])
 	e = np.unique(np.sort(e, axis=1), axis=0)
@@ -380,26 +294,13 @@ WRAP_ROUNDS = ((0.06, 4.0), (0.045, 2.0), (0.03, 1.0), (0.02, 0.5), (0.014, 0.25
 SLIDE = 0.3  # weight of the point-to-point term next to point-to-plane: low enough to let vertices slide off a crease, high enough that limbs (cylinders) cannot twist
 
 
-PIN_W = 200.0  # weight of a fit-point pin (a data vertex weighs 1): pins are met to a fraction of a mm
-
-
-def wrap(Q, T, data_mask, target_P, target_T, rounds=WRAP_ROUNDS, pins=()):
+def wrap(Q, T, data_mask, target_P, target_T, rounds=WRAP_ROUNDS):
 	"""Pull Q (n x 3) onto the target surface (non-rigid ICP). Each round: closest target point with
 	a compatible normal, then a displacement D minimising
-	    lam * sum_edges |D_i - D_j|^2 + sum_i w_i [ (n_i . (Q_i + D_i - t_i))^2 + SLIDE |Q_i + D_i - t_i|^2 ]
-	    + PIN_W * sum_pins |sum_k b_k (Q + D)_vk - p|^2.
+	    lam * sum_edges |D_i - D_j|^2 + sum_i w_i [ (n_i . (Q_i + D_i - t_i))^2 + SLIDE |Q_i + D_i - t_i|^2 ].
 	Point-to-plane lets vertices slide along the surface instead of piling up where it curves away
-	(closest-point targets collapse there and leave a crease). data_mask: vertices with a data term.
-	pins: (3 vertex ids, 3 barycentric weights, target point, name): a point inside a source
-	triangle that must land on a given target point (the leotard fit points)."""
+	(closest-point targets collapse there and leave a crease). data_mask: vertices with a data term."""
 	n = len(Q)
-	pr, pc, pv = [], [], []
-	for vs, b, _, _ in pins:
-		for j in range(3):
-			for k in range(3):
-				for c in range(3):
-					pr.append(3 * vs[j] + c); pc.append(3 * vs[k] + c); pv.append(PIN_W * b[j] * b[k])
-	Pm = sp.coo_matrix((pv, (pr, pc)), shape=(3 * n, 3 * n)).tocsr()
 	Lp = laplacian(n, T)
 	L3 = sp.kron(Lp, sp.identity(3), format='csr')
 	Nt = vertex_normals(target_P, target_T)
@@ -420,12 +321,8 @@ def wrap(Q, T, data_mask, target_P, target_T, rounds=WRAP_ROUNDS, pins=()):
 			target[sel] = S[col[sel]]; tn[sel] = SN[col[sel]]; ok[sel] = True
 		w = (ok & data_mask).astype(np.float64)
 		M = w[:, None, None] * (tn[:, :, None] * tn[:, None, :] + SLIDE * np.eye(3))  # n x 3 x 3 data blocks
-		A = sp.coo_matrix((M.ravel(), (rows, cols)), shape=(3 * n, 3 * n)).tocsr() + lam * L3 + 1e-6 * sp.identity(3 * n) + Pm
-		rhs = np.einsum('nij,nj->ni', M, target - Q)
-		for vs, b, p, _ in pins:
-			r = p - b @ Q[vs]  # pin residual now
-			for j in range(3): rhs[vs[j]] += PIN_W * b[j] * r
-		rhs = rhs.ravel()
+		A = sp.coo_matrix((M.ravel(), (rows, cols)), shape=(3 * n, 3 * n)).tocsr() + lam * L3 + 1e-6 * sp.identity(3 * n)
+		rhs = np.einsum('nij,nj->ni', M, target - Q).ravel()
 		D = spl.spsolve(A.tocsc(), rhs).reshape(n, 3)
 		Q = Q + D
 		res = np.abs(np.einsum('ij,ij->i', tn, Q - target))[w > 0]
@@ -455,12 +352,9 @@ def daz_landmarks(Cp, P, mh_lm):
 	return L
 
 
-ARM_JOINTS = ('upperarm', 'forearm', 'hand', 'thumb', 'index', 'mid', 'ring', 'pinky')
-
-
 def daz_body(spec, fig, morphs, verbose=True):
 	"""The posed, scaled Genesis 9 body of a recipe: cage, joints, subdivided surface (vertices,
-	triangles) and its arm/hand mask (for the fit-point search)."""
+	triangles). Every recipe gives the same triangles (Genesis 9 topology)."""
 	V0, Tg, nodes, weights = fig
 	deltas, formulas = morphs
 	vals, joint_off = evaluate(spec['morphs'], formulas)
@@ -479,51 +373,63 @@ def daz_body(spec, fig, morphs, verbose=True):
 	Cp = {k: (c - [0, ymin, 0]) * sc for k, c in Cp.items()}
 	S1, q1 = catmull_clark(P, Tg)
 	S2, q2 = catmull_clark(S1, q1)
-	arm_w = sum(w for j, w in weights.items() if any(j[2:].startswith(a) for a in ARM_JOINTS))
-	_, near = cKDTree(P).query(S2)
-	return P, Cp, S2, triangles(q2), arm_w[near] > 0.3
+	return P, Cp, S2, triangles(q2)
 
 
-def mh_skip(pw):
-	"""MakeHuman part weights -> arm/hand/head mask for the fit-point search."""
-	return (pw[:, 1] + pw[:, 2] + pw[:, 6]) / 255.0 > 0.3
+def transfer(Q, src_S, T2, dst_S):
+	"""Carry a mesh lying on one Genesis 9 shape onto another. Every recipe is the same Daz mesh, so a
+	vertex stored as (triangle, barycentric weights, offset along the normal) on the source surface
+	is the same anatomical point on the target. Off-surface parts (hands, egg) keep their offset."""
+	Ns, Nd = vertex_normals(src_S, T2), vertex_normals(dst_S, T2)
+	S, _, tri, bar = surface_samples(src_S, T2, Ns, 0.0015, ids=True)
+	_, i = cKDTree(S).query(Q)
+	t, b = T2[tri[i]], bar[i]
+	p = np.einsum('nk,nkc->nc', b, src_S[t])
+	n = np.einsum('nk,nkc->nc', b, Ns[t]); n /= np.linalg.norm(n, axis=1, keepdims=True)
+	d = np.einsum('nc,nc->n', Q - p, n)
+	pd = np.einsum('nk,nkc->nc', b, dst_S[t])
+	nd = np.einsum('nk,nkc->nc', b, Nd[t]); nd /= np.linalg.norm(nd, axis=1, keepdims=True)
+	return pd + d[:, None] * nd
 
 
 def build(spec, fig, morphs, mh):
-	P, Cp, S2, T2, skip2 = daz_body(spec, fig, morphs)
-
-	# --- wrap the MakeHuman mannequin of the same label onto it ---------------------------------
+	P, Cp, S2, T2 = daz_body(spec, fig, morphs)
 	src, T, pw, mh_lm = mh[spec['mh']]
 	Ld = daz_landmarks(Cp, P, mh_lm)
-	# fit points on both bodies: the anchors for the leg openings (see fit_points)
-	fs, ds = fit_points(src, T, mh_skip(pw))
-	fd, dd = fit_points(S2, T2, skip2)
-	weak = [k for k in fs if not (ds.get('ok_' + k, True) and dd.get('ok_' + k, True))]
-	for k in weak: del fs[k], fd[k]
-	if weak: print('   fit points not pinned (crease too faint):', ', '.join(sorted(weak)))
-	names = ['neck_base', 'shoulder_l', 'elbow_l', 'wrist_l', 'hip_l', 'knee_l', 'ankle_l', 'head_top']
-	A, B = [], []
-	for k in names:
-		a, b = np.array(mh_lm[k]), np.array(Ld[k])
-		A.append(a); B.append(b)
-		if k.endswith('_l'): A.append(a * [-1, 1, 1]); B.append(b * [-1, 1, 1])
-	for k in fs: A.append(fs[k]); B.append(fd[k])
-	A, B = np.array(A), np.array(B)
-	tps = RBFInterpolator(A, B - A, kernel='thin_plate_spline', smoothing=1e-4, degree=1)
-	Q = src + tps(src)
 	head, hand = pw[:, 5] / 255.0, pw[:, 6] / 255.0
-	data = (head < 0.3) & (hand < 0.15)
-	# Pin each source fit point (a point inside a source triangle) to its Daz counterpart.
-	N = vertex_normals(src, T)
-	Ss, _, tri, bar = surface_samples(src, T, N, 0.001, ids=True)
-	tree = cKDTree(Ss)
-	pins = []
-	for k in fs:
-		_, i = tree.query(fs[k])
-		pins.append((T[tri[i]], bar[i], fd[k], k))
-	Q = wrap(Q, T, data, S2, T2, pins=pins)
-	errs = [np.linalg.norm(b @ Q[vs] - t) * 1000 for vs, b, t, k in pins]
-	print('   %d fit points pinned, worst miss %.2f mm' % (len(pins), max(errs)))
+	if spec.get('via'):
+		# --- transfer from an already-built Daz body (its wrap is the reference fit) ------------------
+		# Owner, 2026-10-20: the young adult's leg line sits cleanly in the creases; wrapping the fuller
+		# bodies anew (even with crease points pinned) left the line kinked. Transferring through Daz's
+		# own topology keeps the young adult's fit and follows Daz's anatomy for the new shape.
+		via = next(b for b in BODIES if b['key'] == spec['via'])
+		_, _, Sv, _ = daz_body(via, fig, morphs, verbose=False)
+		Qv = np.fromfile(os.path.join(OUT, via['key'] + '.bin'), dtype='<f4').reshape(-1, 3).astype(np.float64)
+		Q = transfer(Qv, Sv, T2, S2)
+		# Hands: the mannequin's smoothed hands are not on the Daz hand surface, and point-by-point
+		# transfer crumpled them onto Daz's fingers. Their displacement is instead the smooth
+		# (harmonic) continuation of the forearm's.
+		D, free = Q - Qv, hand > 0.15
+		Lp = laplacian(len(Q), T).tocsr()
+		Lff, Lfb = Lp[free][:, free], Lp[free][:, ~free]
+		solve = spl.factorized(Lff.tocsc())
+		for c in range(3): D[free, c] = solve(-(Lfb @ D[~free, c]))
+		Q = Qv + D
+		src = Qv  # the egg below follows the neck relative to the via body
+		print('   transferred from', via['key'])
+	else:
+		# --- wrap the MakeHuman mannequin of the same label onto it -----------------------------------
+		names = ['neck_base', 'shoulder_l', 'elbow_l', 'wrist_l', 'hip_l', 'knee_l', 'ankle_l', 'head_top']
+		A, B = [], []
+		for k in names:
+			a, b = np.array(mh_lm[k]), np.array(Ld[k])
+			A.append(a); B.append(b)
+			if k.endswith('_l'): A.append(a * [-1, 1, 1]); B.append(b * [-1, 1, 1])
+		A, B = np.array(A), np.array(B)
+		tps = RBFInterpolator(A, B - A, kernel='thin_plate_spline', smoothing=1e-4, degree=1)
+		Q = src + tps(src)
+		data = (head < 0.3) & (hand < 0.15)
+		Q = wrap(Q, T, data, S2, T2)
 	# Egg head: the source egg moved as one piece by the neck's mean displacement (warping it with
 	# the body tilted it), blended in over the neck by the head weight.
 	neck = (head > 0.05) & (head < 0.5)

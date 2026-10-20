@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-20
+* **Update**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): crease pins tried and removed (kinked leg lines); the fuller Daz bodies now take the young adult's fit through Daz's shared topology, and the young adult and petite keep their plain wraps.
 * **Update**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): leotard fit points (crotch, hip crease, seat fold, seat) found on both bodies and pinned in the wrap, so leg openings follow each Daz body's own crease.
 * **Creation**: [Daz Genesis 9 bodies](/engineering/pipeline/daz-bodies.md): the owner chose Daz 3D as the body/pose direction; four adult Daz builds wrapped onto the mannequin mesh (designs work unchanged), new `headless` body form, Interactive License summary. No Daz child/teen without the paid age pack.
 
