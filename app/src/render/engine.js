@@ -21,6 +21,7 @@ import { runStones } from '../stones/generators.js';
 import { locate } from '../garment/arrangement.js';
 import { TRIMS } from '../garment/trim.js';
 import { FigureView } from './figure.js';
+import { markSkin } from './postfx.js';
 
 export class Engine {
 	// ref: the reference garment surface (body/reference.js), where curves live
@@ -359,6 +360,7 @@ function setFinish(m, f) {
 	u.uKnit.value = f.knit ?? 0;
 	u.uTape.value = f.tape ? 1 : 0;
 	u.uSkin.value = f.skin ?? 0;
+	markSkin(m, !!f.skin); // the athlete-skin finishes take the subsurface scattering pass
 	m.needsUpdate = true;
 }
 

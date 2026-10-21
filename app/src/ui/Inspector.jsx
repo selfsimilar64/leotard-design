@@ -84,6 +84,8 @@ function DisplayProps() {
 			<Row label="Anti-aliasing"><Select value={d.msaa} options={DISPLAY_OPTIONS.msaa} onChange={num('msaa')} /></Row>
 			<Row label="Shadows"><Select value={d.shadows} options={DISPLAY_OPTIONS.shadows} onChange={(v) => set('shadows', v)} /></Row>
 			<Row label="Glow"><Toggle value={d.bloom} onChange={(v) => set('bloom', v)} /></Row>
+			<Row label="Soft skin" hint="Light scattering under the skin (subsurface), softer and warmer skin"><Toggle value={d.skin} onChange={(v) => set('skin', v)} /></Row>
+			<Row label="Ambient occlusion" hint="Soft contact shadows where straps, stones and folds meet the body"><Toggle value={d.ao} onChange={(v) => set('ao', v)} /></Row>
 			{st.fps ? <Row label="Now"><span>{st.width}×{st.height} px · {st.fps.toFixed(0)} fps</span></Row> : null}
 		</Section>
 	);

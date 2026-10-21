@@ -77,6 +77,26 @@ the athlete's skin**, not from more expensive shading. All upgrades below fit a 
 | R12 | **Optional path-traced stills** (later) | When idle, hand the scene to a GPU path tracer (e.g. three-gpu-pathtracer) for presentation and photo-compare images; the owner has built one before and considers it a modest addition | 0 interactive |
 | R11 | **Dynamic resolution** | Hold 16.6 ms by scaling 0.7-1.0, refine when idle | saves |
 
+# Built 2026-10-21 (app/src/render/postfx.js)
+
+- **Only the scene is multisampled** (`ScenePass`: its own 4x HDR target with depth and stencil as
+  textures, copied into plain composer buffers). Before, the composer's own buffers were
+  multisampled, so every post pass (bloom, glare, output) wrote and resolved 4x HDR buffers: B9 on
+  the mannequin went from 35.2 to 23.3 ms a frame at 1792x1344 (GTX 1650), the glow pass from about
+  12 ms to 1, the person in the A-pose from 38 to 28 ms.
+- **Skin scattering** (`SkinPass`, Display "Soft skin"): skin materials write alpha 0.5 (`markSkin`:
+  the person's skin, the athlete-skin finishes); two separable passes blur skin pixels only from
+  skin pixels, by 1.5 mm turned into pixels by depth, red widest (sigma 1 : 0.3 : 0.18), not across
+  depth steps; the second pass resets the alpha (left in, it washed the image towards white). A 3 mm
+  kernel blurred freckles and pores away (waxy): the blur acts on texture and light together, so the
+  green and blue kernels stay narrow. +0.7 ms.
+- **Ambient occlusion** (`AOPass`, Display "Ambient occlusion"): three's GTAOPass on the scene pass's
+  depth (normals from depth: a separate geometry pass would not see the garment's lift and
+  thickness, done in its vertex shader), half resolution, radius 6 cm, 8 samples. +2 ms. Three r186
+  fails when the depth texture is given to the constructor (worked around in `AOPass`).
+- Not done yet: an HDRI studio environment (needs a downloaded file); better eye shading (owner:
+  not wanted, 2026-10-21).
+
 Estimated total ~10.5-11.5 ms at 2.4 MP. Every phase that adds an upgrade re-runs the POC's
 "Measure frame cost" benchmark with the pane visible and must stay under 14 ms.
 

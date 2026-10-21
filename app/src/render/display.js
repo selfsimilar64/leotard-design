@@ -1,9 +1,9 @@
 // Display settings: how this machine renders the view (resolution, anti-aliasing, shadows, glow,
-// lower resolution while moving). They belong to the computer, not the design, so they are kept in
+// skin scattering, ambient occlusion, lower resolution while moving). They belong to the computer, not the design, so they are kept in
 // the browser (not in the document or its undo history) and applied to the viewport at start-up.
 const KEY = 'leotard.display.v1';
 
-export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 4, shadows: 'soft', bloom: true };
+export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 4, shadows: 'soft', bloom: true, skin: true, ao: true };
 
 // Choices the UI offers (value, label).
 export const DISPLAY_OPTIONS = {

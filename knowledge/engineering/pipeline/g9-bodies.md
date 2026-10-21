@@ -43,6 +43,13 @@ on load. All output is derived from the owner's licensed Daz content and stays l
 | `head` | `none` (cut flat under the chin), `mannequin` (bald head, smoothed), `person` (face, eyes, mouth, lashes, brows, Eirgrid hair) | replaces `form: 'headless'` and the `fig-*` scene bodies |
 | `expression` | `neutral`, `smile` (SR 13, teeth), `soft-smile` (SR 26), `focused` (SR 16) | person only |
 | `form` | `full`, `torso` (dress form) | |
+| `finish` | a mannequin finish (render/presets.js) or `Realistic skin (Daz)` | the body below the head only |
+| `headFinish` | a mannequin finish | the mannequin head (old designs: the body's finish) |
+
+The body and the head are drawn independently: the mannequin's skin is two meshes (body, head)
+discarding each other's side per pixel at the head bone's skin weight 0.5, and the person's figure
+can draw only its head (a real face on a mannequin body) or only its skin below the head (realistic
+skin under a mannequin head or none), cut the same way.
 
 Old documents (no `mesh` field) are migrated by `doc/migrate-g9.js`: `form: 'headless'` becomes
 `head: 'none'`, `daz-*` sizes their new keys, `fig-*` the young adult with `head: 'person'`.

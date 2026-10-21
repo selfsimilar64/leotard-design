@@ -22,6 +22,7 @@
 import * as THREE from 'three';
 import { ccStencil, applyStencil, quadTriangles, readPolys } from '../body/subdivide.js';
 import { vertexNormals } from '../body/mannequin.js';
+import { markSkin } from './postfx.js';
 
 const BASE = (import.meta.env?.BASE_URL ?? '/') + 'g9/';
 const ORDER = { skin: 0, mouth: 0, eyes: 1, brows: 2, lashes: 3, tear: 4, dazhair: 6 };
@@ -238,7 +239,9 @@ export class FigureView {
 			// dual-lobe skin specular: mostly the sharper lobe (Daz: ratio 0.15 rough / 0.85 at 0.55x)
 			mat.roughness = 0.7; mat.specularIntensity = 0.45;
 			if (/Mouth Cavity/.test(name)) mat.color.setScalar(0.35);
-			return skinMaterial(mat, T('sssMap', true), V['Translucency Weight'] ?? 0.85, this.uPart);
+			const skin = skinMaterial(mat, T('sssMap', true), V['Translucency Weight'] ?? 0.85, this.uPart);
+			if (!/Mouth Cavity/.test(name)) markSkin(skin); // subsurface scattering pass (render/postfx.js)
+			return skin;
 		}
 		if (part === 'eyes') {
 			mat.roughness = 0.45; mat.specularIntensity = 0.2;

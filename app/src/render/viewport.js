@@ -5,13 +5,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { SCENE, RIGS } from './presets.js';
 import { studioEnvironment, cyclorama } from './studio.js';
 import { GlarePass } from './glare.js';
+import { ScenePass, SkinPass, AOPass } from './postfx.js';
 
 const _size = new THREE.Vector2();
 
@@ -54,10 +54,15 @@ export class Viewport {
 		scene.background = scene.environment;
 		scene.backgroundBlurriness = 0.7;
 
-		// stencil: a figure's eye film is masked to the visible eyeball (render/figure.js)
-		const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4, stencilBuffer: true });
-		const composer = this.composer = new EffectComposer(renderer, target);
-		composer.addPass(new RenderPass(scene, camera));
+		// the scene is drawn multisampled into its own target (with depth and stencil); the composer's
+		// buffers are plain (render/postfx.js ScenePass)
+		const composer = this.composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false }));
+		this.scenePass = new ScenePass(scene, camera);
+		composer.addPass(this.scenePass);
+		this.skinPass = new SkinPass(camera, this.scenePass); // subsurface scattering of skin
+		composer.addPass(this.skinPass);
+		this.aoPass = new AOPass(scene, camera, this.scenePass.depthTexture); // contact and fold occlusion
+		composer.addPass(this.aoPass);
 		this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.18, 0.1, 1.6);
 		composer.addPass(this.bloom);
 		this.glare = new GlarePass(); // star-filter streaks (scene.glare), off for 'plain'
@@ -193,11 +198,13 @@ export class Viewport {
 		this.settings.renderScale = d.resolution;
 		this.settings.dynamicRes = d.dynamicRes;
 		if (!d.dynamicRes) this.wantScale = 1;
-		for (const t of [this.composer.renderTarget1, this.composer.renderTarget2]) if (t.samples !== d.msaa) { t.samples = d.msaa; t.dispose(); }
+		this.scenePass.setSamples(d.msaa);
 		const sun = this.sun, size = d.shadows === 'sharp' ? 2048 : 1024;
 		sun.castShadow = d.shadows !== 'off';
 		if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
 		this.bloom.enabled = d.bloom;
+		this.skinPass.enabled = this.scenePass.keepSkinMark = d.skin;
+		this.aoPass.enabled = d.ao;
 		if (this.resize() && this.container.clientWidth) this.render();
 	}
 
