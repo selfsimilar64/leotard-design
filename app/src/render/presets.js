@@ -1,4 +1,4 @@
-// Looks, lighting rigs and scene constants.
+// Body appearances and skin tones, lighting rigs and environments, scene constants.
 
 export const SCENE = {
 	camera: { fov: 30, position: [0.25, 1.1, 2.5], target: [0, 0.99, 0] },
@@ -11,6 +11,20 @@ export const SCENE = {
 // with black style tapes (see research_notes/mannequins_and_leotard_fit.md).
 // The body's realistic skin: Genesis 9's own skin textures (render/figure.js), under any head.
 export const REALISTIC_SKIN = 'Realistic skin (Daz)';
+
+// The two ways the body is shown (the panel's Appearance choice, body.set { appearance }): a
+// headless plastic mannequin, or a realistic person (face, hair, Daz skin). Each is a set of body
+// fields; a design whose fields match neither (older files) shows no appearance selected.
+export const APPEARANCES = {
+	mannequin: { form: 'full', head: 'none', finish: 'Matte white fibreglass' },
+	realistic: { form: 'full', head: 'person', finish: REALISTIC_SKIN },
+};
+export function appearanceOf(b) {
+	return Object.keys(APPEARANCES).find((k) => Object.entries(APPEARANCES[k]).every(([f, v]) => (b[f] ?? (f === 'head' ? 'mannequin' : undefined)) === v)) ?? null;
+}
+
+// The realistic person is Stacy on every body, in her own skin (pipeline/daz/bodies.py STACY);
+// the four Genesis 9 skin tones of the picker went with her (owner, 2026-10-21).
 
 export const MANNEQUIN_FINISHES = {
 	'Matte white fibreglass': { colour: 0xe9e7e2, roughness: 0.5, clearcoat: 0.25, clearcoatRoughness: 0.45 },
@@ -48,7 +62,23 @@ export const RIGS = {
 		envLights: [-4.8, -3.2, 3.2, 4.8].map((x) => ({ p: [x, 4.2, 0.9], s: [0.6, 2.4], at: [x, 0, 0.9], L: 9, c: 0xfff6ea })),
 		lights: [{ p: [0, 4.1, 1.6], cd: 10, c: 0xfff6ea }, { p: [1.6, 4.1, -0.6], cd: 6, c: 0xfff6ea }, ...ring(0).slice(2)],
 	},
+	// Photographed studios (render/viewport.js hdri): the HDRI lights the figure and is the room
+	// around it, its floor projected onto the ground the figure stands on.
+	'White loft studio': hdriRig('brown_photostudio_02_4k.hdr'),
+	'Window loft studio': hdriRig('brown_photostudio_01_4k.hdr'),
+	'Parquet studio, sunlit': hdriRig('brown_photostudio_06_4k.hdr'),
+	'Green loft hall': hdriRig('photo_studio_loft_hall_4k.hdr'),
+	'Neon studio': hdriRig('ferndale_studio_12_4k.hdr'),
 };
+
+// An HDRI studio (assets/hdri, served at /hdri). height: the camera height it was shot from
+// (metres; sets where its floor lands), turn: the room's default turn (radians, so a pleasing
+// wall is behind the figure), sun: strength of the shadow-casting key along the HDRI's brightest
+// direction (found when it loads), glint: candela of the small lights there and at the camera
+// that crystals need to sparkle.
+function hdriRig(file, o = {}) {
+	return { hdri: file, fixed: true, env: 1, bg: 1, bloomK: 0.4, height: 1.6, turn: 0, sun: 0.8, glint: 5, lights: ring(0), ...o };
+}
 
 // glow: the backdrop's own light (paper lit by background lights), as a share of its colour
 function studioRig(backdrop, room, k, glow) {
@@ -67,13 +97,3 @@ function studioRig(backdrop, room, k, glow) {
 		shadow: { from: [-1.7, 2.2, 2.3], E: 0.75 * k },
 	};
 }
-
-// Each zone is [fabric key, colour, foil / second colour].
-export const LOOKS = {
-	'Ruby mystique': { sleeves: 'long', back: 'scoop', body: ['mystique', '#b3122e', 'Tone-on-tone'], accent: ['hologram', '#d8dbe6', 'Silver'], sleeve: ['mesh', '#b3122e', 'Tone-on-tone'], pattern: 'Showpiece (edges + swoosh + cascade)', finish: 'Crystal AB' },
-	'Midnight velvet': { sleeves: 'long', back: 'keyhole', body: ['velvet', '#16205c', 'Silver'], accent: ['hologlitter', '#cfd4e6', 'Silver'], sleeve: ['glittermesh', '#10142e', 'Silver'], pattern: 'Starburst', finish: 'Crystal AB' },
-	'Royal hologram': { sleeves: 'long', back: 'scoop', body: ['hologram', '#1b3fb5', 'Silver'], accent: ['foil', '#e6bf58', 'Gold'], sleeve: ['hologram', '#1b3fb5', 'Silver'], pattern: 'Swoosh line (pen stroke)', finish: 'Crystal' },
-	'Sunset ombré': { sleeves: 'long', back: 'scoop', body: ['ombremystique', '#ff4f8b', 'Tone-on-tone'], accent: ['glitter', '#f2c14e', 'Gold'], sleeve: ['mesh', '#d2a48a', 'Tone-on-tone'], pattern: 'Cascade scatter', finish: 'Gold' },
-	'Emerald glitter tank': { sleeves: 'tank', back: 'strappy', body: ['glitter', '#0b7d55', 'Tone-on-tone'], accent: ['pearl', '#f4f1ea', 'Silver'], sleeve: ['mesh', '#0b7d55', 'Tone-on-tone'], pattern: 'Spirals and rosette', finish: 'Colour-matched AB' },
-	'Black wet look': { sleeves: 'tank', back: 'scoop', body: ['wet', '#0c0c10', 'Silver'], accent: ['shattered', '#c8ccd8', 'Silver'], sleeve: ['mesh', '#0c0c10', 'Silver'], pattern: 'Neckline and cuffs', finish: 'Spangles, holographic' },
-};

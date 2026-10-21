@@ -6,6 +6,13 @@
 import * as THREE from 'three';
 
 const ROOT = '/textures/vmod/';
+
+// The app fabric a scan is shown with (its maps replace that fabric's colour, normal and
+// roughness; the fabric adds the sheen or gloss): glossy wovens and leather on shiny tricot, knits,
+// nets and sheers on matte lycra (their alpha map makes them sheer).
+export function baseFabricFor(scan) {
+	return /satin|taffeta|leather/i.test(scan?.name ?? '') ? 'shiny' : 'matte';
+}
 const MAX = 2048; // texels per side on the GPU (the 4096 scans are downsampled)
 
 export class TextureLibrary {

@@ -30,7 +30,7 @@
  },
  "scene": {
   "rig": "Arena (ring of small lights)",
-  "rotateLights": true,
+  "rotateLights": false,
   "exposure": 1,
   "bloom": 0.18,
   "envRotation": 0,

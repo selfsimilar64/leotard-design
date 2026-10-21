@@ -183,6 +183,27 @@ def head_turn(bones, rest):
 	return [round(c, 6) for c in qmul(q, [-r[0], -r[1], -r[2], r[3]])]
 
 
+def qrot(q, v):
+	"""Vector v turned by the unit quaternion q (x, y, z, w)."""
+	r = qmul(qmul(q, [v[0], v[1], v[2], 0.0]), [-q[0], -q[1], -q[2], q[3]])
+	return np.array(r[:3])
+
+
+def seat_eyes(P, bones, bare_P, bare_bones):
+	"""Genesis 9's eyes follow a head shape only through an eye morph made for it (Daz's characters
+	ship one; Stacy, bodies.py STACY, does not): her face moves the eye bones (about 1 cm down on the
+	young adult) while the eyeballs stay where the unshaped face has them, the irises hidden under
+	the upper lids. Each eye (the bare figure's vertices with x > 0 are the left) is moved rigidly
+	back onto its bone, at the offset it has from that bone on the bare figure, turned with the bone.
+	Daz centimetres in and out; a figure whose eyes already follow its face moves by ~0."""
+	out = P.copy()
+	for side, sel in (('l', bare_P[:, 0] > 0), ('r', bare_P[:, 0] <= 0)):
+		b0, b = bare_bones[side + '_eye'], bones[side + '_eye']
+		d0 = qrot([-b0['q'][0], -b0['q'][1], -b0['q'][2], b0['q'][3]], bare_P[sel].mean(0) - np.array(b0['o']))
+		out[sel] += np.array(b['o']) + qrot(b['q'], d0) - P[sel].mean(0)
+	return out
+
+
 def chin_height(S, lo, hi):
 	"""Underside of the chin on the front mid-line: where the front profile jumps forward fastest."""
 	m = (np.abs(S[:, 0]) < 0.003) & (S[:, 1] > lo) & (S[:, 1] < hi)
@@ -333,6 +354,8 @@ def run(keys=None):
 
 	bodies = [b for b in B.BODIES if not keys or b['key'] in keys]
 	manifest['bodies'] = []
+	bare_eyes = g9.read_pts(B.body_dir('bare') + 'zero.pts')['Genesis9Eyes']  # seat_eyes
+	bare_bones = json.load(open(B.body_dir('bare') + 'zero.bones.json'))
 	ref_cage = None
 	for b in bodies:
 		key, d = b['key'], B.body_dir(b['key'])
@@ -358,7 +381,7 @@ def run(keys=None):
 			S2 = skin['stencils'][1] @ (S1 @ C)
 			out = []
 			for name in moving:
-				V = M(pts[name])
+				V = M(seat_eyes(pts[name], bones, bare_eyes, bare_bones) if name == 'Genesis9Eyes' else pts[name])
 				if parts[name][0] == 'dazhair': V = hair_shift(scene[name]['root_bind'], scene[name]['roots'], V, S2, T2)
 				out.append(V)
 			np.concatenate(out).astype('<f4').tofile(os.path.join(OUT, 'figure', key, pk + '.bin'))

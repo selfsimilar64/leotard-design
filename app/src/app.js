@@ -20,7 +20,6 @@ import './doc/commands-decals.js';
 import { surfaceLandmarks } from './body/landmarks.js';
 import { resolvePoint } from './curves/points.js';
 import { defineCommand } from './doc/store.js';
-import { legacyFromLook } from './garment/legacy.js';
 import { buildGarment, inheritPanels, evaluateAll } from './garment/build.js';
 import { showCells } from './render/debug.js';
 import { patternPieces } from './garment/pattern.js';
@@ -44,16 +43,21 @@ export const VIEWS = {
 	'three-quarter': { dir: [0.55, 0.1, 0.83] }, 'back-three-quarter': { dir: [-0.55, 0.1, -0.83] },
 };
 
+// The design shown on a first start (and instead of an autosaved first-generation design): one of
+// the moodboard collection in designs/ (main.jsx opens it once the bodies are loaded).
+export const STARTER = 'b2-ombre-crossover';
 export function defaultDocument() {
-	const d = newDocument('Ruby mystique');
-	d.legacy = legacyFromLook('Ruby mystique');
-	return d;
+	return newDocument('Untitled');
 }
 
 export class App {
 	constructor() {
 		let store;
-		try { store = new DocumentStore(loadAutosave() ?? defaultDocument()); } catch { store = new DocumentStore(defaultDocument()); }
+		let saved = null;
+		try { saved = loadAutosave(); store = new DocumentStore(saved ?? defaultDocument()); } catch { saved = null; store = new DocumentStore(defaultDocument()); }
+		// nothing worth resuming: no autosave, or a first-generation (legacy) design
+		this.fresh = !saved || !!store.doc.legacy;
+		this.file = null;
 		this.store = store;
 		this.listeners = new Set();
 		this.store.onChange((touched, why) => {
@@ -140,7 +144,8 @@ export class App {
 	commands() { return commandList(); }
 	history() { return { undo: this.store.undoStack.map((e) => e.label), redo: this.store.redoStack.map((e) => e.label).reverse() }; }
 
-	new(name = 'Untitled') { this.store.load(newDocument(name)); }
+	// app.file: the designs/ file the design was opened from or last saved to (null for a new one)
+	new(name = 'Untitled') { this.file = null; this.store.load(newDocument(name)); }
 	load(doc) { this.store.load(typeof doc === 'string' ? JSON.parse(doc) : doc); }
 	json() { return JSON.stringify(this.doc, null, 1); }
 
@@ -148,13 +153,41 @@ export class App {
 		const file = safeName(name) + '.json';
 		const r = await fetch('/__fs/designs/' + file, { method: 'PUT', body: this.json() }).catch(() => null);
 		if (!r || !r.ok) { download(file, new Blob([this.json()], { type: 'application/json' })); return 'downloaded ' + file; }
+		this.file = safeName(name);
+		await this.thumbnail('/__fs/designs/thumbs/' + safeName(name) + '.jpg', { view: 'front' }).catch(() => null); // its tile in the Designs row
 		return 'designs/' + file;
 	}
-	async open(name) {
+
+	// A picker tile's picture: the view rendered small (without editing lines) as a JPEG, written
+	// to `url` (the file bridge: /__fs/thumbs/<group>/<name>.jpg lands in public/thumbs, served at
+	// /thumbs; /__fs/designs/thumbs/<name>.jpg for a design). opts: { width, height, view: a VIEWS
+	// name or a camera, keepCamera }. The camera is put back afterwards unless keepCamera.
+	async thumbnail(url, opts = {}) {
+		const vp = this.engine.viewport, cam = vp.getCamera(), w = opts.width ?? 240, h = opts.height ?? 300;
+		if (opts.view) this.view(opts.view);
+		const blob = await this.withoutOverlay(() => vp.capture(w * 2, h * 2));
+		if (!opts.keepCamera) vp.setCamera(cam);
+		const img = await loadImage(URL.createObjectURL(blob)), cv = document.createElement('canvas');
+		cv.width = w; cv.height = h;
+		const x = cv.getContext('2d');
+		x.imageSmoothingQuality = 'high';
+		x.drawImage(img, 0, 0, w, h);
+		const jpg = await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.86));
+		const r = await fetch(url, { method: 'PUT', body: jpg });
+		if (!r.ok) throw new Error(`${url}: ${r.status}`);
+		return url;
+	}
+	// body, scene: fields to keep from the current design (the panel's Designs row keeps the whole
+	// model and environment: picking a design changes only the leotard)
+	async open(name, body = null, scene = null) {
 		const r = await fetch('/__fs/designs/' + safeName(name) + '.json');
 		if (!r.ok) throw new Error(`No saved design "${name}"`);
-		this.load(await r.json());
-		this.engine?.frameCamera(this.doc.body.form);
+		const d = await r.json();
+		if (body) d.body = { ...d.body, ...body };
+		if (scene) d.scene = { ...d.scene, ...scene };
+		this.load(d);
+		this.file = safeName(name);
+		if (!body) this.engine?.frameCamera(this.doc.body.form); // a kept body keeps its framing
 		return this.doc.meta.name;
 	}
 	async designs() { const r = await fetch('/__fs/designs/'); return r.ok ? (await r.json()).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)) : []; }

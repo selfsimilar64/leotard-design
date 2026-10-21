@@ -1,6 +1,6 @@
 // Viewport tools: what a pointer does in the 3D view for the active tool. Every edit is a
 // command (app.exec), so tools add nothing the scripting surface lacks.
-//   orbit   left-drag orbits (OrbitControls)
+//   orbit   left-drag orbits (OrbitControls); a click (no drag) on the garment selects the piece
 //   select  click a line or panel to select it; drag a control point of the selected line
 //           (it slides on the body; a drag is one undo step); Alt-click a line to add a point;
 //           C toggles corner/smooth on the last point touched; Delete removes it (or the line)
@@ -85,7 +85,7 @@ export class ToolController {
 	down(e) {
 		if (e.button !== 0 || e.altKey && tool.value !== 'select') return;
 		const t = tool.value, [x, y] = this.xy(e);
-		if (t === 'orbit') return;
+		if (t === 'orbit') { this.press = { x, y, t: performance.now() }; return; }
 		if (t === 'trim') {
 			// edges tool: pick a line (an edge or a seam) to give it a finish in the inspector
 			const c = this.engine.curveAt(x, y, 9);
@@ -180,6 +180,16 @@ export class ToolController {
 	}
 
 	up(e) {
+		// orbit: a click that did not turn the view picks the piece under it (or clears the choice)
+		const pr = this.press;
+		this.press = null;
+		if (pr && tool.value === 'orbit' && e.button === 0) {
+			const [x, y] = this.xy(e);
+			if (Math.hypot(x - pr.x, y - pr.y) < 5 && performance.now() - pr.t < 500) {
+				const h = this.engine.pickAt(x, y);
+				selection.value = h?.panel ? { kind: 'panels', id: h.panel } : null;
+			}
+		}
 		if (this.drag) { this.drag = null; this.app.endGesture(); try { this.el.releasePointerCapture(e.pointerId); } catch { /* already released */ } }
 	}
 

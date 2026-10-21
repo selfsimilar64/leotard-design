@@ -71,7 +71,16 @@ export function controlPoints(curve, surf, mirrorFn, resolveOn) {
 }
 
 // -> { sps: [{ f, b0, b1, b2 }], pts: Vector3[], s: number[] (arc length), closed, ctrlIndex: sample index of each control point }
+// Sampled on surf.open when there is one (the reference body with its arms raised,
+// body/reference.js), so no sample of a line through the armpit lands on the arm; the samples are
+// then placed on surf itself.
 export function evaluateCurve(curve, surf, { mirror = null, step = STEP, resolveOn = null } = {}) {
+	const out = sampleCurve(curve, surf.open ?? surf, mirror, step, resolveOn);
+	if (surf.open) { out.pts = out.sps.map((sp) => surf.pos(sp)); arcLength(out); }
+	return out;
+}
+
+function sampleCurve(curve, surf, mirror, step, resolveOn) {
 	const cps = controlPoints(curve, surf, mirror, resolveOn), n = cps.length, closed = !!curve.closed && n >= 3;
 	const out = { sps: [], pts: [], s: [], closed, ctrlIndex: [] };
 	if (n === 0) return out;

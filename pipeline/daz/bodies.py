@@ -7,6 +7,7 @@
 #   python pipeline/daz/bodies.py                 bake stage 1 and 2 in Daz Studio, then convert
 #   python pipeline/daz/bodies.py --stage1 [keys]  rest pose, Daz poses, expressions (+ the bare figure)
 #   python pipeline/daz/bodies.py --stage2 [keys]  arm poses (needs stage 1: aims from its landmarks)
+#   python pipeline/daz/bodies.py --missing-poses [keys]  only the Daz poses (POSES) not baked yet
 #   python pipeline/daz/bodies.py --convert        stage 1 + 2 output -> app/public/g9/
 #
 # Stage 1 per body: Genesis 9 with the body's skin, age and character presets, Eirgrid hair and
@@ -32,7 +33,6 @@ STUDIO = os.environ.get('DAZ_STUDIO', r'C:/Program Files/DAZ 3D/DAZStudio6/DAZSt
 OUT = os.path.join(HERE, 'out', 'bodies')
 
 P9 = 'People/Genesis 9/'
-SKIN = lambda i: P9 + 'Materials/Daz Originals/Base Materials/G9 Feminine Skin %02d MAT.duf' % i
 AGE = {'5-6': 'Growing Up 01 5-6', '9-10': 'Growing Up 02 9-10', 'young-teen': 'Growing Up 03 Young Teen',
 	'older-teen': 'Growing Up 04 Older Teen', 'adult': 'Growing Up 05 Adult'}
 AGE_P = lambda a: P9 + 'Shapes/Zev0/Growing Up/Age Presets/%s.duf' % AGE[a]
@@ -41,6 +41,12 @@ _ED = P9 + 'Expressions/3D Sugar/Skilfull Routine/'
 DAZ_POSE = lambda n: next(_PD + f for f in os.listdir(LIB + _PD) if f.startswith('SR G9 Feminine %02d ' % n) and f.endswith('.duf'))
 EXPR = lambda n: next(_ED + f for f in os.listdir(LIB + _ED) if f.startswith('SR Expression %02d ' % n) and f.endswith('.duf'))
 NEUTRAL = P9 + 'Expressions/3D Sugar/0 Expression.duf'
+# The person is Stacy (CaramelDream3D) on every body since 2026-10-21 (owner's choice): her face
+# (the CD Stacy Head morph, on top of each body's age and character shape; not her body morph, so
+# ages and builds stay), her skin, eyes and lashes. Her skin is the only one the app shows.
+_ST = P9 + 'Characters/CaramelDream3D/Stacy/MATERIAL/'
+STACY = [_ST + 'Stacy Skin.duf', [_ST + 'Eyes/Stacy Eyes 00.duf', 'Genesis9Eyes'], [_ST + 'Stacy Eyelashes 01.duf', 'Genesis9Eyelashes']]
+STACY_MORPHS = {'CD Stacy Head': 1}
 EIRGRID = [P9 + 'Hair/Daz Originals/Eirgrid Hair/Eirgrid Hair G9.duf', [P9 + 'Hair/Daz Originals/Eirgrid Hair/Materials Iray/Eirgrid 10 M Brown.duf', 'Eirgrid']]
 
 ATHLETIC = {'body_bs_FlexGluteClenchL': 0.35, 'body_bs_FlexGluteClenchR': 0.35, 'body_bs_FlexQuadL': 0.3,
@@ -51,6 +57,8 @@ ATHLETIC = {'body_bs_FlexGluteClenchL': 0.35, 'body_bs_FlexGluteClenchR': 0.35, 
 # the earlier wrapped Daz bodies (knowledge: daz-bodies); ages come from Growing Up. Characters are
 # dialled by their controller morph (the character .duf presets open a dialog that stops the run).
 # `young` is the reference body every design is drawn on.
+# skin: the Daz skin set each body was baked with before Stacy (unused since: every body wears
+# Stacy's skin, STACY).
 BODIES = [
 	dict(key='child-6', label='Child, about 6', years=6, stature=1.17, skin=1, presets=[AGE_P('5-6')], morphs={}),
 	dict(key='child', label='Child, about 9', years=9, stature=1.33, skin=1, presets=[AGE_P('9-10')], morphs={}),
@@ -70,8 +78,11 @@ BODIES = [
 REF = 'young'
 
 # Poses. 'a-pose': the mannequin stance (upper arm 13 degrees from vertical, a little forward;
-# elbow bent 14 degrees forward), the rest pose every design is drawn in. Daz poses from Skillful
-# Routine (3D Sugar): standing and moving poses that show a leotard.
+# elbow bent 14 degrees forward), the rest pose every design is drawn in. Daz poses: all 30 of
+# Skillful Routine (3D Sugar), the first eight chosen in 2026-10 as the ones that show a leotard
+# best, the rest added on the owner's request (2026-10-21); the app's pose picker lists them in
+# this order. n: the pose's number in the pack (SR G9 Feminine NN ...); the props some of its
+# previews show (ball, hoop) are not part of the figure.
 UPPER_DIR = [math.sin(math.radians(13)), -math.cos(math.radians(13)), 0.06]
 ELBOW_BEND = math.radians(14)
 POSES = [
@@ -83,6 +94,28 @@ POSES = [
 	dict(key='split-leap', label='Split leap', n=16),
 	dict(key='stag-jump', label='Stag jump', n=25),
 	dict(key='kneeling', label='Kneeling', n=13),
+	dict(key='lunge-arms-up', label='Low lunge, arms up', n=2),
+	dict(key='lying-legs-up', label='Lying, legs up', n=3),
+	dict(key='handstand', label='Handstand', n=4),
+	dict(key='legs-up', label='Legs up, on the hands', n=6),
+	dict(key='chest-stand', label='Chest stand', n=7),
+	dict(key='cartwheel-low', label='Cartwheel, low', n=9),
+	dict(key='lying-leg-up', label='Lying, one leg up', n=11),
+	dict(key='one-arm-balance', label='One-arm balance', n=12),
+	dict(key='lying', label='Lying on the floor', n=14),
+	dict(key='swinging', label='Swinging', n=15),
+	dict(key='back-arched', label='Bridge, back arched', n=17),
+	dict(key='lunge-arm-up', label='Lunge, arm up', n=19),
+	dict(key='kneeling-leg-up', label='Kneeling, one leg up', n=20),
+	dict(key='cartwheel', label='Cartwheel', n=21),
+	dict(key='kneeling-arm-up', label='Kneeling, arm up', n=22),
+	dict(key='jump-arched', label='Jump, back arched', n=23),
+	dict(key='walkover', label='Walkover', n=24),
+	dict(key='floor-split', label='Split on the floor', n=26),
+	dict(key='elbow-balance', label='Elbow balance', n=27),
+	dict(key='pirouette', label='Pirouette', n=28),
+	dict(key='arms-open', label='Arms open', n=29),
+	dict(key='one-knee', label='On one knee', n=30),
 ]
 # Arm poses (the app's 'arms-down', 'hands-on-hips', ...: body/pose.js): each arm separately.
 ARMS = ['down', 'front', 'thigh', 'hip', 'up']
@@ -111,14 +144,22 @@ def a_pose_aim(sx):
 def body_dir(key): return os.path.join(OUT, key).replace('\\', '/') + '/'
 
 
-def stage1_jobs(bodies):
+def stage1_jobs(bodies, missing=False):
+	"""missing: only the Daz poses not baked yet (no A-pose, expressions, bare figure or materials)."""
+	if missing:
+		jobs = []
+		for b in bodies:
+			todo = [dict(key=p['key'], preset=DAZ_POSE(p['n']), nodes='all') for p in POSES if not os.path.exists(body_dir(b['key']) + p['key'] + '.pts')]
+			if todo: jobs.append(dict(key=b['key'], out=body_dir(b['key']), presets=[*STACY, *b["presets"], *EIRGRID],
+				morphs={**b['morphs'], **STACY_MORPHS}, poses=todo, materials=False, expressions=[]))
+		return jobs
 	jobs = [dict(key='bare', out=body_dir('bare'), presets=[*EIRGRID], morphs={}, obj=True, materials=True,
 		poses=[dict(key='zero', nodes='all')], expressions=[])]
 	for b in bodies:
 		poses = [dict(key='a-pose', aim={'l': a_pose_aim(1), 'r': a_pose_aim(-1)}, nodes='all')]
 		poses += [dict(key=p['key'], preset=DAZ_POSE(p['n']), nodes='all') for p in POSES]
-		jobs.append(dict(key=b['key'], out=body_dir(b['key']), presets=[SKIN(b['skin']), *b["presets"], *EIRGRID],
-			morphs=b['morphs'], poses=poses, materials=True,
+		jobs.append(dict(key=b['key'], out=body_dir(b['key']), presets=[*STACY, *b["presets"], *EIRGRID],
+			morphs={**b['morphs'], **STACY_MORPHS}, poses=poses, materials=True,
 			expressions=[dict(key=e['key'], preset=e.get('preset') or EXPR(e['n'])) for e in EXPRESSIONS]))
 	return jobs
 
@@ -167,7 +208,8 @@ def stage2_jobs(bodies):
 		for side, sx, other in (('l', 1, 'r'), ('r', -1, 'l')):
 			for a in ARMS:
 				poses.append(dict(key='arm-%s-%s' % (side, a), aim={side: arm_aim(a, m, sx), other: a_pose_aim(-sx)}, nodes='cage'))
-		jobs.append(dict(key=b['key'], out=body_dir(b['key']), presets=[SKIN(b['skin']), *b['presets']], morphs=b['morphs'],
+		# the same shape as stage 1 (Stacy's face too): the app adds each arm's change from the A-pose
+		jobs.append(dict(key=b['key'], out=body_dir(b['key']), presets=[STACY[0], *b['presets']], morphs={**b['morphs'], **STACY_MORPHS},
 			poses=poses, expressions=[]))
 	return jobs
 
@@ -233,6 +275,9 @@ def main():
 	bodies = [b for b in BODIES if not keys or b['key'] in keys]
 	flags = {a for a in args if a.startswith('--')} or {'--stage1', '--stage2', '--convert'}
 	if '--stage1' in flags: run_daz(stage1_jobs(bodies), 'stage1')
+	if '--missing-poses' in flags:
+		jobs = stage1_jobs(bodies, missing=True)
+		if jobs: run_daz(jobs, 'stage1-missing')
 	if '--stage2' in flags: run_daz(stage2_jobs(bodies), 'stage2')
 	if '--convert' in flags:
 		import convert_bodies

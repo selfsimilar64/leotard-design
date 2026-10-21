@@ -1,5 +1,6 @@
 import { render } from 'preact';
 import { app } from './instance.js';
+import { STARTER } from './app.js';
 import { Shell, useShortcuts } from './ui/Shell.jsx';
 import { rev, stats, display } from './ui/state.js';
 import { loadDisplay } from './render/display.js';
@@ -26,6 +27,7 @@ async function start(el) {
 	engine.timing.load = performance.now() - t0;
 	app.attach(engine);
 	app.tools = new ToolController(app, engine);
+	if (app.fresh) await app.open(STARTER).catch((e) => console.warn('starter design', e.message));
 	rev.value++;
 	setInterval(() => { stats.value = { ...viewport.stats, stones: engine.stoneCount?.() ?? 0 }; }, 500);
 }

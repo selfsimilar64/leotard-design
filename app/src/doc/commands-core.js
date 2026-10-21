@@ -1,7 +1,6 @@
-// Core commands: raw edits, document metadata, body, scene, and the POC-style looks.
+// Core commands: raw edits, document metadata, body, scene, and the first-generation garment.
 import { defineCommand } from './store.js';
-import { legacyFromLook } from '../garment/legacy.js';
-import { LOOKS, RIGS, MANNEQUIN_FINISHES, REALISTIC_SKIN } from '../render/presets.js';
+import { RIGS, MANNEQUIN_FINISHES, REALISTIC_SKIN, APPEARANCES } from '../render/presets.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
@@ -48,12 +47,13 @@ defineCommand('meta.set', {
 defineCommand('body.set', {
 	label: 'Change body',
 	get args() {
-		return `{ size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, head?: ${HEADS.join('|')}, finish? (body: a mannequin finish or '${REALISTIC_SKIN}'), headFinish? (the mannequin head's), expression?: ${(catalogue.expressions.map((e) => e.key).join('|')) || 'neutral|...'}, `
+		return `{ appearance?: ${Object.keys(APPEARANCES).join('|')} (sets form, head and finish), size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, head?: ${HEADS.join('|')}, finish? (body: a mannequin finish or '${REALISTIC_SKIN}'), headFinish? (the mannequin head's), expression?: ${(catalogue.expressions.map((e) => e.key).join('|')) || 'neutral|...'}, `
 			+ `pose?: ${[...Object.keys(POSES), ...DAZ_POSES].join('|')} | { left, right } (arms: ${ARMS.join('|')}) }`;
 	},
 	run(tx, a) {
 		// 'headless' (before head types) = the full body with no head
 		if (a.form === 'headless') a = { ...a, form: 'full', head: a.head ?? 'none' };
+		if (a.appearance !== undefined) { oneOf('appearance', a.appearance, Object.keys(APPEARANCES)); const { appearance, ...rest } = a; a = { ...rest, ...APPEARANCES[appearance] }; }
 		setFields(tx, 'body', a, {
 			size: (v) => oneOf('size', v, bodyKeys.length ? bodyKeys : SIZES),
 			form: (v) => oneOf('form', v, ['full', 'torso']),
@@ -67,31 +67,31 @@ defineCommand('body.set', {
 });
 
 defineCommand('scene.set', {
-	label: 'Change lighting', args: '{ rig?, exposure?, bloom?, envRotation?, rotateLights?, glare?: plain|star|star6|arena }',
+	label: 'Change lighting', args: '{ rig?, exposure?, bloom?, envRotation?, rotateLights?, glare?: plain|star|star6|arena, glareSize?: 0.2-2.5, glareStrength?: 0-2, backdrop?: room|plain, backdropColour?, roomHeight?, roomSize? }',
 	run(tx, a) {
 		setFields(tx, 'scene', a, {
 			rig: (v) => oneOf('rig', v, Object.keys(RIGS)),
 			exposure: num('exposure', 0.05, 5), bloom: num('bloom', 0, 3), envRotation: num('envRotation', -100, 100),
 			rotateLights: (v) => { if (typeof v !== 'boolean') throw new Error('rotateLights must be true or false'); },
 			glare: (v) => oneOf('glare', v, Object.keys(GLARE)),
+			glareSize: num('glareSize', 0.2, 2.5), glareStrength: num('glareStrength', 0, 2),
+			backdrop: (v) => oneOf('backdrop', v, ['plain', 'room']),
+			backdropColour: (v) => { if (!/^#[0-9a-f]{6}$/i.test(v)) throw new Error('backdropColour must be a colour like #d9d8d4'); },
+			roomHeight: num('roomHeight', 0.3, 6), roomSize: num('roomSize', 3, 35),
 		});
 	},
 });
 
-// --- POC looks (legacy garment) -----------------------------------------------------------------
+// --- first-generation garment (legacy section of older design files) ---------------------------
 
-defineCommand('legacy.look', {
-	label: 'Apply POC look', args: `{ name: ${Object.keys(LOOKS).map((k) => JSON.stringify(k)).join(' | ')} }`,
-	run(tx, { name }) { tx.set('legacy', legacyFromLook(name)); },
-});
 defineCommand('legacy.clear', {
-	label: 'Remove POC garment',
+	label: 'Remove garment',
 	run(tx) { tx.set('legacy', null); },
 });
 defineCommand('legacy.set', {
-	label: 'Edit POC garment', args: '{ sleeves?, back?, pattern?, finish?, zone?: body|accent|sleeve, fabric?, colour?, second?, trim?: {...} }',
+	label: 'Edit garment', args: '{ sleeves?, back?, pattern?, finish?, zone?: body|accent|sleeve, fabric?, colour?, second?, trim?: {...} }',
 	run(tx, a) {
-		if (!tx.get('legacy')) throw new Error('This design has no POC garment (use legacy.look first)');
+		if (!tx.get('legacy')) throw new Error('This design has no first-generation garment');
 		if (a.sleeves !== undefined) { oneOf('sleeves', a.sleeves, ['long', 'tank']); tx.set('legacy/sleeves', a.sleeves); }
 		if (a.back !== undefined) { oneOf('back', a.back, ['scoop', 'keyhole', 'strappy']); tx.set('legacy/back', a.back); }
 		if (a.pattern !== undefined) { oneOf('pattern', a.pattern, Object.keys(PATTERNS)); tx.set('legacy/pattern', a.pattern); }

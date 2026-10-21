@@ -6,7 +6,8 @@ import { selection, tool } from './state.js';
 import { toolOptions } from './tools.js';
 import { StoneToolOptions } from './inspect-stones.jsx';
 import { FABRICS, SECOND } from '../materials/fabric.js';
-import { FabricPicker } from './FabricPicker.jsx';
+import { MaterialPicker } from './FabricPicker.jsx';
+import { Pane, More, Line } from './Gallery.jsx';
 import { DecalToolOptions } from './inspect-decals.jsx';
 
 const fabricOptions = Object.entries(FABRICS).map(([k, f]) => [k, f.label]);
@@ -62,31 +63,33 @@ function GradientRows({ p, s, doc }) {
 
 function PanelInspector({ sel, doc }) {
 	const p = doc.panels.find((x) => x.id === sel.id);
-	if (!p) return <div class="section-body dim">Panel {sel.id} no longer exists.</div>;
+	if (!p) return <div class="section-body dim">This piece no longer exists.</div>;
 	const s = p.stack?.[0] ?? {};
+	const set = (patch, gesture) => run({ op: 'panel.set', id: p.id, ...patch, ...(gesture ? { gesture } : {}) });
+	const n = doc.panels.filter((x) => x.layer === p.layer).indexOf(p) + 1;
 	return (
-		<Section title={`Panel ${p.name || p.id}`} actions={<button class="btn" onClick={() => run({ op: p.removed ? 'panel.restore' : 'panel.cut', id: p.id })}>{p.removed ? 'Fill' : 'Cut out'}</button>}>
-			<Row label="Name"><input type="text" value={p.name ?? ''} onChange={(e) => run({ op: 'panel.set', id: p.id, name: e.currentTarget.value })} /></Row>
-			<FabricPicker look={{ fabric: s.fabric, colour: s.colour ?? '#888888', second: s.second ?? 'Tone-on-tone', colour2: s.colour2 ?? null }} onPick={(v) => run({ op: 'panel.set', id: p.id, fabric: v })} />
-			<Row label="Colour"><Colour value={s.colour ?? '#888888'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, colour: v, gesture: g })} />
-				<button class="btn" title="Pick the colour from a reference photo (look through it, then click the panel)" onClick={() => { toolOptions.value = { ...toolOptions.value, eyedrop: { panel: p.id, layer: 0 } }; tool.value = 'eyedrop'; }}>Pick</button></Row>
-			<Row label="Foil / second"><Select value={s.colour2 ? 'custom' : s.second ?? 'Tone-on-tone'} options={[...SECOND, ['custom', 'Custom colour']]} onChange={(v) => run(v === 'custom' ? { op: 'panel.set', id: p.id, colour2: s.colour2 ?? '#c0c0c8' } : { op: 'panel.set', id: p.id, second: v, colour2: null })} /></Row>
-			{s.colour2 ? <Row label="Second colour"><Colour value={s.colour2} onChange={(v, g) => run({ op: 'panel.set', id: p.id, colour2: v, gesture: g })} /></Row> : null}
-			{FABRICS[s.fabric]?.film || FABRICS[s.fabric]?.duo || FABRICS[s.fabric]?.flake?.holo || FABRICS[s.fabric]?.iridescence ? <Row label="Effect"><Slider value={s.effect ?? 1} min={0} max={2} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, effect: v, gesture: g })} /></Row> : null}
-			{FABRICS[s.fabric]?.mesh ? <Row label="Sheerness"><Slider value={s.sheer ?? (3.6276 * FABRICS[s.fabric].mesh.holeR ** 2) ** 2} min={0} max={0.95} step={0.01} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, sheer: v, gesture: g })} /></Row> : null}
-			<GradientRows p={p} s={s} doc={doc} />
-			<Row label="Print image"><input type="text" placeholder="/moodboard/... or URL" value={s.print?.src ?? ''} onChange={(e) => run({ op: 'panel.set', id: p.id, print: e.currentTarget.value ? { src: e.currentTarget.value, size: s.print?.size ?? [0.2, 0.2] } : null })} /></Row>
-			{s.print ? <Row label="Print repeat"><Slider value={s.print.size?.[0] ?? 0.2} min={0.02} max={0.8} step={0.005} format={mm} onChange={(v, g) => run({ op: 'panel.set', id: p.id, print: { ...s.print, size: [v, v * (s.print.size?.[1] ?? 0.2) / (s.print.size?.[0] ?? 0.2)] }, gesture: g })} /></Row> : null}
-			<Row label="Scanned fabric"><Select value={s.texture ?? ''} options={[['', 'None (procedural)'], ...scans().map((f) => [f.id, f.name + ' (' + f.id.slice(-4) + ')'])]} onChange={(v) => run({ op: 'panel.set', id: p.id, texture: v || null })} /></Row>
-			{s.texture ? (
-				<>
-					<Row label="Scan colour"><Select value={s.texMode ?? 'original'} options={[['original', 'As scanned'], ['recolour', 'Recolour with colour']]} onChange={(v) => run({ op: 'panel.set', id: p.id, texMode: v })} /></Row>
-					<Row label="Scan scale"><Slider value={s.texScale ?? 1} min={0.25} max={4} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, texScale: v, gesture: g })} /></Row>
-				</>
-			) : null}
-			<Row label="Grain"><Slider value={s.grain ?? 0} min={-Math.PI / 2} max={Math.PI / 2} step={0.01} format={(v) => (v * 180 / Math.PI).toFixed(0) + '°'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, grain: v, gesture: g })} /></Row>
-			<Row label="Mirrored"><span class="dim">{p.mirror === 'both' ? 'yes (both sides)' : 'no'}</span></Row>
-		</Section>
+		<Pane title={p.name || 'Piece ' + n} aside={<button class="btn" title="Back to the whole design (Esc)" onClick={() => { selection.value = null; }}>Done</button>}>
+			{p.removed ? <div class="dim note">This piece is cut out (an opening).</div>
+				: <>
+					<MaterialPicker look={{ fabric: s.fabric, colour: s.colour ?? '#888888', second: s.second ?? 'Tone-on-tone', colour2: s.colour2 ?? null, texture: s.texture ?? null, texMode: s.texMode }} set={set} />
+					{/* the size of a scan's weave or print, or of a fabric's glitter, dots, holes, lace, swirls */}
+					<Line label="Texture size"><Slider value={s.texScale ?? 1} min={0.25} max={4} step={0.05} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ texScale: v }, g)} /></Line>
+				</>}
+			<More>
+				<Row label="Name"><input type="text" value={p.name ?? ''} onChange={(e) => run({ op: 'panel.set', id: p.id, name: e.currentTarget.value })} /></Row>
+				<Row label="Opening"><button class="btn" onClick={() => run({ op: p.removed ? 'panel.restore' : 'panel.cut', id: p.id })}>{p.removed ? 'Fill with fabric' : 'Cut out this piece'}</button></Row>
+				<Row label="Colour from photo"><button class="btn" title="Pick the colour from a reference photo (look through it, then click the piece)" onClick={() => { toolOptions.value = { ...toolOptions.value, eyedrop: { panel: p.id, layer: 0 } }; tool.value = 'eyedrop'; }}>Pick</button></Row>
+				<Row label="Foil / second"><Select value={s.colour2 ? 'custom' : s.second ?? 'Tone-on-tone'} options={[...SECOND, ['custom', 'Custom colour']]} onChange={(v) => run(v === 'custom' ? { op: 'panel.set', id: p.id, colour2: s.colour2 ?? '#c0c0c8' } : { op: 'panel.set', id: p.id, second: v, colour2: null })} /></Row>
+				{s.colour2 ? <Row label="Second colour"><Colour value={s.colour2} onChange={(v, g) => run({ op: 'panel.set', id: p.id, colour2: v, gesture: g })} /></Row> : null}
+				{FABRICS[s.fabric]?.film || FABRICS[s.fabric]?.duo || FABRICS[s.fabric]?.flake?.holo || FABRICS[s.fabric]?.iridescence ? <Row label="Effect"><Slider value={s.effect ?? 1} min={0} max={2} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, effect: v, gesture: g })} /></Row> : null}
+				{FABRICS[s.fabric]?.mesh ? <Row label="Sheerness"><Slider value={s.sheer ?? (3.6276 * FABRICS[s.fabric].mesh.holeR ** 2) ** 2} min={0} max={0.95} step={0.01} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, sheer: v, gesture: g })} /></Row> : null}
+				<GradientRows p={p} s={s} doc={doc} />
+				<Row label="Print image"><input type="text" placeholder="/moodboard/... or URL" value={s.print?.src ?? ''} onChange={(e) => run({ op: 'panel.set', id: p.id, print: e.currentTarget.value ? { src: e.currentTarget.value, size: s.print?.size ?? [0.2, 0.2] } : null })} /></Row>
+				{s.print ? <Row label="Print repeat"><Slider value={s.print.size?.[0] ?? 0.2} min={0.02} max={0.8} step={0.005} format={mm} onChange={(v, g) => run({ op: 'panel.set', id: p.id, print: { ...s.print, size: [v, v * (s.print.size?.[1] ?? 0.2) / (s.print.size?.[0] ?? 0.2)] }, gesture: g })} /></Row> : null}
+				<Row label="Grain"><Slider value={s.grain ?? 0} min={-Math.PI / 2} max={Math.PI / 2} step={0.01} format={(v) => (v * 180 / Math.PI).toFixed(0) + '°'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, grain: v, gesture: g })} /></Row>
+				<Row label="Mirrored"><span class="dim">{p.mirror === 'both' ? 'Yes, both sides' : 'No'}</span></Row>
+			</More>
+		</Pane>
 	);
 }
 
@@ -128,10 +131,6 @@ function StrapInspector({ sel, doc }) {
 	);
 }
 registerInspector('straps', StrapInspector);
-
-// scanned fabrics available (filled once the texture manifest has loaded)
-let scanList = [];
-const scans = () => { if (!scanList.length && app.engine?.textures) app.engine.textures.list().then((l) => { scanList = l; }); return scanList; };
 
 registerInspector('curves', CurveInspector);
 registerInspector('panels', PanelInspector);

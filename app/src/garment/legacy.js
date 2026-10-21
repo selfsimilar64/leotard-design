@@ -1,25 +1,13 @@
 // POC-style garment: the three region-field zones (body, sleeves, accent) drawn on the shared
 // body geometry, the POC's finished edges and stone patterns. Drives documents whose `legacy`
-// section is set (the POC's six looks), so they render exactly as in poc-threejs/src/main.js.
+// section is set (older files; the POC's six preset looks were retired 2026-10-21), so they
+// render exactly as in poc-threejs/src/main.js.
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric } from '../materials/fabric.js';
 import { Stones, PATTERNS } from '../stones/stones.js';
 import { Trim } from './trim.js';
-import { LOOKS } from '../render/presets.js';
 
 export const ZONES = ['body', 'sleeve', 'accent'];
-
-// A POC look as the document's legacy section.
-export function legacyFromLook(name) {
-	const l = LOOKS[name];
-	if (!l) throw new Error(`No look "${name}". Looks: ${Object.keys(LOOKS).join(', ')}`);
-	const zone = ([fabric, colour, second]) => ({ fabric, colour, second });
-	return {
-		look: name, sleeves: l.sleeves, back: l.back, pattern: l.pattern, finish: l.finish,
-		zones: { body: zone(l.body), accent: zone(l.accent), sleeve: zone(l.sleeve) },
-		trim: { finish: 'elastic', fabric: 'mystique', colour: '#c9ccd6', second: 'Silver' },
-	};
-}
 
 export class LegacyGarment {
 	constructor(scene, body) {

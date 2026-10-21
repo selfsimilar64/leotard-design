@@ -4,6 +4,7 @@
 // so the surface points they are made of evaluate on any body.
 import { Surface } from './surface.js';
 import { vertexNormals } from './mannequin.js';
+import { applyStencil } from './subdivide.js';
 
 export function buildReference(man) {
 	const N = man.vertices, R = man.ref, idx = man.idx;
@@ -18,6 +19,7 @@ export function buildReference(man) {
 	const G = new Float32Array(N * 3);
 	for (let i = 0; i < N * 3; i++) G[i] = R[i] + normals[i] * lift[(i / 3) | 0];
 	const surface = new Surface(idx, G);
+	surface.open = openSurface(man);
 	// The head is not garment: cells never flow onto it. Genesis 9's head is one surface with the
 	// neck, so the edges between head and neck faces (the head bone's skin weight at one half: under
 	// the jaw, the base of the skull) are a fixed line every arrangement is cut along
@@ -34,4 +36,16 @@ export function buildReference(man) {
 	vertexNormals(G, idx, gNormals);
 	surface.normals = gNormals;
 	return { surface, lift, cover };
+}
+
+// The reference body with both arms raised (the baked 'up' arm poses): the surface curves are
+// sampled on (curves/evaluate.js). In the A-pose the inner arm nearly touches the side of the
+// chest, so a line drawn through the armpit projected some of its samples onto the arm; on a posed
+// body those samples flew off with the arm (a spike from the armhole up the arm). With the arms up
+// nothing touches there; the samples are surface points of the same mesh, so they are placed back
+// on the reference surface unchanged. Null when the arm poses are not baked.
+function openSurface(man) {
+	const b = man.bodies[man.manifest.ref ?? 'young'];
+	if (!b?.armCages?.['l-up'] || !b.armCages['r-up']) return null;
+	return new Surface(man.idx, applyStencil(man.stencil, man.cageOf(b, { left: 'up', right: 'up' })));
 }

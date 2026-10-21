@@ -25,3 +25,6 @@ app/public/figures-daz/
 # Genesis 9 bodies, poses, expressions and the person's head (owner-licensed Daz content;
 # pipeline/daz/bodies.py)
 app/public/g9/
+
+# Python bytecode
+__pycache__/

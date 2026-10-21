@@ -1,6 +1,6 @@
-// A real person on show instead of the mannequin's skin (head type 'person'): Genesis 9 with Daz's
-// skin, eyes, mouth, lashes, brows and Eirgrid hair, for any body type, pose and expression. The
-// leotard is unchanged: it lives on the canonical mesh, which is the same cage subdivided once.
+// A real person on show instead of the mannequin's skin (head type 'person'): Genesis 9 as Stacy
+// (CaramelDream3D: her face, skin, eyes and lashes; Daz's mouth and brows, Eirgrid hair), for any
+// body type, pose and expression. The leotard is unchanged: it lives on the canonical mesh, which is the same cage subdivided once.
 //
 // Everything is assembled from the cage the mannequin shows (body/mannequin.js cageOf):
 //  - skin: the cage (plus the expression's change) subdivided twice (body/subdivide.js);
@@ -37,14 +37,15 @@ export class FigureView {
 		this.textures = new Map();
 		this.uPart = { value: 0 }; // skin: 0 all, 1 below the head, 2 the head (shared by every skin material)
 		this.files = new Map(); // url -> Promise<ArrayBuffer>
+		this.loaded = new Set(); // urls whose file has arrived
 		this.state = null;      // what is shown: key of body, pose, expression
 		this.queue = Promise.resolve();
 	}
 
 	// Show the person for opts = { man, body (manifest entry), cage, poseKey: the Daz pose whose
 	// eyes, mouth and hair to use ('a-pose' for arm poses), shape: what the cage is (body and pose),
-	// expression, part: 'all' | 'head' (the person's head on a mannequin body) | 'body' (realistic
-	// skin under a mannequin head or none), keep: the mannequin's cut field (canonical mesh), cut: a
+	// expression, part: 'all' | 'head' (the person's head on a mannequin body) |
+	// 'body' (realistic skin under a mannequin head or none), keep: the mannequin's cut field (canonical mesh), cut: a
 	// key for it }, or nothing (null). Resolves when the meshes are on show. The skin's parts are cut
 	// per pixel at the head bone's skin weight one half, as the mannequin's (render/engine.js).
 	show(opts) {
@@ -57,9 +58,24 @@ export class FigureView {
 	}
 
 	file(path) {
-		if (!this.files.has(path)) this.files.set(path, fetch(BASE + path).then((r) => { if (!r.ok) throw new Error(path + ': ' + r.status); return r.arrayBuffer(); }));
+		if (!this.files.has(path)) {
+			const p = fetch(BASE + path).then((r) => { if (!r.ok) throw new Error(path + ': ' + r.status); return r.arrayBuffer(); });
+			p.then(() => this.loaded.add(path), () => this.files.delete(path));
+			this.files.set(path, p);
+		}
 		return this.files.get(path);
 	}
+
+	// The files the person needs for a body (manifest entry), a pose's figure files (poseKey as in
+	// show) and an expression: whether they are all here, and loading them. The engine loads them
+	// before it changes body or pose, so the person, the mannequin's surface and the garment change
+	// in the same frame (update needs nothing else from the network).
+	filesFor(body, poseKey, expression) {
+		const pose = body.poses[poseKey] ? poseKey : 'a-pose';
+		return ['figure.bin', body.poses[pose].figure, ...(expression && expression !== 'neutral' && body.expressions[expression] ? [body.expressions[expression]] : [])];
+	}
+	ready(body, poseKey, expression) { return this.filesFor(body, poseKey, expression).every((f) => this.loaded.has(f)); }
+	prefetch(body, poseKey, expression) { return Promise.all(this.filesFor(body, poseKey, expression).map((f) => this.file(f))); }
 
 	// Render topology (figure.bin), shared by every body; stencils for the skin's second level and
 	// the eyes' and mouth's first.
@@ -171,7 +187,8 @@ export class FigureView {
 		return { l: l.getCenter(new THREE.Vector3()), r: r.getCenter(new THREE.Vector3()) };
 	}
 
-	// The body's materials (its own skin set), built once per body.
+	// The body's materials (built once per body): every body is baked wearing Stacy's skin, eyes and
+	// lashes (pipeline/daz/bodies.py STACY), so they are used as baked.
 	materials(body) {
 		this.mats ??= new Map();
 		if (!this.mats.has(body.key)) {
@@ -229,7 +246,9 @@ export class FigureView {
 		// not an AO map: as aoMap it removed nearly all ambient light. Occlusion comes from aOcc.)
 		const mat = new THREE.MeshPhysicalMaterial({
 			map: T('map', true),
-			normalMap: T('detailNormalMap') ?? T('normalMap'),
+			// (Stacy's skin puts a greyscale micro-detail roughness image in Daz's Detail Normal slot:
+			// read as a normal map it covered her in bumps; her own normal map is used instead)
+			normalMap: (/rough/i.test(M.detailNormalMap ?? '') ? null : T('detailNormalMap')) ?? T('normalMap'),
 			roughnessMap: T('roughnessMap'),
 			color: new THREE.Color(1, 1, 1),
 		});
@@ -372,7 +391,12 @@ export function bakeOcclusion(renderer, meshes, headOnly = false) {
 		side: THREE.DoubleSide,
 	});
 	const scene = new THREE.Scene();
-	const clones = meshes.filter((m) => m.name !== 'tear' && m.name !== 'lashes').map((m) => new THREE.Mesh(m.geometry, depthMat));
+	// see-through parts cast nothing: the tear film, the lashes, and the eyes' clear cornea shell (the
+	// additive groups of the eyes mesh). The shell sits about a millimetre in front of the iris, and
+	// on Stacy's eyes that was beyond the bias: the iris baked black.
+	const skip = new THREE.MeshBasicMaterial({ visible: false });
+	const clones = meshes.filter((m) => m.name !== 'tear' && m.name !== 'lashes')
+		.map((m) => new THREE.Mesh(m.geometry, Array.isArray(m.material) && m.geometry.groups.length ? m.material.map((x) => (x.blending === THREE.AdditiveBlending ? skip : depthMat)) : depthMat));
 	for (const c of clones) scene.add(c);
 	const radius = all.getBoundingSphere(new THREE.Sphere()).radius;
 	const cam = new THREE.OrthographicCamera();

@@ -619,8 +619,10 @@ function secondColour(base, mode, forOmbre, out) {
 
 const _c = new THREE.Color();
 // colour2: an explicit second colour (hex) for the foil, the ombre's far end or the duochrome
-// shift, instead of the `second` choice.
-export function applyFabric(m, key, colour, second, colour2 = null) {
+// shift, instead of the `second` choice. scale: the size of the fabric's texture (glitter and foil
+// dots, mesh holes, lace repeat, film swirls, foil crinkle) as a multiple of its own, the panel's
+// texScale; a scanned texture takes the same multiple (applyTexture).
+export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	const f = FABRICS[key] ?? FABRICS.matte, u = m.userData.u, fl = f.flake, base = _c.set(colour).clone();
 	const two = (forOmbre, out) => (colour2 ? out.set(colour2) : secondColour(base, second, forOmbre, out));
 	m.color.copy(base).multiplyScalar(f.velvet ? 0.42 : 1);
@@ -638,7 +640,7 @@ export function applyFabric(m, key, colour, second, colour2 = null) {
 
 	u.uFlake.value = fl ? 1 : 0;
 	if (fl) {
-		u.uPitch.value = fl.pitch; u.uDotR.value = fl.dotR; u.uPresence.value = fl.presence; u.uTilt.value = fl.tilt;
+		u.uPitch.value = fl.pitch * scale; u.uDotR.value = fl.dotR; u.uPresence.value = fl.presence; u.uTilt.value = fl.tilt;
 		u.uFoilRough.value = fl.rough; u.uColorVar.value = fl.colorVar ?? 0; u.uHolo.value = fl.holo ?? 0; u.uHoloFreq.value = fl.holoFreq ?? 3; u.uHoloJit.value = fl.holoJit ?? 0.2;
 		two(false, u.uFoilColor.value);
 	}
@@ -649,14 +651,14 @@ export function applyFabric(m, key, colour, second, colour2 = null) {
 		else { base.getHSL(_hsl); u.uDuoColor.value.setHSL((_hsl.h + 0.22) % 1, Math.min(_hsl.s * 1.1, 1), _hsl.l); }
 	}
 	u.uFilm.value = f.film ? 1 : 0;
-	if (f.film) { u.uFilmScale.value = f.film.scale; u.uFilmRange.value.fromArray(f.film.range); u.uFilmWarp.value = f.film.warp; u.uFilmTint.value = f.film.tint ?? 0; }
+	if (f.film) { u.uFilmScale.value = f.film.scale * scale; u.uFilmRange.value.fromArray(f.film.range); u.uFilmWarp.value = f.film.warp; u.uFilmTint.value = f.film.tint ?? 0; }
 	u.uLace.value = f.lace ? 1 : 0;
 	// lace: the second colour (custom) is the motifs' and cord's; otherwise a lighter tone of the net
-	if (f.lace) { u.tLace.value = laceTexture(); u.uLaceSize.value = f.lace.size; if (colour2) u.uLaceColor.value.set(colour2); else u.uLaceColor.value.copy(base).multiplyScalar(1.12); }
+	if (f.lace) { u.tLace.value = laceTexture(); u.uLaceSize.value = f.lace.size * scale; if (colour2) u.uLaceColor.value.set(colour2); else u.uLaceColor.value.copy(base).multiplyScalar(1.12); }
 	u.uMesh.value = f.mesh ? 1 : 0;
-	if (f.mesh) { u.uMeshPitch.value = f.mesh.pitch; u.uHoleR.value = f.mesh.holeR; }
+	if (f.mesh) { u.uMeshPitch.value = f.mesh.pitch * scale; u.uHoleR.value = f.mesh.holeR; }
 	u.uBumpAmp.value = f.bump?.amp ?? 0;
-	if (f.bump) u.uBumpScale.value = f.bump.scale;
+	if (f.bump) u.uBumpScale.value = f.bump.scale * scale;
 	u.uKnit.value = f.knit ?? 0;
 	u.uChecker.value = f.checker ?? 0;
 	u.uOmbre.value = f.ombre ? 1 : 0;

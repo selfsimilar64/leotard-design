@@ -3,7 +3,7 @@ type: Component
 title: Garment cutting from curves (arrangement)
 description: "How app/src/garment/ turns the document's curves into panels: projected surface splines, attached end points, insertion of every polyline into the canonical mesh, per-face planar subdivision, pruning, sliver merging, cells and panel seeds, with the tolerances and failure fallbacks that make it robust."
 tags: [app, geometry, arrangement, component]
-generated: { by: claude-code/claude-opus-5-5, at: 2026-10-19T08:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-10-21T18:00:00Z }
 sources:
   - id: code
     resource: "app/src/curves/evaluate.js, curves/points.js, garment/arrangement.js, garment/build.js, garment/blocks.js (branch build/designer-app, 2026-10-19)"
@@ -29,7 +29,16 @@ every body size (and later pose) by barycentric interpolation, as planned.[^arch
    1.5 mm samples, each projected back by a face walk from the previous sample (stays on the same
    sheet; global BVH closest point only as a fallback). Corner points reflect the phantom
    neighbour. Shape modifiers (scallop, zigzag, wave) offset across the curve with whole periods on
-   closed curves.
+   closed curves. **Since 2026-10-21 the sampling runs on `surface.open`**: the reference body
+   with both arms raised (the baked `up` arm poses, `body/reference.js openSurface`); the samples
+   are surface points of the same mesh, so they are then placed on the reference surface
+   unchanged. Reason: in the A-pose the inner arm nearly touches the side of the chest, so a line
+   through the armpit (raglan, underarm, armhole, yokes, bandeau tops) projected some samples onto
+   the arm; on a posed body they flew off with it, the "spike from the armhole up the arm" the owner
+   reported on several designs. Measured on all 13 moodboard designs in the arms-outstretched pose:
+   largest step between neighbouring samples 4-25 cm before, under 2 cm after, except the 2 cm
+   crotch seam (4 cm, the gusset stretching between spread legs, not a jump). Lines away from the
+   armpit sample exactly as before (the torso is the same in both poses).
 3. **Attachments**: a control point may carry `on: { curve, t, mirror? }`; it then sits exactly on
    a sample of that curve, evaluated after it (topological order), so T-junctions are exact and
    follow edits. The mirror image of an attached point uses the target's mirror image, or for a

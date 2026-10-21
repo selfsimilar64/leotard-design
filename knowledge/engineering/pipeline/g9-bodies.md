@@ -1,10 +1,10 @@
 ---
 type: Component
 title: Genesis 9 bodies, poses, expressions and heads (pipeline/daz/bodies.py)
-description: "The app's canonical mesh is Daz Genesis 9's cage subdivided once (100,676 vertices); Daz Studio bakes 8 body types in the A-pose, 8 Skillful Routine poses and 5 one-arm presets per side, plus 4 expressions; the app combines body, pose, expression and head (none, mannequin, person) at run time. Replaces the MakeHuman mannequin and the wrapped Daz bodies."
+description: "The app's canonical mesh is Daz Genesis 9's cage subdivided once (100,676 vertices); Daz Studio bakes 8 body types, each with Stacy's face and skin, in the A-pose, all 30 Skillful Routine poses and 5 one-arm presets per side, plus 4 expressions; the app combines body, pose, expression and head (none, mannequin, person) at run time. Replaces the MakeHuman mannequin and the wrapped Daz bodies."
 tags: [pipeline, component, daz, genesis-9, canonical-mesh, pose, expression, head, migration]
 status: draft
-generated: { by: claude-code/claude-opus-5-5, at: 2026-10-21T08:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-10-21T18:00:00Z }
 sources:
   - id: owner
     resource: conversation with the product owner, 2026-10-21 (Claude Code session)
@@ -39,12 +39,16 @@ on load. All output is derived from the owner's licensed Daz content and stays l
 | Field | Values | Notes |
 |---|---|---|
 | `size` (body type) | `child-6`, `child`, `teen`, `older-teen`, `petite`, `young` (reference), `adult`, `broad` | Growing Up ages and character controllers; scaled to a stature |
-| `pose` | arm poses (`a-pose`, `arms-down`, `hands-on-hips`, … or `{ left, right }` of `rest/down/front/thigh/hip/up`), Daz poses (`standing`, `arms-outstretched`, `one-arm-up`, `passe`, `releve-arms-up`, `split-leap`, `stag-jump`, `kneeling`) | arm poses keep the old names, so photo-matched designs keep their pose |
+| `pose` | arm poses (`a-pose`, `arms-down`, `hands-on-hips`, … or `{ left, right }` of `rest/down/front/thigh/hip/up`), Daz poses: all 30 of Skillful Routine (`standing`, `arms-outstretched`, `one-arm-up`, `passe`, `releve-arms-up`, `split-leap`, `stag-jump`, `kneeling`, then since 2026-10-21 `lunge-arms-up`, `lying-legs-up`, `handstand`, ... `one-knee`: `bodies.py POSES`) | arm poses keep the old names, so photo-matched designs keep their pose; the panel lists only the A-pose and the Daz poses |
 | `head` | `none` (cut flat under the chin), `mannequin` (bald head, smoothed), `person` (face, eyes, mouth, lashes, brows, Eirgrid hair) | replaces `form: 'headless'` and the `fig-*` scene bodies |
 | `expression` | `neutral`, `smile` (SR 13, teeth), `soft-smile` (SR 26), `focused` (SR 16) | person only |
 | `form` | `full`, `torso` (dress form) | |
 | `finish` | a mannequin finish (render/presets.js) or `Realistic skin (Daz)` | the body below the head only |
 | `headFinish` | a mannequin finish | the mannequin head (old designs: the body's finish) |
+| ~~`skin`~~ | (ignored since 2026-10-21) | was a tone picker (Daz skin sets remapped at load); every body now wears Stacy's skin |
+
+The interface offers two appearances built from these fields (`body.set { appearance }`):
+`mannequin` (full, no head, matte white fibreglass) and `realistic` (full, person, realistic skin).
 
 The body and the head are drawn independently: the mannequin's skin is two meshes (body, head)
 discarding each other's side per pixel at the head bone's skin weight 0.5, and the person's figure
@@ -54,9 +58,36 @@ skin under a mannequin head or none), cut the same way.
 Old documents (no `mesh` field) are migrated by `doc/migrate-g9.js`: `form: 'headless'` becomes
 `head: 'none'`, `daz-*` sizes their new keys, `fig-*` the young adult with `head: 'person'`.
 
+# The person is Stacy
+
+Since 2026-10-21 (owner's choice) every body is baked as **Stacy** (CaramelDream3D, a free Genesis 9
+character): her face (`CD Stacy Head` at 1, on top of the body's age preset or character
+controller), her skin (`Stacy Skin.duf`: 4K maps, the same seven surfaces as the G9 Feminine
+skins), eyes (`Stacy Eyes 00`, on `Genesis9Eyes`) and lashes (`Stacy Eyelashes 01`, on
+`Genesis9Eyelashes`): `bodies.py STACY`, `STACY_MORPHS`. Not her body morph, so the eight ages and
+builds keep their shapes. Stage 2 applies the same face (the app adds each arm's change from the
+A-pose cage, so both stages must have the same shape). The bare figure stays unshaped. See
+[free character assets](/engineering/pipeline/free-character-assets.md).
+
+Two pitfalls found on the first Stacy bake:
+
+- **Her eyes do not follow her face.** Genesis 9's eyes take a head shape only through an eye morph
+  made for that character (Daz's characters ship one under `Genesis 9 Eyes/Morphs`; Stacy does
+  not). Her face moves the eye bones (1.03 cm down on the young adult, 0.81 cm on the teen) while
+  the eyeballs stay where the unshaped face has them: the irises sat under the upper lids and the
+  eyes read as grey glass. `convert_bodies.py seat_eyes` moves each eyeball rigidly back onto its
+  bone, at the offset it has on the bare figure, turned with the bone (so it holds in every pose).
+- **Her Detail Normal slot holds a greyscale micro-detail roughness image.** Read as a normal map
+  (the app prefers the detail normal) it covered her skin in bumps; `render/figure.js material()`
+  skips a detail normal whose file name says "rough" and uses her normal map.
+- (Found on the way) the occlusion bake counted the eyes' clear cornea shell as an occluder; it now
+  skips the additive (see-through) groups, as it skipped the tear film and lashes.
+
 # Pipeline (pipeline/daz/)
 
-1. **Stage 1** (`bodies.py --stage1`, `bake_bodies.dsa`, one Daz Studio launch, ~1 min a body):
+1. **Stage 1** (`bodies.py --stage1`, `bake_bodies.dsa`, one Daz Studio launch, ~2.5 min a body
+   with 31 poses; `--missing-poses` bakes only the Daz poses with no `.pts` yet, no A-pose,
+   expressions or materials):
    per body, Genesis 9 with its skin MAT, Growing Up age or character controller, morphs and the
    Eirgrid hair; then each pose: zero pose, the pose preset, the neutral face (Skillful Routine
    poses carry their own face), then arm aims. Written as `.pts` (raw cached-geometry positions,

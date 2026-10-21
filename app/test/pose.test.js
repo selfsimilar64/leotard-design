@@ -43,7 +43,7 @@ describe('poses', () => {
 		expect(DAZ_POSES.length).toBeGreaterThan(3);
 		for (const k of [...Object.keys(POSES), ...DAZ_POSES]) for (const b of man.keys) expect(() => man.cageOf(man.bodies[b], k), `${b} ${k}`).not.toThrow();
 		expect(poseSpec(DAZ_POSES[0])).toEqual({ daz: DAZ_POSES[0] });
-		expect(() => poseSpec('cartwheel')).toThrow(/pose must be one of/);
+		expect(() => poseSpec('moonwalk')).toThrow(/pose must be one of/);
 		expect(() => poseSpec({ left: 'wave' })).toThrow(/left arm must be one of/);
 	});
 });

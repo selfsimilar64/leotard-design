@@ -281,18 +281,33 @@ export class Engine {
 	}
 
 	// Which body, pose, head and expression, full figure or dress form, its finish, its stand.
-	applyBody(b, force) {
-		this.applyFinish(b.finish, b.headFinish);
+	// wait: false applies at once, without waiting for the person's files (see below)
+	applyBody(b, force, wait = true) {
 		const head = b.head ?? 'mannequin', pose = b.pose ?? 'a-pose', poseKey = JSON.stringify(pose);
 		const key = JSON.stringify([b.size, b.form, head, pose, b.finish === REALISTIC_SKIN]);
 		// what the figure draws: its head (a person's), its skin below the head (realistic skin), or both
 		const torso = b.form === 'torso', person = head === 'person' && !torso, real = b.finish === REALISTIC_SKIN && !torso;
 		const part = person && real ? 'all' : person ? 'head' : real ? 'body' : null;
+		// A new body or pose with the person on show first waits for the person's files: then the
+		// body, the garment and the person change in the same frame. (The garment used to move at
+		// once while the person stood in the old pose for a second or two, bare where the leotard was.)
+		const entry = this.body.bodies[b.size], fig = [entry, poseSpec(pose).daz ?? 'a-pose', b.expression];
+		// (Not the first body: there is nothing on show to keep.)
+		if (wait && part && entry && this.bodyKey !== null && (force || key !== this.bodyKey) && !this.figure.ready(...fig)) {
+			const want = this.pendingBody = b, go = (ok) => {
+				if (this.pendingBody === want) { this.pendingBody = null; this.applyBody(want, force, ok); }
+				return this.figureReady;
+			};
+			this.figureReady = this.figure.prefetch(...fig).then(() => go(true), (e) => { console.error('figure', e); return go(false); });
+			return;
+		}
+		this.pendingBody = null;
+		this.applyFinish(b.finish, b.headFinish);
 		const figure = () => (this.figureReady = this.figure.show(part ? {
 			man: this.body, body: this.body.body, cage: this.body.cage, poseKey: this.body.body.daz ?? 'a-pose', shape: this.body.key + '|' + this.body.poseKey,
 			expression: b.expression, part, keep: this.body.keep, cut: this.body.formKind + '|' + this.body.head,
 		} : null));
-		// an expression only changes the person's face
+		// an expression or a skin tone only changes the person
 		if (!force && key === this.bodyKey) { figure(); return; }
 		// a new size or form reframes the camera; a new pose, head or expression keeps it
 		const shape = b.size + '|' + b.form, reframe = this.bodyKey !== null && this.shapeKey !== shape;

@@ -13,6 +13,10 @@ export const GLARE = {
 	arena: { rays: 8, angle: 0.2, strength: 1.15, threshold: 0.9, atten: 0.92 },
 };
 
+// Defaults of scene.glareSize and scene.glareStrength: the presets at full strength read as a lens
+// effect, not as sparkle (owner, 2026-10-21), so the rays start shorter and fainter.
+export const GLARE_SIZE = 0.6, GLARE_STRENGTH = 0.35;
+
 const VERT = /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }`;
 
 export class GlarePass extends Pass {
@@ -58,9 +62,12 @@ export class GlarePass extends Pass {
 		this.enabled = false;
 	}
 
-	setPreset(name) {
+	// size: the rays' length and strength: their brightness, both as multiples of the preset's
+	// (scene.glareSize, scene.glareStrength)
+	setPreset(name, { size = 1, strength = 1 } = {}) {
 		this.preset = GLARE[name] ?? null;
-		this.enabled = !!this.preset;
+		this.size = size; this.strength = strength;
+		this.enabled = !!this.preset && strength > 0;
 	}
 
 	setSize(w, h) {
@@ -84,7 +91,7 @@ export class GlarePass extends Pass {
 		S.atten.value = P.atten;
 		for (let r = 0; r < P.rays; r++) {
 			const ang = P.angle + (r / P.rays) * Math.PI * 2;
-			S.dir.value.set(Math.cos(ang) / qw, Math.sin(ang) / qh);
+			S.dir.value.set(Math.cos(ang) / qw * this.size, Math.sin(ang) / qh * this.size);
 			let src = this.bright, dst = this.a;
 			for (let pass = 0; pass < 2; pass++) {
 				S.tSrc.value = src.texture; S.b.value = Math.pow(6, pass);
@@ -95,7 +102,7 @@ export class GlarePass extends Pass {
 			this.draw(renderer, this.addM, this.sum);
 		}
 		const C = this.compM.uniforms;
-		C.tDiffuse.value = readBuffer.texture; C.tStar.value = this.sum.texture; C.strength.value = P.strength;
+		C.tDiffuse.value = readBuffer.texture; C.tStar.value = this.sum.texture; C.strength.value = P.strength * this.strength;
 		this.draw(renderer, this.compM, this.renderToScreen ? null : writeBuffer);
 		renderer.autoClear = autoClear;
 	}

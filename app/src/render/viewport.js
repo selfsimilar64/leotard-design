@@ -8,12 +8,38 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { GroundedSkybox } from 'three/addons/objects/GroundedSkybox.js';
 import { SCENE, RIGS } from './presets.js';
 import { studioEnvironment, cyclorama } from './studio.js';
-import { GlarePass } from './glare.js';
+import { GlarePass, GLARE_SIZE, GLARE_STRENGTH } from './glare.js';
 import { ScenePass, SkinPass, AOPass } from './postfx.js';
 
-const _size = new THREE.Vector2();
+const _size = new THREE.Vector2(), _Y = new THREE.Vector3(0, 1, 0);
+
+// HDRI studios: the plain backdrop's default colour, and the default radius of the room's dome
+// (metres; it must stay inside the camera's far plane, 40 m)
+export const BACKDROP_COLOUR = '#d9d8d4', ROOM_SIZE = 14;
+
+// Brightest direction of an equirectangular HDR image ({ width, height, data } of RGBA half floats
+// or floats, top row first): the luminance x solid-angle weighted mean direction of its brightest
+// 0.5% above the horizon (a sunlit patch of floor is bright but lights nothing from below), in
+// three.js's equirectangular convention (u = atan2(z, x) / 2pi + 0.5).
+function keyDirection({ width: W, height: H, data }) {
+	const half = data instanceof Uint16Array, f = half ? THREE.DataUtils.fromHalfFloat : (v) => v;
+	const step = Math.max(1, Math.round(W / 512)), E = [], dirs = [];
+	for (let y = step / 2; y < H / 2; y += step) {
+		const th = (0.5 - (y + 0.5) / H) * Math.PI, ct = Math.cos(th), st = Math.sin(th);
+		for (let x = step / 2; x < W; x += step) {
+			const o = (Math.floor(y) * W + Math.floor(x)) * 4, ph = ((x + 0.5) / W - 0.5) * 2 * Math.PI;
+			E.push((0.2126 * f(data[o]) + 0.7152 * f(data[o + 1]) + 0.0722 * f(data[o + 2])) * ct);
+			dirs.push(ct * Math.cos(ph), st, ct * Math.sin(ph));
+		}
+	}
+	const thr = Float32Array.from(E).sort()[Math.floor(E.length * 0.995)], k = new THREE.Vector3();
+	E.forEach((e, i) => { if (e >= thr) k.x += dirs[i * 3] * e, k.y += dirs[i * 3 + 1] * e, k.z += dirs[i * 3 + 2] * e; });
+	return k.normalize();
+}
 
 export class Viewport {
 	constructor(container) {
@@ -98,8 +124,15 @@ export class Viewport {
 		this.cyc = cyclorama();
 		this.cyc.visible = false;
 		this.world.add(this.cyc);
+		// HDRI studios (rig.hdri): loaded once each; the room drawn as a skybox with a ground, and a
+		// floor that shows only shadows (the key's) laid on that ground
+		this.hdris = new Map(); // file -> Promise<{ tex, env, key: Vector3, sky }>
+		this.hdriOn = null;     // the HDRI studio on show
+		const catcher = this.catcher = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.32 }));
+		catcher.rotation.x = -Math.PI / 2; catcher.position.y = -0.0085; catcher.receiveShadow = true; catcher.visible = false;
+		this.world.add(catcher);
 
-		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: true, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1, dynamicRes: true };
+		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: false, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1, dynamicRes: true };
 		this.onFrame = new Set();
 		this.onResize = new Set();
 		this.stats = { fps: 0, cpuMs: 0, triangles: 0, width: 0, height: 0 };
@@ -170,8 +203,18 @@ export class Viewport {
 			sun.intensity = sh.E; sun.color.set(sh.c ?? 0xffffff);
 			sun.shadow.camera.updateProjectionMatrix();
 		}
-		this.glare.setPreset(this.settings.glare ?? 'plain');
+		this.glare.setPreset(this.settings.glare ?? 'plain', { size: this.settings.glareSize ?? GLARE_SIZE, strength: this.settings.glareStrength ?? GLARE_STRENGTH });
 		this.rigFixed = !!r.fixed;
+		this.showHdri(null);
+		if (r.hdri) {
+			// until the studio has loaded, the last environment stays on show
+			const want = this.settings.rig;
+			this.cyc.visible = false; this.floor.visible = false;
+			this.hdri(r.hdri).then((h) => { if (this.settings.rig === want) this.showHdri(r, h); }, (e) => console.error('hdri', e));
+			this.bloomK = r.bloomK ?? 1;
+			this.rig.rotation.y = 0;
+			return;
+		}
 		this.bloomK = r.bloomK ?? 1;
 		if (r.fixed) this.rig.rotation.y = 0;
 		let env = this.envs.get(this.settings.rig);
@@ -189,6 +232,64 @@ export class Viewport {
 			this.scene.background = this.cyc.material.color.clone();
 		}
 		else this.scene.background = env;
+	}
+
+	// An HDRI studio: its equirectangular image (the skybox), the lighting prefiltered from it, and
+	// its key direction: the luminance-weighted mean direction of its brightest 0.5% of solid angle
+	// (the window or the softbox).
+	hdri(file) {
+		let p = this.hdris.get(file);
+		if (!p) {
+			p = new HDRLoader().loadAsync('/hdri/' + file).then((tex) => {
+				tex.mapping = THREE.EquirectangularReflectionMapping;
+				return { tex, env: this.pmrem.fromEquirectangular(tex).texture, key: keyDirection(tex.image) };
+			});
+			p.catch(() => this.hdris.delete(file));
+			this.hdris.set(file, p);
+		}
+		return p;
+	}
+
+	// Shows an HDRI studio (rig r, loaded h), or takes it away (null). Behind the figure
+	// (scene.backdrop): 'plain', a flat colour (backdropColour), the HDRI only lighting; or 'room',
+	// the photographed room as a grounded skybox: a dome of radius roomSize whose lower part is
+	// flattened into the floor, as seen from a camera roomHeight above it. Where the flattening
+	// meets the walls the photo is stretched; the two numbers move that seam.
+	showHdri(r, h) {
+		const was = this.hdriOn, s = this.settings;
+		this.catcher.visible = !!r;
+		if (was?.sky) was.sky.visible = false;
+		if (!r) { this.hdriOn = null; return; }
+		const height = s.roomHeight ?? r.height, radius = s.roomSize ?? ROOM_SIZE, k = height + '|' + radius;
+		if (h.skyKey !== k) { // one dome per studio, rebuilt when its shape changes
+			if (h.sky) { h.sky.removeFromParent(); h.sky.geometry.dispose(); h.sky.material.dispose(); }
+			h.sky = new GroundedSkybox(h.tex, height, radius); h.skyKey = k;
+		}
+		const sky = h.sky;
+		this.hdriOn = { r, h, sky };
+		sky.position.y = height - 0.0085; // its ground on the floor the figure stands on
+		const room = s.backdrop === 'room';
+		sky.visible = room;
+		if (!sky.parent) this.scene.add(sky);
+		this.scene.environment = h.env;
+		this.scene.background = room ? null : new THREE.Color(s.backdropColour ?? BACKDROP_COLOUR);
+		this.sun.visible = r.sun > 0; this.sun.intensity = r.sun;
+		// glints: at the key, and a small one beside the camera (what the crystals face)
+		this.lights.forEach((l, i) => { l.visible = i < 2; l.intensity = i === 0 ? r.glint : r.glint * 0.4; l.color.set(0xffffff); });
+		this.placeHdriLights();
+	}
+
+	// The key's shadow and glints follow the room as it turns (envRotation).
+	placeHdriLights() {
+		const o = this.hdriOn;
+		if (!o) return;
+		const a = this.settings.envRotation + (o.r.turn ?? 0), k = o.h.key.clone().applyAxisAngle(_Y, a);
+		o.sky.rotation.y = a;
+		this.scene.environmentRotation.y = this.scene.backgroundRotation.y = a;
+		const t = this.sun.target.position.set(0, 1.0, 0);
+		this.sun.position.copy(k).multiplyScalar(4).add(t);
+		this.lights[0].position.copy(k).multiplyScalar(3).add(t);
+		this.lights[1].position.set(0.4, 1.4, 3.2);
 	}
 
 	// Display settings (render/display.js): resolution, anti-aliasing samples, shadow map, glow and
@@ -213,7 +314,8 @@ export class Viewport {
 		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
 		if (!this.container.clientWidth) return; // pane not laid out yet
 		if (s.rotateLights && !this.photo && !this.rigFixed) this.rig.rotation.y += dt * SCENE.lightSpin;
-		this.scene.environmentRotation.y = this.scene.backgroundRotation.y = s.envRotation + this.rig.rotation.y * SCENE.envFollow;
+		if (this.hdriOn) this.placeHdriLights();
+		else this.scene.environmentRotation.y = this.scene.backgroundRotation.y = s.envRotation + this.rig.rotation.y * SCENE.envFollow;
 		this.renderer.toneMappingExposure = s.exposure;
 		this.bloom.strength = s.bloom * (this.bloomK ?? 1);
 		this.lights[0].getWorldPosition(this.keyDir).sub(this.controls.target).normalize();
