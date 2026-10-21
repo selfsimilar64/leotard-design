@@ -3,7 +3,7 @@
 import { app } from '../instance.js';
 import { rev, selection } from './state.js';
 import { Section, Row, Select, Colour, Slider, Toggle, run } from './controls.jsx';
-import { RIGS, MANNEQUIN_FINISHES, LOOKS } from '../render/presets.js';
+import { RIGS, MANNEQUIN_FINISHES, LOOKS, REALISTIC_SKIN } from '../render/presets.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
@@ -52,7 +52,8 @@ function DesignProps({ doc }) {
 					onChange={(v) => run({ op: 'body.set', head: v })} /></Row> : null}
 				{!torso && head === 'person' ? <Row label="Expression"><Select value={b.expression ?? 'neutral'} options={catalogue.expressions.map((e) => [e.key, e.label])}
 					onChange={(v) => run({ op: 'body.set', expression: v })} /></Row> : null}
-				{torso || head !== 'person' ? <Row label="Finish"><Select value={b.finish} options={Object.keys(MANNEQUIN_FINISHES)} onChange={(v) => run({ op: 'body.set', finish: v })} /></Row> : null}
+				<Row label={torso ? 'Finish' : 'Body material'}><Select value={b.finish} options={torso ? Object.keys(MANNEQUIN_FINISHES) : [REALISTIC_SKIN, ...Object.keys(MANNEQUIN_FINISHES)]} onChange={(v) => run({ op: 'body.set', finish: v })} /></Row>
+				{!torso && head === 'mannequin' ? <Row label="Head finish"><Select value={b.headFinish ?? 'Matte white fibreglass'} options={Object.keys(MANNEQUIN_FINISHES)} onChange={(v) => run({ op: 'body.set', headFinish: v })} /></Row> : null}
 			</Section>
 			<Section title="Lighting">
 				<Row label="Preset"><Select value={s.rig} options={Object.keys(RIGS)} onChange={(v) => run({ op: 'scene.set', rig: v })} /></Row>

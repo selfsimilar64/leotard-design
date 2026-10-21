@@ -1,7 +1,7 @@
 // Core commands: raw edits, document metadata, body, scene, and the POC-style looks.
 import { defineCommand } from './store.js';
 import { legacyFromLook } from '../garment/legacy.js';
-import { LOOKS, RIGS, MANNEQUIN_FINISHES } from '../render/presets.js';
+import { LOOKS, RIGS, MANNEQUIN_FINISHES, REALISTIC_SKIN } from '../render/presets.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
@@ -48,7 +48,7 @@ defineCommand('meta.set', {
 defineCommand('body.set', {
 	label: 'Change body',
 	get args() {
-		return `{ size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, head?: ${HEADS.join('|')}, expression?: ${(catalogue.expressions.map((e) => e.key).join('|')) || 'neutral|...'}, finish?, `
+		return `{ size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, head?: ${HEADS.join('|')}, finish? (body: a mannequin finish or '${REALISTIC_SKIN}'), headFinish? (the mannequin head's), expression?: ${(catalogue.expressions.map((e) => e.key).join('|')) || 'neutral|...'}, `
 			+ `pose?: ${[...Object.keys(POSES), ...DAZ_POSES].join('|')} | { left, right } (arms: ${ARMS.join('|')}) }`;
 	},
 	run(tx, a) {
@@ -59,7 +59,8 @@ defineCommand('body.set', {
 			form: (v) => oneOf('form', v, ['full', 'torso']),
 			head: (v) => oneOf('head', v, HEADS),
 			expression: (v) => { if (catalogue.expressions.length) oneOf('expression', v, catalogue.expressions.map((e) => e.key)); },
-			finish: (v) => oneOf('finish', v, Object.keys(MANNEQUIN_FINISHES)),
+			finish: (v) => oneOf('finish', v, [...Object.keys(MANNEQUIN_FINISHES), REALISTIC_SKIN]),
+			headFinish: (v) => oneOf('headFinish', v, Object.keys(MANNEQUIN_FINISHES)),
 			pose: (v) => { poseSpec(v); },
 		});
 	},

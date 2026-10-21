@@ -14,7 +14,7 @@ export function newDocument(name = 'Untitled') {
 		format: FORMAT, version: VERSION, mesh: MESH,
 		meta: { name, author: '', created: new Date().toISOString(), notes: '' },
 		ids: {},
-		body: { size: 'young', form: 'full', head: 'mannequin', expression: 'neutral', finish: 'Matte white fibreglass', pose: 'a-pose' },
+		body: { size: 'young', form: 'full', head: 'mannequin', expression: 'neutral', finish: 'Matte white fibreglass', headFinish: 'Matte white fibreglass', pose: 'a-pose' },
 		scene: { rig: 'Arena (ring of small lights)', rotateLights: true, exposure: 1, bloom: 0.18, envRotation: 0, glare: 'plain' },
 		// POC-style garment (analytic regions). Set only for the POC's looks; null for app designs.
 		legacy: null,

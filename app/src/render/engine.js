@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { createFabricMaterial } from '../materials/fabric.js';
 import { fullBodyStand, dressFormStand, cutCaps } from './stand.js';
-import { MANNEQUIN_FINISHES } from './presets.js';
+import { MANNEQUIN_FINISHES, REALISTIC_SKIN } from './presets.js';
 import { DecalSet } from './decals.js';
 import { surfaceLandmarks } from '../body/landmarks.js';
 import { poseSpec } from '../body/pose.js';
@@ -27,18 +27,30 @@ export class Engine {
 	constructor(viewport, body, ref) {
 		this.viewport = viewport; this.body = body; this.ref = ref; this.surf = ref.surface;
 		const scene = viewport.world; // the body and garment (scaled together when matching a photo)
+		// The mannequin's skin in two pieces split along the head's border (the head bone's skin weight
+		// at one half, per pixel: each piece discards the other's side through its own keep field), so
+		// the body and the mannequin head take their own finishes; the body's can also be the
+		// person's realistic skin (render/figure.js) under any head.
 		this.skin = createFabricMaterial(3);
+		this.headSkin = createFabricMaterial(3);
 		// cut bodies (dress form, no head) are open tubes under their caps: show the inside, not the background
-		this.skin.side = THREE.DoubleSide;
+		this.skin.side = this.headSkin.side = THREE.DoubleSide;
 		// the body's own geometry plus closed eyes for the mannequin head (body.eyeCaps): same attributes
-		const sg = new THREE.BufferGeometry(), caps = body.eyeCaps(), ix = new Uint32Array(body.idx.length + caps.length);
-		for (const [k, a] of Object.entries(body.geometry.attributes)) sg.setAttribute(k, a);
+		const caps = body.eyeCaps(), ix = new Uint32Array(body.idx.length + caps.length);
 		ix.set(body.idx); ix.set(caps, body.idx.length);
-		sg.setIndex(new THREE.BufferAttribute(ix, 1));
-		this.skinMesh = new THREE.Mesh(sg, this.skin);
-		this.skinMesh.frustumCulled = false; // the geometry's positions change when the body is swapped
-		this.skinMesh.castShadow = this.skinMesh.receiveShadow = true; // arms shade the torso
-		scene.add(this.skinMesh);
+		const piece = (mat) => {
+			const g = new THREE.BufferGeometry(), keep = new THREE.BufferAttribute(new Float32Array(body.vertices), 1);
+			for (const [k, a] of Object.entries(body.geometry.attributes)) g.setAttribute(k, k === 'aKeep' ? keep : a);
+			g.setIndex(new THREE.BufferAttribute(ix, 1));
+			const m = new THREE.Mesh(g, mat);
+			m.frustumCulled = false; // the geometry's positions change when the body is swapped
+			m.castShadow = m.receiveShadow = true; // arms shade the torso
+			m.userData.keep = keep;
+			scene.add(m);
+			return m;
+		};
+		this.skinMesh = piece(this.skin);
+		this.headMesh = piece(this.headSkin);
 		this.capMaterial = new THREE.MeshPhysicalMaterial();
 		this.stand = null;
 		this.figure = new FigureView(scene, viewport.renderer); // head type 'person': a real person instead of the mannequin's skin
@@ -118,7 +130,7 @@ export class Engine {
 
 	stoneCount() { return this.legacyMode ? this.legacy.stones.count : this.stoneView.count; }
 
-	get fabricMaterials() { return [this.skin, ...this.legacy.materials, ...[...this.layers.values()].flatMap((L) => [...L.view.materials.values()])]; }
+	get fabricMaterials() { return [this.skin, this.headSkin, ...this.legacy.materials, ...[...this.layers.values()].flatMap((L) => [...L.view.materials.values()])]; }
 	get garment() { return this.layers.get('L0')?.view ?? null; }
 	get views() { return [...this.layers.values()].map((L) => L.view); }
 	whenFlat() { return Promise.all(this.views.map((v) => v.whenFlat())); }
@@ -256,15 +268,12 @@ export class Engine {
 		}
 	}
 
-	applyFinish(name) {
-		const f = MANNEQUIN_FINISHES[name] ?? MANNEQUIN_FINISHES['Matte white fibreglass'], skin = this.skin, u = skin.userData.u;
-		skin.color.set(f.colour); skin.roughness = f.roughness;
-		skin.clearcoat = f.clearcoat ?? 0; skin.clearcoatRoughness = f.clearcoatRoughness ?? 0;
-		skin.sheen = f.sheen ?? 0; skin.sheenRoughness = 0.7; skin.sheenColor.set(0xffffff);
-		u.uKnit.value = f.knit ?? 0;
-		u.uTape.value = f.tape ? 1 : 0;
-		u.uSkin.value = f.skin ?? 0;
-		skin.needsUpdate = true;
+	// Mannequin finishes: the body's (or the realistic skin, drawn by the figure; the caps and the
+	// dress form then take the plain skin tone) and the mannequin head's.
+	applyFinish(name, headName = name) {
+		const real = name === REALISTIC_SKIN;
+		const f = MANNEQUIN_FINISHES[real ? 'Skin tone' : name] ?? MANNEQUIN_FINISHES['Matte white fibreglass'];
+		setFinish(this.skin, f); setFinish(this.headSkin, MANNEQUIN_FINISHES[headName] ?? f);
 		const cm = this.capMaterial;
 		cm.color.set(f.colour); cm.roughness = f.roughness; cm.clearcoat = f.clearcoat ?? 0; cm.sheen = f.sheen ?? 0;
 		cm.needsUpdate = true;
@@ -272,18 +281,22 @@ export class Engine {
 
 	// Which body, pose, head and expression, full figure or dress form, its finish, its stand.
 	applyBody(b, force) {
-		this.applyFinish(b.finish);
+		this.applyFinish(b.finish, b.headFinish);
 		const head = b.head ?? 'mannequin', pose = b.pose ?? 'a-pose', poseKey = JSON.stringify(pose);
-		const key = JSON.stringify([b.size, b.form, head, pose]);
-		const person = head === 'person' && b.form !== 'torso', figure = () => (this.figureReady = this.figure.show(person
-			? { man: this.body, body: this.body.body, cage: this.body.cage, poseKey: this.body.body.daz ?? 'a-pose', shape: this.body.key + '|' + this.body.poseKey, expression: b.expression } : null));
+		const key = JSON.stringify([b.size, b.form, head, pose, b.finish === REALISTIC_SKIN]);
+		// what the figure draws: its head (a person's), its skin below the head (realistic skin), or both
+		const torso = b.form === 'torso', person = head === 'person' && !torso, real = b.finish === REALISTIC_SKIN && !torso;
+		const part = person && real ? 'all' : person ? 'head' : real ? 'body' : null;
+		const figure = () => (this.figureReady = this.figure.show(part ? {
+			man: this.body, body: this.body.body, cage: this.body.cage, poseKey: this.body.body.daz ?? 'a-pose', shape: this.body.key + '|' + this.body.poseKey,
+			expression: b.expression, part, keep: this.body.keep, cut: this.body.formKind + '|' + this.body.head,
+		} : null));
 		// an expression only changes the person's face
 		if (!force && key === this.bodyKey) { figure(); return; }
 		// a new size or form reframes the camera; a new pose, head or expression keeps it
 		const shape = b.size + '|' + b.form, reframe = this.bodyKey !== null && this.shapeKey !== shape;
 		this.bodyKey = key; this.shapeKey = shape;
 		const t = performance.now(), body = this.body, scene = this.viewport.world;
-		const torso = b.form === 'torso';
 		body.setCut(b.form, head); // before setBody: the mannequin head is shaped there
 		if (body.key !== b.size || body.poseKey !== poseKey || !body.key || body.headKey !== body.head) body.setBody(b.size, pose);
 		this.setWrinklePose(pose);
@@ -293,6 +306,11 @@ export class Engine {
 			m.userData.u.uClip.value = body.clip ? 1 : 0;
 			m.userData.u.uTapeY.value.set(fl.waist, fl.bust, fl.hip, fl.neck);
 		}
+		// the two skin pieces always clip: the body's cut, and each other's side of the head's border
+		const K = body.keep, H = body.wHead, kb = this.skinMesh.userData.keep, kh = this.headMesh.userData.keep;
+		for (let i = 0; i < body.vertices; i++) { kb.array[i] = Math.min(K[i], 0.5 - H[i]); kh.array[i] = Math.min(K[i], H[i] - 0.5); }
+		kb.needsUpdate = kh.needsUpdate = true;
+		for (const m of [this.skin, this.headSkin]) m.userData.u.uClip.value = 1;
 		if (this.stand) { scene.remove(this.stand); this.stand.traverse((o) => o.geometry?.dispose()); }
 		// the person stands on their own; a Daz pose (leaps, kneeling) has no stand either
 		const daz = !!body.body.daz;
@@ -300,7 +318,8 @@ export class Engine {
 		if (!torso && body.headless) this.stand.add(cutCaps(body, this.capMaterial));
 		if (!torso && !person && !daz) this.stand.add(fullBodyStand(body));
 		scene.add(this.stand);
-		this.skinMesh.visible = !person;
+		this.skinMesh.visible = !real;
+		this.headMesh.visible = !torso && head === 'mannequin';
 		figure();
 		const s = torso ? 0.9 : 0.75, blob = this.viewport.blob;
 		blob.scale.set(s, s, 1); blob.position.z = torso ? body.crotch.z : 0;
@@ -329,6 +348,18 @@ export class Engine {
 		controls.target.copy(centre);
 		cam.position.copy(centre).addScaledVector(dir, dist);
 	}
+}
+
+// A mannequin finish (render/presets.js) on a skin piece's material.
+function setFinish(m, f) {
+	const u = m.userData.u;
+	m.color.set(f.colour); m.roughness = f.roughness;
+	m.clearcoat = f.clearcoat ?? 0; m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
+	m.sheen = f.sheen ?? 0; m.sheenRoughness = 0.7; m.sheenColor.set(0xffffff);
+	u.uKnit.value = f.knit ?? 0;
+	u.uTape.value = f.tape ? 1 : 0;
+	u.uSkin.value = f.skin ?? 0;
+	m.needsUpdate = true;
 }
 
 // Extra height of a layer's finishes above the shell's (overlays sit 0.9 mm per step higher).

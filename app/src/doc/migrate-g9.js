@@ -12,15 +12,17 @@ export const MESH = 'g9-sd1';
 // Old body keys -> body types (body/mannequin.js manifest).
 const SIZES = { 'daz-petite': 'petite', 'daz-young': 'young', 'daz-adult': 'adult', 'daz-broad': 'broad' };
 
-// The body section of any saved design -> { size, form, head, expression, pose, finish }.
+// The body section of any saved design -> { size, form, head, expression, pose, finish, headFinish }.
 export function migrateBody(b, bodyKeys = []) {
 	const out = { ...b };
 	if (out.form === 'headless') { out.form = 'full'; out.head ??= 'none'; }
-	if (typeof out.size === 'string' && out.size.startsWith('fig-')) { out.size = 'young'; out.head ??= 'person'; }
+	if (typeof out.size === 'string' && out.size.startsWith('fig-')) { out.size = 'young'; out.head ??= 'person'; out.finish = 'Realistic skin (Daz)'; }
 	out.size = SIZES[out.size] ?? out.size;
 	if (bodyKeys.length && !bodyKeys.includes(out.size)) out.size = 'young';
 	out.head ??= 'mannequin';
 	out.expression ??= 'neutral';
+	// before body and head finishes were separate the mannequin head wore the body's finish
+	if (!out.headFinish) out.headFinish = out.finish && !/^Realistic/.test(out.finish) && !/^Linen/.test(out.finish) ? out.finish : 'Matte white fibreglass';
 	return out;
 }
 

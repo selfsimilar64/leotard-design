@@ -34,6 +34,7 @@ export class FigureView {
 		this.renderer = renderer;
 		this.loader = new THREE.TextureLoader();
 		this.textures = new Map();
+		this.uPart = { value: 0 }; // skin: 0 all, 1 below the head, 2 the head (shared by every skin material)
 		this.files = new Map(); // url -> Promise<ArrayBuffer>
 		this.state = null;      // what is shown: key of body, pose, expression
 		this.queue = Promise.resolve();
@@ -41,10 +42,13 @@ export class FigureView {
 
 	// Show the person for opts = { man, body (manifest entry), cage, poseKey: the Daz pose whose
 	// eyes, mouth and hair to use ('a-pose' for arm poses), shape: what the cage is (body and pose),
-	// expression }, or nothing (null). Resolves when the meshes are on show.
+	// expression, part: 'all' | 'head' (the person's head on a mannequin body) | 'body' (realistic
+	// skin under a mannequin head or none), keep: the mannequin's cut field (canonical mesh), cut: a
+	// key for it }, or nothing (null). Resolves when the meshes are on show. The skin's parts are cut
+	// per pixel at the head bone's skin weight one half, as the mannequin's (render/engine.js).
 	show(opts) {
 		if (!opts) { this.group.visible = false; this.state = null; return this.queue; }
-		const key = [opts.shape, opts.poseKey, opts.expression].join('|');
+		const key = [opts.shape, opts.poseKey, opts.expression, opts.part, opts.cut].join('|');
 		if (key === this.state) { this.group.visible = true; return this.queue; }
 		this.state = key;
 		this.queue = this.queue.then(() => (this.state === key ? this.update(opts, key) : null)).catch((e) => console.error('figure', e));
@@ -72,7 +76,7 @@ export class FigureView {
 		return (this.topo = { S2, T2, meshes, F });
 	}
 
-	async update({ man, body, cage, poseKey, expression, shape }, key) {
+	async update({ man, body, cage, poseKey, expression, shape, part = 'all', keep }, key) {
 		const t0 = performance.now();
 		const { S2, T2, meshes, F } = await this.topology(man);
 		const pose = body.poses[poseKey] ? poseKey : 'a-pose';
@@ -99,6 +103,10 @@ export class FigureView {
 		}
 		const L1 = applyStencil(man.stencil, skinCage), L2 = applyStencil(S2, L1), N2 = new Float32Array(L2.length);
 		vertexNormals(L2, T2, N2);
+		// per skin vertex: the head bone's weight (where head and body part) and the mannequin's cut
+		this.headW ??= applyStencil(S2, man.wHead, new Float32Array(S2.n), 1);
+		const cutW = applyStencil(S2, part === 'head' || !keep ? new Float32Array(man.vertices).fill(1) : keep, new Float32Array(S2.n), 1);
+		this.uPart.value = { all: 0, body: 1, head: 2 }[part];
 
 		const mats = this.materials(body);
 		const fresh = !this.meshes;
@@ -120,7 +128,17 @@ export class FigureView {
 		meshes.forEach((m, i) => {
 			const mesh = this.meshes[i], P = mesh.geometry.attributes.position.array, Nn = mesh.geometry.attributes.normal.array;
 			let W, WN; // welded positions and normals of this part
-			if (m.name === 'skin') { W = L2; WN = N2; }
+			if (m.name === 'skin') {
+				W = L2; WN = N2;
+				const g = mesh.geometry;
+				if (!g.attributes.aHead) {
+					g.setAttribute('aHead', new THREE.BufferAttribute(Float32Array.from(m.map, (j) => this.headW[j]), 1));
+					g.setAttribute('aCut', new THREE.BufferAttribute(new Float32Array(m.vertices), 1));
+				}
+				const C = g.attributes.aCut;
+				for (let r = 0; r < m.vertices; r++) C.array[r] = cutW[m.map[r]];
+				C.needsUpdate = true;
+			}
 			else if (m.stencil) { W = applyStencil(m.stencil, moving[m.name]); WN = new Float32Array(W.length); vertexNormals(W, m.tris, WN); }
 			else if (m.bind) { W = bound(m.bind, L2, N2, T2); WN = weldedNormals(W, m); }
 			else { W = moving[m.name]; WN = weldedNormals(W, m); }
@@ -132,11 +150,13 @@ export class FigureView {
 			mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.attributes.normal.needsUpdate = true;
 			mesh.geometry.computeBoundingBox(); mesh.geometry.computeBoundingSphere();
 			mesh.material = m.groups.map((gr) => mats[gr.material] ?? mats.fallback);
+			mesh.visible = m.name === 'skin' || part !== 'body'; // eyes, mouth, lashes, brows, hair: with the head
 		});
 		if (fresh) for (const m of this.meshes) this.group.add(m);
 		// a new expression on the same body and pose only changes the face
-		bakeOcclusion(this.renderer, this.meshes, !fresh && this.baked === shape);
-		this.baked = shape;
+		const bake = shape + '|' + part;
+		bakeOcclusion(this.renderer, this.meshes.filter((x) => x.visible), !fresh && this.baked === bake);
+		this.baked = bake;
 		if (this.state === key) this.group.visible = true;
 		this.timing = performance.now() - t0;
 	}
@@ -218,7 +238,7 @@ export class FigureView {
 			// dual-lobe skin specular: mostly the sharper lobe (Daz: ratio 0.15 rough / 0.85 at 0.55x)
 			mat.roughness = 0.7; mat.specularIntensity = 0.45;
 			if (/Mouth Cavity/.test(name)) mat.color.setScalar(0.35);
-			return skinMaterial(mat, T('sssMap', true), V['Translucency Weight'] ?? 0.85);
+			return skinMaterial(mat, T('sssMap', true), V['Translucency Weight'] ?? 0.85, this.uPart);
 		}
 		if (part === 'eyes') {
 			mat.roughness = 0.45; mat.specularIntensity = 0.2;
@@ -294,13 +314,18 @@ function withOcclusion(mat, direct, extra) {
 // The punctual-light diffuse line lives in the lights_physical_pars_fragment chunk, so the chunk is
 // inlined and patched (a replace on the material's own shader text would not find it; three r186).
 const DIFFUSE_LINE = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );';
-function skinMaterial(mat, sssMap, weight) {
+function skinMaterial(mat, sssMap, weight, uPart) {
 	if (!THREE.ShaderChunk.lights_physical_pars_fragment.includes(DIFFUSE_LINE)) console.warn('figure skin: three.js lighting chunk changed; subsurface wrap not applied');
 	return withOcclusion(mat, 0.35, (sh) => {
 		sh.uniforms.uSSS = { value: sssMap };
 		sh.uniforms.uSSSWeight = { value: sssMap ? weight : 0 };
+		sh.uniforms.uPart = uPart;
+		sh.vertexShader = sh.vertexShader
+			.replace('#include <common>', '#include <common>\nattribute float aHead;\nattribute float aCut;\nvarying float vHead;\nvarying float vCut;')
+			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHead = aHead;\nvCut = aCut;');
 		sh.fragmentShader = sh.fragmentShader
-			.replace('#include <common>', '#include <common>\nuniform sampler2D uSSS;\nuniform float uSSSWeight;\nvec3 gSSS;')
+			.replace('#include <common>', '#include <common>\nuniform sampler2D uSSS;\nuniform float uSSSWeight;\nuniform float uPart;\nvarying float vHead;\nvarying float vCut;\nvec3 gSSS;')
+			.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n\tif ( vCut < 0.0 || ( uPart == 1.0 && vHead > 0.5 ) || ( uPart == 2.0 && vHead < 0.5 ) ) discard;')
 			.replace('#include <lights_fragment_begin>', 'gSSS = texture2D(uSSS, vMapUv).rgb * uSSSWeight;\n#include <lights_fragment_begin>')
 			.replace('#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment.replace(DIFFUSE_LINE,
 				`{

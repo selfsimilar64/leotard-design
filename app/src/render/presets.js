@@ -9,6 +9,9 @@ export const SCENE = {
 // Mannequin surfaces. Retail mannequins are matte white fibreglass by default (gloss, skin tones
 // and black are the common options); professional dress forms are linen over padding, marked
 // with black style tapes (see research_notes/mannequins_and_leotard_fit.md).
+// The body's realistic skin: Genesis 9's own skin textures (render/figure.js), under any head.
+export const REALISTIC_SKIN = 'Realistic skin (Daz)';
+
 export const MANNEQUIN_FINISHES = {
 	'Matte white fibreglass': { colour: 0xe9e7e2, roughness: 0.5, clearcoat: 0.25, clearcoatRoughness: 0.45 },
 	'Gloss white': { colour: 0xf2f1ee, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 },
