@@ -21,3 +21,7 @@ app/public/mannequins-daz/
 # Daz-derived figure scenes (heads, hair, poses; owner-licensed Daz content; pipeline/daz/bake.py)
 pipeline/daz/out/
 app/public/figures-daz/
+
+# Genesis 9 bodies, poses, expressions and the person's head (owner-licensed Daz content;
+# pipeline/daz/bodies.py)
+app/public/g9/

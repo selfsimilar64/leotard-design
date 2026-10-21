@@ -1,8 +1,10 @@
 // Point specs: the ways a command can name a point on the body, all resolved to a surface point
 // { f, b0, b1, b2 } on the canonical mesh:
 //   { sp: { f, b: [b1, b2] } }        exact surface point
-//   { p: [x, y, z] }                  reference-body position (metres, y up, +z front) -> closest point
-//   { front: [x, y] } / { back: [x, y] }   frontal-plane position on the front or back of the torso
+//   { p: [x, y, z] }                  design-frame position (metres, y up, +z front) -> closest point
+//   { front: [x, y] } / { back: [x, y] }   design-frame frontal-plane position on the front or back of the torso
+//   (design frame: the earlier MakeHuman mannequin's coordinates, which scripts and blocks were
+//   written in; body/mannequin.js `design`)
 //   { lm: 'shoulder_l', d: [dx, dy, dz] }  a rig landmark (+ offset) -> closest point, or a skin
 //                                     landmark such as 'navel', 'waist-l', 'bust-l' (body/landmarks.js)
 //   { curve: 'c3', t: 0.25 }          a point along an evaluated curve (0..1 of its length)
@@ -11,7 +13,7 @@
 //                                     reference photo (solved camera); torso hits win over arms by default
 // The context gives the reference surface, the mannequin and the evaluated curves.
 import * as THREE from 'three';
-import { fromSP } from '../body/surface.js';
+import { fromSP, Surface } from '../body/surface.js';
 import { rayThrough } from '../render/camera-solve.js';
 
 const _v = new THREE.Vector3();
@@ -20,7 +22,7 @@ export function resolvePoint(spec, ctx) {
 	if (!spec || typeof spec !== 'object') throw new Error('A point is an object such as { front: [x, y] } or { p: [x, y, z] }');
 	const S = ctx.surf;
 	if (spec.sp) return fromSP(spec.sp);
-	if (spec.p) { const r = S.closest(_v.fromArray(spec.p)); if (!r) throw new Error('point off the body'); return strip(r); }
+	if (spec.p) { const r = designSurface(ctx.man).closest(_v.fromArray(spec.p)); if (!r) throw new Error('point off the body'); return strip(r); }
 	if (spec.front || spec.back) {
 		const [x, y] = spec.front ?? spec.back;
 		const r = ctx.man.projectFront(x, y, !!spec.back);
@@ -63,6 +65,14 @@ export function resolvePoint(spec, ctx) {
 }
 
 const strip = (r) => ({ f: r.f, b0: r.b0, b1: r.b1, b2: r.b2 });
+
+// The canonical mesh laid out in the design frame (built once): closest points for { p }.
+const designSurfaces = new WeakMap();
+function designSurface(man) {
+	let s = designSurfaces.get(man);
+	if (!s) designSurfaces.set(man, s = new Surface(man.idx, man.design));
+	return s;
+}
 
 // Point at fraction t of an evaluated curve's length (surface point of the nearest sample).
 export function pointAlong(c, t) {

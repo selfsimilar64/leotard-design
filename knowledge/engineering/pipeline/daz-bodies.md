@@ -3,7 +3,8 @@ type: Component
 title: Daz Genesis 9 bodies (build_daz_bodies.py)
 description: "pipeline/build_daz_bodies.py evaluates Daz 3D Genesis 9 shapes from the owner's local Daz library (morph formula graph, arm stance by linear blend skinning, two Catmull-Clark levels) and shrink-wraps the MakeHuman mannequin mesh onto them, so the app gets Daz-shaped bodies on its existing topology; output is git-ignored."
 tags: [pipeline, component, mannequin, daz, genesis-9, wrap, licensing]
-status: draft
+status: deprecated
+superseded_by: /engineering/pipeline/g9-bodies.md
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-20T13:30:00Z }
 sources:
   - id: script
@@ -29,6 +30,12 @@ sources:
 ---
 
 # Takeaway
+
+**Superseded 2026-10-21** by [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md): the app's mesh is
+Genesis 9 itself, so nothing is wrapped any more. `build_daz_bodies.py` is kept only because the
+wrapped young adult it builds is the bridge that converts MakeHuman-era designs
+(`pipeline/daz/convert_bodies.py migration_map`). The findings below remain the record of why the
+wrap was hard.
 
 The app can show **Daz 3D Genesis 9 body shapes on its own mannequin mesh**: each Daz body is
 evaluated from the owner's local Daz library, then the MakeHuman mannequin mesh is wrapped onto it,

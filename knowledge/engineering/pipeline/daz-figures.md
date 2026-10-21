@@ -3,7 +3,8 @@ type: Component
 title: Daz figure scenes (real person renders)
 description: "pipeline/daz/bake.py has Daz Studio 6 itself apply Genesis 9 skin, Growing Up age, Skillful Routine pose and expression (scripted, unattended), exports the posed figures as OBJ, and convert.py turns them into app render meshes (skin, eyes, mouth, lashes, brows) plus procedural competition hair (slicked back into a bun with a scrunchie); the mannequin mesh is carried onto the posed body so every leotard design fits it unchanged."
 tags: [pipeline, component, daz, genesis-9, figure, head, face, hair, pose, age, licensing]
-status: draft
+status: deprecated
+superseded_by: /engineering/pipeline/g9-bodies.md
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-21T02:00:00Z }
 sources:
   - id: owner
@@ -28,6 +29,12 @@ sources:
 ---
 
 # Takeaway
+
+**Superseded 2026-10-21** by [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md): fixed scenes (one
+age, pose and expression each) became independent choices of body, pose, expression and head
+(`head: 'person'`). The scene pipeline (`bake.py`, `bake_scenes.dsa`, `convert.py`, `hair.py`) was
+removed; the rendering notes (skin, eyes, occlusion bake, Daz hair) still describe
+`render/figure.js`, and the follower and hair findings carried over (re-attachment to the skin).
 
 The app can show a **real person** wearing the leotard: a Genesis 9 figure with a textured face,
 eyes, teeth, lashes and brows, an age from 6 to adult, a gymnastics pose and a smiling or neutral

@@ -13,6 +13,8 @@ import { SCENE, RIGS } from './presets.js';
 import { studioEnvironment, cyclorama } from './studio.js';
 import { GlarePass } from './glare.js';
 
+const _size = new THREE.Vector2();
+
 export class Viewport {
 	constructor(container) {
 		this.container = container;
@@ -41,7 +43,7 @@ export class Viewport {
 		controls.maxDistance = 6;
 		// dynamic resolution (realism upgrade R11): while the view moves and frames run late, render
 		// at down to 70%; full resolution again as soon as it is still
-		this.dynScale = 1; this.moving = false; this.stillAt = 0;
+		this.dynScale = this.wantScale = 1; this.moving = false; this.stillAt = 0;
 		controls.addEventListener('start', () => { this.moving = true; });
 		controls.addEventListener('end', () => { this.moving = false; this.stillAt = performance.now(); });
 
@@ -100,11 +102,16 @@ export class Viewport {
 		this.keyDir = new THREE.Vector3();
 		this._frames = 0; this._acc = 0; this._cpu = 0;
 
-		new ResizeObserver(() => this.resize()).observe(container);
+		// Resizing the canvas clears it. The observer runs after the frame was drawn and before the
+		// page is painted, so it draws again at once: otherwise that frame showed black (the flicker
+		// the owner saw while orbiting, when dynamic resolution changed the size twice a second).
+		new ResizeObserver(() => { if (this.resize() && this.container.clientWidth) this.render(); }).observe(container);
 		this.resize();
 		renderer.setAnimationLoop(() => this.frame());
 	}
 
+	// Fits the canvas to its pane (or to a reference photo's crop) at the current resolution.
+	// Returns whether the drawing buffer changed (and so was cleared).
 	resize() {
 		let w = Math.max(this.container.clientWidth, 1), h = Math.max(this.container.clientHeight, 1);
 		if (w < 8 || h < 8) return; // pane hidden: keep the last size
@@ -119,6 +126,7 @@ export class Viewport {
 			Object.assign(this.photoImg.style, { left: -c[0] * k + 'px', top: -c[1] * k + 'px', width: this.photo.size[0] * k + 'px', height: this.photo.size[1] * k + 'px' });
 		} else Object.assign(el.style, { position: '', left: '', top: '' });
 		const pr = Math.min(window.devicePixelRatio, 2) * this.settings.renderScale * this.dynScale;
+		if (this.renderer.getPixelRatio() === pr && this.renderer.getSize(_size).x === w && _size.y === h) return false; // same size: do not clear
 		this.camera.aspect = w / h;
 		this.camera.updateProjectionMatrix();
 		this.renderer.setPixelRatio(pr);
@@ -127,6 +135,7 @@ export class Viewport {
 		this.composer.setSize(w, h);
 		this.bloom.setSize(w * pr / 2, h * pr / 2); // glow is blurry by nature: half resolution is invisible and 4x cheaper
 		for (const fn of this.onResize ?? []) fn(w, h);
+		return true;
 	}
 
 	applyScene(s) {
@@ -177,6 +186,21 @@ export class Viewport {
 		else this.scene.background = env;
 	}
 
+	// Display settings (render/display.js): resolution, anti-aliasing samples, shadow map, glow and
+	// dynamic resolution.
+	applyDisplay(d) {
+		this.display = d;
+		this.settings.renderScale = d.resolution;
+		this.settings.dynamicRes = d.dynamicRes;
+		if (!d.dynamicRes) this.wantScale = 1;
+		for (const t of [this.composer.renderTarget1, this.composer.renderTarget2]) if (t.samples !== d.msaa) { t.samples = d.msaa; t.dispose(); }
+		const sun = this.sun, size = d.shadows === 'sharp' ? 2048 : 1024;
+		sun.castShadow = d.shadows !== 'off';
+		if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+		this.bloom.enabled = d.bloom;
+		if (this.resize() && this.container.clientWidth) this.render();
+	}
+
 	frame() {
 		this.timer.update();
 		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
@@ -188,6 +212,9 @@ export class Viewport {
 		this.lights[0].getWorldPosition(this.keyDir).sub(this.controls.target).normalize();
 		for (const fn of this.onFrame) fn(dt);
 		if (!this.photo) this.controls.update();
+		// a dynamic-resolution step takes effect before this frame is drawn (resizing clears the
+		// canvas: done after drawing, the cleared canvas was shown, a black flash)
+		if (this.wantScale !== this.dynScale) { this.dynScale = this.wantScale; this.resize(); }
 		this.render();
 		this._cpu += performance.now() - start;
 		this._frames++; this._acc += dt;
@@ -195,9 +222,9 @@ export class Viewport {
 			const sz = this.renderer.getDrawingBufferSize(new THREE.Vector2());
 			Object.assign(this.stats, { fps: this._frames / this._acc, cpuMs: this._cpu / this._frames, triangles: this.renderer.info.render.triangles, width: sz.x, height: sz.y, scale: this.dynScale });
 			this._frames = 0; this._acc = 0; this._cpu = 0;
-			if (s.dynamicRes && this.moving && this.stats.fps < 52 && this.dynScale > 0.7) { this.dynScale = Math.max(0.7, this.dynScale - 0.1); this.resize(); }
+			if (s.dynamicRes && this.moving && this.stats.fps < 52 && this.dynScale > 0.7) this.wantScale = Math.max(0.7, this.dynScale - 0.1);
 		}
-		if (this.dynScale < 1 && !this.moving && performance.now() - this.stillAt > 350) { this.dynScale = 1; this.resize(); }
+		if (this.dynScale < 1 && !this.moving && performance.now() - this.stillAt > 350) this.wantScale = 1;
 	}
 
 	render() {

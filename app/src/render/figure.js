@@ -1,21 +1,30 @@
-// A real person on show instead of the mannequin: a Genesis 9 figure (skin, eyes, mouth, lashes,
-// brows, hair) baked by Daz Studio for one age, pose and expression (pipeline/daz/bake.py). The
-// mannequin mesh is still there, carried onto the same posed body (the body's file), so the leotard
-// fits it exactly as it fits any body; only the mannequin's own skin and stand are hidden.
+// A real person on show instead of the mannequin's skin (head type 'person'): Genesis 9 with Daz's
+// skin, eyes, mouth, lashes, brows and Eirgrid hair, for any body type, pose and expression. The
+// leotard is unchanged: it lives on the canonical mesh, which is the same cage subdivided once.
+//
+// Everything is assembled from the cage the mannequin shows (body/mannequin.js cageOf):
+//  - skin: the cage (plus the expression's change) subdivided twice (body/subdivide.js);
+//  - eyes and mouth: their own cages for the pose (pipeline/daz/convert_bodies.py), subdivided once;
+//  - lashes, brows and tear film: bound to the skin (triangle, barycentric weights, offset; Daz
+//    moves them with the bones but not with the head's shape morphs, so they are re-attached);
+//  - hair: baked per body and pose (arm poses use the A-pose's: the head does not move);
+//  - expressions: the changes of the skin, eyes and mouth cages on the A-pose, turned with the
+//    head's rotation in the pose.
 //
 // Shading is "appears correct" (knowledge: realism at 60 fps), not Iray: Daz's textures (colour,
 // normal, roughness, translucency, cavity) on MeshPhysicalMaterial, with
 //  - skin: diffuse light wrapped round the terminator per colour channel (red reaches furthest),
 //    tinted by the translucency map: the cheap stand-in for subsurface scattering that keeps skin
 //    from looking like painted plastic;
-//  - a per-vertex occlusion bake (bakeOcclusion) from many directions at load: eye sockets, the
-//    eyeball under the lids, nostrils, lips, ears and the mouth get the contact shadow a shadow map
-//    cannot resolve. Without it the eyes and teeth glow, the main tell of a real-time face.
+//  - a per-vertex occlusion bake (bakeOcclusion) from many directions: eye sockets, the eyeball
+//    under the lids, nostrils, lips, ears and the mouth get the contact shadow a shadow map cannot
+//    resolve. Without it the eyes and teeth glow, the main tell of a real-time face.
 import * as THREE from 'three';
+import { ccStencil, applyStencil, quadTriangles, readPolys } from '../body/subdivide.js';
+import { vertexNormals } from '../body/mannequin.js';
 
-const BASE = (import.meta.env?.BASE_URL ?? '/') + 'figures-daz/';
-// vertex attributes a figure mesh may carry (convert.py / hair.py) and their sizes
-const ATTRS = { position: 3, normal: 3, uv: 2, uv1: 2, tangent: 4, fade: 1 };
+const BASE = (import.meta.env?.BASE_URL ?? '/') + 'g9/';
+const ORDER = { skin: 0, mouth: 0, eyes: 1, brows: 2, lashes: 3, tear: 4, dazhair: 6 };
 
 export class FigureView {
 	constructor(parent, renderer) {
@@ -25,53 +34,131 @@ export class FigureView {
 		this.renderer = renderer;
 		this.loader = new THREE.TextureLoader();
 		this.textures = new Map();
-		this.key = null;
-		this.loading = null;
+		this.files = new Map(); // url -> Promise<ArrayBuffer>
+		this.state = null;      // what is shown: key of body, pose, expression
+		this.queue = Promise.resolve();
 	}
 
-	// Show the figure of body b (manifest entry with `figure`), or nothing (b without one).
-	async show(b) {
-		const key = b?.figure ?? null;
-		if (key === this.key) { this.group.visible = !!key; return this.loading; }
-		this.key = key;
-		this.clear();
-		if (!key) { this.group.visible = false; return; }
-		this.loading = this.load(key).then(() => { this.group.visible = this.key === key; });
-		return this.loading;
+	// Show the person for opts = { man, body (manifest entry), cage, poseKey: the Daz pose whose
+	// eyes, mouth and hair to use ('a-pose' for arm poses), shape: what the cage is (body and pose),
+	// expression }, or nothing (null). Resolves when the meshes are on show.
+	show(opts) {
+		if (!opts) { this.group.visible = false; this.state = null; return this.queue; }
+		const key = [opts.shape, opts.poseKey, opts.expression].join('|');
+		if (key === this.state) { this.group.visible = true; return this.queue; }
+		this.state = key;
+		this.queue = this.queue.then(() => (this.state === key ? this.update(opts, key) : null)).catch((e) => console.error('figure', e));
+		return this.queue;
 	}
 
-	clear() {
-		for (const m of [...this.group.children]) { m.geometry?.dispose(); this.group.remove(m); }
+	file(path) {
+		if (!this.files.has(path)) this.files.set(path, fetch(BASE + path).then((r) => { if (!r.ok) throw new Error(path + ': ' + r.status); return r.arrayBuffer(); }));
+		return this.files.get(path);
 	}
 
-	async load(key) {
-		const [spec, bin] = await Promise.all([
-			fetch(BASE + key).then((r) => r.json()),
-			fetch(BASE + key.replace(/\.json$/, '.bin')).then((r) => r.arrayBuffer()),
+	// Render topology (figure.bin), shared by every body; stencils for the skin's second level and
+	// the eyes' and mouth's first.
+	async topology(man) {
+		if (this.topo) return this.topo;
+		const F = man.manifest.figure, buf = await this.file('figure.bin');
+		const S2 = ccStencil(man.vertices, new Uint8Array(man.quads.length / 4).fill(4), man.quads);
+		const T2 = quadTriangles(S2.quads);
+		const meshes = F.meshes.map((m) => {
+			const rec = { ...m, map: new Uint32Array(buf, m.map.offset, m.map.count), uv: new Float32Array(buf, m.uv.offset, m.uv.count), index: new Uint32Array(buf, m.index.offset, m.index.count) };
+			if (m.cage) { const c = readPolys(buf, m.cage); rec.stencil = ccStencil(m.cageVertices, c.sizes, c.ids); rec.tris = quadTriangles(rec.stencil.quads); }
+			if (m.bind) rec.bind = { tri: new Uint32Array(buf, m.bind.tri.offset, m.bind.tri.count), bary: new Float32Array(buf, m.bind.bary.offset, m.bind.bary.count), offset: new Float32Array(buf, m.bind.offset.offset, m.bind.offset.count) };
+			return rec;
+		});
+		return (this.topo = { S2, T2, meshes, F });
+	}
+
+	async update({ man, body, cage, poseKey, expression, shape }, key) {
+		const t0 = performance.now();
+		const { S2, T2, meshes, F } = await this.topology(man);
+		const pose = body.poses[poseKey] ? poseKey : 'a-pose';
+		const [poseBuf, exprBuf] = await Promise.all([
+			this.file(body.poses[pose].figure),
+			expression && expression !== 'neutral' && body.expressions[expression] ? this.file(body.expressions[expression]) : null,
 		]);
-		const mats = {}, hc = spec.materials['hair:shell']?.values.colour;
-		this.hairColour = hc ? new THREE.Color().fromArray(hc) : null;
-		for (const [id, m] of Object.entries(spec.materials)) mats[id] = this.material({ ...m, name: id.slice(id.indexOf(':') + 1) });
-		const meshes = [];
-		for (const ms of spec.meshes) {
+		if (this.state !== key) return;
+		// per-pose positions: eyes cage, mouth cage, hair
+		const moving = {};
+		let o = 0;
+		F.moving.forEach((part, i) => { const n = F.movingVertices[i] * 3; moving[part] = Float32Array.from(new Float32Array(poseBuf, o * 4, n)); o += n; });
+		// expression: changes of the skin, eyes and mouth cages, turned with the head
+		const skinCage = Float32Array.from(cage);
+		if (exprBuf) {
+			const q = new THREE.Quaternion().fromArray(body.poses[pose].head), v = new THREE.Vector3();
+			const targets = { skin: skinCage, eyes: moving.eyes, mouth: moving.mouth };
+			let e = 0;
+			F.expression.forEach((part, i) => {
+				const n = F.expressionVertices[i], A = targets[part], D = new Float32Array(exprBuf, e * 4, n * 3);
+				for (let k = 0; k < n; k++) { v.fromArray(D, k * 3).applyQuaternion(q); A[k * 3] += v.x; A[k * 3 + 1] += v.y; A[k * 3 + 2] += v.z; }
+				e += n * 3;
+			});
+		}
+		const L1 = applyStencil(man.stencil, skinCage), L2 = applyStencil(S2, L1), N2 = new Float32Array(L2.length);
+		vertexNormals(L2, T2, N2);
+
+		const mats = this.materials(body);
+		const fresh = !this.meshes;
+		this.meshes ??= meshes.map((m) => {
 			const g = new THREE.BufferGeometry();
-			for (const [f, n] of Object.entries(ATTRS)) if (ms[f + 'Offset'] != null) g.setAttribute(f === 'fade' ? 'aFade' : f, new THREE.BufferAttribute(new Float32Array(bin, ms[f + 'Offset'], ms.vertices * n), n));
-			g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, ms.indexOffset, ms.indices), 1));
-			const list = [];
-			ms.groups.forEach((gr, i) => { g.addGroup(gr.start, gr.count, i); list.push(mats[gr.material]); });
-			const mesh = new THREE.Mesh(g, list);
-			mesh.name = ms.name;
-			mesh.castShadow = ms.name !== 'tear' && ms.name !== 'lashes';
+			g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(m.vertices * 3), 3));
+			g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(m.vertices * 3), 3));
+			g.setAttribute('uv', new THREE.BufferAttribute(m.uv, 2));
+			g.setIndex(new THREE.BufferAttribute(m.index, 1));
+			m.groups.forEach((gr, i) => g.addGroup(gr.start, gr.count, i));
+			const mesh = new THREE.Mesh(g, []);
+			mesh.name = m.name;
+			mesh.castShadow = m.name !== 'tear' && m.name !== 'lashes';
 			mesh.receiveShadow = true;
 			mesh.frustumCulled = false;
-			mesh.renderOrder = { skin: 0, mouth: 0, eyes: 1, brows: 2, lashes: 3, tear: 4, hair: 5, bun: 5, tie: 5, dazhair: 6, strands: 7 }[ms.name] ?? 0;
-			meshes.push(mesh);
+			mesh.renderOrder = ORDER[m.name] ?? 0;
+			return mesh;
+		});
+		meshes.forEach((m, i) => {
+			const mesh = this.meshes[i], P = mesh.geometry.attributes.position.array, Nn = mesh.geometry.attributes.normal.array;
+			let W, WN; // welded positions and normals of this part
+			if (m.name === 'skin') { W = L2; WN = N2; }
+			else if (m.stencil) { W = applyStencil(m.stencil, moving[m.name]); WN = new Float32Array(W.length); vertexNormals(W, m.tris, WN); }
+			else if (m.bind) { W = bound(m.bind, L2, N2, T2); WN = weldedNormals(W, m); }
+			else { W = moving[m.name]; WN = weldedNormals(W, m); }
+			for (let r = 0; r < m.vertices; r++) {
+				const j = m.map[r] * 3;
+				P[r * 3] = W[j]; P[r * 3 + 1] = W[j + 1]; P[r * 3 + 2] = W[j + 2];
+				Nn[r * 3] = WN[j]; Nn[r * 3 + 1] = WN[j + 1]; Nn[r * 3 + 2] = WN[j + 2];
+			}
+			mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.attributes.normal.needsUpdate = true;
+			mesh.geometry.computeBoundingBox(); mesh.geometry.computeBoundingSphere();
+			mesh.material = m.groups.map((gr) => mats[gr.material] ?? mats.fallback);
+		});
+		if (fresh) for (const m of this.meshes) this.group.add(m);
+		// a new expression on the same body and pose only changes the face
+		bakeOcclusion(this.renderer, this.meshes, !fresh && this.baked === shape);
+		this.baked = shape;
+		if (this.state === key) this.group.visible = true;
+		this.timing = performance.now() - t0;
+	}
+
+	// Centres of the eyes (for framing a face): the eyeball meshes' bounding-box centres.
+	eyes() {
+		const m = this.meshes?.find((x) => x.name === 'eyes');
+		if (!m) return null;
+		const P = m.geometry.attributes.position.array, l = new THREE.Box3(), r = new THREE.Box3(), v = new THREE.Vector3();
+		for (let i = 0; i < P.length; i += 3) { v.fromArray(P, i); (v.x > 0 ? l : r).expandByPoint(v); }
+		return { l: l.getCenter(new THREE.Vector3()), r: r.getCenter(new THREE.Vector3()) };
+	}
+
+	// The body's materials (its own skin set), built once per body.
+	materials(body) {
+		this.mats ??= new Map();
+		if (!this.mats.has(body.key)) {
+			const out = { fallback: new THREE.MeshStandardMaterial({ color: 0x888888 }) };
+			for (const [id, m] of Object.entries(body.materials)) out[id] = this.material({ ...m, name: id.slice(id.indexOf(':') + 1) });
+			this.mats.set(body.key, out);
 		}
-		bakeOcclusion(this.renderer, meshes);
-		const skin = meshes.find((m) => m.name === 'skin'), hair = meshes.find((m) => m.name === 'hair');
-		if (skin) skin.geometry.setAttribute('aScalp', new THREE.BufferAttribute(scalpUnderHair(skin.geometry, hair?.geometry), 1));
-		for (const m of meshes) this.group.add(m);
-		this.spec = spec;
+		return this.mats.get(body.key);
 	}
 
 	tex(path, srgb) {
@@ -85,33 +172,20 @@ export class FigureView {
 		return this.textures.get(k);
 	}
 
-	// One app material from a converted Daz material ({ part, maps, values }, convert.py).
+	// One app material from a converted Daz material ({ part, maps, values }, convert_bodies.py).
 	material(m) {
 		const M = m.maps, V = m.values, name = m.name ?? '';
 		const T = (k, srgb = false) => (M[k] ? this.tex(M[k], srgb) : null);
 		const part = m.part;
 		if (part === 'lashes' || part === 'brows') {
 			// Daz tints a light hair albedo by Diffuse Color under a strong glossy layer; without that
-			// layer the same tint reads grey, so the colour is set directly: brows a little darker
-			// than the scene's hair, lashes near black.
-			const brow = this.hairColour ? this.hairColour.clone().multiplyScalar(0.75) : new THREE.Color(0.045, 0.03, 0.022);
+			// layer the same tint reads grey, so the colour is set directly: brows dark brown, lashes
+			// near black.
 			const mat = new THREE.MeshStandardMaterial({
-				color: part === 'lashes' ? new THREE.Color(0.03, 0.024, 0.02) : brow,
+				color: part === 'lashes' ? new THREE.Color(0.03, 0.024, 0.02) : new THREE.Color(0.045, 0.03, 0.022),
 				alphaMap: T('alphaMap'), alphaTest: part === 'lashes' ? 0.25 : 0.04, alphaToCoverage: true,
 				roughness: 0.6, side: THREE.DoubleSide,
 				opacity: part === 'brows' ? 1.15 : 1.3, // > 1: thin strands keep their coverage at a distance (alpha to coverage)
-			});
-			return withOcclusion(mat, 0.6);
-		}
-		if (part === 'hair') return hairMaterial(T, V);
-		if (part === 'strands') {
-			// Daz strand hair (the Pixie cut) as thin ribbons (hair.py strand_ribbons): soft across the
-			// ribbon and fading at the tip (alpha to coverage), highlight stretched across the strands
-			const c = new THREE.Color().setRGB(...(V.colour ?? [0.31, 0.235, 0.2]), THREE.SRGBColorSpace);
-			const mat = new THREE.MeshPhysicalMaterial({
-				color: c, alphaMap: strandAlpha(), alphaTest: 0.02, alphaToCoverage: true, side: THREE.DoubleSide,
-				roughness: 0.42, specularIntensity: 0.6, anisotropy: 0.8, anisotropyRotation: Math.PI / 2,
-				sheen: 0.5, sheenRoughness: 0.45, sheenColor: new THREE.Color().setRGB(...(V.glossy ?? [0.67, 0.58, 0.5]), THREE.SRGBColorSpace).multiplyScalar(0.5),
 			});
 			return withOcclusion(mat, 0.6);
 		}
@@ -125,16 +199,11 @@ export class FigureView {
 			});
 			return withOcclusion(mat, 0.5);
 		}
-		if (part === 'tie') {
-			const c = new THREE.Color().fromArray(V.colour ?? [0.05, 0.05, 0.06]);
-			return withOcclusion(new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.75, sheen: 1, sheenColor: c.clone().lerp(new THREE.Color(1, 1, 1), 0.35), sheenRoughness: 0.45 }), 0.5);
-		}
 		if (part === 'tear') {
 			// the wet line along the lower lid: reflections only, added on top
-			const mat = new THREE.MeshPhysicalMaterial({ color: 0x000000, roughness: 0.08, metalness: 0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, alphaMap: T('alphaMap'), specularIntensity: 1 });
-			return mat;
+			return new THREE.MeshPhysicalMaterial({ color: 0x000000, roughness: 0.08, metalness: 0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, alphaMap: T('alphaMap'), specularIntensity: 1 });
 		}
-		if (part === 'eyes' && /Moisture/i.test(m.name ?? '')) return corneaMaterial();
+		if (part === 'eyes' && /Moisture/i.test(name)) return corneaMaterial();
 		// (Daz's "Ambient Occlusion Weight" map, *_SO, is a specular-occlusion mask averaging 0.07,
 		// not an AO map: as aoMap it removed nearly all ambient light. Occlusion comes from aOcc.)
 		const mat = new THREE.MeshPhysicalMaterial({
@@ -149,7 +218,7 @@ export class FigureView {
 			// dual-lobe skin specular: mostly the sharper lobe (Daz: ratio 0.15 rough / 0.85 at 0.55x)
 			mat.roughness = 0.7; mat.specularIntensity = 0.45;
 			if (/Mouth Cavity/.test(name)) mat.color.setScalar(0.35);
-			return skinMaterial(mat, T('sssMap', true), V['Translucency Weight'] ?? 0.85, this.hairColour);
+			return skinMaterial(mat, T('sssMap', true), V['Translucency Weight'] ?? 0.85);
 		}
 		if (part === 'eyes') {
 			mat.roughness = 0.45; mat.specularIntensity = 0.2;
@@ -166,6 +235,29 @@ export class FigureView {
 	}
 }
 
+// Followers bound to the skin: barycentric point of their skin triangle plus the offset along the
+// interpolated normal.
+function bound({ tri, bary, offset }, S, N, T) {
+	const n = offset.length, out = new Float32Array(n * 3);
+	for (let k = 0; k < n; k++) {
+		const t = tri[k] * 3, a = T[t] * 3, b = T[t + 1] * 3, c = T[t + 2] * 3, w0 = bary[k * 3], w1 = bary[k * 3 + 1], w2 = bary[k * 3 + 2];
+		let nx = w0 * N[a] + w1 * N[b] + w2 * N[c], ny = w0 * N[a + 1] + w1 * N[b + 1] + w2 * N[c + 1], nz = w0 * N[a + 2] + w1 * N[b + 2] + w2 * N[c + 2];
+		const l = Math.hypot(nx, ny, nz) || 1, d = offset[k] / l;
+		for (let i = 0; i < 3; i++) out[k * 3 + i] = w0 * S[a + i] + w1 * S[b + i] + w2 * S[c + i];
+		out[k * 3] += nx * d; out[k * 3 + 1] += ny * d; out[k * 3 + 2] += nz * d;
+	}
+	return out;
+}
+
+// Normals of an unsubdivided part on its welded vertices (UV seams do not show): its render
+// triangles mapped back to welded vertices.
+function weldedNormals(W, m) {
+	if (!m.welded) { m.welded = new Uint32Array(m.index.length); for (let i = 0; i < m.index.length; i++) m.welded[i] = m.map[m.index[i]]; }
+	const out = new Float32Array(W.length);
+	vertexNormals(W, m.welded, out);
+	return out;
+}
+
 // The clear outer shell of the eye: a mirror-like film that only adds reflections (the catchlights
 // that make eyes look alive); everything else shows through. Drawn only where the eyeball itself
 // is the visible surface (stencil 1, written by the eye material): the shell sits a fraction of a
@@ -174,56 +266,6 @@ function corneaMaterial() {
 	return new THREE.MeshPhysicalMaterial({ color: 0x000000, roughness: 0.03, metalness: 0, specularIntensity: 1, clearcoat: 1, clearcoatRoughness: 0.02,
 		transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: 1.3,
 		stencilWrite: true, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc, stencilZPass: THREE.KeepStencilOp, stencilWriteMask: 0 });
-}
-
-// Slicked-back hair (pipeline/daz/hair.py): a shell combed towards the bun. The look is in the
-// shading: fine streaks (map, normalMap; uv.x runs along the strands), an anisotropic highlight
-// stretched across the strands as on real hair (tangent = combing direction, rotated a quarter
-// turn), a soft sheen, and at the hairline the shell breaks up strand by strand (aFade, 0 at the
-// edge) so skin shows between the first hairs instead of a hard cap edge.
-function hairMaterial(T, V) {
-	const c = new THREE.Color().fromArray(V.colour ?? [0.085, 0.052, 0.032]);
-	const map = T('map', true), nrm = T('normalMap');
-	for (const t of [map, nrm]) if (t) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
-	const mat = new THREE.MeshPhysicalMaterial({
-		color: c, map, normalMap: nrm, normalScale: new THREE.Vector2(0.6, 0.6),
-		roughness: 0.34, specularIntensity: 0.8, anisotropy: 0.85, anisotropyRotation: Math.PI / 2,
-		sheen: 0.35, sheenRoughness: 0.4, sheenColor: c.clone().lerp(new THREE.Color(1, 0.9, 0.8), 0.25),
-		alphaToCoverage: !!V.fadeEdge, transparent: false,
-	});
-	if (!V.fadeEdge) return withOcclusion(mat, 0.6);
-	return withOcclusion(mat, 0.6, (sh) => {
-		sh.vertexShader = sh.vertexShader
-			.replace('#include <common>', '#include <common>\nattribute float aFade;\nvarying float vFade;')
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvFade = aFade;');
-		sh.fragmentShader = sh.fragmentShader
-			.replace('#include <common>', '#include <common>\nvarying float vFade;')
-			.replace('#include <alphatest_fragment>', `#include <alphatest_fragment>
-				{
-					// strand-wise break-up of the hairline: streak brightness across the strands
-					float st = texture2D( map, vec2( vMapUv.x * 0.15, vMapUv.y * 3.0 ) ).r;
-					diffuseColor.a *= smoothstep( 0.0, 0.6, vFade * 1.2 + ( st - 0.8 ) * 0.6 );
-					// thin hair near the edge is darker and duller (bright strand ends read as a fringe)
-					diffuseColor.rgb *= mix( 0.55, 1.0, smoothstep( 0.0, 0.6, vFade ) );
-				}`)
-			.replace('#include <aomap_fragment>', `#include <aomap_fragment>
-				reflectedLight.directSpecular *= smoothstep( 0.0, 0.7, vFade );
-				reflectedLight.indirectSpecular *= mix( 0.3, 1.0, smoothstep( 0.0, 0.7, vFade ) );`);
-	});
-}
-
-// Coverage across a strand ribbon (u, soft edges) and along it (v, thinning to the tip).
-let _strandAlpha = null;
-function strandAlpha() {
-	if (_strandAlpha) return _strandAlpha;
-	const W = 32, Hh = 64, d = new Uint8Array(W * Hh * 4);
-	for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
-		const u = (x + 0.5) / W * 2 - 1, v = (y + 0.5) / Hh, a = Math.max(0, 1 - u * u) * (1 - Math.pow(v, 3) * 0.85);
-		const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = Math.round(a * 255); d[i + 3] = 255;
-	}
-	_strandAlpha = new THREE.DataTexture(d, W, Hh); _strandAlpha.needsUpdate = true;
-	_strandAlpha.magFilter = _strandAlpha.minFilter = THREE.LinearFilter;
-	return _strandAlpha;
 }
 
 // Per-vertex occlusion (attribute aOcc, from bakeOcclusion) darkens indirect light fully and direct
@@ -251,22 +293,14 @@ function withOcclusion(mat, direct, extra) {
 // Daz's translucency map, so the shadow edge glows warm instead of cutting off grey.
 // The punctual-light diffuse line lives in the lights_physical_pars_fragment chunk, so the chunk is
 // inlined and patched (a replace on the material's own shader text would not find it; three r186).
-// Also: under the hair (aScalp, from scalpUnderHair) the skin takes the hair colour, as dense roots
-// would: Daz paints the scalp pale, and it showed through the hairline's thin edge as a light band.
 const DIFFUSE_LINE = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );';
-function skinMaterial(mat, sssMap, weight, hairColour) {
+function skinMaterial(mat, sssMap, weight) {
 	if (!THREE.ShaderChunk.lights_physical_pars_fragment.includes(DIFFUSE_LINE)) console.warn('figure skin: three.js lighting chunk changed; subsurface wrap not applied');
 	return withOcclusion(mat, 0.35, (sh) => {
 		sh.uniforms.uSSS = { value: sssMap };
 		sh.uniforms.uSSSWeight = { value: sssMap ? weight : 0 };
-		sh.uniforms.uHair = { value: hairColour ?? new THREE.Color(0, 0, 0) };
-		sh.uniforms.uHairOn = { value: hairColour ? 1 : 0 };
-		sh.vertexShader = sh.vertexShader
-			.replace('#include <common>', '#include <common>\nattribute float aScalp;\nvarying float vScalp;')
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = aScalp;');
 		sh.fragmentShader = sh.fragmentShader
-			.replace('#include <common>', '#include <common>\nuniform sampler2D uSSS;\nuniform float uSSSWeight;\nuniform vec3 uHair;\nuniform float uHairOn;\nvarying float vScalp;\nvec3 gSSS;')
-			.replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb = mix( diffuseColor.rgb, uHair * 0.9, vScalp * uHairOn * 0.92 );')
+			.replace('#include <common>', '#include <common>\nuniform sampler2D uSSS;\nuniform float uSSSWeight;\nvec3 gSSS;')
 			.replace('#include <lights_fragment_begin>', 'gSSS = texture2D(uSSS, vMapUv).rgb * uSSSWeight;\n#include <lights_fragment_begin>')
 			.replace('#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment.replace(DIFFUSE_LINE,
 				`{
@@ -278,42 +312,17 @@ function skinMaterial(mat, sssMap, weight, hairColour) {
 	});
 }
 
-// Per skin vertex: how much hair lies over it, from the nearest hair-shell vertex's fade: rising
-// where the first hairs become visible (fade 0.08-0.35; the pale scalp showed through there, while
-// a tint reaching the bare edge read as a painted shadow line), only for skin right under the shell
-// (within 4-6 mm), 0 elsewhere or without hair.
-function scalpUnderHair(skin, hair) {
-	const n = skin.attributes.position.count, out = new Float32Array(n);
-	if (!hair) return out;
-	const H = hair.attributes.position.array, F = hair.attributes.aFade.array, cell = 0.008, grid = new Map();
-	for (let i = 0, k = 0; i < H.length; i += 3, k++) {
-		const key = Math.floor(H[i] / cell) + ',' + Math.floor(H[i + 1] / cell) + ',' + Math.floor(H[i + 2] / cell);
-		if (!grid.has(key)) grid.set(key, []);
-		grid.get(key).push(k);
-	}
-	const P = skin.attributes.position.array;
-	for (let i = 0, k = 0; i < P.length; i += 3, k++) {
-		const cx = Math.floor(P[i] / cell), cy = Math.floor(P[i + 1] / cell), cz = Math.floor(P[i + 2] / cell);
-		let best = cell * cell, f = 0;
-		for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
-			for (const j of grid.get((cx + a) + ',' + (cy + b) + ',' + (cz + c)) ?? []) {
-				const dx = H[j * 3] - P[i], dy = H[j * 3 + 1] - P[i + 1], dz = H[j * 3 + 2] - P[i + 2], d = dx * dx + dy * dy + dz * dz;
-				if (d < best) { best = d; f = F[j]; }
-			}
-		}
-		out[k] = best < cell * cell ? THREE.MathUtils.smoothstep(f, 0.08, 0.35) * (1 - THREE.MathUtils.smoothstep(Math.sqrt(best), 0.004, 0.006)) : 0;
-	}
-	return out;
-}
-
 // --- occlusion bake --------------------------------------------------------------------------------
 // For each of DIRS directions, the figure's depth seen from that direction (orthographic); a vertex
 // is lit from there if nothing is in front of it. Occlusion = cosine-weighted share of lit
 // directions over the hemisphere of its normal. Twice: the whole figure, then the head region at
-// 10x the resolution (eye sockets and lips are millimetre-scale).
+// 10x the resolution (eye sockets and lips are millimetre-scale). headOnly: only the head pass (an
+// expression changes nothing else); the other vertices keep their last values.
+// Depth is packed into 8-bit RGBA (a quarter of the bytes of a float target to read back) and each
+// pass only visits its own vertices: together about 3x faster than float depth over every vertex.
 const DIRS = 96;
 
-export function bakeOcclusion(renderer, meshes) {
+export function bakeOcclusion(renderer, meshes, headOnly = false) {
 	const t0 = performance.now();
 	const all = new THREE.Box3();
 	for (const m of meshes) { m.geometry.computeBoundingBox(); all.union(m.geometry.boundingBox); }
@@ -324,67 +333,78 @@ export function bakeOcclusion(renderer, meshes) {
 		passes.push({ box: new THREE.Box3().setFromCenterAndSize(c.clone().add(new THREE.Vector3(0, -0.01, -0.02)), new THREE.Vector3(0.26, 0.3, 0.28)), res: 1024, bias: 0.0012 });
 	}
 	const depthMat = new THREE.ShaderMaterial({
+		uniforms: { uFar: { value: 1 } },
 		vertexShader: 'varying float vZ; void main(){ vec4 p = modelViewMatrix * vec4(position,1.0); vZ = -p.z; gl_Position = projectionMatrix * p; }',
-		fragmentShader: 'varying float vZ; void main(){ gl_FragColor = vec4(vZ, 0.0, 0.0, 1.0); }',
+		// depth / far in [0, 1) packed base 255 into four bytes (0 = nothing there)
+		fragmentShader: `uniform float uFar; varying float vZ; void main(){
+			float d = clamp(vZ / uFar, 1e-6, 0.999999);
+			vec4 e = fract(d * vec4(1.0, 255.0, 65025.0, 16581375.0));
+			e -= e.yzww * vec4(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0, 0.0);
+			gl_FragColor = e; }`,
 		side: THREE.DoubleSide,
 	});
 	const scene = new THREE.Scene();
 	const clones = meshes.filter((m) => m.name !== 'tear' && m.name !== 'lashes').map((m) => new THREE.Mesh(m.geometry, depthMat));
 	for (const c of clones) scene.add(c);
 	const radius = all.getBoundingSphere(new THREE.Sphere()).radius;
-	const centre = all.getCenter(new THREE.Vector3());
 	const cam = new THREE.OrthographicCamera();
 	const dirs = fibonacciSphere(DIRS);
-	const occ = meshes.map((m) => ({ lit: new Float32Array(m.geometry.attributes.position.count), w: new Float32Array(m.geometry.attributes.position.count) }));
 	const prevTarget = renderer.getRenderTarget(), prevClear = renderer.getClearColor(new THREE.Color()), prevAlpha = renderer.getClearAlpha();
-	// which pass each vertex belongs to: the head box's vertices take the fine pass only
+	// each pass's vertices per mesh: the head box's vertices take the fine pass only
 	const v = new THREE.Vector3();
-	const mask = meshes.map((m) => {
-		const P = m.geometry.attributes.position.array, k = P.length / 3, a = new Uint8Array(k), b = new Uint8Array(k);
-		for (let i = 0; i < k; i++) { v.fromArray(P, i * 3); const h = passes[1]?.box.containsPoint(v); a[i] = h ? 0 : 1; b[i] = h ? 1 : 0; }
-		return [a, b];
+	const lists = meshes.map((m) => {
+		const P = m.geometry.attributes.position.array, k = P.length / 3, a = [], b = [];
+		for (let i = 0; i < k; i++) { v.fromArray(P, i * 3); (passes[1]?.box.containsPoint(v) ? b : a).push(i); }
+		return [Uint32Array.from(a), Uint32Array.from(b)];
 	});
-	for (const pass of passes) {
-		const rt = new THREE.WebGLRenderTarget(pass.res, pass.res, { type: THREE.FloatType, format: THREE.RGBAFormat, depthBuffer: true });
-		const buf = new Float32Array(pass.res * pass.res * 4);
+	const occ = meshes.map((m) => ({ lit: new Float32Array(m.geometry.attributes.position.count), w: new Float32Array(m.geometry.attributes.position.count) }));
+	passes.forEach((pass, pi) => {
+		if (headOnly && pi === 0) return;
+		const rt = new THREE.WebGLRenderTarget(pass.res, pass.res, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: true });
+		const buf = new Uint8Array(pass.res * pass.res * 4);
 		const pc = pass.box.getCenter(new THREE.Vector3()), half = pass.box.getSize(new THREE.Vector3()).length() / 2;
 		renderer.setClearColor(0x000000, 0);
 		for (const d of dirs) {
 			cam.left = -half; cam.right = half; cam.top = half; cam.bottom = -half;
 			cam.near = 0.01; cam.far = radius * 2 + half * 2 + 1;
+			depthMat.uniforms.uFar.value = cam.far;
 			cam.position.copy(pc).addScaledVector(d, radius + half + 0.5);
 			cam.up.set(Math.abs(d.y) > 0.9 ? 1 : 0, Math.abs(d.y) > 0.9 ? 0 : 1, 0);
 			cam.lookAt(pc); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
 			renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, cam);
 			renderer.readRenderTargetPixels(rt, 0, 0, pass.res, pass.res, buf);
-			const e = cam.matrixWorldInverse.elements, R = pass.res, s2 = 0.5 / half;
+			const e = cam.matrixWorldInverse.elements, R = pass.res, s2 = 0.5 / half, far = cam.far;
 			meshes.forEach((m, mi) => {
-				const P = m.geometry.attributes.position.array, N = m.geometry.attributes.normal.array, o = occ[mi], ok = mask[mi][passes.indexOf(pass)];
-				for (let i = 0, k = 0; i < P.length; i += 3, k++) {
-					if (!ok[k]) continue;
+				const P = m.geometry.attributes.position.array, N = m.geometry.attributes.normal.array, o = occ[mi], list = lists[mi][pi];
+				for (let q = 0; q < list.length; q++) {
+					const k = list[q], i = k * 3;
 					const c = N[i] * d.x + N[i + 1] * d.y + N[i + 2] * d.z;
 					if (c <= 0) continue;
 					const x = P[i], y = P[i + 1], z0 = P[i + 2];
 					const vx = e[0] * x + e[4] * y + e[8] * z0 + e[12], vy = e[1] * x + e[5] * y + e[9] * z0 + e[13], vz = e[2] * x + e[6] * y + e[10] * z0 + e[14];
 					const px = Math.floor((vx * s2 + 0.5) * R), py = Math.floor((vy * s2 + 0.5) * R);
 					if (px < 0 || py < 0 || px >= R || py >= R) continue;
-					const z = buf[(py * R + px) * 4];
+					const t = (py * R + px) * 4;
+					const z = (buf[t] + buf[t + 1] / 255 + buf[t + 2] / 65025 + buf[t + 3] / 16581375) / 255 * far;
 					o.w[k] += c;
 					if (z === 0 || -vz <= z + pass.bias * (1 + 1.5 * Math.sqrt(1 - c * c) / Math.max(c, 0.2))) o.lit[k] += c;
 				}
 			});
 		}
 		rt.dispose();
-	}
+	});
 	renderer.setRenderTarget(prevTarget); renderer.setClearColor(prevClear, prevAlpha);
 	meshes.forEach((m, mi) => {
-		const o = occ[mi], a = new Float32Array(o.lit.length);
-		for (let k = 0; k < a.length; k++) a[k] = o.w[k] > 0 ? Math.min(1, o.lit[k] / o.w[k] * 1.08) : 1;
+		const o = occ[mi], raw = m.userData.occRaw ??= new Float32Array(o.lit.length).fill(1);
+		const update = (k) => { raw[k] = o.w[k] > 0 ? Math.min(1, o.lit[k] / o.w[k] * 1.08) : 1; };
+		if (!headOnly) for (const k of lists[mi][0]) update(k);
+		for (const k of lists[mi][1]) update(k);
+		const a = Float32Array.from(raw);
 		smoothOcclusion(m.geometry, a);
 		m.geometry.setAttribute('aOcc', new THREE.BufferAttribute(a, 1));
 	});
 	depthMat.dispose();
-	console.info(`figure occlusion bake ${(performance.now() - t0).toFixed(0)} ms`);
+	console.info(`figure occlusion bake${headOnly ? ' (head)' : ''} ${(performance.now() - t0).toFixed(0)} ms`);
 }
 
 // Average over welded neighbours twice (removes speckle from the depth-map lookups).

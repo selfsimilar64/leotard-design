@@ -1,69 +1,84 @@
 // Mannequin bodies and garment regions.
 //
-// The bodies are MakeHuman meshes baked by pipeline/build_mannequins.py: four ages, all the same
-// mesh with different vertex positions, so vertex i is the same anatomical point on every body.
-// That is what makes the leotard fit every size: the garment is designed once on the reference
-// body (REF, the young adult) and every region field below is evaluated on the reference
+// The canonical mesh is Daz 3D's Genesis 9: its base cage subdivided once (Catmull-Clark,
+// body/subdivide.js), 100,676 vertices. Every body type in every pose is that mesh with different
+// vertex positions, so vertex i is the same anatomical point on every body. That is what makes the
+// leotard fit every size and pose: the garment is designed once on the reference body (REF, the
+// young adult in the mannequin's A-pose) and every region field below is evaluated on the reference
 // position of each vertex (attribute aRef), then carried to whichever body is shown.
+// Bodies come from pipeline/daz/bodies.py: Daz Studio bakes each body type in each pose (joint
+// correctives included) and the app subdivides the cage. Arm poses are baked one arm at a time and
+// added to the A-pose, so every left/right combination works (body/pose.js).
+// Knowledge: engineering/pipeline/g9-bodies.md.
 //
 // The leotard is not separate geometry. It is the same surface, pushed out in the vertex shader
 // by a per-vertex "lift" (stretch fabric bridging the body's hollows, see computeLift) plus the
 // fabric thickness, with "region fields" deciding where fabric exists (see regions()). The fields
 // are stored per vertex (aCover / aZone) and thresholded per pixel in fabric.js; stones.js reads
 // the same per-vertex values through surface points so stones only land on fabric.
+//
+// Design frame: the first designs, the garment blocks (garment/blocks.js), the POC's region fields
+// and { front: [x, y] } point specs were written in the coordinates of the earlier MakeHuman
+// mannequin. `design` holds each vertex's position on that body through the same anatomical
+// correspondence the Daz bodies were fitted with (pipeline/daz/convert_bodies.py), so those lines
+// land where they always did.
 import * as THREE from 'three';
 import { regions } from '../garment/legacy-regions.js';
-import { applyPose, isRest } from './pose.js';
+import { poseSpec, setDazPoses } from './pose.js';
+import { ccStencil, applyStencil, quadTriangles, readPolys } from './subdivide.js';
 
-const abs = Math.abs, min = Math.min, max = Math.max, sq = Math.sqrt;
+const abs = Math.abs, min = Math.min, max = Math.max;
 const clamp = (x, a, b) => min(max(x, a), b);
 const mix = (a, b, t) => a + (b - a) * t;
 const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 export const REF = 'young';
-const BASE = (import.meta.env?.BASE_URL ?? '/') + 'mannequins/';
+export const MESH = 'g9-sd1';
+const BASE = (import.meta.env?.BASE_URL ?? '/') + 'g9/';
 
 // Stretch fabric spans hollows instead of following them (gluteal cleft, under and between the
 // bust, spine groove, crotch, the front of the armpit). LIFT_MAX caps the span; LIFT_ITER sets how
 // far a bridge can reach (Jacobi diffusion: roughly sqrt(iterations) edges, ~6 mm each).
 const LIFT_MAX = 0.03, LIFT_ITER = 220;
 
-// Dress form cuts, in reference-body metres: neck 2.2 cm above the neck base (just under the
-// opening left by the egg head), legs at mid-thigh (swimwear-style "3/4" form, so the leotard's
-// leg openings show), arms just below the armpit.
+// Dress form cuts, in reference-body metres: neck 2.2 cm above the neck base, legs at mid-thigh
+// (swimwear-style "3/4" form, so the leotard's leg openings show), arms just below the armpit.
 const FORM = { neck: 0.022, thigh: 0.13, armT: 0.1 };
+
+// Head types: 'none' (cut flat under the chin), 'mannequin' (the bald head, smoothed into a
+// sculpted mannequin head), 'person' (render/figure.js: face, eyes, hair).
+export const HEADS = ['none', 'mannequin', 'person'];
 
 // ---------------------------------------------------------------------------------------------
 
-// Keys of the loaded bodies, for validating body.set (commands-core.js).
+// Keys of the loaded bodies, for validating body.set (commands-core.js), and the catalogue the UI
+// lists (labels of bodies, poses, expressions).
 export const bodyKeys = [];
-
-// Optional extra bodies on the same mesh, kept out of git: Daz 3D Genesis 9 shapes built from the
-// owner's licensed Daz library by pipeline/build_daz_bodies.py. Missing folder = no extra bodies.
-const EXTRA = '../mannequins-daz/';
-// Daz figure scenes (a real person: head, face, age, pose; pipeline/daz/bake.py), also kept out of
-// git. Each body's `figure` is the render scene the engine shows instead of the mannequin's skin.
-const FIGURES = '../figures-daz/';
+export const catalogue = { bodies: [], poses: [], expressions: [] };
 
 // get(file, 'json' | 'arrayBuffer') can be replaced (tests read the files from disk).
 export async function loadMannequins(onProgress, get = fetchFile) {
 	const manifest = await get('manifest.json', 'json');
-	const shared = await get('shared.bin', 'arrayBuffer');
-	let extra = null, figures = null;
-	try { extra = await get(EXTRA + 'manifest.json', 'json'); } catch { /* no extra bodies */ }
-	if (extra?.vertices !== manifest.vertices) extra = null;
-	try { figures = await get(FIGURES + 'manifest.json', 'json'); } catch { /* no figure scenes */ }
-	if (figures?.vertices !== manifest.vertices) figures = null;
-	const list = [...manifest.bodies, ...(extra?.bodies ?? []).map((b) => ({ ...b, file: EXTRA + b.file, neck: b.neck && EXTRA + b.neck })),
-		...(figures?.bodies ?? []).map((b) => ({ ...b, file: FIGURES + b.file }))];
+	if (manifest.mesh !== MESH) throw new Error(`g9/manifest.json is for mesh ${manifest.mesh}, the app needs ${MESH}: run pipeline/daz/bodies.py`);
+	const topo = await get('topology.bin', 'arrayBuffer');
 	const bodies = {};
-	await Promise.all(list.map(async (b) => {
-		bodies[b.key] = { ...b, pos: new Float32Array(await get(b.file, 'arrayBuffer')) };
-		if (b.neck) bodies[b.key].neckPos = new Float32Array(await get(b.neck, 'arrayBuffer'));
+	await Promise.all(manifest.bodies.map(async (b) => {
+		const cages = {}, armCages = {};
+		await Promise.all([
+			...Object.entries(b.poses).map(async ([k, p]) => { cages[k] = new Float32Array(await get(p.file, 'arrayBuffer')); }),
+			...Object.entries(b.arms).map(async ([k, f]) => { armCages[k] = new Float32Array(await get(f, 'arrayBuffer')); }),
+		]);
+		bodies[b.key] = { ...b, cages, armCages };
 		onProgress?.(b.key);
 	}));
-	bodyKeys.splice(0, bodyKeys.length, ...list.map((b) => b.key));
-	return new Mannequin({ ...manifest, bodies: list }, shared, bodies);
+	let migrate = null;
+	if (manifest.migrate) migrate = await get('migrate.bin', 'arrayBuffer').catch(() => null);
+	bodyKeys.splice(0, bodyKeys.length, ...manifest.bodies.map((b) => b.key));
+	catalogue.bodies = manifest.bodies.map((b) => ({ key: b.key, label: b.label, years: b.years }));
+	catalogue.poses = manifest.poses;
+	catalogue.expressions = manifest.expressions;
+	setDazPoses(manifest.poses.map((p) => p.key).filter((k) => k !== 'a-pose'));
+	return new Mannequin(manifest, topo, bodies, migrate);
 }
 
 async function fetchFile(f, kind) { const r = await fetch(BASE + f); if (!r.ok) throw new Error(`${f}: ${r.status}`); return r[kind](); }
@@ -71,13 +86,25 @@ async function fetchFile(f, kind) { const r = await fetch(BASE + f); if (!r.ok) 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _n = new THREE.Vector3();
 
 class Mannequin {
-	constructor(manifest, shared, bodies) {
-		const N = this.vertices = manifest.vertices, I = manifest.indices;
+	constructor(manifest, topo, bodies, migrate) {
+		this.manifest = manifest;
+		const N = this.vertices = manifest.vertices, T = manifest.topology;
 		this.bodies = bodies;
 		this.keys = manifest.bodies.map((b) => b.key);
-		const idx = this.idx = new Uint32Array(shared, 0, I);
-		const pw = this.parts = new Uint8Array(shared, I * 4, N * 8); // body-part weights, 8 per vertex (body/pose.js skins with them)
-		this.triangles = I / 3;
+		// the cage's subdivision, checked against the pipeline's triangles (pipeline/g9.py cc_stencil)
+		const cage = readPolys(topo, T.cage);
+		this.stencil = ccStencil(manifest.cage, cage.sizes, cage.ids);
+		const idx = this.idx = new Uint32Array(topo, T.index.offset, T.index.count);
+		const tri = quadTriangles(this.stencil.quads);
+		if (this.stencil.n !== N || tri.length !== idx.length || tri.some((v, i) => v !== idx[i])) throw new Error('Subdivision differs from the pipeline (body/subdivide.js vs pipeline/g9.py)');
+		this.quads = this.stencil.quads;
+		const pw = this.parts = new Uint8Array(topo, T.parts.offset, N * 8); // body-part weights, 8 per vertex (manifest.parts)
+		this.triangles = idx.length / 3;
+		if (migrate) {
+			const M = manifest.migrate;
+			this.migrate = { vertices: M.vertices, positions: new Float32Array(migrate, M.positions.offset, M.positions.count), index: new Uint32Array(migrate, M.index.offset, M.index.count) };
+			this.design = new Float32Array(migrate, M.design.offset, M.design.count);
+		}
 
 		// Part weights (0..1): arm = upper arm + forearm + hand, the side of the armhole seam.
 		this.wArm = new Float32Array(N); this.wHead = new Float32Array(N); this.wLeg = new Float32Array(N);
@@ -87,9 +114,9 @@ class Mannequin {
 			this.wHead[i] = pw[i * 8 + 5] / 255;
 		}
 
-		// Vertex adjacency (CSR), for the lift solve.
+		// Vertex adjacency (CSR), for the lift solve and the head smoothing.
 		const deg = new Uint32Array(N + 1), pairs = new Set();
-		for (let t = 0; t < I; t += 3) for (let e = 0; e < 3; e++) {
+		for (let t = 0; t < idx.length; t += 3) for (let e = 0; e < 3; e++) {
 			const a = idx[t + e], b = idx[t + (e + 1) % 3];
 			const k = a < b ? a * N + b : b * N + a;
 			if (!pairs.has(k)) { pairs.add(k); deg[a + 1]++; deg[b + 1]++; }
@@ -99,11 +126,12 @@ class Mannequin {
 		for (const k of pairs) { const a = Math.floor(k / N), b = k - a * N; nbr[fill[a]++] = b; nbr[fill[b]++] = a; }
 		this.adjStart = deg; this.adj = nbr;
 
-		this.ref = bodies[REF].pos;
-		this.refLm = bodies[REF].landmarks;
+		const ref = bodies[manifest.ref ?? REF];
+		this.ref = this.restOf(ref);
+		this.refLm = ref.landmarks;
+		if (!this.design) this.design = this.ref; // no design frame: the reference body's own coordinates
 		this.buildRefFields();
 		this.buildFrontRaster();
-		this.buildNeckParams();
 
 		const g = this.geometry = new THREE.BufferGeometry();
 		g.setIndex(new THREE.BufferAttribute(idx, 1));
@@ -117,13 +145,33 @@ class Mannequin {
 		this.triArea = new Float32Array(this.triangles);
 		this.cdf = new Float32Array(this.triangles);
 		this.key = null;
+		this.formKind = 'full'; this.head = 'mannequin';
+	}
+
+	// The canonical mesh of a body's A-pose (cached).
+	restOf(b) { return (b.rest ??= applyStencil(this.stencil, b.cages['a-pose'])); }
+
+	// The cage of a body in a pose: a Daz pose as baked, or the A-pose plus each posed arm's change.
+	cageOf(b, pose) {
+		const p = poseSpec(pose), A = b.cages['a-pose'];
+		if (p.daz) return b.cages[p.daz];
+		if (p.left === 'rest' && p.right === 'rest') return A;
+		const out = Float32Array.from(A);
+		for (const [side, arm] of [['l', p.left], ['r', p.right]]) {
+			if (arm === 'rest') continue;
+			const C = b.armCages[side + '-' + arm];
+			if (!C) throw new Error(`Body ${b.key} has no baked arm pose ${side}-${arm} (pipeline/daz/bodies.py --stage2)`);
+			for (let i = 0; i < out.length; i++) out[i] += C[i] - A[i];
+		}
+		return out;
 	}
 
 	// -------------------------------------------------------------------------------------------
 	// Static per-vertex fields on the reference body.
 
 	buildRefFields() {
-		const N = this.vertices, R = this.ref, L = this.refLm;
+		const N = this.vertices, R = this.ref, D = this.design, L = this.refLm;
+		const torso = (i) => this.wArm[i] < 0.15 && this.wHead[i] < 0.5 && this.wLeg[i] < 0.5;
 		// Mid-plane (front/back) and half-width per 1 cm slice of the torso: "front vs back" for the
 		// region fields and the side seam.
 		const slices = new Map();
@@ -150,10 +198,24 @@ class Mannequin {
 		};
 
 		const crotchY = this.crotchY = this.refCrotch();
+		// Tape lines of the dress form and the skin landmarks: the bust (most forward point of the
+		// bust, 8-32 cm under the neck base) and the natural waist (narrowest torso between the bust
+		// and 12 cm above the crotch), measured on the reference body.
+		let bustY = 0, bz = -9;
+		for (let i = 0; i < N; i++) {
+			const ax = abs(R[i * 3]), y = R[i * 3 + 1];
+			if (torso(i) && ax > 0.04 && ax < 0.13 && y > L.neck_base[1] - 0.32 && y < L.neck_base[1] - 0.08 && R[i * 3 + 2] > bz) { bz = R[i * 3 + 2]; bustY = y; }
+		}
+		const half = new Map();
+		for (let i = 0; i < N; i++) if (torso(i)) { const k = Math.round(R[i * 3 + 1] * 100); half.set(k, max(half.get(k) ?? 0, abs(R[i * 3]))); }
+		let waistY = 0, ww = 9;
+		for (let k = Math.ceil((crotchY + 0.12) * 100); k <= Math.floor((bustY - 0.06) * 100); k++) { const w = half.get(k); if (w !== undefined && w < ww) { ww = w; waistY = k / 100; } }
+		this.formLines = { waist: waistY, bust: bustY, hip: crotchY + 0.06, neck: L.neck_base[1] + 0.005 };
+
 		this.armT = new Float32Array(N);
 		this.armF = new Float32Array(N);
 		this.keep = new Float32Array(N);
-		this.keepHeadless = new Float32Array(N).fill(1); // form 'headless': nothing cut (see neckExtension)
+		this.keepAll = new Float32Array(N).fill(1); // full figure: nothing cut
 		this.form = new Float32Array(N * 2);
 		const p = [0, 0, 0];
 		for (let i = 0; i < N; i++) {
@@ -170,12 +232,12 @@ class Mannequin {
 			this.keep[i] = this.wHead[i] > 0.5 ? -1 : min(fNeck, fLeg, fArm);
 
 			// Dress-form style tape fields: x = side-seam distance (z from the mid-plane), y = princess
-			// line distance (|x| from a line through mid-shoulder and the bust point, waisted below).
-			const zr = z - zMid(y);
-			this.form[i * 2] = zr;
-			const bustX = 0.075, waistY = 1.04;
-			const px = y > 1.168 ? mix(bustX, 0.072, smoothstep(1.168, 1.33, y)) : mix(0.055, bustX, smoothstep(waistY, 1.168, y)) + (y < waistY ? (waistY - y) * 0.25 : 0);
-			this.form[i * 2 + 1] = abs(x) - px;
+			// line distance (|x| from a line through mid-shoulder and the bust point, waisted below;
+			// design frame).
+			this.form[i * 2] = z - zMid(y);
+			const dx = D[i * 3], dy = D[i * 3 + 1], bustX = 0.075, dWaist = 1.04;
+			const px = dy > 1.168 ? mix(bustX, 0.072, smoothstep(1.168, 1.33, dy)) : mix(0.055, bustX, smoothstep(dWaist, 1.168, dy)) + (dy < dWaist ? (dWaist - dy) * 0.25 : 0);
+			this.form[i * 2 + 1] = abs(dx) - px;
 		}
 		this.zMid = zMid;
 		this.keepTorso = this.keep.slice();
@@ -197,7 +259,6 @@ class Mannequin {
 			for (let i = 0; i < N; i++) { let s2 = g2[i]; for (let k = S[i]; k < S[i + 1]; k++) s2 += g2[A[k]]; grad[i] = s2 / (S[i + 1] - S[i] + 1); }
 		}
 		for (let i = 0; i < N; i++) this.armF[i] = clamp((this.wArm[i] - 0.5) / max(grad[i], 6), -0.08, 0.08);
-		this.formLines = { waist: 1.04, bust: 1.168, hip: crotchY + 0.06, neck: L.neck_base[1] + 0.005 };
 	}
 
 	refCrotch() {
@@ -211,13 +272,14 @@ class Mannequin {
 
 	// Garment regions on every vertex (the style changes; the body does not matter). The regions
 	// decide where fabric can bridge (see computeLift), so the garment surface is rebuilt too.
+	// The POC's fields are written in the design frame.
 	setStyle(style) {
 		const styleKey = style.sleeves + '|' + style.back;
 		if (styleKey === this.styleKey) return;
 		this.styleKey = styleKey;
-		const R = this.ref, out = [0, 0, 0], v = {}, cover = this.aCover.array, zone = this.aZone.array;
+		const R = this.ref, D = this.design, out = [0, 0, 0], v = {}, cover = this.aCover.array, zone = this.aZone.array;
 		for (let i = 0; i < this.vertices; i++) {
-			v.x = R[i * 3]; v.y = R[i * 3 + 1]; v.z = R[i * 3 + 2]; v.zr = this.form[i * 2];
+			v.x = D[i * 3]; v.y = D[i * 3 + 1]; v.z = R[i * 3 + 2]; v.zr = this.form[i * 2];
 			v.arm = this.armF[i]; v.armT = this.armT[i]; v.head = this.wHead[i];
 			regions(v, style, out);
 			cover[i] = out[0]; zone[i * 2] = out[1]; zone[i * 2 + 1] = out[2];
@@ -238,21 +300,27 @@ class Mannequin {
 	// -------------------------------------------------------------------------------------------
 	// Switching bodies: positions, normals, the fabric's lift over hollows, AO, sampling tables.
 
-	// pose: a preset name or { left, right } (body/pose.js); the rest pose when absent.
+	// pose: a pose name, a Daz pose key or { left, right } (body/pose.js); the A-pose when absent.
 	setBody(key, pose = this.pose) {
-		const N = this.vertices, idx = this.idx, src = this.bodies[key].pos;
-		this.key = key; this.body = this.bodies[key];
-		this.pose = pose ?? null; this.poseKey = JSON.stringify(pose ?? 'a-pose');
-		const P = this.aPos.array; P.set(src);
-		if (pose && !isRest(pose)) {
-			// where hands go is measured on the rest body: crotch height, waist height, front of the belly
-			const L = this.body.landmarks, crotchY = this.measureCrotch().y;
-			let frontZ = 0;
-			for (let i = 0; i < N; i++) if (abs(P[i * 3]) < 0.03 && abs(P[i * 3 + 1] - L.waist[1]) < 0.04 && this.wArm[i] < 0.1) frontZ = max(frontZ, P[i * 3 + 2]);
-			applyPose(P, this.parts, this.body, pose, { crotchY, waistY: L.waist[1], frontZ });
+		const N = this.vertices, idx = this.idx, b = this.bodies[key];
+		if (!b) throw new Error(`No body ${key}`);
+		const spec = poseSpec(pose);
+		this.key = key; this.pose = pose ?? null; this.poseKey = JSON.stringify(pose ?? 'a-pose');
+		this.headKey = this.head;
+		this.cage = this.cageOf(b, pose);
+		// landmarks of what is shown: a Daz pose has its own; arm poses keep the A-pose's
+		this.body = { ...b, landmarks: spec.daz ? b.poses[spec.daz].landmarks : b.landmarks, daz: spec.daz ?? null };
+		const P = this.aPos.array;
+		applyStencil(this.stencil, this.cage, P);
+		if (this.head === 'mannequin') this.sculptHead(P);
+		// the headless cut: a plane under the chin and at the base of the skull, on the body's A-pose
+		// (y = a + b z, pipeline/daz/convert_bodies.py neck_plane), carried into the pose per vertex
+		if (this.keepNeckBody !== key) {
+			const K = this.keepNeck ??= new Float32Array(N), Rb = this.restOf(b), [na, nb] = b.neck;
+			for (let i = 0; i < N; i++) K[i] = na + nb * Rb[i * 3 + 2] - Rb[i * 3 + 1];
+			this.keepNeckBody = key;
 		}
-		this.headlessKey = this.headless;
-		if (this.headless) this.neckExtension(P);
+		this.applyCut();
 		const Nn = this.aNrm.array;
 		vertexNormals(P, idx, Nn);
 
@@ -271,6 +339,57 @@ class Mannequin {
 		this.crotch = this.measureCrotch();
 		this.contact = this.contactOcclusion(P, Nn); // depends on the body and pose only
 		this.updateGarment();
+	}
+
+	// The mannequin head: the bald Genesis 9 head smoothed into a sculpted shape (eyes, lips,
+	// nostrils and ears softened away, the skull and profile kept), as a display mannequin's.
+	// Taubin smoothing (shrink-free), fading in over the head bone's skin weights (the neck stays).
+	sculptHead(P) {
+		const S = this.adjStart, A = this.adj;
+		const list = this.headList ??= Uint32Array.from({ length: this.vertices }, (_, i) => i).filter((i) => this.wHead[i] > 0.02);
+		const w = this.headW ??= Float32Array.from(list, (i) => smoothstep(0.1, 0.9, this.wHead[i]));
+		const Q = new Float32Array(list.length * 3);
+		for (let it = 0; it < 2 * HEAD_SMOOTH; it++) {
+			const lam = it % 2 ? -0.53 : 0.5;
+			for (let k = 0; k < list.length; k++) {
+				const i = list[k];
+				let x = 0, y = 0, z = 0;
+				for (let e = S[i]; e < S[i + 1]; e++) { const j = A[e] * 3; x += P[j]; y += P[j + 1]; z += P[j + 2]; }
+				const n = S[i + 1] - S[i], f = lam * w[k];
+				Q[k * 3] = P[i * 3] + f * (x / n - P[i * 3]);
+				Q[k * 3 + 1] = P[i * 3 + 1] + f * (y / n - P[i * 3 + 1]);
+				Q[k * 3 + 2] = P[i * 3 + 2] + f * (z / n - P[i * 3 + 2]);
+			}
+			for (let k = 0; k < list.length; k++) { const i = list[k] * 3; P[i] = Q[k * 3]; P[i + 1] = Q[k * 3 + 1]; P[i + 2] = Q[k * 3 + 2]; }
+		}
+	}
+
+	// Triangles closing the eye openings (Genesis 9's skin is open where the eyeballs sit): the
+	// mannequin head is drawn with them, as closed, smooth lids. Each opening (a loop of boundary
+	// edges) is filled by a strip zig-zagging between its two ends, no new vertices.
+	eyeCaps() {
+		if (this._eyeCaps) return this._eyeCaps;
+		const idx = this.idx, N = this.vertices, next = new Map(), use = new Map();
+		for (let t = 0; t < idx.length; t += 3) for (let e = 0; e < 3; e++) {
+			const a = idx[t + e], b = idx[t + (e + 1) % 3], k = a < b ? a * N + b : b * N + a;
+			use.set(k, (use.get(k) ?? 0) + 1);
+		}
+		// boundary edges, oriented as their triangle has them, walked backwards (the cap faces outwards)
+		for (let t = 0; t < idx.length; t += 3) for (let e = 0; e < 3; e++) {
+			const a = idx[t + e], b = idx[t + (e + 1) % 3];
+			if (use.get(a < b ? a * N + b : b * N + a) === 1 && this.wHead[a] > 0.5) next.set(b, a);
+		}
+		const tris = [], seen = new Set();
+		for (const start of next.keys()) {
+			if (seen.has(start)) continue;
+			const loop = [];
+			for (let v = start; v !== undefined && !seen.has(v); v = next.get(v)) { seen.add(v); loop.push(v); }
+			for (let i = 0, j = loop.length - 1; j - i > 1;) {
+				tris.push(loop[i], loop[i + 1], loop[j]); i++;
+				if (j - i > 1) { tris.push(loop[i], loop[j - 1], loop[j]); j--; }
+			}
+		}
+		return (this._eyeCaps = Uint32Array.from(tris));
 	}
 
 	// The garment surface on the current body and style: the fabric's lift over hollows, its
@@ -316,16 +435,16 @@ class Mannequin {
 	computeLift(P, Nn, C = this.aCover.array, iter = LIFT_ITER, warm = null) {
 		const N = this.vertices, S = this.adjStart, A = this.adj;
 		let h = warm ? Float32Array.from(warm) : new Float32Array(N), h2 = new Float32Array(N);
-		const fixed = new Uint8Array(N);
-		for (let i = 0; i < N; i++) fixed[i] = this.wHead[i] > 0.5 || this.armT[i] > 1 || C[i] <= 0 ? 1 : 0;
-		for (let i = 0; i < N; i++) if (fixed[i]) h[i] = 0;
+		// only fabric vertices take part (the rest stay 0): a list keeps the sweeps off the bare body
+		const free = [];
+		for (let i = 0; i < N; i++) if (this.wHead[i] > 0.5 || this.armT[i] > 1 || C[i] <= 0) h[i] = 0; else free.push(i);
 		for (let it = 0; it < iter; it++) {
-			for (let i = 0; i < N; i++) {
-				if (fixed[i]) { h2[i] = 0; continue; }
+			for (let k = 0; k < free.length; k++) {
+				const i = free[k];
 				const px = P[i * 3], py = P[i * 3 + 1], pz = P[i * 3 + 2], nx = Nn[i * 3], ny = Nn[i * 3 + 1], nz = Nn[i * 3 + 2];
 				let s = 0;
-				for (let k = S[i]; k < S[i + 1]; k++) {
-					const j = A[k], hj = h[j];
+				for (let e = S[i]; e < S[i + 1]; e++) {
+					const j = A[e], hj = h[j];
 					s += (P[j * 3] + Nn[j * 3] * hj - px) * nx + (P[j * 3 + 1] + Nn[j * 3 + 1] * hj - py) * ny + (P[j * 3 + 2] + Nn[j * 3 + 2] * hj - pz) * nz;
 				}
 				h2[i] = clamp(s / (S[i + 1] - S[i]), 0, LIFT_MAX);
@@ -339,22 +458,24 @@ class Mannequin {
 	// the hip): each torso vertex is darkened by the nearest arm vertex in front of it within R,
 	// and each arm vertex by the nearest torso vertex in front of it. Grid of R-sized cells.
 	contactOcclusion(P, Nn, R = 0.045) {
-		const N = this.vertices, ao = new Float32Array(N).fill(1), grid = new Map(), key = (x, y, z) => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0;
+		const N = this.vertices, ao = new Float32Array(N).fill(1), key = (x, y, z) => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0;
 		const isArm = (i) => this.wArm[i] > 0.6, isTorso = (i) => this.wArm[i] < 0.15 && this.wHead[i] < 0.5 && this.wLeg[i] < 0.5;
+		// one grid per side, so each vertex only visits the other side's cells (most are empty)
+		const grids = [new Map(), new Map()]; // [torso, arm]
 		for (let i = 0; i < N; i++) {
 			if (!isArm(i) && !isTorso(i)) continue;
-			const k = key(Math.floor(P[i * 3] / R), Math.floor(P[i * 3 + 1] / R), Math.floor(P[i * 3 + 2] / R));
+			const k = key(Math.floor(P[i * 3] / R), Math.floor(P[i * 3 + 1] / R), Math.floor(P[i * 3 + 2] / R)), grid = grids[isArm(i) ? 1 : 0];
 			let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i);
 		}
 		for (let i = 0; i < N; i++) {
 			const arm = isArm(i);
 			if (!arm && !isTorso(i)) continue;
+			const other = grids[arm ? 0 : 1];
 			const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2], gx = Math.floor(x / R), gy = Math.floor(y / R), gz = Math.floor(z / R);
 			let best = R;
 			for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-				const b = grid.get(key(gx + dx, gy + dy, gz + dz));
+				const b = other.get(key(gx + dx, gy + dy, gz + dz));
 				if (b) for (const j of b) {
-					if (isArm(j) === arm) continue;
 					const ex = P[j * 3] - x, ey = P[j * 3 + 1] - y, ez = P[j * 3 + 2] - z;
 					if (ex * Nn[i * 3] + ey * Nn[i * 3 + 1] + ez * Nn[i * 3 + 2] <= 0) continue; // behind this surface
 					const d = Math.hypot(ex, ey, ez);
@@ -393,14 +514,15 @@ class Mannequin {
 		out.p = p; out.n = n;
 		out.cover = sp.b0 * C[i0] + sp.b1 * C[i1] + sp.b2 * C[i2];
 		out.keep = sp.b0 * K[i0] + sp.b1 * K[i1] + sp.b2 * K[i2];
-		out.refY = sp.b0 * this.ref[i0 * 3 + 1] + sp.b1 * this.ref[i1 * 3 + 1] + sp.b2 * this.ref[i2 * 3 + 1];
+		out.refY = sp.b0 * this.design[i0 * 3 + 1] + sp.b1 * this.design[i1 * 3 + 1] + sp.b2 * this.design[i2 * 3 + 1]; // design frame (the POC's stone patterns)
 		return out;
 	}
 
-	// Front (or back) orthographic raster of the reference torso: which triangles cover each 4 mm
-	// cell. Arms and head are left out, so "project onto the front" always lands on the torso.
+	// Front (or back) orthographic raster of the reference torso in the design frame: which
+	// triangles cover each 4 mm cell. Arms and head are left out, so "project onto the front" always
+	// lands on the torso.
 	buildFrontRaster() {
-		const R = this.ref, idx = this.idx, C = 0.004, x0 = -0.32, y0 = 0.45, nx = 160, ny = 280;
+		const R = this.design, idx = this.idx, C = 0.004, x0 = -0.32, y0 = 0.45, nx = 160, ny = 280;
 		const lists = Array.from({ length: nx * ny }, () => []);
 		for (let f = 0; f < this.triangles; f++) {
 			const i0 = idx[f * 3], i1 = idx[f * 3 + 1], i2 = idx[f * 3 + 2];
@@ -413,9 +535,9 @@ class Mannequin {
 		this.raster = { C, x0, y0, nx, ny, lists };
 	}
 
-	// Project a reference-frontal-plane point (x, y) onto the front (or back) of the torso.
+	// Project a design-frame frontal-plane point (x, y) onto the front (or back) of the torso.
 	projectFront(x, y, back = false) {
-		const { C, x0, y0, nx, ny, lists } = this.raster, R = this.ref, idx = this.idx;
+		const { C, x0, y0, nx, ny, lists } = this.raster, R = this.design, idx = this.idx;
 		const i = Math.floor((x - x0) / C), j = Math.floor((y - y0) / C);
 		if (i < 0 || j < 0 || i >= nx || j >= ny) return null;
 		let best = null, bz = back ? 9 : -9;
@@ -474,8 +596,8 @@ class Mannequin {
 	// -------------------------------------------------------------------------------------------
 	// The zero line of a per-vertex field as closed loops of edge crossings { i, j, w }: the point
 	// is mix(vertex i, vertex j, w). Same linear interpolation as the per-pixel discard, so
-	// anything built on a loop meets the cut exactly. Used for the dress-form cut (cutLoops) and
-	// the garment's openings (edgeLoops, for the finished edges in trim.js).
+	// anything built on a loop meets the cut exactly. Used for the dress-form and neck cuts
+	// (cutLoops) and the garment's openings (edgeLoops, for the finished edges in trim.js).
 	contour(F) {
 		const idx = this.idx, N = this.vertices;
 		const crossing = new Map(), next = new Map();
@@ -509,127 +631,23 @@ class Mannequin {
 	}
 
 	// -------------------------------------------------------------------------------------------
-	// Headless form: the egg head is reshaped into the rest of the neck. The mannequin mesh has no
-	// neck above the opening the egg sits on, and that opening is steeply tilted (throat ~3 cm above
-	// the neck base at the front, base of the skull at the back), so cutting there left a stub
-	// (owner, 2026-10-20: "the neck should go up until it becomes the chin"). The egg is a separate
-	// closed surface of 4.4k vertices; here it becomes a tube continuing the opening's outline up to
-	// about chin height, closed by a flat top. Same mesh, so designs are unaffected.
-
-	// Per egg vertex: polar position t (0 = bottom, 1 = top) and azimuth around the egg's centre, on
-	// the reference body; and the opening's boundary vertices.
-	buildNeckParams() {
-		const N = this.vertices, R = this.ref, idx = this.idx, egg = [];
-		for (let i = 0; i < N; i++) if (this.wHead[i] > 0.5) egg.push(i);
-		let cx = 0, cy = 0, cz = 0;
-		for (const i of egg) { cx += R[i * 3]; cy += R[i * 3 + 1]; cz += R[i * 3 + 2]; }
-		cx /= egg.length; cy /= egg.length; cz /= egg.length;
-		// The egg was built as rings around its own long axis, tilted 14 deg (chin forward): measure
-		// height along that axis (0 = bottom, 1 = top) and azimuth around it, so a constant t is one
-		// ring of the egg (measured against plain vertical, the rings near the top scrambled).
-		const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-		for (const i of egg) {
-			const d = [R[i * 3] - cx, R[i * 3 + 1] - cy, R[i * 3 + 2] - cz];
-			for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) C[a][b] += d[a] * d[b];
-		}
-		let ax = [0, 1, 0]; // power iteration: the long axis, oriented upwards
-		for (let it = 0; it < 50; it++) {
-			const n = [0, 1, 2].map((a) => C[a][0] * ax[0] + C[a][1] * ax[1] + C[a][2] * ax[2]), l = Math.hypot(...n);
-			ax = n.map((v) => v / l);
-		}
-		if (ax[1] < 0) ax = ax.map((v) => -v);
-		const e1 = [0, -ax[2], ax[1]].map((v, _, a) => v / Math.hypot(...a)); // towards the front (+z), across the axis
-		const e2 = [ax[1] * e1[2] - ax[2] * e1[1], ax[2] * e1[0] - ax[0] * e1[2], ax[0] * e1[1] - ax[1] * e1[0]];
-		const h = egg.map((i) => (R[i * 3] - cx) * ax[0] + (R[i * 3 + 1] - cy) * ax[1] + (R[i * 3 + 2] - cz) * ax[2]);
-		const h0 = Math.min(...h), h1 = Math.max(...h);
-		const t = new Float32Array(egg.length), az = new Float32Array(egg.length);
-		egg.forEach((i, k) => {
-			const d = [R[i * 3] - cx, R[i * 3 + 1] - cy, R[i * 3 + 2] - cz];
-			t[k] = (h[k] - h0) / (h1 - h0);
-			// azimuth: 0 = front (e1 ~ +z), positive towards +x, matching atan2(x, z) of the outline
-			az[k] = Math.atan2(d[0] * e2[0] + d[1] * e2[1] + d[2] * e2[2], d[0] * e1[0] + d[1] * e1[1] + d[2] * e1[2]);
-		});
-		const use = new Map();
-		for (let f = 0; f < idx.length; f += 3) for (let e = 0; e < 3; e++) {
-			const a = idx[f + e], b = idx[f + (e + 1) % 3], k = a < b ? a * N + b : b * N + a;
-			use.set(k, (use.get(k) ?? 0) + 1);
-		}
-		const hole = new Set(), ny = this.refLm.neck_base[1];
-		for (const [k, c] of use) {
-			if (c !== 1) continue;
-			const a = Math.floor(k / N), b = k - a * N;
-			for (const v of [a, b]) if (this.wHead[v] < 0.5 && R[v * 3 + 1] > ny) hole.add(v);
-		}
-		this.neck = { egg: Uint32Array.from(egg), t, az, hole: Uint32Array.from(hole) };
+	// Cuts. form: 'full' | 'torso' (the dress form: neck, upper arms, mid-thigh); head: HEADS.
+	// The keep field (> 0 = shown) is swapped in place: aKeep and the garment share the array.
+	// The head is part of the mesh: 'none' cuts it off flat under the chin (keepNeck, set per body
+	// in setBody); 'mannequin' shapes it in setBody (sculptHead); 'person' leaves the mannequin's
+	// skin to render/figure.js.
+	setCut(form, head = this.head) {
+		if (!HEADS.includes(head)) throw new Error(`head must be one of: ${HEADS.join(', ')}`);
+		this.formKind = form; this.head = head;
+		if (this.key) this.applyCut();
 	}
-
-	// Reshape the egg (positions P of the current body, in place) into the neck extension.
-	// Daz bodies bring their own: the egg laid onto the Daz body's real neck up to a flat cut under
-	// the chin at the front and the base of the skull at the back (pipeline/build_daz_bodies.py,
-	// neck_positions; the cut is the plane y = a + b z, neckPlane [a, b]); everything above it is
-	// discarded through the keep field. The MakeHuman bodies have no real neck to borrow: their egg
-	// becomes a tube continuing the opening's outline, as below.
-	neckExtension(P) {
-		const { egg, t, az, hole } = this.neck, s = this.body.stature / 1.61;
-		if (this.body.neckPos) {
-			const Q = this.body.neckPos, K = this.keepNeck ??= new Float32Array(this.vertices), [a, b] = this.body.neckPlane;
-			for (let k = 0; k < egg.length; k++) for (let c = 0; c < 3; c++) P[egg[k] * 3 + c] = Q[k * 3 + c];
-			for (let i = 0; i < this.vertices; i++) K[i] = a + b * P[i * 3 + 2] - P[i * 3 + 1];
-			this.keepNeckBody = this.key;
-			this.keep.set(K);
-			this.geometry.getAttribute('aKeep').needsUpdate = true;
-			return;
-		}
-		// the opening's outline on this body, by angle around its centre (0 = front, +x = left)
-		let hx = 0, hz = 0;
-		for (const v of hole) { hx += P[v * 3]; hz += P[v * 3 + 2]; }
-		hx /= hole.length; hz /= hole.length;
-		const ring = [...hole].map((v) => ({ a: Math.atan2(P[v * 3] - hx, P[v * 3 + 2] - hz), x: P[v * 3], y: P[v * 3 + 1], z: P[v * 3 + 2] }));
-		ring.sort((p, q) => p.a - q.a);
-		const at = (a) => { // linear interpolation around the closed outline
-			let j = ring.findIndex((r) => r.a > a); if (j < 0) j = 0;
-			const r1 = ring[j], r0 = ring[(j - 1 + ring.length) % ring.length];
-			let span = r1.a - r0.a, d = a - r0.a;
-			if (span <= 0) span += 2 * Math.PI;
-			if (d < 0) d += 2 * Math.PI;
-			const w = clamp(d / span, 0, 1);
-			return [mix(r0.x, r1.x, w), mix(r0.y, r1.y, w), mix(r0.z, r1.z, w)];
-		};
-		// The opening's front (throat) is ~7 cm lower than its back (base of the skull). The top of the
-		// extension is a smooth, nearly level line under the jaw: NECK_FRONT above the opening at the
-		// front, NECK_BACK above it at the back, blended by cos(azimuth) around the sides.
-		let yf = -9, yb = -9; // opening height at the front and back
-		{ const f = at(0), b = at(Math.PI); yf = f[1]; yb = b[1]; }
-		const NECK_FRONT = 0.05 * s, NECK_BACK = 0.004 * s, TAPER = 0.04, DOME = 0.004 * s;
-		const topF = yf + NECK_FRONT, topB = yb + NECK_BACK;
-		for (let k = 0; k < egg.length; k++) {
-			const i = egg[k], [x, y, z] = at(az[k]), c = Math.cos(az[k]);
-			const top = Math.max((topF + topB) / 2 + (topF - topB) / 2 * c, y + 0.004 * s);
-			const tt = t[k];
-			let r, yy; // radial scale towards the outline's centre; height
-			if (tt < 0.15) { // below the opening, just inside the neck (hidden): continues the tube down
-				const u = tt / 0.15; r = 0.985 * Math.min(1, u * 1.6); yy = y - 0.012 * s * (1 - u);
-			} else if (tt < 0.85) { // the tube, from the opening up to the top line
-				const u = (tt - 0.15) / 0.7; r = 1 - TAPER * u; yy = mix(y, top, u);
-			} else { // flat top, slightly domed
-				const u = (tt - 0.85) / 0.15; r = (1 - TAPER) * (1 - u); yy = mix(top, (topF + topB) / 2, u) + DOME * Math.sin(u * Math.PI / 2); // one height at the centre: no crease
-			}
-			P[i * 3] = hx + (x - hx) * r;
-			P[i * 3 + 1] = yy;
-			P[i * 3 + 2] = hz + (z - hz) * r;
-		}
-	}
-
-	// Which cut the keep field describes: the dress form's (neck, upper arms, mid-thigh) or the neck
-	// alone (the full body without its head). Swapped in place: aKeep and the garment share the array.
-	setCut(form) {
-		this.headless = form === 'headless';
-		const neckCut = this.headless && this.body?.neckPos && this.keepNeckBody === this.key; // a Daz body's flat neck cut
-		this.keep.set(!this.headless ? this.keepTorso : neckCut ? this.keepNeck : this.keepHeadless);
+	applyCut() {
+		this.keep.set(this.formKind === 'torso' ? this.keepTorso : this.head === 'none' ? this.keepNeck : this.keepAll);
 		this.geometry.getAttribute('aKeep').needsUpdate = true;
 	}
+	get headless() { return this.formKind !== 'torso' && this.head === 'none'; }
 
-	// Dress form: the boundary loops of the keep field on the current body, for the end caps.
+	// Boundary loops of the keep field on the current body (dress form and neck cuts), for the caps.
 	cutLoops() {
 		const P = this.aPos.array;
 		return this.contour(this.keep).map((loop) => loop.map(({ i, j, w }) =>
@@ -655,6 +673,10 @@ class Mannequin {
 		}));
 	}
 }
+
+// Taubin passes of the mannequin head (sculptHead): enough to soften the eyes, lips, nostrils and
+// ears into a sculpted shape while the skull, nose and chin keep their form.
+const HEAD_SMOOTH = 30;
 
 export function vertexNormals(P, idx, out) {
 	out.fill(0);

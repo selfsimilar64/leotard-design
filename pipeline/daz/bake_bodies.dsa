@@ -1,0 +1,279 @@
+// Daz Studio batch bake of the app's Genesis 9 bodies: every body type in every pose, plus each
+// body's facial expressions, as raw vertex positions. Run by pipeline/daz/bodies.py:
+//
+//   DAZStudio.exe -noPrompt -scriptArg <jobs.json> pipeline/daz/bake_bodies.dsa
+//
+// jobs.json: { "library": "<Daz library root>/", "neutral": "<expression preset>", "bodies": [ {
+//   "key", "out": "<dir>/", "presets": [ <library-relative .duf> | [<.duf>, <node name part>] ],
+//   "morphs": { <modifier or controller name>: value },
+//   "obj": true                     also export scene.obj at the first pose (topology, UVs)
+//   "materials": true               also write materials.json at the first pose
+//   "poses": [ { "key", "preset"?: <pose .duf>, "aim"?: { "l"?: ARM, "r"?: ARM }, "nodes": "cage" | "all" } ],
+//   "expressions": [ { "key", "preset" } ] } ] }
+// ARM: { "upper": [x, y, z] (direction of the upper arm, world), "fore": [x, y, z] (direction of the
+// forearm) | "to": [x, y, z] (a point the forearm points at, cm), "collar"?: degrees of collarbone lift }
+//
+// Per body, after its presets (skin, age, character, hair) and morphs:
+//  - each pose: the figure reset to its zero pose, the pose preset (if any) applied, the face reset
+//    to neutral (Skillful Routine poses carry their own face; expressions are baked separately),
+//    then arms aimed (if any; see aimArm). Written to <out><pose>.pts (vertex positions, cm, of
+//    Genesis 9 only ("cage") or of every figure ("all": eyes, mouth, lashes, brows, tear, hair)) and
+//    <out><pose>.bones.json (joint origins, ends and world rotations); materials.json (every
+//    figure's material properties and maps) at the first pose.
+//  - each expression: the "a-pose" pose (its arm aim reused) with the expression preset applied;
+//    Genesis 9, eyes and mouth written to <out>expr-<key>.pts.
+// .pts format: per figure a line "#node <name> <count>", then <count> lines "x y z" (centimetres).
+// Daz Studio does the shaping, posing, joint correctives and expressions; Python only reads results.
+(function () {
+	var args = App.scriptArgs, log = [], logPath = String(args[0]).replace(/\.json$/, ".log");
+	function write(path, text) { var f = new DzFile(path); f.open(DzFile.WriteOnly); f.write(text); f.close(); }
+	try { run(); } catch (e) { log.push("FATAL " + e + " args=" + args.join("|")); }
+	write(logPath, log.join("\n") + "\n");
+	App.delayedExit();
+
+	function run() {
+	var jf = new DzFile(args[0]);
+	jf.open(DzFile.ReadOnly);
+	var spec = JSON.parse(String(jf.read()));
+	jf.close();
+	var lib = spec.library;
+	var FACE = ["Genesis9", "Genesis9Eyes", "Genesis9Mouth"];
+
+	function figures() {
+		var out = [], nodes = Scene.getNodeList();
+		for (var i = 0; i < nodes.length; i++) if (nodes[i].inherits("DzSkeleton")) out.push(nodes[i]);
+		return out;
+	}
+	function setModifier(fig, name, value) {
+		var obj = fig.getObject();
+		for (var j = 0; j < obj.getNumModifiers(); j++) {
+			var m = obj.getModifier(j);
+			if (m.getName() === name) { m.getValueControl().setValue(value); return true; }
+		}
+		var p = fig.findProperty(name);
+		if (p) { p.setValue(value); return true; }
+		return false;
+	}
+	function apply(path, target) {
+		Scene.selectAllNodes(false);
+		Scene.setPrimarySelection(target);
+		return App.getContentMgr().openFile(lib + path, true);
+	}
+
+	// Every bone (and the figure node) back to its default rotation and translation.
+	function resetPose(g9) {
+		var bs = g9.getAllBones(), all = [g9];
+		for (var i = 0; i < bs.length; i++) all.push(bs[i]);
+		for (var i = 0; i < all.length; i++) {
+			var n = all[i], cs = [n.getXRotControl(), n.getYRotControl(), n.getZRotControl(), n.getXPosControl(), n.getYPosControl(), n.getZPosControl()];
+			for (var k = 0; k < cs.length; k++) if (cs[k]) cs[k].setValue(cs[k].getDefaultValue());
+		}
+	}
+
+	// --- arm aiming ------------------------------------------------------------------------------
+	// Upper arm: its Front-Back (Y), Bend (Z) and Twist (X) rotations; forearm: its Bend (Y). Solved
+	// together by damped Gauss-Newton with numerical derivatives so the upper arm points along
+	// `upper` and the forearm along `fore` (or towards `to`). Limits are lifted while solving (the
+	// raised arm needs more than the upper arm's own range; the collarbone takes some first).
+	function V(a) { return { x: a[0], y: a[1], z: a[2] }; }
+	function sub(a, b) { return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }; }
+	function unit(a) { var l = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z) || 1; return { x: a.x / l, y: a.y / l, z: a.z / l }; }
+	function solve(A, b) { // small dense linear solve (Gaussian elimination, partial pivoting)
+		var n = b.length, M = [];
+		for (var i = 0; i < n; i++) M.push(A[i].slice(0).concat([b[i]]));
+		for (var c = 0; c < n; c++) {
+			var p = c;
+			for (var r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+			var t = M[c]; M[c] = M[p]; M[p] = t;
+			for (var r = c + 1; r < n; r++) { var f = M[r][c] / M[c][c]; for (var k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+		}
+		var x = [];
+		for (var i = n - 1; i >= 0; i--) { var s = M[i][n]; for (var k = i + 1; k < n; k++) s -= M[i][k] * x[k]; x[i] = s / M[i][i]; }
+		return x;
+	}
+	function aimArm(g9, side, arm) {
+		var ua = g9.findBone(side + "_upperarm"), fa = g9.findBone(side + "_forearm"), hd = g9.findBone(side + "_hand"), co = g9.findBone(side + "_shoulder");
+		var ctl = [ua.getYRotControl(), ua.getZRotControl(), ua.getXRotControl(), fa.getYRotControl()];
+		for (var k = 0; k < ctl.length; k++) ctl[k].setIsClamped(false);
+		if (arm.collar) {
+			// lift the collarbone: whichever sign of its Bend raises the shoulder joint
+			var cz = co.getZRotControl(), y0 = ua.getWSPos().y;
+			cz.setValue(arm.collar);
+			if (ua.getWSPos().y < y0) cz.setValue(-arm.collar);
+		}
+		var dU = unit(V(arm.upper));
+		function resid(x) {
+			for (var k = 0; k < 4; k++) ctl[k].setValue(x[k]);
+			var S = ua.getWSPos(), E = fa.getWSPos(), W = hd.getWSPos();
+			var u = unit(sub(E, S)), f = unit(sub(W, E));
+			var dF = arm.to ? unit(sub(V(arm.to), E)) : unit(V(arm.fore));
+			// twist kept small (a tiny pull to 0) so the solution is the least-twisted one
+			return [u.x - dU.x, u.y - dU.y, u.z - dU.z, f.x - dF.x, f.y - dF.y, f.z - dF.z, x[2] * 0.0005];
+		}
+		var x = [], lam = 1e-3;
+		for (var k = 0; k < 4; k++) x.push(ctl[k].getValue());
+		var r = resid(x), err = 0;
+		for (var i = 0; i < r.length; i++) err += r[i] * r[i];
+		for (var it = 0; it < 60 && err > 1e-10; it++) {
+			var J = [];
+			for (var k = 0; k < 4; k++) {
+				var x2 = x.slice(0); x2[k] += 0.05;
+				var r2 = resid(x2), col = [];
+				for (var i = 0; i < r.length; i++) col.push((r2[i] - r[i]) / 0.05);
+				J.push(col);
+			}
+			var A = [], g = [];
+			for (var a = 0; a < 4; a++) {
+				A.push([]); var s = 0;
+				for (var i = 0; i < r.length; i++) s += J[a][i] * r[i];
+				g.push(-s);
+				for (var b = 0; b < 4; b++) { var t = 0; for (var i = 0; i < r.length; i++) t += J[a][i] * J[b][i]; A[a].push(t + (a === b ? lam : 0)); }
+			}
+			var dx = solve(A, g), xn = [];
+			for (var k = 0; k < 4; k++) xn.push(x[k] + Math.max(-30, Math.min(30, dx[k])));
+			var rn = resid(xn), en = 0;
+			for (var i = 0; i < rn.length; i++) en += rn[i] * rn[i];
+			if (en < err) { x = xn; r = rn; err = en; lam = Math.max(lam / 3, 1e-6); }
+			else { lam *= 4; resid(x); }
+		}
+		resid(x);
+		var vals = [];
+		for (var k = 0; k < 4; k++) vals.push(Math.round(x[k] * 1000) / 1000);
+		return { err: Math.sqrt(err), values: vals, collar: arm.collar ? co.getZRotControl().getValue() : 0 };
+	}
+	// re-apply a solved aim without solving again
+	function setArm(g9, side, sol) {
+		var ua = g9.findBone(side + "_upperarm"), fa = g9.findBone(side + "_forearm"), co = g9.findBone(side + "_shoulder");
+		var ctl = [ua.getYRotControl(), ua.getZRotControl(), ua.getXRotControl(), fa.getYRotControl()];
+		if (sol.collar) co.getZRotControl().setValue(sol.collar);
+		for (var k = 0; k < 4; k++) { ctl[k].setIsClamped(false); ctl[k].setValue(sol.values[k]); }
+	}
+
+	// --- output ------------------------------------------------------------------------------------
+	function dump(path, names) {
+		var figs = figures(), out = [];
+		for (var i = 0; i < figs.length; i++) {
+			var n = figs[i], name = n.getName();
+			if (names && names.indexOf(name) < 0) continue;
+			// a bone turned by script does not refresh the cached mesh (a pose preset does): without this
+			// every aimed arm came out in Genesis 9's default stance
+			n.getObject().forceCacheUpdate(n);
+			var geom = n.getObject().getCachedGeom(), c = geom.getNumVertices();
+			out.push("#node " + name + " " + c);
+			for (var v = 0; v < c; v++) { var p = geom.getVertex(v); out.push(p.x.toFixed(3) + " " + p.y.toFixed(3) + " " + p.z.toFixed(3)); }
+		}
+		write(path, out.join("\n") + "\n");
+	}
+	function num(x) { return Math.round(x * 100000) / 100000; }
+	function bones(g9) {
+		var out = {}, bs = g9.getAllBones();
+		for (var k = 0; k < bs.length; k++) {
+			var b = bs[k], o = b.getWSPos(), e = b.getEndPoint(), q = b.getWSRot();
+			out[b.getName()] = { o: [num(o.x), num(o.y), num(o.z)], e: [num(e.x), num(e.y), num(e.z)], q: [num(q.x), num(q.y), num(q.z), num(q.w)] };
+		}
+		return JSON.stringify(out);
+	}
+	function exportObj(path) {
+		Scene.selectAllNodes(false);
+		var exp = App.getExportMgr().findExporterByClassName("DzObjExporter"), s = new DzFileIOSettings();
+		exp.getDefaultOptions(s);
+		s.setStringValue("Preset", "Custom");
+		s.setFloatValue("Scale", 1);
+		s.setBoolValue("WriteVN", false); s.setBoolValue("WriteVT", true);
+		s.setBoolValue("WriteG", true); s.setBoolValue("GroupGeom", false); s.setBoolValue("GroupNodes", true); s.setBoolValue("GroupSurfaces", true);
+		s.setBoolValue("WriteUsemtl", true); s.setBoolValue("WriteMtllib", true);
+		s.setBoolValue("SelectedOnly", false); s.setBoolValue("SelectedRootsOnly", false); s.setBoolValue("IncludeParented", true);
+		s.setBoolValue("RemoveUnusedVerts", false); s.setBoolValue("WeldSeams", false); s.setBoolValue("CollapseUVTiles", false);
+		s.setIntValue("RunSilent", 1);
+		exp.writeFile(path, s);
+	}
+	// Layered images (the eyes' iris + sclera) are composited by Daz Studio into its temp folder and
+	// overwritten by the next body: copy them next to the body's output.
+	function keepMap(path, outDir) {
+		if (path.indexOf("/temp/") < 0) return path;
+		var dst = outDir + "map_" + path.split("/").pop().replace(/ /g, "_");
+		if (new DzFile(dst).exists()) new DzFile(dst).remove();
+		new DzFile(path).copy(dst);
+		return dst;
+	}
+	function materials(outDir) {
+		var out = {}, figs = figures();
+		for (var i = 0; i < figs.length; i++) {
+			var node = figs[i], mats = node.getObject().getCurrentShape().getAllMaterials(), M = {};
+			for (var k = 0; k < mats.length; k++) {
+				var m = mats[k], P = {};
+				for (var q = 0; q < m.getNumProperties(); q++) {
+					var p = m.getProperty(q), e = {}, keep = false;
+					if (p.inherits("DzFloatColorProperty") || p.inherits("DzColorProperty")) {
+						var c = p.getColorValue(); e.v = [num(c.red / 255), num(c.green / 255), num(c.blue / 255)]; keep = true;
+					} else if (p.inherits("DzNumericProperty")) { e.v = num(p.getValue()); keep = true; }
+					if (p.inherits("DzImageProperty") || p.isMappable && p.isMappable()) {
+						var t = p.getMapValue();
+						if (t) { e.map = keepMap(String(t.getFilename()), outDir); keep = true; }
+					}
+					if (keep) P[p.getName()] = e;
+				}
+				M[m.getName()] = P;
+			}
+			out[node.getName()] = { label: node.getLabel(), materials: M };
+		}
+		return JSON.stringify(out, null, 1);
+	}
+
+	for (var bi = 0; bi < spec.bodies.length; bi++) {
+		var job = spec.bodies[bi], t0 = Date.now();
+		try {
+			Scene.clear();
+			App.getContentMgr().openFile(lib + "People/Genesis 9/Genesis 9.duf", true);
+			var g9 = null, figs = figures();
+			for (var i = 0; i < figs.length; i++) if (figs[i].getName() === "Genesis9") g9 = figs[i];
+			for (var p = 0; p < job.presets.length; p++) {
+				var pr = job.presets[p], path = typeof pr === "string" ? pr : pr[0], target = g9;
+				if (typeof pr !== "string") {
+					target = null; figs = figures();
+					for (var i = 0; i < figs.length; i++) if (figs[i].getName().indexOf(pr[1]) >= 0 || figs[i].getLabel().indexOf(pr[1]) >= 0) target = figs[i];
+					if (!target) { log.push(job.key + ": no node " + pr[1] + " for " + path); continue; }
+				}
+				if (!apply(path, target)) log.push(job.key + ": preset failed " + path);
+			}
+			var names = Object.keys(job.morphs || {});
+			for (var k = 0; k < names.length; k++) if (!setModifier(g9, names[k], job.morphs[names[k]])) log.push(job.key + ": no modifier " + names[k]);
+			figs = figures();
+			for (var i = 0; i < figs.length; i++) {
+				var lod = figs[i].getObject().getCurrentShape().findProperty("lodlevel");
+				if (lod) lod.setValue(0);
+			}
+			var solved = {}; // pose key -> { l, r } solved arm aims
+			for (var pi = 0; pi < job.poses.length; pi++) {
+				var ps = job.poses[pi];
+				resetPose(g9);
+				if (ps.preset && !apply(ps.preset, g9)) log.push(job.key + "/" + ps.key + ": pose failed " + ps.preset);
+				if (!apply(spec.neutral, g9)) log.push(job.key + ": neutral face failed");
+				var sides = ["l", "r"], sol = {};
+				for (var si = 0; si < 2; si++) {
+					var a = ps.aim && ps.aim[sides[si]];
+					if (!a) continue;
+					sol[sides[si]] = aimArm(g9, sides[si], a);
+					if (sol[sides[si]].err > 0.02) log.push(job.key + "/" + ps.key + ": arm " + sides[si] + " residual " + sol[sides[si]].err.toFixed(4));
+				}
+				solved[ps.key] = sol;
+				dump(job.out + ps.key + ".pts", ps.nodes === "all" ? null : ["Genesis9"]);
+				write(job.out + ps.key + ".bones.json", bones(g9));
+				write(job.out + ps.key + ".aim.json", JSON.stringify(sol));
+				if (job.obj && pi === 0) exportObj(job.out + "scene.obj");
+				if (pi === 0 && job.materials) write(job.out + "materials.json", materials(job.out));
+			}
+			for (var ei = 0; ei < (job.expressions || []).length; ei++) {
+				var ex = job.expressions[ei], rest = solved["a-pose"];
+				resetPose(g9);
+				apply(spec.neutral, g9);
+				if (rest) { if (rest.l) setArm(g9, "l", rest.l); if (rest.r) setArm(g9, "r", rest.r); }
+				if (!apply(ex.preset, g9)) log.push(job.key + ": expression failed " + ex.preset);
+				dump(job.out + "expr-" + ex.key + ".pts", FACE);
+			}
+			log.push(job.key + ": ok " + Math.round((Date.now() - t0) / 1000) + " s");
+		} catch (e) { log.push(job.key + ": ERROR " + e); }
+		write(logPath, log.join("\n") + "\n");
+	}
+	}
+})();

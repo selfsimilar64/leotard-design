@@ -1,4 +1,21 @@
-# Mannequin pipeline
+# Body pipelines
+
+## Genesis 9 bodies (the designer app, since 2026-10-21)
+
+The designer app's bodies, poses, expressions and the person's head are Daz 3D Genesis 9, baked by
+Daz Studio from the owner's licensed Daz library and converted for the app:
+
+```bash
+python pipeline/daz/bodies.py              # stage 1 + 2 in Daz Studio (~15 min), then convert (~6 min)
+python pipeline/daz/bodies.py --convert    # convert an earlier bake only
+```
+
+Output: `app/public/g9/` (about 560 MB, git-ignored: derived from licensed Daz content). The app
+and its tests need it. Details: `knowledge/engineering/pipeline/g9-bodies.md`.
+`build_daz_bodies.py` (the earlier wrap of the MakeHuman mesh onto Daz shapes) is kept only to
+rebuild the bridge that converts designs drawn on the MakeHuman mannequin.
+
+## MakeHuman mannequin (the POC; the first designer-app bodies)
 
 `build_mannequins.py` bakes the four mannequin bodies used by `poc-threejs` from the CC0
 MakeHuman base mesh, through the MPFB 2 extension installed in the portable Blender under

@@ -12,7 +12,9 @@
   "size": "young",
   "form": "full",
   "finish": "Matte white fibreglass",
-  "pose": "a-pose"
+  "pose": "a-pose",
+  "head": "mannequin",
+  "expression": "neutral"
  },
  "scene": {
   "rig": "Arena (ring of small lights)",
@@ -70,5 +72,6 @@
  "stones": [],
  "placed": [],
  "reference": [],
- "locks": {}
+ "locks": {},
+ "mesh": "g9-sd1"
 }

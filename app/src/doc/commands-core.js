@@ -5,11 +5,11 @@ import { LOOKS, RIGS, MANNEQUIN_FINISHES } from '../render/presets.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
-import { poseSpec } from '../body/pose.js';
-import { bodyKeys } from '../body/mannequin.js';
+import { poseSpec, POSES, ARMS, DAZ_POSES } from '../body/pose.js';
+import { bodyKeys, catalogue, HEADS } from '../body/mannequin.js';
 import { GLARE } from '../render/glare.js';
 
-const SIZES = ['child', 'teen', 'young', 'adult'];
+const SIZES = ['child-6', 'child', 'teen', 'older-teen', 'petite', 'young', 'adult', 'broad'];
 
 function oneOf(name, v, list) {
 	if (!list.includes(v)) throw new Error(`${name} must be one of: ${list.join(', ')} (got ${JSON.stringify(v)})`);
@@ -46,11 +46,19 @@ defineCommand('meta.set', {
 });
 
 defineCommand('body.set', {
-	label: 'Change body', args: '{ size?: child|teen|young|adult (plus daz-petite|daz-young|daz-adult|daz-broad when built), form?: full|headless|torso, finish?, pose?: a-pose|arms-down|hands-in-front|hands-on-hips|hands-on-thighs|left-hand-on-hip|right-hand-on-hip|left-arm-up|right-arm-up | { left, right } (arms: rest|down|front|thigh|hip|up) }',
+	label: 'Change body',
+	get args() {
+		return `{ size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, head?: ${HEADS.join('|')}, expression?: ${(catalogue.expressions.map((e) => e.key).join('|')) || 'neutral|...'}, finish?, `
+			+ `pose?: ${[...Object.keys(POSES), ...DAZ_POSES].join('|')} | { left, right } (arms: ${ARMS.join('|')}) }`;
+	},
 	run(tx, a) {
+		// 'headless' (before head types) = the full body with no head
+		if (a.form === 'headless') a = { ...a, form: 'full', head: a.head ?? 'none' };
 		setFields(tx, 'body', a, {
 			size: (v) => oneOf('size', v, bodyKeys.length ? bodyKeys : SIZES),
-			form: (v) => oneOf('form', v, ['full', 'headless', 'torso']),
+			form: (v) => oneOf('form', v, ['full', 'torso']),
+			head: (v) => oneOf('head', v, HEADS),
+			expression: (v) => { if (catalogue.expressions.length) oneOf('expression', v, catalogue.expressions.map((e) => e.key)); },
 			finish: (v) => oneOf('finish', v, Object.keys(MANNEQUIN_FINISHES)),
 			pose: (v) => { poseSpec(v); },
 		});

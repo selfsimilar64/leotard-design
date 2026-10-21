@@ -30,6 +30,9 @@ finished edges, printable pattern).[^build]
 
 - Dev server: `npm --prefix app run dev` (port 5174; `.claude/launch.json` entry
   `leotard-designer`). The app autosaves to localStorage; designs save to `app/designs/`.
+- Bodies: since 2026-10-21 the app (and its tests) need the Genesis 9 bodies in `app/public/g9/`,
+  built locally from the owner's Daz library by `python pipeline/daz/bodies.py` (about 20 minutes;
+  git-ignored, see [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md)).
 - Unit tests: `npm --prefix app test` (vitest; 33 tests: document/undo, posing, arrangement on a sphere
   and on the body, block options including raglan, flattening, camera solve, seam distance and
   gradient fields). Debug scripts in `app/test/debug/` run with

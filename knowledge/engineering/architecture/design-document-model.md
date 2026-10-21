@@ -40,7 +40,7 @@ and 6 of the [POC-to-product gap](/engineering/architecture/poc-to-product-gap.m
 
 | Type | Fields | Notes |
 |---|---|---|
-| `SurfacePoint` | `f` (canonical face id), `b` (two barycentrics, third implied) | On the canonical MakeHuman topology (41,595 vertices); evaluates on every size and pose.[^addressing] |
+| `SurfacePoint` | `f` (canonical face id), `b` (two barycentrics, third implied) | On the canonical mesh, Genesis 9 subdivided once (100,676 vertices; document `mesh: 'g9-sd1'`; before 2026-10-21 the MakeHuman topology, converted on load: [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md)); evaluates on every size and pose.[^addressing] |
 | `SurfaceFrame` | `SurfacePoint` + `angle` (radians from the canonical tangent field) | Orientation of shaped stones, decals, motif stamps. |
 | `Side` | `L`, `R`, `both` | `both` = authored once, mirrored through the precomputed left/right face map. |
 
@@ -50,7 +50,7 @@ and 6 of the [POC-to-product gap](/engineering/architecture/poc-to-product-gap.m
 {
   "format": "leotard-design", "version": 1,
   "meta": { "name": "", "author": "", "created": "", "notes": "" },
-  "body": { "size": "young", "skin": "tone-3", "pose": "a-pose", "display": "athlete" },
+  "body": { "size": "young", "pose": "a-pose", "head": "mannequin", "expression": "neutral", "form": "full", "finish": "Athlete skin, light" },
   "layers": [ { "id": "L0", "kind": "shell" },        // shell = the garment itself
               { "id": "L1", "kind": "overlay", "z": 1 },  // wrap pieces, surplice, sash, appliqué
               { "id": "Lm", "kind": "lining", "z": -1 } ],// shapes seen through mesh (bandeau, crop)

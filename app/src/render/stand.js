@@ -82,6 +82,18 @@ export function dressFormStand(body, capMaterial) {
 	return g;
 }
 
+// The body without its head (head type 'none'): flat caps over the neck cut, in the body's finish
+// (no wooden fitting: owner, 2026-10-20, it "looks like part of a mannequin").
+export function cutCaps(body, capMaterial) {
+	const g = new THREE.Group();
+	for (const loop of body.cutLoops()) {
+		const m = new THREE.Mesh(capGeometry(loop).geometry, capMaterial);
+		m.material.side = THREE.DoubleSide;
+		g.add(m);
+	}
+	return g;
+}
+
 // Flat caps over every cut loop of the body's keep field, and on the highest (the neck) a turned
 // wooden disc and knob.
 function neckCaps(body, capMaterial, g) {

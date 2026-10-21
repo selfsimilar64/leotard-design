@@ -29,6 +29,9 @@ import { FABRICS } from './materials/fabric.js';
 import { swatch } from './materials/swatches.js';
 import { SS as SS_TABLE, COLOURS as STONE_COLOURS } from './stones/library.js';
 import { toSP as toSPLocal } from './body/surface.js';
+import { migrate, setSurfaceConverter } from './doc/schema.js';
+import { MESH, surfaceConverter } from './doc/migrate-g9.js';
+import { bodyKeys } from './body/mannequin.js';
 
 // Ends a drag: touches the curves so the garment is re-cut and new cells get their panels, inside
 // the drag's own history entry.
@@ -63,6 +66,10 @@ export class App {
 	attach(engine) {
 		this.engine = engine;
 		engine.app = this;
+		// designs saved on the earlier MakeHuman mannequin: converted to Genesis 9 on load (the
+		// autosave was read before the bodies were)
+		setSurfaceConverter(surfaceConverter(engine.body), bodyKeys);
+		if (this.doc.mesh !== MESH) migrate(this.store.doc);
 		const app = this, landmarks = surfaceLandmarks(engine.body, engine.surf);
 		this.store.ctx = {
 			man: engine.body, surf: engine.surf, landmarks,

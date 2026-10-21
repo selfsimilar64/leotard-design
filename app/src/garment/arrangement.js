@@ -399,6 +399,9 @@ export function buildArrangement(surf, curves) {
 		for (const t of res) { list.push(triFace.length); tris.push(t[0], t[1], t[2]); triFace.push(f); }
 		faceTris.set(f, list);
 	}
+	// fixed lines of the surface (the head's border, body/reference.js): constraints of no curve
+	const B = surf.barrier;
+	if (B) for (let k = 0; k < B.length; k += 2) addC(B[k], B[k + 1], []);
 
 	const tE = performance.now();
 	// (F) cells: flood fill across edges that are not constraints. Untouched faces join through the

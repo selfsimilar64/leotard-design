@@ -1,11 +1,12 @@
-// Test helpers: load the baked mannequins from disk (no fetch in node).
+// Test helpers: load the Genesis 9 bodies from disk (no fetch in node; built locally by
+// pipeline/daz/bodies.py, not in git: the tests need them).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadMannequins } from '../src/body/mannequin.js';
 import { buildReference } from '../src/body/reference.js';
 
-const DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public/mannequins');
+const DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public/g9');
 
 let cached = null;
 export async function loadBody() {

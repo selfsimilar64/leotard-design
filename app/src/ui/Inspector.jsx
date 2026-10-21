@@ -12,6 +12,10 @@ import { ToolOptions } from './inspect-garment.jsx';
 import { StoneCounts } from './inspect-stones.jsx';
 import { BLOCK_OPTIONS } from '../garment/blocks.js';
 import { tool } from './state.js';
+import { catalogue } from '../body/mannequin.js';
+import { display, stats } from './state.js';
+import { DISPLAY_OPTIONS, saveDisplay } from '../render/display.js';
+import { POSES, POSE_LABELS } from '../body/pose.js';
 
 const fabricOptions = Object.entries(FABRICS).map(([k, f]) => [k, f.label]);
 
@@ -32,13 +36,23 @@ function DesignProps({ doc }) {
 	const b = doc.body, s = doc.scene, L = doc.legacy;
 	const bodies = app.engine?.body;
 	const sizes = bodies ? bodies.keys.map((k) => [k, `${bodies.bodies[k].label} · ${Math.round(bodies.bodies[k].stature * 100)} cm`]) : [b.size];
+	// arm poses (the photo-matching set) and Daz's whole-body poses; a custom left/right mix shows as such
+	const poseKey = typeof b.pose === 'string' ? b.pose : 'custom';
+	const poses = [...Object.keys(POSES).map((k) => [k, POSE_LABELS[k] ?? k]), ...catalogue.poses.filter((p) => p.key !== 'a-pose').map((p) => [p.key, p.label])];
+	if (poseKey === 'custom') poses.push(['custom', `Arms: left ${b.pose.left ?? 'rest'}, right ${b.pose.right ?? 'rest'}`]);
+	const torso = b.form === 'torso', head = b.head ?? 'mannequin';
 	return (
 		<>
 			<Section title="Body">
-				<Row label="Body"><Select value={b.size} options={sizes} onChange={(v) => run({ op: 'body.set', size: v })} /></Row>
-				<Row label="Style"><Select value={b.form} options={[['full', 'Full-body mannequin'], ['headless', 'Full body, no head'], ['torso', 'Dress form (torso)']]}
+				<Row label="Body type"><Select value={b.size} options={sizes} onChange={(v) => run({ op: 'body.set', size: v })} /></Row>
+				<Row label="Pose"><Select value={poseKey} options={poses} onChange={(v) => v !== 'custom' && run({ op: 'body.set', pose: v })} /></Row>
+				<Row label="Presentation"><Select value={b.form} options={[['full', 'Full body'], ['torso', 'Dress form (torso)']]}
 					onChange={(v) => run({ op: 'body.set', form: v, finish: v === 'torso' ? 'Linen dress form' : 'Matte white fibreglass' })} /></Row>
-				<Row label="Finish"><Select value={b.finish} options={Object.keys(MANNEQUIN_FINISHES)} onChange={(v) => run({ op: 'body.set', finish: v })} /></Row>
+				{!torso ? <Row label="Head"><Select value={head} options={[['none', 'Hidden'], ['mannequin', 'Mannequin head'], ['person', 'Person (face and hair)']]}
+					onChange={(v) => run({ op: 'body.set', head: v })} /></Row> : null}
+				{!torso && head === 'person' ? <Row label="Expression"><Select value={b.expression ?? 'neutral'} options={catalogue.expressions.map((e) => [e.key, e.label])}
+					onChange={(v) => run({ op: 'body.set', expression: v })} /></Row> : null}
+				{torso || head !== 'person' ? <Row label="Finish"><Select value={b.finish} options={Object.keys(MANNEQUIN_FINISHES)} onChange={(v) => run({ op: 'body.set', finish: v })} /></Row> : null}
 			</Section>
 			<Section title="Lighting">
 				<Row label="Preset"><Select value={s.rig} options={Object.keys(RIGS)} onChange={(v) => run({ op: 'scene.set', rig: v })} /></Row>
@@ -51,7 +65,26 @@ function DesignProps({ doc }) {
 			<StoneCounts />
 			<BlockPicker doc={doc} />
 			{L ? <LegacyProps L={L} /> : null}
+			<DisplayProps />
 		</>
+	);
+}
+
+// This computer's display settings (render/display.js): not part of the design, no undo.
+function DisplayProps() {
+	const d = display.value, st = stats.value;
+	if (!d) return null;
+	const set = (k, v) => { const n = { ...d, [k]: v }; display.value = n; saveDisplay(n); app.engine?.viewport.applyDisplay(n); };
+	const num = (k) => (v) => set(k, Number(v));
+	return (
+		<Section title="Display" open={false}>
+			<Row label="Resolution" hint="Share of the screen's pixels the view is drawn at; lower is faster"><Select value={d.resolution} options={DISPLAY_OPTIONS.resolution} onChange={num('resolution')} /></Row>
+			<Row label="Lower while moving" hint="Draw at a lower resolution while the view turns, when frames run late"><Toggle value={d.dynamicRes} onChange={(v) => set('dynamicRes', v)} /></Row>
+			<Row label="Anti-aliasing"><Select value={d.msaa} options={DISPLAY_OPTIONS.msaa} onChange={num('msaa')} /></Row>
+			<Row label="Shadows"><Select value={d.shadows} options={DISPLAY_OPTIONS.shadows} onChange={(v) => set('shadows', v)} /></Row>
+			<Row label="Glow"><Toggle value={d.bloom} onChange={(v) => set('bloom', v)} /></Row>
+			{st.fps ? <Row label="Now"><span>{st.width}×{st.height} px · {st.fps.toFixed(0)} fps</span></Row> : null}
+		</Section>
 	);
 }
 

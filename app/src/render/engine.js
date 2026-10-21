@@ -2,7 +2,7 @@
 // touched) rebuilds whatever depends on the sections a command touched (see doc/store.js).
 import * as THREE from 'three';
 import { createFabricMaterial } from '../materials/fabric.js';
-import { fullBodyStand, dressFormStand } from './stand.js';
+import { fullBodyStand, dressFormStand, cutCaps } from './stand.js';
 import { MANNEQUIN_FINISHES } from './presets.js';
 import { DecalSet } from './decals.js';
 import { surfaceLandmarks } from '../body/landmarks.js';
@@ -28,15 +28,20 @@ export class Engine {
 		this.viewport = viewport; this.body = body; this.ref = ref; this.surf = ref.surface;
 		const scene = viewport.world; // the body and garment (scaled together when matching a photo)
 		this.skin = createFabricMaterial(3);
-		// the mannequin's neck is an open tube under the egg head: show its inside, not the background
+		// cut bodies (dress form, no head) are open tubes under their caps: show the inside, not the background
 		this.skin.side = THREE.DoubleSide;
-		this.skinMesh = new THREE.Mesh(body.geometry, this.skin);
+		// the body's own geometry plus closed eyes for the mannequin head (body.eyeCaps): same attributes
+		const sg = new THREE.BufferGeometry(), caps = body.eyeCaps(), ix = new Uint32Array(body.idx.length + caps.length);
+		for (const [k, a] of Object.entries(body.geometry.attributes)) sg.setAttribute(k, a);
+		ix.set(body.idx); ix.set(caps, body.idx.length);
+		sg.setIndex(new THREE.BufferAttribute(ix, 1));
+		this.skinMesh = new THREE.Mesh(sg, this.skin);
 		this.skinMesh.frustumCulled = false; // the geometry's positions change when the body is swapped
 		this.skinMesh.castShadow = this.skinMesh.receiveShadow = true; // arms shade the torso
 		scene.add(this.skinMesh);
 		this.capMaterial = new THREE.MeshPhysicalMaterial();
 		this.stand = null;
-		this.figure = new FigureView(scene, viewport.renderer); // a Daz figure body shows a real person instead
+		this.figure = new FigureView(scene, viewport.renderer); // head type 'person': a real person instead of the mannequin's skin
 		this.legacy = new LegacyGarment(scene, body);
 		this.textures = new TextureLibrary(viewport.renderer);
 		this.layers = new Map(); // layer id -> { layer, g, view: GarmentView, rims: Rims }
@@ -219,6 +224,7 @@ export class Engine {
 	}
 	setWrinklePose(pose) {
 		const p = poseSpec(pose), W = this.wrinkleZones();
+		// (a Daz pose's arms are not presets: its armpits keep their folds)
 		W.N[1].w = p.left === 'up' ? 0.3 : 1; W.N[2].w = p.right === 'up' ? 0.3 : 1;
 	}
 
@@ -264,34 +270,41 @@ export class Engine {
 		cm.needsUpdate = true;
 	}
 
-	// Which body, full figure or dress form, its finish, its stand.
+	// Which body, pose, head and expression, full figure or dress form, its finish, its stand.
 	applyBody(b, force) {
 		this.applyFinish(b.finish);
-		const key = b.size + '|' + b.form + '|' + JSON.stringify(b.pose ?? 'a-pose');
-		if (!force && key === this.bodyKey) return;
-		// a new size or form reframes the camera; a new pose keeps it
+		const head = b.head ?? 'mannequin', pose = b.pose ?? 'a-pose', poseKey = JSON.stringify(pose);
+		const key = JSON.stringify([b.size, b.form, head, pose]);
+		const person = head === 'person' && b.form !== 'torso', figure = () => (this.figureReady = this.figure.show(person
+			? { man: this.body, body: this.body.body, cage: this.body.cage, poseKey: this.body.body.daz ?? 'a-pose', shape: this.body.key + '|' + this.body.poseKey, expression: b.expression } : null));
+		// an expression only changes the person's face
+		if (!force && key === this.bodyKey) { figure(); return; }
+		// a new size or form reframes the camera; a new pose, head or expression keeps it
 		const shape = b.size + '|' + b.form, reframe = this.bodyKey !== null && this.shapeKey !== shape;
 		this.bodyKey = key; this.shapeKey = shape;
 		const t = performance.now(), body = this.body, scene = this.viewport.world;
-		const torso = b.form === 'torso', headless = b.form === 'headless';
-		body.setCut(b.form); // before setBody: the headless form reshapes the egg into a neck
-		if (body.key !== b.size || body.poseKey !== JSON.stringify(b.pose ?? 'a-pose') || !body.key || body.headlessKey !== body.headless) body.setBody(b.size, b.pose);
-		this.setWrinklePose(b.pose);
-		body.clip = torso || headless;
+		const torso = b.form === 'torso';
+		body.setCut(b.form, head); // before setBody: the mannequin head is shaped there
+		if (body.key !== b.size || body.poseKey !== poseKey || !body.key || body.headKey !== body.head) body.setBody(b.size, pose);
+		this.setWrinklePose(pose);
+		body.clip = torso || body.headless;
 		const fl = body.formLines;
 		for (const m of this.fabricMaterials) {
 			m.userData.u.uClip.value = body.clip ? 1 : 0;
 			m.userData.u.uTapeY.value.set(fl.waist, fl.bust, fl.hip, fl.neck);
 		}
 		if (this.stand) { scene.remove(this.stand); this.stand.traverse((o) => o.geometry?.dispose()); }
-		this.stand = torso ? dressFormStand(body, this.capMaterial) : fullBodyStand(body);
+		// the person stands on their own; a Daz pose (leaps, kneeling) has no stand either
+		const daz = !!body.body.daz;
+		this.stand = torso ? dressFormStand(body, this.capMaterial) : new THREE.Group();
+		if (!torso && body.headless) this.stand.add(cutCaps(body, this.capMaterial));
+		if (!torso && !person && !daz) this.stand.add(fullBodyStand(body));
 		scene.add(this.stand);
-		// a figure scene: the person's own skin, head and hair instead of the mannequin's skin and stand
-		const fig = !!body.body.figure && !torso;
-		this.skinMesh.visible = !fig; this.stand.visible = !fig;
-		this.figureReady = this.figure.show(fig ? body.body : null);
+		this.skinMesh.visible = !person;
+		figure();
 		const s = torso ? 0.9 : 0.75, blob = this.viewport.blob;
 		blob.scale.set(s, s, 1); blob.position.z = torso ? body.crotch.z : 0;
+		blob.visible = !daz;
 		this.timing.mannequin = performance.now() - t;
 		if (this.legacyMode) this.legacy.onBodyChanged();
 		else {
@@ -301,14 +314,16 @@ export class Engine {
 		if (reframe) this.frameCamera(b.form);
 	}
 
-	// Fit the leotard area (mid-thigh to the head, or the whole dress form) in view, keeping the
-	// current orbit direction.
+	// Fit the leotard area (mid-thigh to the top of the head, or the whole dress form) in view,
+	// keeping the current orbit direction. A Daz pose (leaps, kneeling) is framed whole.
 	frameCamera(form = 'full') {
 		const body = this.body, b = body.body, torso = form === 'torso', cam = this.viewport.camera, controls = this.viewport.controls;
-		const top = torso ? b.landmarks.neck_base[1] + 0.09 : b.stature + 0.03;
-		const bottom = torso ? body.crotch.y - 0.2 : body.crotch.y - 0.33;
-		const span = top - bottom, centre = new THREE.Vector3(0, (top + bottom) / 2, 0);
-		const fov = THREE.MathUtils.degToRad(cam.fov), fit = Math.max(span, span * 0.62 / cam.aspect);
+		const bb = body.geometry.boundingBox;
+		let top = torso ? b.landmarks.neck_base[1] + 0.09 : bb.max.y + 0.03;
+		let bottom = torso ? body.crotch.y - 0.2 : body.crotch.y - 0.33;
+		if (b.daz && !torso) { top = bb.max.y + 0.03; bottom = bb.min.y - 0.03; }
+		const span = top - bottom, centre = new THREE.Vector3(b.daz ? (bb.min.x + bb.max.x) / 2 : 0, (top + bottom) / 2, b.daz ? (bb.min.z + bb.max.z) / 2 : 0);
+		const fov = THREE.MathUtils.degToRad(cam.fov), fit = Math.max(span, (b.daz ? bb.max.x - bb.min.x : span * 0.62) / cam.aspect);
 		const dist = fit / 2 / Math.tan(fov / 2) * 1.12;
 		const dir = cam.position.clone().sub(controls.target).normalize();
 		controls.target.copy(centre);

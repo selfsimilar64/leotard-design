@@ -2,6 +2,8 @@
 // sleeve seams and cuffs, leg lines) and panel seeds. Lines come from scalar fields on the
 // reference body (the same family as the POC's regions), traced as zero contours and resampled
 // into a few smooth control points, so every block line is an ordinary curve the designer drags.
+// The fields are written in the design frame (man.design: the earlier MakeHuman mannequin's
+// coordinates, body/mannequin.js), where every number below was measured.
 import * as THREE from 'three';
 import { toSP, fromSP } from '../body/surface.js';
 import { evaluateCurve } from '../curves/evaluate.js';
@@ -49,7 +51,7 @@ function backNeck(x, y, kind) {
 const SLEEVE_END = { cap: 0.09, short: 0.24, 'three-quarter': 0.7, long: 0.95 };
 
 function fields(man, opts) {
-	const N = man.vertices, R = man.ref;
+	const N = man.vertices, R = man.design;
 	const neck = new Float32Array(N), leg = new Float32Array(N), arm = new Float32Array(N), cuff = new Float32Array(N), seam = new Float32Array(N);
 	// Leg cuts, by where the opening peaks at the side (reference body, crotch at 0.765): standard
 	// ~0.893 (12.8 cm above the crotch), high ~0.926 (16 cm), competition ~0.976 (21 cm): 1 cm under

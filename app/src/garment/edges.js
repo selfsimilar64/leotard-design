@@ -20,7 +20,7 @@ export function openingLoops(arr, garment) {
 	for (const [k, [a, b, c, third]] of seen) {
 		next.set(a, b);
 		const cs = arr.constraint.get(k);
-		info.set(a, { curve: cs ? [...cs][0] : null, cell: c, third });
+		info.set(a, { curve: (cs && [...cs][0]) ?? null, cell: c, third }); // (the head's border has no curve)
 	}
 	const loops = [], used = new Set();
 	for (const start of next.keys()) {

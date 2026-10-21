@@ -1,5 +1,10 @@
 # Builds Daz 3D Genesis 9 versions of the app's mannequin bodies, as extra bodies on the SAME mesh.
 #
+# SUPERSEDED (2026-10-21): the app's mesh is now Genesis 9 itself (pipeline/daz/bodies.py). This
+# script is kept only because its wrapped young adult (app/public/mannequins-daz/daz-young.bin) is
+# the bridge pipeline/daz/convert_bodies.py (migration_map) uses to convert designs drawn on the
+# MakeHuman mannequin; run it (daz-young) if that file is missing.
+#
 #   python pipeline/build_daz_bodies.py            (system Python 3 with numpy + scipy)
 #
 # Reads the owner's local Daz content library (free Genesis 9 Starter Essentials; set DAZ_LIBRARY

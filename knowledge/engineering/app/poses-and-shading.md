@@ -1,7 +1,7 @@
 ---
 type: Component
 title: Poses, shadows and surface folds (P7)
-description: "How the designer app poses the mannequin to match a photo (arm presets skinned with dual quaternions on the baked part weights), the soft studio shadow and contact darkening, tension wrinkles, fold stamps (gathers, ruching, twist knots) and dynamic resolution; with measured costs and the shader pitfall found on Windows."
+description: "How the designer app poses the mannequin to match a photo (arm presets, baked by Daz Studio on Genesis 9 since 2026-10-21; before, skinned with dual quaternions), the soft studio shadow and contact darkening, tension wrinkles, fold stamps (gathers, ruching, twist knots) and dynamic resolution; with measured costs and the shader pitfall found on Windows."
 tags: [app, rendering, pose, shadows, component, p7]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-19T13:00:00Z }
@@ -25,21 +25,22 @@ The three gate designs render posed as in their photos at 9.8-10.9 ms a frame at
 
 # Poses (`body/pose.js`)
 
+**Since 2026-10-21 poses are baked by Daz Studio on Genesis 9** ([Genesis 9 bodies](/engineering/pipeline/g9-bodies.md)):
+the dual-quaternion skinning of the MakeHuman arms below is gone, and Genesis 9's joint correctives
+shape the shoulders and armpits. The preset names stayed, so photo-matched designs keep their pose.
+
 - Pose = a preset (`a-pose`, `arms-down`, `hands-in-front`, `hands-on-hips`, `hands-on-thighs`,
   `left-hand-on-hip`, `right-hand-on-hip`, `left-arm-up`, `right-arm-up`) or `{ left, right }`
-  with each arm `rest | down | front | thigh | hip | up` or explicit `{ upper: [x, y, z], fore:
-  [x, y, z] | { to: [x, y, z] } }`. `body.set { pose }`.
-- The rest (A) pose already has arms only 13 degrees from vertical; what photos need is hands on
-  hips, hands in front, an arm raised.
-- Skinning: per arm, a rotation at the shoulder takes the upper arm to its direction, one at the
-  posed elbow takes the forearm to its direction or target; the shoulder part gets half the
-  shoulder rotation. Each vertex blends its part weights' transforms (manifest parts: shoulder,
-  upper arm, forearm, hand) as dual quaternions, so the elbow bends without the collapse linear
-  blending gives. Torso vertices are untouched (tested).
-- Hand targets come from the rest body (crotch height, waist height, front of the belly), so
-  presets fit every size.
+  with each arm `rest | down | front | thigh | hip | up`, or a whole-body Daz pose (`standing`,
+  `split-leap`, ...). `body.set { pose }`. Explicit `{ upper, fore }` arm directions are no longer
+  accepted (each arm preset is a bake).
+- Each arm preset is baked one arm at a time, aimed in Daz at the body's own landmarks (crotch,
+  waist, belly front, head top); the app adds both arms' changes to the A-pose.
+- *Before Genesis 9 (history):* per arm, a rotation at the shoulder took the upper arm to its
+  direction and one at the posed elbow the forearm, blended per vertex as dual quaternions on the
+  baked MakeHuman part weights.
 - A pose change re-runs the body pipeline (normals, lift, contact darkening, rims, straps,
-  stones): about 0.3-1.6 s. The camera keeps its place.
+  stones). The camera keeps its place; a Daz pose is framed whole.
 
 # Shading
 
@@ -58,14 +59,18 @@ The three gate designs render posed as in their photos at 9.8-10.9 ms a frame at
   branch per pixel is undefined on GPUs; on Windows it shaded whole wrinkle zones black. Flock,
   stamp, wrinkle and seam heights are now summed and bumped once, outside the loops.
 - Dynamic resolution (R11): while the view is orbiting and frames come late (under 52 fps) the
-  render scale steps down to 70%; full resolution as soon as the view is still.
+  render scale steps down to 70%; full resolution as soon as the view is still. Each step resizes
+  the canvas, which clears it: until 2026-10-21 the resize ran after the frame was drawn, so the
+  cleared canvas was shown, the black flicker the owner saw about every second while orbiting.
+  The step now takes effect before the frame is drawn (`Viewport.frame`, `wantScale`), and a
+  resize from the page layout redraws at once. It can be switched off in the Display settings.
 
 # Not done
 
 - GTAO (screen-space AO for strap, band and stone contact): straps already have a contact
   shadow; stones none.
-- Skinning of the legs and head (no pose needs them yet); garment does not slide over the body
-  when an arm is raised (the armhole moves with the shoulder).
+- The garment does not slide over the body when an arm is raised (the armhole moves with the
+  shoulder).
 
 [^code]: P7 source
 [^roadmap]: Moodboard coverage roadmap

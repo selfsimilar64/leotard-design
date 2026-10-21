@@ -1,7 +1,8 @@
 import { render } from 'preact';
 import { app } from './instance.js';
 import { Shell, useShortcuts } from './ui/Shell.jsx';
-import { rev, stats } from './ui/state.js';
+import { rev, stats, display } from './ui/state.js';
+import { loadDisplay } from './render/display.js';
 import { Viewport } from './render/viewport.js';
 import { Engine } from './render/engine.js';
 import { loadMannequins } from './body/mannequin.js';
@@ -18,6 +19,7 @@ async function start(el) {
 	if (started) return;
 	started = true;
 	const viewport = new Viewport(el);
+	viewport.applyDisplay(display.value = loadDisplay());
 	const t0 = performance.now();
 	const body = await loadMannequins();
 	const engine = new Engine(viewport, body, buildReference(body));

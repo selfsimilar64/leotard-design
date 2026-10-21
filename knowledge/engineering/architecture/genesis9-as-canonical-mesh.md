@@ -40,6 +40,11 @@ sources:
 
 # Summary (plain language)
 
+**Done 2026-10-21:** the app now runs on Genesis 9 subdivided once; see
+[Genesis 9 bodies](/engineering/pipeline/g9-bodies.md). The phases below were carried out with
+two changes: bodies and poses are baked by Daz Studio itself (not by the Python morph evaluator),
+and arm poses too (route (a) of section 4), so the app's own arm skinning is gone.
+
 Making Daz's Genesis 9 body the app's foundation mesh is feasible and would remove the
 "wrapping" step behind most recent fit iteration. Daz bodies, ages, poses and fitted garments
 would then plug in exactly. The mesh checks out cleanly: perfectly mirror-symmetric, one
