@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-10-21
+* **Creation**: [Daz figure scenes](/engineering/pipeline/daz-figures.md): real-person renders. Daz Studio 6 is scripted to bake Genesis 9 with skin, Growing Up age, Skillful Routine pose and expression; the app renders the face, eyes, teeth, lashes and brows (wrapped-diffuse skin, per-vertex occlusion bake, stencilled eye film) with procedural competition hair (slicked back into a bun with a scrunchie, on the Pixie hair's scalp cap) and fits the leotard through the shared Genesis 9 topology. Six showcase scenes, ages 6 to adult. Owner judged the procedural hair "so bad"; Daz's own hairs (Pixie strands as ribbons, Eirgrid cards) now load per scene and are carried onto each head shape (followers and hairs do not follow Growing Up or character head morphs in Daz's export). [Daz bodies](/engineering/pipeline/daz-bodies.md): morph loader reads only Daz's own morphs (Growing Up ships compressed files with neutralizer formulas).
+
 ## 2026-10-20
 * **Update**: `competition` leg cut (side peak ~2 cm under the hip bone) added to the block library and used by B2 ([how a leotard sits](/domain/sizing/how-a-leotard-sits-on-the-body.md)); headless Daz neck cut tilted from chin to skull base; finished edges honour the cut ([Daz bodies](/engineering/pipeline/daz-bodies.md)).
 * **Creation**: [Genesis 9 as the canonical mesh](/engineering/architecture/genesis9-as-canonical-mesh.md): feasibility study. G9 is exactly symmetric, one piece, all quads; subdivided once it is 99,688 vertices (5.9 mm torso edges vs 9.2 mm on MakeHuman, ~2.4x triangles); 116 joint correctives; Growing Up offers an Interactive License ($35). Recommendation: switch after a performance spike.

@@ -159,7 +159,11 @@ they ship. Until then the files stay local (git-ignored).
 
 # Open
 
-- Child and teen Daz bodies need *Growing Up for Genesis 9* (paid, plus its Interactive License).
+- Child and teen Daz bodies: *Growing Up for Genesis 9* was bought on 2026-10-20 and is used by the
+  [figure scenes](/engineering/pipeline/daz-figures.md) (ages 5-6 to adult, baked by Daz Studio, the
+  mannequin mesh carried over by `transfer()`); mannequin-only Daz child/teen bodies can be made the
+  same way. `load_morphs` reads only `Morphs/Daz 3D` (Growing Up's compressed files and neutralizer
+  formulas would change these recipes).
 - Feet: exclude toes from the data term or replace the mannequin feet.
 - The Daz bodies keep a natural bust; a sports-bra compression look is one slider
   (`body_ctrl_BreastsFlatten`) away.

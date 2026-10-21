@@ -41,15 +41,21 @@ export const bodyKeys = [];
 // Optional extra bodies on the same mesh, kept out of git: Daz 3D Genesis 9 shapes built from the
 // owner's licensed Daz library by pipeline/build_daz_bodies.py. Missing folder = no extra bodies.
 const EXTRA = '../mannequins-daz/';
+// Daz figure scenes (a real person: head, face, age, pose; pipeline/daz/bake.py), also kept out of
+// git. Each body's `figure` is the render scene the engine shows instead of the mannequin's skin.
+const FIGURES = '../figures-daz/';
 
 // get(file, 'json' | 'arrayBuffer') can be replaced (tests read the files from disk).
 export async function loadMannequins(onProgress, get = fetchFile) {
 	const manifest = await get('manifest.json', 'json');
 	const shared = await get('shared.bin', 'arrayBuffer');
-	let extra = null;
+	let extra = null, figures = null;
 	try { extra = await get(EXTRA + 'manifest.json', 'json'); } catch { /* no extra bodies */ }
 	if (extra?.vertices !== manifest.vertices) extra = null;
-	const list = [...manifest.bodies, ...(extra?.bodies ?? []).map((b) => ({ ...b, file: EXTRA + b.file, neck: b.neck && EXTRA + b.neck }))];
+	try { figures = await get(FIGURES + 'manifest.json', 'json'); } catch { /* no figure scenes */ }
+	if (figures?.vertices !== manifest.vertices) figures = null;
+	const list = [...manifest.bodies, ...(extra?.bodies ?? []).map((b) => ({ ...b, file: EXTRA + b.file, neck: b.neck && EXTRA + b.neck })),
+		...(figures?.bodies ?? []).map((b) => ({ ...b, file: FIGURES + b.file }))];
 	const bodies = {};
 	await Promise.all(list.map(async (b) => {
 		bodies[b.key] = { ...b, pos: new Float32Array(await get(b.file, 'arrayBuffer')) };

@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "app", "run", "dev"],
       "port": 5174
+    },
+    {
+      "name": "leotard-designer-alt",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "app", "vite", "app", "--port", "5175", "--strictPort"],
+      "port": 5175
     }
   ]
 }

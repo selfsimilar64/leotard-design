@@ -52,7 +52,8 @@ export class Viewport {
 		scene.background = scene.environment;
 		scene.backgroundBlurriness = 0.7;
 
-		const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+		// stencil: a figure's eye film is masked to the visible eyeball (render/figure.js)
+		const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4, stencilBuffer: true });
 		const composer = this.composer = new EffectComposer(renderer, target);
 		composer.addPass(new RenderPass(scene, camera));
 		this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.18, 0.1, 1.6);

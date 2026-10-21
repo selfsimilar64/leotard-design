@@ -20,6 +20,7 @@ import { StoneView } from '../stones/view.js';
 import { runStones } from '../stones/generators.js';
 import { locate } from '../garment/arrangement.js';
 import { TRIMS } from '../garment/trim.js';
+import { FigureView } from './figure.js';
 
 export class Engine {
 	// ref: the reference garment surface (body/reference.js), where curves live
@@ -35,6 +36,7 @@ export class Engine {
 		scene.add(this.skinMesh);
 		this.capMaterial = new THREE.MeshPhysicalMaterial();
 		this.stand = null;
+		this.figure = new FigureView(scene, viewport.renderer); // a Daz figure body shows a real person instead
 		this.legacy = new LegacyGarment(scene, body);
 		this.textures = new TextureLibrary(viewport.renderer);
 		this.layers = new Map(); // layer id -> { layer, g, view: GarmentView, rims: Rims }
@@ -284,6 +286,10 @@ export class Engine {
 		if (this.stand) { scene.remove(this.stand); this.stand.traverse((o) => o.geometry?.dispose()); }
 		this.stand = torso ? dressFormStand(body, this.capMaterial) : fullBodyStand(body);
 		scene.add(this.stand);
+		// a figure scene: the person's own skin, head and hair instead of the mannequin's skin and stand
+		const fig = !!body.body.figure && !torso;
+		this.skinMesh.visible = !fig; this.stand.visible = !fig;
+		this.figureReady = this.figure.show(fig ? body.body : null);
 		const s = torso ? 0.9 : 0.75, blob = this.viewport.blob;
 		blob.scale.set(s, s, 1); blob.position.z = torso ? body.crotch.z : 0;
 		this.timing.mannequin = performance.now() - t;

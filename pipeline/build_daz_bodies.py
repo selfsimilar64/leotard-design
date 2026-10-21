@@ -150,10 +150,21 @@ def parse_url(u):
 	return i, prop
 
 
+def read_dsf(f):
+	"""A .dsf file, plain or gzip-compressed (add-on products such as Growing Up ship compressed)."""
+	raw = open(f, 'rb').read()
+	if raw[:2] == b'\x1f\x8b':
+		import gzip; raw = gzip.decompress(raw)
+	return json.loads(raw.decode('utf-8'))
+
+
 def load_morphs():
+	# Daz's own Genesis 9 morphs only. Add-on morph folders (Zev0's Growing Up, installed 2026-10-20)
+	# bring 'mult'-stage neutralizer formulas into the graph that would change these recipes' shapes;
+	# age and add-on shapes are baked by Daz Studio itself instead (pipeline/daz/bake.py).
 	deltas, formulas = {}, []
-	for f in glob.glob(os.path.join(G9, 'Morphs', '**', '*.dsf'), recursive=True):
-		d = json.load(open(f, encoding='utf-8'))
+	for f in glob.glob(os.path.join(G9, 'Morphs', 'Daz 3D', '**', '*.dsf'), recursive=True):
+		d = read_dsf(f)
 		for m in d.get('modifier_library', []):
 			if 'morph' in m:
 				vals = m['morph']['deltas']['values']
