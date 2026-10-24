@@ -3,13 +3,13 @@
 // (garment/edges.js). The finish of a loop comes from the document's trims (the trim naming one
 // of the loop's curves), else turned self-fabric elastic. Rebuilt when the cut or the body changes.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, bindScan } from '../materials/fabric.js';
 import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 import { openingLoops } from '../garment/edges.js';
 
 export class Rims {
-	constructor(scene, man) {
-		this.man = man;
+	constructor(scene, man, textures = null) {
+		this.man = man; this.textures = textures;
 		this.group = new THREE.Group();
 		scene.add(this.group);
 		this.meshes = [];
@@ -132,6 +132,7 @@ export class Rims {
 		if (!m) {
 			m = createFabricMaterial(4);
 			applyFabric(m, fin.fabric, fin.colour, fin.second);
+			bindScan(m, fin, this.textures); // its fabric's default scan, as on the panels
 			const T = TRIMS[fin.kind];
 			m.userData.u.uRows.value.set(T.rows[0], T.rows[1]);
 			m.userData.u.uThread.value.set(fin.colour).multiplyScalar(0.8); // thread matched to the fabric, a shade darker

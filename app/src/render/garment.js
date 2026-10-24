@@ -4,7 +4,7 @@
 // garment normal, AO, reference position) and the same fabric shader as the POC draws it
 // (zone 5: no region discards, cloth-space UVs). Changing body only re-interpolates.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, applyTexture } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, bindScan } from '../materials/fabric.js';
 import { cellPiece, cellSignature } from '../garment/pieces.js';
 import { Flattener } from '../garment/flattener.js';
 import { seamKeys, seamDistance, gradientField } from '../garment/fields.js';
@@ -148,10 +148,7 @@ export class GarmentView {
 			} else u.uPrint.value = 0;
 			this.applyDecals(m);
 			if (this.wrinkles) { u.uWrinkle.value = this.wrinkles.Z; u.uWrinkleN.value = this.wrinkles.N; }
-			if (s.texture && this.textures) {
-				const opts = { scale: s.texScale ?? 1, recolour: s.texMode === 'recolour', colour: s.colour, masks: s.masks, normal: s.texNormal };
-				this.textures.get(s.texture).then((set) => applyTexture(m, set, opts), (e) => console.warn('texture', s.texture, e.message));
-			} else applyTexture(m, null);
+			bindScan(m, s, this.textures); // its own scan, or its fabric's default
 			// opaque panels take shadows (and so cast them: variance shadow maps); sheer ones do
 			// neither, so a lining under lace or mesh is not blacked out by it
 			for (const c of this.cells) if (c.panelId === p.id) c.mesh.castShadow = c.mesh.receiveShadow = !m.transparent;

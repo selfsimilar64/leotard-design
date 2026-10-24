@@ -131,8 +131,16 @@ texScale: 0.81 }` (0.81 brings its wales to tricot's 0.38 mm). Problems met, in 
 
 Torso against the GK photo (`#1f4542`, bloom off): bright/dark 3.82 (photo 3.46), saturation mid
 0.66 (0.61), brightest 10% 0.36 (0.36).[^session-2026-10-24] Satin and the glitter interlock scans
-checked after the mip change: unchanged. Not yet the default for matte lycra (owner to decide);
-the procedural knit stays for fabrics without a scan.
+checked after the mip change: unchanged.
+
+**Default since 2026-10-24 (owner's decision).** `FABRICS.matte.scan = { id: 'TX-00001482', scale:
+0.81 }`: every matte lycra panel, strap and finished edge shows the scan, recoloured to its colour,
+unless it names its own `texture`. One helper, `bindScan` in `app/src/materials/fabric.js`, does
+this for `render/garment.js`, `render/straps.js` and `render/rims.js` (edges now take scans; `Rims`
+gets the engine's `TextureLibrary`). A scan that loads after the look has changed is dropped, and a
+colour change keeps the bound scan (no flash of the procedural knit). Where the scan cannot load
+(the VMOD files are never bundled), the procedural knit shows. Not covered: the picker tiles
+(`materials/swatches.js`, invisible at tile size) and the legacy POC garment path.
 
 # Reference images
 
@@ -147,8 +155,6 @@ The GK photo is retouched, so its numbers are a target, not a measurement.
   [stretch-dependent appearance](/engineering/rendering/fabric-shading/stretch-dependent-appearance.md),
   needs per-triangle stretch passed to the shader.
 - Bloom on HDRI rigs (above).
-- Whether matte lycra uses the scan by default (a `FABRICS` field for a default scan, or a
-  start-point setting); the finished-edge bindings (`render/rims.js`) do not take scans yet.
 - A plain matte tricot scan, if VMOD has one, to replace the scuba stand-in.
 - The same procedure for shiny tricot, stretch mesh, metallic foil, mystique and stretch velvet,
   the owner's first batch.

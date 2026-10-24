@@ -606,7 +606,11 @@ export const FABRICS = {
 	// mixed in linear light, so a third white is nearly white on a dark colour) a dark green's
 	// highlights lost a third of their saturation against a GK product photo; at 0.1 / 0.1 the
 	// render matches it (dev/material-eval.js, 2026-10-24).
-	matte: { label: 'Matte lycra', roughness: 0.8, sheen: 0.1, sheenRoughness: 0.6, sheenTint: 0.1, knit: 1 },
+	// scan: the scanned texture the fabric shows by default (recoloured; scale: its tile size as a
+	// multiple of the scan's own). TX-00001482 is a scuba knit whose face stands in for matte tricot,
+	// scaled to tricot's 0.38 mm wale (owner's choice, 2026-10-24); without the scan (the textures are
+	// never bundled) the procedural knit shows.
+	matte: { label: 'Matte lycra', roughness: 0.8, sheen: 0.1, sheenRoughness: 0.6, sheenTint: 0.1, knit: 1, scan: { id: 'TX-00001482', scale: 0.81 } },
 	checker: { label: 'UV checker (debug)', roughness: 0.8, checker: 0.02 },
 	shiny: { label: 'Shiny tricot', roughness: 0.4, sheen: 0.2, sheenRoughness: 0.5, anisotropy: 0.6, knit: 1 },
 	wet: { label: 'Wet look (cire)', roughness: 0.36, clearcoat: 1, clearcoatRoughness: 0.1, anisotropy: 0.3 },
@@ -700,6 +704,27 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	m.transparent = !!f.mesh;
 	m.alphaToCoverage = !f.mesh;
 	m.needsUpdate = true; // sheen / clearcoat / anisotropy / iridescence switch shader variants
+}
+
+// The scanned texture a look shows, as { id, opts } for TextureLibrary.get + applyTexture, or null:
+// its own (look.texture), else its fabric's default scan, recoloured to its colour. look: a panel
+// stack entry, a strap's fabric or a finished edge ({ fabric, colour, texture?, texMode?, texScale?,
+// texNormal?, masks? }).
+function scanOf(look) {
+	if (look.texture) return { id: look.texture, opts: { scale: look.texScale ?? 1, recolour: look.texMode === 'recolour', colour: look.colour, masks: look.masks, normal: look.texNormal } };
+	const d = FABRICS[look.fabric]?.scan;
+	return d ? { id: d.id, opts: { scale: d.scale * (look.texScale ?? 1), recolour: true, colour: look.colour, normal: look.texNormal } } : null;
+}
+
+// Bind a look's scan (scanOf) to a material once it has loaded, after applyFabric. Shared by panels,
+// straps and finished edges so they agree. A scan that arrives after the look has changed is
+// dropped; the scan already bound stays while the same one reloads with new options (no flash of
+// the procedural knit on a colour change). textures: a TextureLibrary, or null for none.
+export function bindScan(m, look, textures) {
+	const s = textures ? scanOf(look) : null, key = s ? s.id + JSON.stringify(s.opts) : null;
+	if (m.userData.scanId !== s?.id) applyTexture(m, null);
+	m.userData.scan = key; m.userData.scanId = s?.id;
+	if (s) textures.get(s.id).then((set) => { if (m.userData.scan === key) applyTexture(m, set, s.opts); }, (e) => console.warn('texture', s.id, e.message));
 }
 
 // Bind a scanned texture set (materials/textures.js) to a fabric material, or unbind it (set = null).

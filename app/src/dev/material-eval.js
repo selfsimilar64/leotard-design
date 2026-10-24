@@ -45,7 +45,8 @@ export async function prepare(fabric, colour) {
 	await app.engine.figureReady;
 	app.exec({ op: 'start.apply', key: 'plain-tank' });
 	for (const p of app.doc.panels) app.exec({ op: 'panel.set', id: p.id, fabric, ombre: null, ...fields });
-	if (fields.texture) await app.engine.textures.get(fields.texture);
+	const scan = fields.texture ?? (await appFabrics())[fabric]?.scan?.id; // its own or the fabric's default
+	if (scan) await app.engine.textures.get(scan);
 	app.exec({ op: 'scene.set', ...SETUP });
 	await app.engine.figureReady;
 	await app.engine.viewport.hdri(RIGS[SETUP.rig].hdri);

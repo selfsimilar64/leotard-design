@@ -2,7 +2,7 @@
 // topstitching, in the strap's fabric with cloth-space UVs along the strap, plus a soft contact
 // shadow on whatever it lies on (fabric or skin). Straps stack by their layer number where they cross.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, applyTexture } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, bindScan } from '../materials/fabric.js';
 import { strapGrid, markGrid, ACROSS, STRAP_PROFILE } from '../garment/straps.js';
 
 const FABRIC = 0.0012, ABOVE = 0.0009, STACK = 0.0013;
@@ -128,8 +128,7 @@ export class StrapView {
 		m.userData.u.uUV.value = 1;
 		m.userData.u.uRows.value.set(s.edge === 'none' ? 0 : 0.0016, 0);
 		m.userData.u.uThread.value.set(f.colour ?? '#222222').multiplyScalar(0.8);
-		if (f.texture && this.textures) this.textures.get(f.texture).then((set) => applyTexture(m, set, { recolour: f.texMode === 'recolour', colour: f.colour }));
-		else applyTexture(m, null);
+		bindScan(m, { ...f, fabric: f.fabric ?? 'matte', colour: f.colour ?? '#222222' }, this.textures); // its own scan, or its fabric's default
 		return m;
 	}
 

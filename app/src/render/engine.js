@@ -192,7 +192,7 @@ export class Engine {
 			for (const layer of doc.layers) {
 				let L = this.layers.get(layer.id);
 				if (!L) {
-					L = { layer, view: new GarmentView(scene, this.body, layer), rims: new Rims(scene, this.body), g: null };
+					L = { layer, view: new GarmentView(scene, this.body, layer), rims: new Rims(scene, this.body, this.textures), g: null };
 					L.view.textures = this.textures;
 					L.view.wrinkles = this.wrinkleZones();
 					this.layers.set(layer.id, L);
