@@ -131,6 +131,13 @@ list per fabric).[^samples]
 3. Convert to KTX2 (Basis Universal) with mip-maps: about 4-8x less GPU memory, which matters on a
    4 GB GTX 1650 and on iPad. Budget **~20-30 MB of GPU memory per material** after compression.
 4. Fold normal-map detail into roughness at distance (Toksvig-style) so fine weave does not shimmer.
+   **Built 2026-10-24** (`FABRIC_FRAGMENT`, the `uTex` block), with two parts found necessary on a
+   knit scan: mip levels made by Gaussian blur, not the GPU's 2x2 boxes (`mipChain` in
+   `app/src/materials/textures.js`: the box chain folded a regular knit's loop columns into wavy
+   ribs at arm's length), and colour, roughness and normal sampled one level blurrier than the GPU
+   picks. Recolour needs the base map's mean luminance in linear light (it was averaged from sRGB
+   bytes, so recoloured scans came out about half as bright). Details: [photo match: matte
+   lycra](/engineering/rendering/fabric-shading/photo-match-matte-lycra.md).
 5. Register as a fabric preset: maps + tile size + which shader layers it drives (lace → opacity +
    mesh-over-skin; glitter → flake mask; foil → foil mask) + recolour rule (most scans should be
    recolourable to the team colour: keep the luminance, replace the hue).

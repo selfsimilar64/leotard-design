@@ -246,7 +246,12 @@ const FABRIC_FRAGMENT = /* glsl */`
 
 	if ( uTex > .5 ) {
 		vec2 tuv = q / uTile;
-		vec4 tb = texture2D( tBase, tuv );
+		// One mip level blurrier than the GPU picks for the colour, roughness and relief: at its own
+		// choice a knit's loop columns (one or two pixels at arm's length) still flicker. What the blur
+		// removes from the relief comes back as roughness (Toksvig, below). The levels themselves are
+		// Gaussian, not the GPU's boxes (textures.js mipChain).
+		const float TB = 1.;
+		vec4 tb = texture2D( tBase, tuv, TB );
 		vec3 col = tb.rgb;
 		if ( uTexRecolour > .5 ) col = uTexTint * ( dot( col, vec3( .2126, .7152, .0722 ) ) / max( uTexLum, 1e-3 ) );
 		if ( uTexFlags.w > .5 ) {
@@ -256,11 +261,18 @@ const FABRIC_FRAGMENT = /* glsl */`
 			col = mix( col, uMaskCol2 * sh, mk.z ); col = mix( col, uMaskCol3 * sh, mk.w );
 		}
 		diffuseColor.rgb = col;
-		if ( uTexFlags.x > .5 ) roughnessFactor = clamp( texture2D( tRough, tuv ).r, .04, 1. );
+		if ( uTexFlags.x > .5 ) roughnessFactor = clamp( texture2D( tRough, tuv, TB ).r, .04, 1. );
 		if ( uTexFlags.z > .5 ) metalnessFactor = max( metalnessFactor, texture2D( tMtl, tuv ).r );
 		if ( uTexFlags.y > .5 ) diffuseColor.a *= texture2D( tAlpha, tuv ).r;
 		if ( uTexNormal > 0. ) {
-			vec3 tn = texture2D( tNormal, tuv ).xyz * 2. - 1.;
+			vec3 tn = texture2D( tNormal, tuv, TB ).xyz * 2. - 1.;
+			// Toksvig: a texel seen from afar averages many directions (mipmaps), so its normal comes out
+			// shorter than 1. That spread is relief too small to see, which the eye sees as a broader,
+			// softer shine, not as a flat surface: it widens the GGX lobe (alpha^2 += 2 variance,
+			// capped as Filament's specular anti-aliasing is).
+			float tl = max( length( tn ), 1e-3 ), tv = min( ( 1. - tl ) / tl * uTexNormal * uTexNormal, .18 );
+			float ta = roughnessFactor * roughnessFactor;
+			roughnessFactor = sqrt( sqrt( min( ta * ta + 2. * max( tv, 0. ), 1. ) ) );
 			tn.xy *= uTexNormal;
 			normal = normalize( cotangentFrame( normal, - vViewPosition, tuv ) * tn );
 		}
@@ -303,29 +315,22 @@ const FABRIC_FRAGMENT = /* glsl */`
 	// so the colour at a distance does not change, once it is under about four pixels (fp, |dx| +
 	// |dy|, runs about 1.5x a pixel; at two to three pixels the wale columns beat into diagonal
 	// moire): the loop's two legs first, then the courses, then the wale columns. The grooves
-	// between the wales are deeper than the gap between a loop's legs, and a little darker. Last to
-	// go is the yarn's drift: neighbouring wales sit a little higher or lower in streaks a few
-	// millimetres wide, the faint grain a swatch shows at arm's length.
-	if ( uKnit > 0. ) {
+	// between the wales are deeper than the gap between a loop's legs, and a little darker.
+	// A scanned texture brings its own knit, so this one is off under a scan.
+	if ( uKnit > 0. && uTex < .5 ) {
 		const vec2 kp = vec2( .00038, .00023 ); // wale, course pitch (m)
 		float fw = 1. - smoothstep( .3, .5, fp / kp.x ), fc = 1. - smoothstep( .3, .5, fp / kp.y );
-		float fl = 1. - smoothstep( .3, .5, fp / ( kp.x * .5 ) ), fd = 1. - smoothstep( .3, .5, fp / ( kp.x * 4. ) );
-		if ( fd > 0. ) {
+		float fl = 1. - smoothstep( .3, .5, fp / ( kp.x * .5 ) );
+		if ( fw > 0. ) {
 			vec2 k = q / kp;
-			float drift = vnoise( vec2( k.x * .25, k.y * .04 + 3.7 ) ) - .5;
-			float hgt = drift * kp.x * .15 * fd, shade = drift * .04 * fd;
-			if ( fw > 0. ) {
-				float wx = fract( k.x ) - .5, d = abs( wx ) - .25;
-				float legs = mix( .667, max( 1. - 16. * d * d, 0. ), fl );      // the two legs of each loop; .667: their average
-				float across = .6 * ( 1. - 4. * wx * wx ) + .4 * legs;           // the wale column round it (average .667)
-				float cy = fract( k.y + abs( wx ) * .7 ) - .5;                   // legs lean into a V
-				float along = mix( .79, 1. - 2.5 * cy * cy, fc );                // .79: its average
-				float loop = across * along;
-				hgt += loop * kp.x * .1 * fw;
-				shade += ( loop - .53 ) * .1 * fw;                               // .53: the loop's average
-			}
-			normal = bumpN( normal, hgt * uKnit );
-			diffuseColor.rgb *= 1. + shade * uKnit;
+			float wx = fract( k.x ) - .5, d = abs( wx ) - .25;
+			float legs = mix( .667, max( 1. - 16. * d * d, 0. ), fl );          // the two legs of each loop; .667: their average
+			float across = .6 * ( 1. - 4. * wx * wx ) + .4 * legs;               // the wale column round it (average .667)
+			float cy = fract( k.y + abs( wx ) * .7 ) - .5;                       // legs lean into a V
+			float along = mix( .79, 1. - 2.5 * cy * cy, fc );                    // .79: its average
+			float loop = across * along;
+			normal = bumpN( normal, loop * kp.x * .1 * uKnit * fw );
+			diffuseColor.rgb *= 1. + ( loop - .53 ) * .1 * uKnit * fw;           // .53: the loop's average
 		}
 	}
 

@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-24
+* **Update**: [Photo match: matte lycra](/engineering/rendering/fabric-shading/photo-match-matte-lycra.md): yarn-drift streaks removed (owner: mid-range looked bad). A scanned knit (VMOD TX-00001482 scuba, scaled to tricot's wale) stands in for tricot: recoloured scans were half as bright (mean luminance taken from sRGB bytes; now linear), and the GPU's box mip chain turned its loop columns into vertical ribs at arm's length (now Gaussian mip levels, `mipChain`); relief lost at distance becomes roughness (Toksvig). Matches the GK photo at body distance; not the default yet. [Texture import pipeline](/engineering/rendering/fabric-shading/texture-import-pipeline.md) step 4 marked built.
 * **Creation**: [Photo match: matte lycra](/engineering/rendering/fabric-shading/photo-match-matte-lycra.md): first fabric checked against a real photo (GK plain tank) in the owner's test scene, with a capture script (`app/src/dev/material-eval.js`, four distances, bloom off). The old sheen (0.4, a third white in linear light) and the HDRI rigs' bloom washed a dark green out (mid saturation 0.41 against the photo's 0.61); sheen 0.1 tinted 10% (new `sheenTint`) and no bloom match it (0.63). Knit rebuilt to the tricot's real structure, fading scale by scale so it shows at hand's length without moire. Bloom default left for the owner.
 
 ## 2026-10-21

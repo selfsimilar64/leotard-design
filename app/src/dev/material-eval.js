@@ -38,11 +38,14 @@ function views() {
 	};
 }
 
+// colour: a hex colour, or panel fields, e.g. { colour, texture: 'TX-00001482', texMode: 'recolour' }
 export async function prepare(fabric, colour) {
+	const fields = typeof colour === 'string' ? { colour } : colour;
 	app.exec({ op: 'body.set', ...BODY });
 	await app.engine.figureReady;
 	app.exec({ op: 'start.apply', key: 'plain-tank' });
-	for (const p of app.doc.panels) app.exec({ op: 'panel.set', id: p.id, fabric, colour, ombre: null });
+	for (const p of app.doc.panels) app.exec({ op: 'panel.set', id: p.id, fabric, ombre: null, ...fields });
+	if (fields.texture) await app.engine.textures.get(fields.texture);
 	app.exec({ op: 'scene.set', ...SETUP });
 	await app.engine.figureReady;
 	await app.engine.viewport.hdri(RIGS[SETUP.rig].hdri);

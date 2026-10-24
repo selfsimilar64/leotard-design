@@ -52,7 +52,7 @@ export class TextureLibrary {
 			t.wrapS = t.wrapT = THREE.RepeatWrapping;
 			t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
 			t.anisotropy = Math.min(aniso, 8);
-			t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter;
+			t.mipmaps = mipChain(bmp); t.generateMipmaps = false; t.minFilter = THREE.LinearMipmapLinearFilter;
 			t.flipY = false; // the bitmap is already flipped (OpenGL convention, as the normal maps expect)
 			t.needsUpdate = true;
 			t.userData.bitmap = bmp;
@@ -83,7 +83,38 @@ async function bitmap(url) {
 	return createImageBitmap(blob, { imageOrientation: 'flipY', resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
 }
 
-// Mean luminance, min and max of the red channel (on a 64-pixel thumbnail).
+// The texture's mip levels, each a Gaussian blur of the full image (sigma about half the level's
+// texel, wrapped round the tile) sampled down. The GPU's own chain halves by 2x2 boxes, level after
+// level, which folds a regular knit's loop columns (a period near some level's texel size) into
+// wavy vertical ribs at arm's length that were never in the fabric (TX-00001482, 2026-10-24).
+function mipChain(bmp) {
+	const W = bmp.width, H = bmp.height, out = [bmp];
+	const pad = document.createElement('canvas'), px = pad.getContext('2d');
+	for (let l = 1, w = W, h = H; w > 1 || h > 1; l++) {
+		w = Math.max(1, w >> 1); h = Math.max(1, h >> 1);
+		const s = 2 ** l * 0.5, m = Math.min(Math.ceil(s * 3), W, H); // blur sigma and wrap margin, source pixels
+		pad.width = W + 2 * m; pad.height = H + 2 * m;
+		px.filter = 'none';
+		for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) px.drawImage(bmp, m + x * W, m + y * H);
+		const c = document.createElement('canvas'), cx = c.getContext('2d');
+		c.width = W; c.height = H;
+		cx.filter = `blur(${s}px)`;
+		cx.drawImage(pad, -m, -m);
+		const lv = document.createElement('canvas');
+		lv.width = w; lv.height = h;
+		const lx = lv.getContext('2d');
+		lx.imageSmoothingQuality = 'high';
+		lx.drawImage(c, 0, 0, w, h);
+		out.push(lv);
+	}
+	return out;
+}
+
+// Mean luminance, min and max of the red channel (on a 64-pixel thumbnail). lum is in linear light
+// (the bytes decoded from sRGB), as the shader reads the base map; min, max and mean are the raw
+// bytes, for the data maps (alpha, metal). Averaging the sRGB bytes made recoloured scans come out
+// about half as bright as their colour (a mid-dark scan's mean byte is ~4x its linear mean).
+const toLinear = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 function averageOf(bmp) {
 	const c = new OffscreenCanvas(64, 64), x = c.getContext('2d');
 	x.drawImage(bmp, 0, 0, 64, 64);
@@ -91,7 +122,7 @@ function averageOf(bmp) {
 	let lum = 0, mn = 1, mx = 0, mean = 0;
 	for (let i = 0; i < d.length; i += 4) {
 		const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
-		lum += 0.2126 * r + 0.7152 * g + 0.0722 * b; mn = Math.min(mn, r); mx = Math.max(mx, r); mean += r;
+		lum += 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b); mn = Math.min(mn, r); mx = Math.max(mx, r); mean += r;
 	}
 	return { lum: lum / (d.length / 4), min: mn, max: mx, mean: mean / (d.length / 4) };
 }

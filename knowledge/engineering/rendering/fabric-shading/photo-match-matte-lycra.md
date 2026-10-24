@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: "Photo match: matte lycra"
-description: "First fabric checked against a real photo in a fixed test scene (White loft studio, arms outstretched, three to four distances, bloom off): the old preset's sheen and the scene's bloom washed a dark green out; with sheen 0.1 (tinted 10% white) and no bloom the render matches a GK product photo's contrast and saturation, and a rebuilt tricot knit shows at hand's length."
+description: "First fabric checked against a real photo in a fixed test scene (White loft studio, arms outstretched, four distances, bloom off): the old sheen and the scene's bloom washed a dark green out (fixed: sheen 0.1 tinted 10%); a drawn tricot knit for close up; then a scanned knit, which needed linear-light recolouring and Gaussian mip levels (the GPU's box mips turned its loop columns into ribs at arm's length)."
 tags: [rendering, fabric, calibration, matte, knit, bloom]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-24T13:10:00Z }
 sources:
@@ -93,14 +93,46 @@ GK Elite plain tank photo against the render (`#1f4542`, torso view):[^session-2
 The old knit was a sine across the grain at 0.35 mm that faded to nothing at about 0.07 mm per
 pixel, so the fabric was perfectly smooth beyond a few centimetres. The new one follows a warp-knit
 tricot's technical face at the Carvico counts (wale 0.38 mm, course 0.23 mm):[^matte-tricot] V-shaped
-loops of two legs, deeper grooves between the wale columns, and the yarn's height drifting in
-streaks about four wales wide. Each scale fades to its own average (so the colour at a distance
-does not change) once it is under about four pixels: legs, then courses, then wale columns, then
-the drift. At two to three pixels the wale columns beat into a diagonal moire, which the
-debug checker fabric showed was not the grain (the grain runs straight up the body). Result:
-faint vertical streaks at 17-45 cm, loops at 6 cm, smooth beyond about a metre. Shared by every
-fabric with `knit` (shiny tricot, mystique, hologram, the ombres) and the linen dress-form
-mannequin finish (`render/engine.js`); shiny and mystique checked, unchanged at body distance.
+loops of two legs and deeper grooves between the wale columns. Each scale fades to its own average
+(so the colour at a distance does not change) once it is under about four pixels: legs, then
+courses, then wale columns. At two to three pixels the wale columns beat into a diagonal moire,
+which the debug checker fabric showed was not the grain (the grain runs straight up the body).
+Result: loops at 6 cm, smooth beyond about 15 cm. Shared by every fabric with `knit` (shiny
+tricot, mystique, hologram, the ombres) and the linen dress-form mannequin finish
+(`render/engine.js`); shiny and mystique checked, unchanged at body distance; off under a scan.
+
+**Rejected: yarn-drift streaks.** A coarser term (wales a little higher or lower in streaks four
+wales wide) kept a "grain" visible at 17-45 cm. The owner judged the mid-range look bad, and no
+measurement supported it; removed the same day. **Physically, sub-pixel relief does not stay
+visible as streaks; it becomes the shape of the highlight** (see the scan below).
+
+# The scanned knit (TX-00001482)
+
+The physically grounded route the owner chose next: a measured scan instead of a drawn knit. No
+plain matte tricot was in the library, so the owner downloaded VMOD TX-00001482 *neoprene scuba
+solid*: its face is the same family (columns of V loops), a little coarser (about 0.47 mm per
+wale) and deeper.[^owner-2026-10-24] Applied as `{ texture: 'TX-00001482', texMode: 'recolour',
+texScale: 0.81 }` (0.81 brings its wales to tricot's 0.38 mm). Problems met, in order:
+
+1. **Half as bright as its colour**: recolour divides by the scan's mean luminance, which was
+   averaged from sRGB bytes while the shader reads linear values. Fixed in `averageOf`
+   (`app/src/materials/textures.js`); affects every recoloured scan and the colour masks.
+2. **Vertical ribs at arm's length** (45 cm and 17 cm), present at any relief strength down to 0.3.
+   Not in the scan: filtering everything over about a millimetre out of its maps changed nothing,
+   and sampling a blurrier mip level made the ribs bigger. They were made by the GPU's mip chain,
+   whose repeated 2x2 averaging aliases a regular period near a level's texel size (the loop
+   columns, ~15 px in the normal map) into slow beats. Fixed by building the levels from Gaussian
+   blurs of the full image (`mipChain`): smooth at 45 cm and beyond, a faint fine texture at
+   17 cm, loops at 6 cm. Costs about 1.4 s to load this scan, 2.7 s for a 4096 scan (stalls up to
+   0.66 s; could move to a worker).
+3. Distance: colour, roughness and normal are sampled one mip level blurrier than the GPU picks,
+   and the length the averaged normal loses becomes roughness (Toksvig: alpha^2 += 2 variance,
+   capped at 0.18 as Filament's specular anti-aliasing is).
+
+Torso against the GK photo (`#1f4542`, bloom off): bright/dark 3.82 (photo 3.46), saturation mid
+0.66 (0.61), brightest 10% 0.36 (0.36).[^session-2026-10-24] Satin and the glitter interlock scans
+checked after the mip change: unchanged. Not yet the default for matte lycra (owner to decide);
+the procedural knit stays for fabrics without a scan.
 
 # Reference images
 
@@ -115,6 +147,9 @@ The GK photo is retouched, so its numbers are a target, not a measurement.
   [stretch-dependent appearance](/engineering/rendering/fabric-shading/stretch-dependent-appearance.md),
   needs per-triangle stretch passed to the shader.
 - Bloom on HDRI rigs (above).
+- Whether matte lycra uses the scan by default (a `FABRICS` field for a default scan, or a
+  start-point setting); the finished-edge bindings (`render/rims.js`) do not take scans yet.
+- A plain matte tricot scan, if VMOD has one, to replace the scuba stand-in.
 - The same procedure for shiny tricot, stretch mesh, metallic foil, mystique and stretch velvet,
   the owner's first batch.
 
