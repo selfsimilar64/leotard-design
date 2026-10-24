@@ -297,12 +297,35 @@ const FABRIC_FRAGMENT = /* glsl */`
 		}
 	}
 
+	// --- knit: the technical face of a warp-knit tricot. Columns of V-shaped loops along the grain
+	// (wales, ~26 per cm), stacked in courses (~44 per cm), the counts on Carvico's matte tricot data
+	// sheets (knowledge/domain/fabrics/matte-tricot.md). Each scale fades on its own, to its average
+	// so the colour at a distance does not change, once it is under about four pixels (fp, |dx| +
+	// |dy|, runs about 1.5x a pixel; at two to three pixels the wale columns beat into diagonal
+	// moire): the loop's two legs first, then the courses, then the wale columns. The grooves
+	// between the wales are deeper than the gap between a loop's legs, and a little darker. Last to
+	// go is the yarn's drift: neighbouring wales sit a little higher or lower in streaks a few
+	// millimetres wide, the faint grain a swatch shows at arm's length.
 	if ( uKnit > 0. ) {
-		const float kp = .00035;
-		float fade = 1. - smoothstep( .2, .5, fp / kp );
-		if ( fade > 0. ) {
-			float w = sin( q.x / kp * 6.2832 ) * ( .65 + .35 * sin( q.y / kp * 3.7 + q.x / kp * 3.1416 ) );
-			normal = bumpN( normal, w * kp * .07 * uKnit * fade );
+		const vec2 kp = vec2( .00038, .00023 ); // wale, course pitch (m)
+		float fw = 1. - smoothstep( .3, .5, fp / kp.x ), fc = 1. - smoothstep( .3, .5, fp / kp.y );
+		float fl = 1. - smoothstep( .3, .5, fp / ( kp.x * .5 ) ), fd = 1. - smoothstep( .3, .5, fp / ( kp.x * 4. ) );
+		if ( fd > 0. ) {
+			vec2 k = q / kp;
+			float drift = vnoise( vec2( k.x * .25, k.y * .04 + 3.7 ) ) - .5;
+			float hgt = drift * kp.x * .15 * fd, shade = drift * .04 * fd;
+			if ( fw > 0. ) {
+				float wx = fract( k.x ) - .5, d = abs( wx ) - .25;
+				float legs = mix( .667, max( 1. - 16. * d * d, 0. ), fl );      // the two legs of each loop; .667: their average
+				float across = .6 * ( 1. - 4. * wx * wx ) + .4 * legs;           // the wale column round it (average .667)
+				float cy = fract( k.y + abs( wx ) * .7 ) - .5;                   // legs lean into a V
+				float along = mix( .79, 1. - 2.5 * cy * cy, fc );                // .79: its average
+				float loop = across * along;
+				hgt += loop * kp.x * .1 * fw;
+				shade += ( loop - .53 ) * .1 * fw;                               // .53: the loop's average
+			}
+			normal = bumpN( normal, hgt * uKnit );
+			diffuseColor.rgb *= 1. + shade * uKnit;
 		}
 	}
 
@@ -574,7 +597,11 @@ export function createFabricMaterial(zone) {
 // light and is invisible next to the foil.
 // Flake fields: pitch (m), dotR (cells), presence, tilt, rough, colorVar, holo, holoFreq, holoJit.
 export const FABRICS = {
-	matte: { label: 'Matte lycra', roughness: 0.8, sheen: 0.4, sheenRoughness: 0.6, knit: 1 },
+	// Matte lycra's sheen is low and close to its own colour: at 0.4 and a third white (the tint is
+	// mixed in linear light, so a third white is nearly white on a dark colour) a dark green's
+	// highlights lost a third of their saturation against a GK product photo; at 0.1 / 0.1 the
+	// render matches it (dev/material-eval.js, 2026-10-24).
+	matte: { label: 'Matte lycra', roughness: 0.8, sheen: 0.1, sheenRoughness: 0.6, sheenTint: 0.1, knit: 1 },
 	checker: { label: 'UV checker (debug)', roughness: 0.8, checker: 0.02 },
 	shiny: { label: 'Shiny tricot', roughness: 0.4, sheen: 0.2, sheenRoughness: 0.5, anisotropy: 0.6, knit: 1 },
 	wet: { label: 'Wet look (cire)', roughness: 0.36, clearcoat: 1, clearcoatRoughness: 0.1, anisotropy: 0.3 },
@@ -630,7 +657,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	m.metalness = f.metalness ?? 0;
 	m.sheen = f.sheen ?? 0;
 	m.sheenRoughness = f.sheenRoughness ?? 0.6;
-	m.sheenColor.copy(base).lerp(_c.set(0xffffff), f.velvet ? 0.25 : 0.35); // a knit's sheen carries its own colour
+	m.sheenColor.copy(base).lerp(_c.set(0xffffff), f.sheenTint ?? (f.velvet ? 0.25 : 0.35)); // a knit's sheen carries its own colour; sheenTint: share of white
 	m.clearcoat = f.clearcoat ?? 0;
 	m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
 	m.anisotropy = f.anisotropy ?? 0;

@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-10-24
+* **Creation**: [Photo match: matte lycra](/engineering/rendering/fabric-shading/photo-match-matte-lycra.md): first fabric checked against a real photo (GK plain tank) in the owner's test scene, with a capture script (`app/src/dev/material-eval.js`, four distances, bloom off). The old sheen (0.4, a third white in linear light) and the HDRI rigs' bloom washed a dark green out (mid saturation 0.41 against the photo's 0.61); sheen 0.1 tinted 10% (new `sheenTint`) and no bloom match it (0.63). Knit rebuilt to the tricot's real structure, fading scale by scale so it shows at hand's length without moire. Bloom default left for the owner.
+
 ## 2026-10-21
 * **Decision**: [Owner review: presets, poses, Stacy](/decisions/2026-10-21-owner-review-presets-poses-stacy.md): a design changes only the leotard; plain backdrop in HDRI studios; weaker glare with size and strength; lights never circle by default; pre-rendered material tiles on twisted cloth in one row with a texture size for every material; all 30 Skillful Routine poses and no arm-only poses in the picker; Stacy's face and skin on every body, no skin-tone picker.
 * **Update**: [Garment cutting](/engineering/app/garment-cutting.md): curves are sampled on the reference body with its arms raised, so lines through the armpit no longer land on the arm (the spikes up the arm in posed designs). [Side panel](/engineering/app/side-panel-and-presets.md): the above, plus body and pose changes wait for the person's files so the garment and the person change in the same frame. [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md): Stacy on every body, 30 poses, `--missing-poses`. [Free character assets](/engineering/pipeline/free-character-assets.md): Stacy in use.
