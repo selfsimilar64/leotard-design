@@ -126,6 +126,14 @@ Feminine03's areola and halo). The centres are the UVs of the 8 cage vertices Ge
 change: G9's nipple geometry is HD detail only (base deltas under 1 mm), which the pipeline never loads.
 The MakeHuman mannequins were already smoothed there ([mannequin pipeline](/engineering/pipeline/mannequin-pipeline.md)).
 
+**Sports-bra bust (2026-10-25, owner).** Every body from the young teen up is baked with
+`body_ctrl_BreastsFlatten` 1 and `body_ctrl_BreastsIn-Out` 0.5 (`bodies.py BUST`). **Pitfall:**
+every Skillful Routine pose preset writes 0 to all the breast controls (flatten included) and the
+pectoral rotations, so before 2026-10-25 the petite body's flatten held only in the A-pose and
+arm poses; `bake_bodies.dsa reshape()` sets the job's morphs again after each pose preset. Flatten
+is clamped at 1 by Daz. What else was compared and why it was set aside:
+[sports-bra bust](/decisions/2026-10-25-sports-bra-bust.md).
+
 # In the app
 
 - **Subdivision**: `body/subdivide.js` builds the Catmull-Clark stencil (sparse matrix) from the
@@ -173,6 +181,17 @@ Display settings). Earlier numbers in these notes (9.8-15 ms) were measured in a
 are not comparable. Body or pose change: about 1.8 s (lift 0.5 s; contact darkening was 3.4 s on
 the denser mesh until it searched only the other side's cells: 0.1 s). Person: first show about
 5-7 s, new expression about 2.5 s (occlusion bake: depth packed into bytes, only the head re-baked).
+Since 2026-10-24 the occlusion bake tests each vertex on the GPU (`bakeOcclusion`, `render/figure.js`:
+vertices as texels, one full-screen accumulation pass per direction, one read-back at the end)
+instead of reading each of the 192 depth maps back and testing ~0.5-0.9 M vertices on the CPU:
+bun-bangs hair 2.9 s -> 0.62-0.67 s in the app, Eirgrid 12 s before; values unchanged (max
+difference 0.01). The person's update was then about 1.7 s: bake 0.65, skin normals ~0.4
+(`vertexNormals` allocated an array per triangle), posing the two hairs not on show ~0.3, skin
+copy ~0.16, subdivision itself only ~0.04. Since 2026-10-25 hidden parts are not posed and the
+normals are allocation-free: 0.55-0.65 s, nothing visible changed. Fewer bake directions were
+measured and rejected (96 -> 32 saves ~0.1 s; occlusion off by up to 0.25 in places). Not pre-baked to files on purpose: bodies, poses and hair change often (owner,
+2026-10-24). A pose change is still dominated by the garment slide (about 4-5 s,
+[garment sliding](/engineering/app/garment-sliding.md)).
 Data: about 560 MB in `app/public/g9/` (per pose 5 MB for the hair).
 
 # Open

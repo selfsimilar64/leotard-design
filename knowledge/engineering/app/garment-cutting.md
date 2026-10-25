@@ -39,6 +39,12 @@ every body size (and later pose) by barycentric interpolation, as planned.[^arch
    largest step between neighbouring samples 4-25 cm before, under 2 cm after, except the 2 cm
    crotch seam (4 cm, the gusset stretching between spread legs, not a jump). Lines away from the
    armpit sample exactly as before (the torso is the same in both poses).
+   This cannot help a **control point stored on the arm** (traced against the inner arm in the
+   A-pose, where it lies on the side of the chest): the line then legitimately runs up the arm to
+   it in a pose. B5's upper back opening (one point, arm skin weight 0.98) and B12's lining top (two
+   points) had such points; they were moved 0.5-1.3 cm to the closest torso face on 2026-10-21, and
+   `test/curves.test.js` now fails any sleeveless (`tank`) design with a point whose arm weight
+   (`man.wArm`) exceeds 0.8. Sleeved designs keep arm points on purpose (cuffs, underarm seams).
 3. **Attachments**: a control point may carry `on: { curve, t, mirror? }`; it then sits exactly on
    a sample of that curve, evaluated after it (topological order), so T-junctions are exact and
    follow edits. The mirror image of an attached point uses the target's mirror image, or for a

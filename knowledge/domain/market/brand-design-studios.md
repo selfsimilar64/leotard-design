@@ -65,7 +65,8 @@ crystal option, then hand the design to a human rep or account manager.[^notes-t
 was found of any brand tool that lets a user draw a new panel line, move a seam or place an
 individual stone.[^notes-tools][^report] **All descriptions come from vendor page text; none of
 the studios was operated hands-on** (they are interactive WebGL tools the research session could
-not drive).[^notes-tools]
+not drive).[^notes-tools] Sylvia P's studio has since been operated and taken apart: see the
+[Studio SP teardown](/domain/market/studio-sp-teardown.md) (2026-10-24).
 
 # The three studios
 

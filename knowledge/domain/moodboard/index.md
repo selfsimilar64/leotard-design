@@ -14,6 +14,7 @@
 
 # Domain Concept
 
+* [Moodboard common patterns (counted vocabulary)](common-patterns.md) (draft) - A fresh count over the 138-photo catalogue (about 106 garments) of what recurs on each axis a designer picks: neckline, back, front top (yoke), waist treatment, sleeves, leg line, colour and fabric schemes, gradients, stone treatments, trims and logos; with the suggested starting points and first-tier pickers the designer app's building blocks are drawn from.
 * [Moodboard design-space taxonomy](design-space-taxonomy.md) (draft) - Synthesis of the 138-image moodboard teardown into the axes along which the designs vary (silhouette, panelling, openings and straps, layers, fabrics, prints, trims, stones, decals, photography), with rough frequencies and the rare features that set the tool's ceiling.
 
 # Section

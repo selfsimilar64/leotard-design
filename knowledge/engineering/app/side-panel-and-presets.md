@@ -20,6 +20,12 @@ sources:
 
 # Takeaway
 
+**Partly superseded on 2026-10-23** by [building blocks and starting points](/engineering/app/building-blocks-and-starting-points.md):
+the Designs row sits under "Start from" beside the starting points, "Start from a basic shape"
+became the Shape pane (one element at a time, nothing reset), the material row is ordered by
+moodboard frequency, fabric fit moved to the settings popover and the piece pane was
+reorganised. The model, scene, appearance, HDRI, glare and thumbnail parts below still apply.
+
 The side panel is a stack of **panes** of **picture tiles** that scroll sideways. With nothing
 selected it shows the design gallery, the model (appearance, age and build, pose,
 expression), the environment and the starting shape; clicking a garment piece in the 3D view

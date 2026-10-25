@@ -9,6 +9,7 @@
 # Reference
 
 * [Owner-facing overview: building every moodboard leotard in the app](moodboard-tools-plan-overview.md) - Mirror pointer for reports/Moodboard tools plan - overview.md, the plain-language answer to the owner's five moodboard questions and the summary of the nine-phase plan.
+* [Owner-facing overview: how Sylvia P's Studio SP works](studio-sp-teardown-overview.md) - Mirror pointer for reports/Studio SP teardown - overview.md, the plain-language summary of the Studio SP teardown and what it means for our app.
 
 # Section
 

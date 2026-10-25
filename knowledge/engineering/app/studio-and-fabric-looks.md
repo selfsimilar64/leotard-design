@@ -1,7 +1,7 @@
 ---
 type: Component
 title: Studio lighting and fabric looks (P3)
-description: "How the designer app renders catalogue-photo realism: photo-studio light rigs, athlete skin, the moodboard's fabric looks (liquid hologram, oil-slick, duochrome, chrome, glitter foil, lace on net, illusion mesh), sheerness, gradients, prints, logos, linings, seam shading, swatch thumbnails and matching a panel's colour to a photo. Includes the measured gate results and the pitfalls found."
+description: "How the designer app renders catalogue-photo realism: photo-studio light rigs, athlete skin, the moodboard's fabric looks (liquid hologram, oil-slick, duochrome, chrome, glitter foil, illusion mesh), sheerness, gradients, prints, logos, linings, seam shading, swatch thumbnails and matching a panel's colour to a photo. Includes the measured gate results and the pitfalls found."
 tags: [app, rendering, fabric, lighting, component, p3]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-19T12:00:00Z }
@@ -60,10 +60,24 @@ line, warned in the console if three changes it), slight roughness variation, a 
 | Oil-slick foil | Metal with the same swirled film, no tint |
 | Duochrome foil | Colour turns towards a second hue at grazing angles (`duo`) |
 | Mirror chrome, glitter-grain foil | Metal at 0.06 roughness; metal with dense fine flakes |
-| Lace (floral, on net) | A net (mesh holes) plus a procedural tileable floral lace mask (`materials/lace.js`: flowers, leaves, vines, picots; woven toile inside motifs; raised cord); the second colour is the motifs', the fabric colour the net's |
 | Illusion mesh | Very open mesh |
 
-Per-panel fields: `colour2` (foil, gradient end, duochrome shift or lace motif colour), `effect`
+Owner's fabric review, 2026-10-24 ([decision](/decisions/2026-10-24-owner-fabric-review.md)):
+- Lace and shattered glass hologram were removed (`materials/lace.js` and the shader's `uLace` with
+  them); designs that used them open on stretch mesh and hologram foil dots (`RETIRED_FABRICS`,
+  `doc/schema.js` `retireFabrics`). Five scans are hidden from the picker (`RETIRED_SCANS`).
+- Default texture sizes: `FABRICS[k].texScale` and `SCAN_SCALE`, read through `texScaleOf(look)`.
+  A piece's own `texScale` wins; `panel.set` with a new fabric or scan clears it.
+- Wet look: clear coat 0.55 at 0.2 (was 1 at 0.1, a mirror that read as latex), base 0.32 with
+  anisotropy 0.5, a little sheen and the procedural knit.
+- Foil, oil-slick, duochrome, iridescent film and chrome: the value-noise crinkle bump (`bump`) is
+  gone, the knit (`knit: 1`) stands in; stretch velvet has neither; crushed velvet keeps
+  `bump { amp 0.12, scale 12 mm }` (was 0.7 at 7 mm). Before/after captures were made with
+  `dev/material-eval.js` (tweak = the old fields).
+- Pitfall: `render/rims.js` caches finished-edge materials by their look, so a live edit of
+  `FABRICS` (material-eval's tweak) leaves the leg and arm bands on the old look until a reload.
+
+Per-panel fields: `colour2` (foil, gradient end or duochrome shift), `effect`
 (0-2, strength of hologram, film or duochrome), `sheer` (share of skin or lining seen through a
 mesh or net, face on), `ombre` (a gradient `{ colour, curve | axis, start, end }`, computed per
 vertex on the reference body, `garment/fields.js`), `print` (an image tiled in cloth space).

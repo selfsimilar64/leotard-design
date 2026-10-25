@@ -84,6 +84,15 @@ the athlete's skin**, not from more expensive shading. All upgrades below fit a 
   multisampled, so every post pass (bloom, glare, output) wrote and resolved 4x HDR buffers: B9 on
   the mannequin went from 35.2 to 23.3 ms a frame at 1792x1344 (GTX 1650), the glow pass from about
   12 ms to 1, the person in the A-pose from 38 to 28 ms.
+- **The stencil is not resolved** (2026-10-24): the multisampled scene target resolved depth and
+  stencil together every frame, and on ANGLE / D3D11 (GTX 1650) that blit cost ~31 ms of a 35 ms
+  frame (person, A-pose, Eirgrid hair; 24.4 -> 13.6 ms in the low lunge with bun-bangs). Nothing
+  after the scene reads the stencil (the eye film uses it while the scene draws), so
+  `resolveStencilBuffer = false`; the image is unchanged (max 3/255). Depth is still resolved for
+  AO and skin scattering. With that, 4x MSAA costs only ~1.6 ms (13.6 against 12.0 ms); the owner
+  set it off by default for now (`render/display.js`). Without MSAA, alpha-to-coverage has no
+  samples to work with: lashes, brows and hair cards render as hard cut-outs (lashes visibly
+  heavier); opaque fabric edges barely change.
 - **Skin scattering** (`SkinPass`, Display "Soft skin"): skin materials write alpha 0.5 (`markSkin`:
   the person's skin, the athlete-skin finishes); two separable passes blur skin pixels only from
   skin pixels, by 1.5 mm turned into pixels by depth, red widest (sigma 1 : 0.3 : 0.18), not across

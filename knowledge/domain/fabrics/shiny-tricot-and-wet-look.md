@@ -41,6 +41,14 @@ sources:
     resource: https://www.snowflakedesigns.com/fabric-swatches/nylon-lycra-fabric-swatches.html
     title: Snowflake shiny lycra swatches
     author: org:snowflake-designs
+  - id: cire
+    resource: https://www.dictionary.com/browse/cire
+    title: "Dictionary.com: cire"
+    author: org:dictionary-com
+  - id: glazing
+    resource: https://www.encyclopedia.com/fashion/encyclopedias-almanacs-transcripts-and-maps/glazing
+    title: "Encyclopedia.com: glazing"
+    author: org:encyclopedia-com
   - id: lineup-novelty
     resource: https://thelineup.com/pages/fabrics/novelty
     title: The Lineup novelty fabrics
@@ -83,6 +91,12 @@ All also in the notes.[^notes-fab]
 **[INFERRED]** Beverly needs 145-270 g to reach 40% width extension against 95-180 g for Sumatra, so
 the satin-effect tricot is noticeably firmer than plain shiny tricot of similar weight.[^notes-fab]
 
+Cire itself is a wax, heat and calender finish: very hot friction-calender rollers glaze the
+fabric, and on thermoplastic fibres (nylon is one) the fibres partly fuse and flatten, so the
+finish is permanent; tricot, satin and taffeta are the typical cire fabrics.[^cire][^glazing] So a
+cire wet look is the knit's own surface glazed, a step below a coated latex-like "Liquid"; the app
+renders it that way ([owner's fabric review](/decisions/2026-10-24-owner-fabric-review.md)).
+
 **[UNVERIFIED]** The shading notes flag that the trade meaning of "wet look" (high-gloss, often coated
 nylon/spandex) was assumed from general knowledge rather than a mill source; the fabric notes support
 it only through maker copy (Sylvia P, GK Cire "coated look").[^notes-fab]
@@ -90,6 +104,8 @@ it only through maker copy (Sylvia P, GK Cire "coated look").[^notes-fab]
 Rendering: [per-fabric shading recipe](/engineering/rendering/fabric-shading/per-fabric-shading-recipe.md)
 (anisotropic base; wet look adds a clear coat).
 
+[^cire]: Dictionary.com, "cire"
+[^glazing]: Encyclopedia.com, "glazing"
 [^notes-fab]: Research notes: fabrics and materials (Q1 shiny bullets, Q3 inferences, Q9 gloss ladder)
 [^carvico-sumatra]: Carvico Sumatra Rec data sheet PDF
 [^carvico-beverly]: Carvico Beverly data sheet PDF

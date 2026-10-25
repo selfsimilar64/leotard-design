@@ -133,7 +133,7 @@ Torso against the GK photo (`#1f4542`, bloom off): bright/dark 3.82 (photo 3.46)
 0.66 (0.61), brightest 10% 0.36 (0.36).[^session-2026-10-24] Satin and the glitter interlock scans
 checked after the mip change: unchanged.
 
-**Default since 2026-10-24 (owner's decision).** `FABRICS.matte.scan = { id: 'TX-00001482', scale:
+**Default since 2026-10-24 (owner's decision).** (Hidden from the picker as "royal blue scuba" and shown at 185% by default since the [owner's fabric review](/decisions/2026-10-24-owner-fabric-review.md).) `FABRICS.matte.scan = { id: 'TX-00001482', scale:
 0.81 }`: every matte lycra panel, strap and finished edge shows the scan, recoloured to its colour,
 unless it names its own `texture`. One helper, `bindScan` in `app/src/materials/fabric.js`, does
 this for `render/garment.js`, `render/straps.js` and `render/rims.js` (edges now take scans; `Rims`

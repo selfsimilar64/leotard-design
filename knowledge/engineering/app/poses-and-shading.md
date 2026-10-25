@@ -70,7 +70,7 @@ shape the shoulders and armpits. The preset names stayed, so photo-matched desig
 - GTAO (screen-space AO for strap, band and stone contact): straps already have a contact
   shadow; stones none.
 - The garment does not slide over the body when an arm is raised (the armhole moves with the
-  shoulder).
+  shoulder). Experiment since 2026-10-21: [garment sliding](/engineering/app/garment-sliding.md).
 
 [^code]: P7 source
 [^roadmap]: Moodboard coverage roadmap
