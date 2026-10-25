@@ -81,7 +81,7 @@ function Settings({ onClose }) {
 			<Line label="Glow"><Toggle value={d.bloom} onChange={(v) => set('bloom', v)} /></Line>
 			<Line label="Soft skin"><Toggle value={d.skin} onChange={(v) => set('skin', v)} /></Line>
 			<Line label="Contact shadows"><Toggle value={d.ao} onChange={(v) => set('ao', v)} /></Line>
-			<h3 class="pane-title"><span>Fabric fit in poses</span></h3>
+			<h3 class="pane-title"><span>Fabric fit</span></h3>
 			<FabricFit />
 			<h3 class="pane-title"><span>Performance</span></h3>
 			<Line label="Show frame rate"><Toggle value={showStats.value} onChange={(v) => { showStats.value = v; }} /></Line>

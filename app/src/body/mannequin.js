@@ -41,6 +41,10 @@ const BASE = (import.meta.env?.BASE_URL ?? '/') + 'g9/';
 // bust, spine groove, crotch, the front of the armpit). LIFT_MAX caps the span; LIFT_ITER sets how
 // far a bridge can reach (Jacobi diffusion: roughly sqrt(iterations) edges, ~6 mm each).
 const LIFT_MAX = 0.03, LIFT_ITER = 220;
+// The viewing controls over it (Man.liftOpt, set from the settings popover; defaults also in
+// render/display.js): taut (0..1, how much of the span the fabric holds: below 1 it sags into the
+// hollow), max (the cap, metres) and reach (a multiple of LIFT_ITER's reach: iterations x reach^2).
+export const LIFT_DEFAULTS = { taut: 1, max: LIFT_MAX, reach: 1 };
 const SLIDE_WARM = 0.05; // share of the slide's free vertices that may change for a warm start (slideFabric)
 
 // Dress form cuts, in reference-body metres: neck 2.2 cm above the neck base, legs at mid-thigh
@@ -153,6 +157,7 @@ class Mannequin {
 		this.slide = true; // the garment slides over the posed body (body/slide.js); false: painted on the skin
 		this.slideCoarse = true; // solved on the base cage, then subdivided (slideCage); false: on the canonical mesh
 		this.slideOpt = { shrink: 0.75, grip: 0.002, iters: 30 }; // tension (rest size 75%), friction, solver passes (defaults: render/display.js)
+		this.liftOpt = { ...LIFT_DEFAULTS }; // how the fabric bridges hollows (computeLift)
 	}
 
 	// The canonical mesh of a body's A-pose (cached).
@@ -405,7 +410,7 @@ class Mannequin {
 	updateGarment(warm = false) {
 		this.slideFabric();
 		const N = this.vertices, idx = this.idx, P = this.gPos, Nn = this.gNrm;
-		const h = warm && this.liftBody === this.key ? this.computeLift(P, Nn, undefined, 40, this.aLift.array) : this.computeLift(P, Nn);
+		const h = warm && this.liftBody === this.key ? this.computeLift(P, Nn, undefined, this.aLift.array) : this.computeLift(P, Nn);
 		this.liftBody = this.key;
 		this.aLift.array.set(h);
 		// Garment surface normals: normals of the lifted surface (flat across the bridges).
@@ -511,16 +516,20 @@ class Mannequin {
 		return (this._cageMesh = { vertices: V, idx: Uint32Array.from(tris), adjStart: deg, adj });
 	}
 
-	// Outward-only membrane: h_i = clamp(mean_j <P_j + h_j N_j - P_i, N_i>, 0, LIFT_MAX). On convex
+	// Outward-only membrane: h_i = clamp(taut * mean_j <P_j + h_j N_j - P_i, N_i>, 0, max). On convex
 	// skin the neighbours lie below the tangent plane, so h stays 0 and the fabric hugs the body;
 	// in a hollow they lie above it, and the fabric spans across. Circumferential curvature wins
 	// at the waist, so the leotard still follows the waist in.
 	// Only fabric bridges: bare skin (cover <= 0) is pinned at 0, which also pins every opening to
 	// the body the way its elastic does. Without this the "fabric" spanned from the shoulder strap
 	// towards the bare neck hollow and floated ~1 cm off the shoulder.
-	// cover: per-vertex field (> 0 = fabric); iter / warm: fewer iterations from a previous solution.
-	computeLift(P, Nn, C = this.aCover.array, iter = LIFT_ITER, warm = null) {
+	// taut < 1 shrinks each vertex's share of its neighbours' span, so the bridge decays into the
+	// hollow (deep hollows keep some, shallow grooves lose it) instead of spanning it flat.
+	// cover: per-vertex field (> 0 = fabric); warm: 40 iterations from a previous solution;
+	// o: LIFT_DEFAULTS' shape (the reference surface passes the defaults: curves must not move).
+	computeLift(P, Nn, C = this.aCover.array, warm = null, o = this.liftOpt) {
 		const N = this.vertices, S = this.adjStart, A = this.adj;
+		const iter = warm ? 40 : Math.round(LIFT_ITER * o.reach * o.reach), taut = o.taut, hMax = o.max;
 		let h = warm ? Float32Array.from(warm) : new Float32Array(N), h2 = new Float32Array(N);
 		// only fabric vertices take part (the rest stay 0): a list keeps the sweeps off the bare body
 		const free = [];
@@ -534,7 +543,7 @@ class Mannequin {
 					const j = A[e], hj = h[j];
 					s += (P[j * 3] + Nn[j * 3] * hj - px) * nx + (P[j * 3 + 1] + Nn[j * 3 + 1] * hj - py) * ny + (P[j * 3 + 2] + Nn[j * 3 + 2] * hj - pz) * nz;
 				}
-				h2[i] = clamp(s / (S[i + 1] - S[i]), 0, LIFT_MAX);
+				h2[i] = clamp((taut * s) / (S[i + 1] - S[i]), 0, hMax);
 			}
 			[h, h2] = [h2, h];
 		}

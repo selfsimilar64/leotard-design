@@ -8,7 +8,11 @@ const KEY = 'leotard.display.v1';
 export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 0, shadows: 'soft', bloom: true, skin: true, ao: true,
 	// the garment sliding over a posed body (body/slide.js, experiment): on/off, tension (the
 	// fabric's rest size, 1 = none) and grip (friction against the skin); tuned from the Model pane
-	slide: true, slideTension: 0.75, slideGrip: 0.002 }; // owner-tuned 2026-10-21 (low lunge)
+	slide: true, slideTension: 0.75, slideGrip: 0.002, // owner-tuned 2026-10-21 (low lunge)
+	// how the fabric bridges the body's hollows, in every pose (Man.computeLift; defaults also
+	// LIFT_DEFAULTS in body/mannequin.js): tautness 0..1 (the slider is logarithmic, ui/Inspector.jsx
+	// tautOf), deepest span (m), reach (x the default)
+	liftTaut: 1, liftMax: 0.03, liftReach: 1 };
 
 // Choices the UI offers (value, label).
 export const DISPLAY_OPTIONS = {

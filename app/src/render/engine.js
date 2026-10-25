@@ -282,9 +282,11 @@ export class Engine {
 
 	// The garment sliding over a posed body (body/slide.js): on/off and { shrink, grip }; re-solves
 	// where the fabric sits on the body shown and rebuilds everything that sits on it.
-	setSlide(on, opt) {
+	// lift: { taut, max, reach }, how the fabric bridges hollows (Man.computeLift).
+	setSlide(on, opt, lift) {
 		const b = this.body;
 		b.slide = on; b.slideOpt = { ...b.slideOpt, ...opt };
+		if (lift) b.liftOpt = { ...b.liftOpt, ...lift };
 		if (!this.app || !b.key) return;
 		b.key = null;
 		this.applyBody(this.app.doc.body, true, false);

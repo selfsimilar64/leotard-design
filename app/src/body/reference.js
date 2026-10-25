@@ -3,7 +3,7 @@
 // mannequin.js). Curves are drawn and stored on this surface; it is the same mesh as every body,
 // so the surface points they are made of evaluate on any body.
 import { Surface } from './surface.js';
-import { vertexNormals } from './mannequin.js';
+import { vertexNormals, LIFT_DEFAULTS } from './mannequin.js';
 import { applyStencil } from './subdivide.js';
 
 export function buildReference(man) {
@@ -15,7 +15,8 @@ export function buildReference(man) {
 		const bare = man.wHead[i] > 0.5 || man.armT[i] > 1 || (man.wLeg[i] > 0.5 && R[i * 3 + 1] < man.crotchY - 0.03);
 		cover[i] = bare ? -1 : 1;
 	}
-	const lift = man.computeLift(R, normals, cover);
+	// always the default bridging: the viewing controls (liftOpt) must not move stored curves
+	const lift = man.computeLift(R, normals, cover, null, LIFT_DEFAULTS);
 	const G = new Float32Array(N * 3);
 	for (let i = 0; i < N * 3; i++) G[i] = R[i] + normals[i] * lift[(i / 3) | 0];
 	const surface = new Surface(idx, G);

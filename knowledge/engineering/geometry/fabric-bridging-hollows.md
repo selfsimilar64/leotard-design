@@ -17,6 +17,10 @@ sources:
     resource: measurements of aLift in the running POC, 2026-10-15 (Claude Code session)
     title: Lift before and after pinning bare skin
     author: claude-code/claude-opus-5-5
+  - id: app-2026-10-25
+    resource: measurements of aLift in the running designer app, 2026-10-25 (Claude Code session)
+    title: Lift against the bridging controls
+    author: claude-code/claude-opus-5-5
   - id: report
     resource: /references/research/research-report.md
     title: "Research report (in-bundle mirror), 'designed directly on the body' section"
@@ -61,6 +65,25 @@ h_i ← clamp( mean over neighbours j of ⟨P_j + h_j·N_j − P_i, N_i⟩ , 0, 
 
 Source: `poc-threejs/src/body.js`.[^body-js] Component details: [body and regions](/engineering/poc/body-and-regions.md).
 
+# Viewing controls in the designer app (2026-10-25)
+
+The app's copy (`computeLift` in `app/src/body/mannequin.js`) takes `Man.liftOpt = { taut, max, reach }`
+(defaults `LIFT_DEFAULTS`: 1, 0.03 m, 1), set from three sliders in the settings popover's "Fabric fit"
+section (`FabricFit` in `app/src/ui/Inspector.jsx`), stored per computer with the display settings
+(`liftTaut`, `liftMax`, `liftReach` in `app/src/render/display.js`). They apply in every pose; a change
+re-solves the body like the slide's Tension and Grip (`Engine.setSlide`'s third argument).[^app-2026-10-25]
+
+- **Bridging** (`taut`, 0..1): h_i ← clamp(taut · mean …, 0, max). Below 1 each vertex keeps only part
+  of its neighbours' span, so the bridge decays into the hollow (a screened diffusion). The response is
+  steep near 1 (teen body, A-pose, starting design: total lift 5043 mm at 1, 3463 at 0.99, 1016 at 0.9,
+  163 at 0.5), so the slider is logarithmic in 1 − taut (`tautOf`): 50% → taut 0.97, 44% of the volume.
+- **Deepest bridge** (`max`, 0–50 mm): the cap formerly fixed as `LIFT_MAX`.
+- **Bridge reach** (`reach`, 25–150%): cold-solve iterations = `LIFT_ITER · reach²`. 25% kept a third of
+  the volume; 150% added 2% (the hollows had converged) and costs about 1.1 s against 0.8 s.
+- Warm solves (garment edits) still run 40 iterations from the last solution.
+- The **reference surface** (`app/src/body/reference.js`, where curves are stored) always uses
+  `LIFT_DEFAULTS`, so the controls change the view and never move a saved design's lines.
+
 # Limits and open issues **[INFERRED]**
 
 - It is a geometric heuristic, not a tension model: bridge shape does not depend on fabric stiffness,
@@ -81,3 +104,4 @@ Source: `poc-threejs/src/body.js`.[^body-js] Component details: [body and region
 [^gg-notes]: Research notes: garment geometry and placement (in-bundle mirror).
 [^report]: Research report (in-bundle mirror).
 [^fix-2026-10-15]: Measured in the running POC before and after the change, 2026-10-15 (young-adult body, tank, scoop back).
+[^app-2026-10-25]: Measured in the running designer app, 2026-10-25 (teen body, A-pose, the design open at start-up).
