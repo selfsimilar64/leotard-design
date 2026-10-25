@@ -248,6 +248,29 @@ teen, arms-down, light leotard):[^app-2026-10-25]
   the seat (and the trim to follow them), as real elastic under tension does. Not done.
 - Releasing every outline cell (hips too) floated the seat off the hips.
 
+Second round (owner: "continue in the direction you think is best", 2026-10-25), all reverted,
+judged on renders in standing, lunge, split leap and stag jump:[^app-2026-10-25]
+- Gusset zone (6 cm either side of the crotch, 5 cm up, seen from behind) with the sheet free over
+  everything there: V gone, but the fabric at the bottom of the cleft lies about 10 cm forward of
+  the cheeks; pulled back onto the sheet, vertices past the 12 cm move cap stayed put and tore into
+  a fin. Blending those instead gave a smooth ramp, but the sheet, floating past the seat's real
+  lower edge, laid the gusset's underside flat onto it: a tab hanging below the seat. Blending skin
+  facing down in the zone removed the tab; a spike stayed where the leg trim meets the gusset (from
+  the rule lifting hidden sideways walls) and the leg-opening edge on the gusset turned ragged
+  (blended gusset slid back into the thigh). Keeping the downward-facing gusset in place instead
+  creased the lower cleft again. In standing the best variant left a curled glassy piece at the
+  gusset, worse than the V.
+- A second sheet seen from below, for the cleft's fabric to drop onto: it saw the feet under the
+  thighs (or an artificial edge where the thighs were cut off) and hung a strip down between the
+  legs.
+- A local 3D relaxation in the zone (each vertex towards its neighbours' mean, pushed out of the
+  skin along the nearest skin vertex's normal): the leg-opening edges slid along the skin into
+  scallops, and the V hardly changed in standing.
+Conclusion: a height field (one view) cannot describe fabric that turns under, and the patches
+interact. A real fix is likely a small cloth relaxation of the crotch region with the leg
+openings' edges kept from sliding (edge length or pattern rest lengths) and proper collision,
+started from the sheet's result.
+
 Also seen: in the stag jump a strip down the upper cleft is not spanned (a crease). The leaning
 cleft makes its walls count as hidden (more than 5 mm behind the skin seen), so they are blended,
 not lifted, and about 1,200 vertices fall under the 45° rule. Lifting hidden walls that face
