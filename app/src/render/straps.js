@@ -54,17 +54,17 @@ export class StrapView {
 			const base = FABRIC + ABOVE + STACK * (order.get(sid) ?? 0);
 			for (let r = 0; r < nr; r++) for (let c = 0; c < nc; c++) {
 				const sp = rows[r][c], o = r * nc + c;
-				const p = at(sp, P), n = at(sp, N), lift = at(sp, L, 1)[0], nl = Math.hypot(n[0], n[1], n[2]) || 1;
-				const h = lift + base + STRAP_PROFILE[c] * Math.min(w / 0.01, 1.4);
-				for (let k = 0; k < 3; k++) pos[o * 3 + k] = p[k] + (n[k] / nl) * h;
+				const p = at(sp, P), n = at(sp, N), lift = at(sp, L), nl = Math.hypot(n[0], n[1], n[2]) || 1;
+				const h = base + STRAP_PROFILE[c] * Math.min(w / 0.01, 1.4);
+				for (let k = 0; k < 3; k++) pos[o * 3 + k] = p[k] + lift[k] + (n[k] / nl) * h;
 				uv[o * 2] = ACROSS[c] * w; uv[o * 2 + 1] = grid.along[r];
 				rim[o * 2] = (0.5 - Math.abs(ACROSS[c])) * w; rim[o * 2 + 1] = grid.along[r];
 				ao[o] = c === 0 || c === nc - 1 ? 0.75 : 1;
 				const rp = at(sp, man.ref); ref.set(rp, o * 3);
 				// contact shadow on the fabric or skin beneath, spread a little wider than the strap
 				const onFabric = fabricCover ? at(sp, fabricCover, 1)[0] > 0 : true;
-				const sh = onFabric ? lift + FABRIC + 0.0003 : 0.0003;
-				for (let k = 0; k < 3; k++) spos[o * 3 + k] = p[k] + (n[k] / nl) * sh;
+				const sh = onFabric ? FABRIC + 0.0003 : 0.0003;
+				for (let k = 0; k < 3; k++) spos[o * 3 + k] = p[k] + (onFabric ? lift[k] : 0) + (n[k] / nl) * sh;
 				scol[o * 4 + 3] = c === 0 || c === nc - 1 ? 0 : 0.32;
 			}
 			// spread the shadow's outer samples outwards in the tangent plane

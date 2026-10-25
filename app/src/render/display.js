@@ -12,7 +12,10 @@ export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 0, shad
 	// how the fabric bridges the body's hollows, in every pose (Man.computeLift; defaults also
 	// LIFT_DEFAULTS in body/mannequin.js): tautness 0..1 (the slider is logarithmic, ui/Inspector.jsx
 	// tautOf), deepest span (m), reach (x the default)
-	liftTaut: 1, liftMax: 0.03, liftReach: 1 };
+	liftTaut: 1, liftMax: 0.03, liftReach: 1,
+	// or the rolling-ball fit instead (body/ball.js, experiment; the default since 2026-10-25: the
+	// membrane cannot span the gluteal cleft) and its ball radius (m)
+	liftMethod: 'ball', liftBall: 0.05 };
 
 // Choices the UI offers (value, label).
 export const DISPLAY_OPTIONS = {

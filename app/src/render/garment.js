@@ -76,7 +76,7 @@ export class GarmentView {
 			}
 			const geo = new THREE.BufferGeometry();
 			const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
-			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 1); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
+			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
 			geo.setAttribute('aSeam', new THREE.BufferAttribute(seamDistance(arr, man, c, verts, seams), 1));
 			geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
 			geo.setIndex(new THREE.BufferAttribute(piece.I, 1));
@@ -218,7 +218,7 @@ export class GarmentView {
 		const A = geo.attributes;
 		// the fabric's own place on the body (slid over the skin in a pose: body/slide.js)
 		lerp3(man.gPos ?? man.aPos.array, A.position, false); lerp3(man.gNrm ?? man.aNrm.array, A.normal, true); lerp3(man.aGNormal.array, A.aGNormal, true);
-		lerp3(man.ref, A.aRef, false); lerp1(man.aLift.array, A.aLift); lerp1(man.aAO.array, A.aAO); lerp1(man.keep, A.aKeep); lerp1(man.form, A.aForm, 2);
+		lerp3(man.ref, A.aRef, false); lerp3(man.aLift.array, A.aLift, false); lerp1(man.aAO.array, A.aAO); lerp1(man.keep, A.aKeep); lerp1(man.form, A.aForm, 2);
 		// tangent round the body (the stretch direction anisotropic shine follows), as the POC's
 		lerp1(man.aTan.array, A.tangent, 4);
 		const T = A.tangent.array;

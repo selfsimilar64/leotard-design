@@ -27,6 +27,7 @@ import { regions } from '../garment/legacy-regions.js';
 import { poseSpec, setDazPoses } from './pose.js';
 import { ccStencil, applyStencil, quadTriangles, readPolys } from './subdivide.js';
 import { slideGarment } from './slide.js';
+import { rollingBall } from './ball.js';
 
 const abs = Math.abs, min = Math.min, max = Math.max;
 const clamp = (x, a, b) => min(max(x, a), b);
@@ -44,7 +45,8 @@ const LIFT_MAX = 0.03, LIFT_ITER = 220;
 // The viewing controls over it (Man.liftOpt, set from the settings popover; defaults also in
 // render/display.js): taut (0..1, how much of the span the fabric holds: below 1 it sags into the
 // hollow), max (the cap, metres) and reach (a multiple of LIFT_ITER's reach: iterations x reach^2).
-export const LIFT_DEFAULTS = { taut: 1, max: LIFT_MAX, reach: 1 };
+// method 'ball' replaces the membrane with the rolling-ball fit (body/ball.js), ball its radius (m).
+export const LIFT_DEFAULTS = { taut: 1, max: LIFT_MAX, reach: 1, method: 'ball', ball: 0.05 };
 const SLIDE_WARM = 0.05; // share of the slide's free vertices that may change for a warm start (slideFabric)
 
 // Dress form cuts, in reference-body metres: neck 2.2 cm above the neck base, legs at mid-thigh
@@ -146,7 +148,7 @@ class Mannequin {
 		const attr = (name, size, data = new Float32Array(N * size)) => { const a = new THREE.BufferAttribute(data, size); g.setAttribute(name, a); return a; };
 		this.aPos = attr('position', 3); this.aNrm = attr('normal', 3); this.aTan = attr('tangent', 4);
 		this.aAO = attr('aAO', 1); this.aCover = attr('aCover', 1); this.aZone = attr('aZone', 2);
-		this.aLift = attr('aLift', 1); this.aGNormal = attr('aGNormal', 3);
+		this.aLift = attr('aLift', 3); this.aGNormal = attr('aGNormal', 3); // aLift: skin (or slid fabric) to garment surface
 		attr('aRef', 3, this.ref);
 		attr('aKeep', 1, this.keep);
 		attr('aForm', 2, this.form);
@@ -410,19 +412,29 @@ class Mannequin {
 	updateGarment(warm = false) {
 		this.slideFabric();
 		const N = this.vertices, idx = this.idx, P = this.gPos, Nn = this.gNrm;
-		const h = warm && this.liftBody === this.key ? this.computeLift(P, Nn, undefined, this.aLift.array) : this.computeLift(P, Nn);
-		this.liftBody = this.key;
-		this.aLift.array.set(h);
+		// The lift as a vector (aLift): the membrane's height along the normal, or the rolling ball's
+		// move across a fold (body/ball.js).
+		const D = this.aLift.array;
+		if (this.liftOpt.method === 'ball') {
+			const S = this.aPos.array;
+			if (this._ball?.key !== this.key + this.poseKey) this._ball = { key: this.key + this.poseKey };
+			D.set(rollingBall(this, P, Nn, S, this.aNrm.array, this.aCover.array, this.liftOpt.ball, this._ball));
+			this.liftBody = null;
+		} else {
+			const h = warm && this.liftBody === this.key ? this.computeLift(P, Nn, undefined, this.liftH) : this.computeLift(P, Nn);
+			this.liftBody = this.key; this.liftH = h;
+			for (let i = 0; i < N * 3; i++) D[i] = Nn[i] * h[(i / 3) | 0];
+		}
 		// Garment surface normals: normals of the lifted surface (flat across the bridges).
 		const G = new Float32Array(N * 3);
-		for (let i = 0; i < N * 3; i++) G[i] = P[i] + Nn[i] * h[(i / 3) | 0];
+		for (let i = 0; i < N * 3; i++) G[i] = P[i] + D[i];
 		vertexNormals(G, idx, this.aGNormal.array);
 		this.garmentPos = G;
 
 		const ao = this.aAO.array;
 		// Ambient occlusion from how deep the vertex sits under the fabric bridge: crevices
 		// (armpit, between the legs, under the bust) are exactly where the lift is large.
-		for (let i = 0; i < N; i++) ao[i] = clamp(1 - h[i] * 16, 0.4, 1);
+		for (let i = 0; i < N; i++) ao[i] = clamp(1 - Math.hypot(D[i * 3], D[i * 3 + 1], D[i * 3 + 2]) * 16, 0.4, 1);
 		if (this.contact) for (let i = 0; i < N; i++) ao[i] *= this.contact[i];
 
 		// Area-weighted sampling table on the garment surface.

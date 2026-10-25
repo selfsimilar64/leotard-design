@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: Fabric bridging hollows
-description: "Stretch fabric spans body concavities (sternum, under and between the bust, lower back, gluteal cleft, underarm, crotch) instead of following them; the POC models this with an outward-only membrane offset solved per body."
+description: "Stretch fabric spans body concavities (sternum, under and between the bust, lower back, gluteal cleft, underarm, crotch) instead of following them; the POC models this with an outward-only membrane offset solved per body, which cannot span the gluteal cleft, so the app now defaults to a rolling-ball fit (morphological closing)."
 tags: [geometry, technique, garment, offset, poc]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:00:00Z }
 sources:
@@ -83,6 +83,66 @@ re-solves the body like the slide's Tension and Grip (`Engine.setSlide`'s third 
 - Warm solves (garment edits) still run 40 iterations from the last solution.
 - The **reference surface** (`app/src/body/reference.js`, where curves are stored) always uses
   `LIFT_DEFAULTS`, so the controls change the view and never move a saved design's lines.
+
+# The membrane cannot span the gluteal cleft (2026-10-25)
+
+Owner: the seat still sank far too low with every slider at its maximum. Measured on the teen body
+(arms-down, B8): the membrane's lift along the cleft was **0 mm** over a cleft 22-53 mm deep, and the
+fabric followed it all the way down. The cleft is not a bowl but two convex cheeks meeting in a slot:
+every cheek vertex sees convex skin (h stays 0), and inside the slot the walls' normals face each
+other (n.x ≈ ±0.99 at 1 mm from the midline), so a lift along the normal moves the fabric sideways,
+never across. The two cheeks are neighbours only at the floor of the slot, so nothing can diffuse
+from one cheek top to the other. The slide (`body/slide.js`) does not span it in a standing pose
+either (grip 0: 24 of 25 mm still sunk at 6 cm). The same shape probably occurs wherever skin
+touches itself (between the thighs, a closed cleavage); not measured.[^app-2026-10-25]
+
+# Rolling-ball fit (`app/src/body/ball.js`, experiment, default since 2026-10-25)
+
+The fabric lies on the surface a ball of radius R traces when rolled over the skin (a morphological
+closing): the skin wherever the ball touches it, an arc across any fold narrower than the ball. It
+is a geometric stand-in, not a cloth model: garment CAD (CLO, Marvelous Designer) simulates a sheet
+under tension with collisions, which gives a nearly straight span; a big ball approximates that.
+Owner chose it after that comparison. **[INFERRED]** for the tool comparison.
+
+1. **Free balls**: centre = skin point + normal·R per vertex, kept when no skin vertex of the same
+   part lies within R − 0.5 mm. Parts: trunk (torso and legs) and each arm, so a ball too big for
+   the arm-to-side gap does not web the torso to the arm; the head is no obstacle. Cached per body,
+   pose and R (independent of the garment).
+2. **Projection**: a fabric vertex whose own ball is blocked moves to the nearest free ball's surface,
+   G = c + (P − c)·R/|P − c|, unless within `SNAP` = 2 mm of it.
+3. **Openings pinned**: the move fades in (smoothstep) over `PIN` = 3 cm of mesh distance from bare
+   skin, as elastic holds an edge; then 8 smoothing passes of the move over the fabric.
+4. **Untangling**: the vertices from the two walls of a fold land on the same arc and cross; the moved
+   vertices relax 10 passes towards their neighbours' mean, never inwards of the fabric's own normal.
+
+The lift is now a **vector** (`aLift`, 3 components: skin or slid fabric to garment surface) in the
+app's mannequin, garment cells (`render/garment.js`), straps (`render/straps.js`) and the fabric
+shader (`transformed += normal * uOffset + aLift * uGarment`); the membrane writes N·h into it. AO
+uses its length. The POC (`poc-threejs`) keeps its scalar lift.
+
+Measured (teen, arms-down, B8, R = 5 cm, before pinning and untangling): fabric sink at the midline,
+2/4/6/10 cm above the crotch, 27/16/11/7 mm against the cleft's 53/32/25/22 mm; R = 10 cm
+20/13/9/3 mm. Visually the cleft line is gone; a small dip stays where the leg openings meet (the
+membrane has the same). Cost: a full refit 1.5 s with the slide (ball part about 1.3 s at R 5 cm,
+1.8 s at 10 cm); a garment edit 0.55 s (the centres are cached).[^app-2026-10-25]
+
+Tuning found on the way:
+- Without pinning, the crotch gusset (a few cm between the leg openings) was pushed out below the
+  leg line into a crumpled bulge.
+- Smoothing 25 passes instead of 8 pulled the bridge back into the cleft near the leg openings.
+- Untangling 40 passes pulled the fabric inside the cheeks (skin through); 0 left a faint crease
+  down the midline where arcs from the two cheeks meet; 10 is clean.
+- In a pose (split leap) the slid fabric sits a millimetre or two off its own ball everywhere; with
+  a 0.5 mm snap those tiny moves were then shrunk into the body by the untangling (skin through the
+  back and shoulders). Fixed by the 2 mm snap and the never-inwards clamp.
+- Counting "flipped" triangles (garment against skin face normal) misleads here: across the cleft
+  the surface legitimately turns about 90°. Judge by renders.
+
+Controls: settings popover, Fabric fit, "How fabric spans hollows" (membrane / rolling ball) and
+"Ball size" 0-150 mm (default 50); the membrane's three sliders show only for the membrane.
+
+Open: per-region ball size (bust against seat), cost at large R, the closed-cleavage and inner-thigh
+cases, and whether stored curves should eventually sit on a ball-fitted reference surface.
 
 # Limits and open issues **[INFERRED]**
 

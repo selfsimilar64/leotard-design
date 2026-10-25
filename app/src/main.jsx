@@ -24,7 +24,7 @@ async function start(el) {
 	const body = await loadMannequins();
 	const d = display.value;
 	body.slide = d.slide; body.slideOpt = { ...body.slideOpt, shrink: d.slideTension, grip: d.slideGrip };
-	body.liftOpt = { taut: d.liftTaut, max: d.liftMax, reach: d.liftReach };
+	body.liftOpt = { taut: d.liftTaut, max: d.liftMax, reach: d.liftReach, method: d.liftMethod, ball: d.liftBall };
 	const engine = new Engine(viewport, body, buildReference(body));
 	engine.timing.load = performance.now() - t0;
 	app.attach(engine);

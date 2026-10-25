@@ -15,7 +15,7 @@ const PARS_VERTEX = /* glsl */`
 attribute float aCover;
 attribute vec2 aZone;
 attribute float aAO;
-attribute float aLift;
+attribute vec3 aLift;      // skin (or slid fabric) to the garment surface (body/mannequin.js updateGarment)
 attribute vec3 aGNormal;
 attribute vec3 aRef;
 attribute float aKeep;
@@ -41,7 +41,7 @@ varying float vAO;
 `;
 
 const BEGIN_VERTEX = /* glsl */`
-transformed += normal * ( uOffset + aLift * uGarment );
+transformed += normal * uOffset + aLift * uGarment;
 vObjPos = position;
 vObjNormal = normal;
 vCover = aCover;

@@ -8,7 +8,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { app } from '../instance.js';
 import { rev, selection, tool, notify, designsRev, display } from './state.js';
 import { saveDisplay } from '../render/display.js';
-import { Slider, Toggle, Colour, run } from './controls.jsx';
+import { Slider, Toggle, Colour, Select, run } from './controls.jsx';
 import { Strip, Pane, Line, Chips, More, Swatches } from './Gallery.jsx';
 import { GLARE_SIZE, GLARE_STRENGTH } from '../render/glare.js';
 import { BACKDROP_COLOUR, ROOM_SIZE } from '../render/viewport.js';
@@ -191,6 +191,7 @@ const gripPos = (g) => (g <= 0 ? 0 : Math.max(0, Math.min(100, (100 * Math.log10
 // volume, 0.9 20%, 0.98 53%), so the slider is logarithmic in the slack 1 - taut: 0 -> 0 (hugs),
 // 50 -> 0.97 (about half), 100 -> 1.
 const tautOf = (x) => 1 - (10 ** (-3 * x / 100) - 0.001) / 0.999;
+const LIFT_METHODS = [['membrane', 'Membrane (fills open dips)'], ['ball', 'Rolling ball (spans folds)']];
 const tautPos = (t) => Math.round((-100 * Math.log10(0.999 * (1 - t) + 0.001)) / 3);
 
 export function FabricFit() {
@@ -205,7 +206,7 @@ export function FabricFit() {
 		// let the panel show "Fitting…" before the solve holds the page
 		setTimeout(() => {
 			const e = app.engine;
-			e?.setSlide(n.slide, { shrink: n.slideTension, grip: n.slideGrip }, { taut: n.liftTaut, max: n.liftMax, reach: n.liftReach });
+			e?.setSlide(n.slide, { shrink: n.slideTension, grip: n.slideGrip }, { taut: n.liftTaut, max: n.liftMax, reach: n.liftReach, method: n.liftMethod, ball: n.liftBall });
 			setMs(e?.body.slideMs || null); setBusy(false);
 		}, 30);
 	};
@@ -220,15 +221,24 @@ export function FabricFit() {
 					<CommitSlider value={gripPos(d.slideGrip)} min={0} max={100} step={1} format={(v) => gripOf(v).toFixed(3)} onCommit={(v) => apply({ slideGrip: gripOf(v) })} />
 				</Line>
 			</> : null}
-			<Line label="Bridging (how taut fabric spans hollows)">
-				<CommitSlider value={tautPos(d.liftTaut)} min={0} max={100} step={1} format={(v) => `${v}%`} onCommit={(v) => apply({ liftTaut: tautOf(v) })} />
+			<Line label="How fabric spans hollows">
+				<Select value={d.liftMethod} options={LIFT_METHODS} onChange={(v) => apply({ liftMethod: v })} />
 			</Line>
-			<Line label="Deepest bridge">
-				<CommitSlider value={Math.round(d.liftMax * 1000)} min={0} max={50} step={1} format={(v) => `${v} mm`} onCommit={(v) => apply({ liftMax: v / 1000 })} />
-			</Line>
-			<Line label="Bridge reach (how wide a hollow it spans)">
-				<CommitSlider value={Math.round(d.liftReach * 100)} min={25} max={150} step={5} format={(v) => `${v}%`} onCommit={(v) => apply({ liftReach: v / 100 })} />
-			</Line>
+			{d.liftMethod === 'ball' ? (
+				<Line label="Ball size (bigger spans folds flatter)">
+					<CommitSlider value={Math.round(d.liftBall * 1000)} min={0} max={150} step={5} format={(v) => `${v} mm`} onCommit={(v) => apply({ liftBall: v / 1000 })} />
+				</Line>
+			) : <>
+				<Line label="Bridging (how taut fabric spans hollows)">
+					<CommitSlider value={tautPos(d.liftTaut)} min={0} max={100} step={1} format={(v) => `${v}%`} onCommit={(v) => apply({ liftTaut: tautOf(v) })} />
+				</Line>
+				<Line label="Deepest bridge">
+					<CommitSlider value={Math.round(d.liftMax * 1000)} min={0} max={50} step={1} format={(v) => `${v} mm`} onCommit={(v) => apply({ liftMax: v / 1000 })} />
+				</Line>
+				<Line label="Bridge reach (how wide a hollow it spans)">
+					<CommitSlider value={Math.round(d.liftReach * 100)} min={25} max={150} step={5} format={(v) => `${v}%`} onCommit={(v) => apply({ liftReach: v / 100 })} />
+				</Line>
+			</>}
 			<div class="dim note">{busy ? 'Fitting…' : !posed ? 'Sliding shows in poses; the mannequin stance is the design as drawn.' : ms ? `Fitted in ${(ms / 1000).toFixed(1)} s` : ''}</div>
 		</div>
 	);
