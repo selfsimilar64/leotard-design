@@ -224,7 +224,7 @@ export function FabricFit() {
 			<Line label="Taut across the seat"><Toggle value={d.liftSeat} onChange={(v) => apply({ liftSeat: v })} /></Line>
 			{d.liftSeat ? (
 				<Line label="Stretch across the seat (against up it; more pulls the cleft flatter)">
-					<CommitSlider value={d.liftSeatAcross} min={1} max={10} step={0.5} format={(v) => `${v}x`} onCommit={(v) => apply({ liftSeatAcross: v })} />
+					<CommitSlider value={d.liftSeatAcross} min={1} max={30} step={0.5} format={(v) => `${v}x`} onCommit={(v) => apply({ liftSeatAcross: v })} />
 				</Line>
 			) : null}
 			<Line label="How fabric spans hollows">

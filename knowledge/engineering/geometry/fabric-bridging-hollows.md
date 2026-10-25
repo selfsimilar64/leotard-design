@@ -229,8 +229,10 @@ material is still crushed into a narrow strip on the sheet: shading hides it, a 
 seam-like jump down the cleft.
 
 Controls: settings popover, Fabric fit, "Taut across the seat" (on by default) and "Stretch across
-the seat" 1-10× (default 4×; `liftSeatAcross` in `render/display.js`, passed to the mannequin as
-`liftOpt.seatAlong` = 1 / it).
+the seat" 1-30× (default 4×; `liftSeatAcross` in `render/display.js`, passed to the mannequin as
+`liftOpt.seatAlong` = 1 / it). The range was 1-10× until the owner asked for more (2026-10-25);
+30× renders cleanly (one-arm-up pose, no streaks) and differs little from 10×: the small V at the
+bottom comes from the sheet's held edge there, not from the tension.
 
 Not yet done: the bust (the fold under it is the same kind of problem; the same code with another
 region and frame), bodies other than the teen and older teen checked by eye.
