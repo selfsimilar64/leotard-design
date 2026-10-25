@@ -13,9 +13,10 @@ export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 0, shad
 	// LIFT_DEFAULTS in body/mannequin.js): tautness 0..1 (the slider is logarithmic, ui/Inspector.jsx
 	// tautOf), deepest span (m), reach (x the default)
 	liftTaut: 1, liftMax: 0.03, liftReach: 1,
-	// or the rolling-ball fit instead (body/ball.js, experiment; the default since 2026-10-25: the
-	// membrane cannot span the gluteal cleft) and its ball radius (m)
-	liftMethod: 'ball', liftBall: 0.05 };
+	// or the rolling-ball fit instead (body/ball.js, experiment: left a crevice and artifacts from
+	// ~90 mm, owner 2026-10-25) and its ball radius (m); the taut sheet across the seat on top
+	// (body/seat.js, experiment) and how much harder it is stretched across the seat than up it
+	liftMethod: 'membrane', liftBall: 0.05, liftSeat: true, liftSeatAcross: 4 };
 
 // Choices the UI offers (value, label).
 export const DISPLAY_OPTIONS = {

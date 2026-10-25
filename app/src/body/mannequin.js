@@ -28,6 +28,7 @@ import { poseSpec, setDazPoses } from './pose.js';
 import { ccStencil, applyStencil, quadTriangles, readPolys } from './subdivide.js';
 import { slideGarment } from './slide.js';
 import { rollingBall } from './ball.js';
+import { seatSheet } from './seat.js';
 
 const abs = Math.abs, min = Math.min, max = Math.max;
 const clamp = (x, a, b) => min(max(x, a), b);
@@ -45,8 +46,10 @@ const LIFT_MAX = 0.03, LIFT_ITER = 220;
 // The viewing controls over it (Man.liftOpt, set from the settings popover; defaults also in
 // render/display.js): taut (0..1, how much of the span the fabric holds: below 1 it sags into the
 // hollow), max (the cap, metres) and reach (a multiple of LIFT_ITER's reach: iterations x reach^2).
-// method 'ball' replaces the membrane with the rolling-ball fit (body/ball.js), ball its radius (m).
-export const LIFT_DEFAULTS = { taut: 1, max: LIFT_MAX, reach: 1, method: 'ball', ball: 0.05 };
+// method 'ball' replaces the membrane with the rolling-ball fit (body/ball.js), ball its radius (m);
+// seat adds the taut sheet across the gluteal cleft (body/seat.js) on top of either, seatAlong its
+// tension up the seat over its tension across (1 / the panel's "stretch across").
+export const LIFT_DEFAULTS = { taut: 1, max: LIFT_MAX, reach: 1, method: 'membrane', ball: 0.05, seat: true, seatAlong: 0.25 };
 const SLIDE_WARM = 0.05; // share of the slide's free vertices that may change for a warm start (slideFabric)
 
 // Dress form cuts, in reference-body metres: neck 2.2 cm above the neck base, legs at mid-thigh
@@ -425,16 +428,28 @@ class Mannequin {
 			this.liftBody = this.key; this.liftH = h;
 			for (let i = 0; i < N * 3; i++) D[i] = Nn[i] * h[(i / 3) | 0];
 		}
-		// Garment surface normals: normals of the lifted surface (flat across the bridges).
-		const G = new Float32Array(N * 3);
+		// the taut sheet across the seat (body/seat.js) replaces either lift where it spans the cleft
+		this.seatMs = 0;
+		const seat = this.liftOpt.seat ? seatSheet(this, P, this.aPos.array, this.aNrm.array, this.aCover.array, D, this.liftOpt.seatAlong) : null;
+		if (seat) this.seatMs = seat.ms;
+		// Garment surface normals: normals of the lifted surface (flat across the bridges); over the
+		// seat, the sheet's own (its moved vertices crowd onto a narrow strip, see body/seat.js).
+		const G = new Float32Array(N * 3), GN = this.aGNormal.array;
 		for (let i = 0; i < N * 3; i++) G[i] = P[i] + D[i];
-		vertexNormals(G, idx, this.aGNormal.array);
+		vertexNormals(G, idx, GN);
+		if (seat) for (let i = 0; i < N; i++) {
+			const w = seat.weight[i];
+			if (!w) continue;
+			const x = GN[i * 3] + w * (seat.normal[i * 3] - GN[i * 3]), y = GN[i * 3 + 1] + w * (seat.normal[i * 3 + 1] - GN[i * 3 + 1]), z = GN[i * 3 + 2] + w * (seat.normal[i * 3 + 2] - GN[i * 3 + 2]), l = Math.hypot(x, y, z) || 1;
+			GN[i * 3] = x / l; GN[i * 3 + 1] = y / l; GN[i * 3 + 2] = z / l;
+		}
 		this.garmentPos = G;
 
 		const ao = this.aAO.array;
 		// Ambient occlusion from how deep the vertex sits under the fabric bridge: crevices
-		// (armpit, between the legs, under the bust) are exactly where the lift is large.
-		for (let i = 0; i < N; i++) ao[i] = clamp(1 - Math.hypot(D[i * 3], D[i * 3 + 1], D[i * 3 + 2]) * 16, 0.4, 1);
+		// (armpit, between the legs, under the bust) are exactly where the lift is large. Over the
+		// seat, how far the sheet spans above the skin (its vertices moved further than that).
+		for (let i = 0; i < N; i++) ao[i] = clamp(1 - (seat && seat.aoDepth[i] >= 0 ? seat.aoDepth[i] : Math.hypot(D[i * 3], D[i * 3 + 1], D[i * 3 + 2])) * 16, 0.4, 1);
 		if (this.contact) for (let i = 0; i < N; i++) ao[i] *= this.contact[i];
 
 		// Area-weighted sampling table on the garment surface.

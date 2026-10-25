@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: Fabric bridging hollows
-description: "Stretch fabric spans body concavities (sternum, under and between the bust, lower back, gluteal cleft, underarm, crotch) instead of following them; the POC models this with an outward-only membrane offset solved per body, which cannot span the gluteal cleft, so the app now defaults to a rolling-ball fit (morphological closing)."
+description: "Stretch fabric spans body concavities (sternum, under and between the bust, lower back, gluteal cleft, underarm, crotch) instead of following them; the POC models this with an outward-only membrane offset solved per body, which cannot span the gluteal cleft; the app adds a taut sheet across the seat (an anisotropic membrane at rest solved as seen from behind) on top of the membrane, a rolling-ball fit stays selectable."
 tags: [geometry, technique, garment, offset, poc]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:00:00Z }
 sources:
@@ -143,6 +143,97 @@ Controls: settings popover, Fabric fit, "How fabric spans hollows" (membrane / r
 
 Open: per-region ball size (bust against seat), cost at large R, the closed-cleavage and inner-thigh
 cases, and whether stored curves should eventually sit on a ball-fitted reference surface.
+
+**Owner review (2026-10-25): the rolling ball does not solve the seat.** It helps a little at first;
+from a ball of about 90 mm artifacts form and the crevice gets no shallower (likely the 3 cm pin at
+the leg openings plus smoothing pulling the arc back in, and big balls blocked by the thighs; not
+measured). The default went back to the membrane; the ball stays selectable.
+
+# Taut sheet across the seat (`app/src/body/seat.js`, on by default since 2026-10-25)
+
+Owner chose a targeted physics approach ("option 1": the fabric in the cleft much shorter than the
+skin) after asking how complex a seat- or bust-specific simulation would be. Why the existing slide
+does not do it: it is as-rigid-as-possible, so it keeps the fabric's rest shape, fold included. A
+membrane (stretch only, no bending stiffness) under tension pulls straight across a gap. The catch
+on the skin's own mesh: the cleft's walls are several cm² of material real fabric does not have;
+pulled taut it would bunch along the midline.
+
+The sheet is solved at rest (what a cloth simulation settles to), seen from behind, which removes
+that material: from behind the walls have no width.
+
+1. **Frame** from the posed seat: d = minus its mean skin normal (into the body), e1 from the left
+   half's centroid to the right half's, e2 = d × e1. Follows the pelvis in a pose.
+2. **Skin seen from behind**: the trunk's triangles (no head, no arms) rasterised into a 2.5 mm grid
+   over the seat's extent + 2 cm, keeping the nearest: depth s and cover.
+3. **Sheet**: depth u with Tx·u_xx + Ty·u_yy = 0 where free (a tensioned membrane with nothing
+   pressing on it), u ≤ s (cannot enter the body): projected SOR, 600 passes, ω 1.8. Free over
+   fabric; held on bare skin (the leg openings' elastic), on the grid's border and along the body's
+   outline (cells next to one off the body: hips, the gap between the legs).
+4. **Fabric onto the sheet** over the seat region (reference body: 3 cm below to 25 cm above the
+   crotch, |x| < 16 cm, front and back), per fabric vertex, from its depth z against the skin s and
+   the sheet u in its cell:
+   - z − s > 10 cm (the front of the body): keeps its lift;
+   - 0.5 mm < z − s ≤ 10 cm (hidden a little: deep in the bottom of the cleft, the start of the
+     gusset, under a cheek), or the sheet steeper than 45° there: **blended**;
+   - sheet off the skin (> 0.5 mm) and the vertex is the skin seen there: moves along −d onto the
+     sheet (≤ 12 cm), faded out over the region's top (15-25 cm) and sides (11-16 cm);
+   - otherwise (the sheet rests on it): keeps its lift.
+   Blended vertices, and bare skin next to fabric (the triangles across an opening's edge), take the
+   mean of their neighbours' displacement (200 Gauss-Seidel passes), so the seat blends into the
+   gusset. It replaces the membrane's or ball's lift there.
+5. **Shading**: moved vertices use the sheet's own normal (−d + u_a·e1 + u_b·e2, weighted by the
+   fade) instead of their triangles', and AO from the sheet's span over the skin (s − u) instead of
+   how far the vertex moved; blended vertices interpolate the AO depth.
+
+Measured, first version (teen, arms-down, B8; equal tension, back half only; fabric dip at the
+midline against the cheeks at 2/4/6/10/14 cm above the crotch): membrane 46/36/29/22/10 mm, with the
+sheet 46/23/11/6/3 mm. Cost now about 0.12-0.32 s per garment update.[^app-2026-10-25]
+
+Tuning found on the way:
+- Stopping the move dead at the region's top left a step (a highlight line) across the small of the
+  back, because the sheet also spans the spine's groove: hence the fade.
+
+## Owner review and second version (2026-10-25)
+
+Owner: the first version "produces artifacts and leaves a hole still going deep into the seat".
+Judged from renders in a light colour (owner: always render seat tests on a light leotard, so the
+shading of the seat's shape shows), older-teen body, arms-down, A-pose, lunge and split leap. Causes
+found, each fixed in steps 3-5 above:[^app-2026-10-25]
+
+- **The hole**: at the bottom the cleft is up to 10 cm deep (to the perineum) and its walls reach
+  forward of the side seam (form > 0). The region was the back half only, so those walls never
+  moved and left a pocket. Now the whole trunk in the region, sorted by visibility.
+- **Spikes at the lower edge**: free cells at the outline had no neighbour beyond, so the sheet
+  floated off (up to 8 cm behind the crotch) and dragged the fabric there back. Now held.
+- **A groove down the lower cleft** (lunge): not a bug. With equal tension a membrane spanning a gap
+  over a rounded seat must form a saddle (u_xx = −u_yy). Leotards are stretched far harder around
+  the hips than up the seat; tension across 4× along pulled it straight across (row 3 cm up, lunge:
+  sheet 16 mm below the cheek-to-cheek line at 1:1, 5 mm at 4:1, none at 10:1).
+- **Crumpled fabric where the cleft meets the gusset**: first one row moved 5 cm and the next not at
+  all (a visibility cut-off); then, with blending, neighbours 1 mm apart landed 2 cm apart where the
+  sheet drops steeply to its held edge. Fixed by the blending, the 45° rule and the sheet normals.
+
+Tried and dropped (judged by renders):
+- A facing test (held where the skin seen turns from the view): also held the cleft's own walls
+  (they face sideways), dimples in the sheet; in the split leap the lower half stayed open.
+- The outline free across only (a taut line from cheek to cheek along the bottom), or fully free: a
+  ledge of fabric floating off under the seat in the lunge.
+- Spreading the moved vertices over the sheet (relaxing their place across it, so the walls'
+  material is not crushed into a strip): folded the fabric into flaps down the cleft.
+- Skin facing down (the gusset seen edge-on) blended instead of moved: tried only with the free
+  outline, dropped with it.
+
+What remains: a small smooth V where the seat turns under into the gusset (as on real leotards),
+and in extreme close-ups under the crotch a faint line where the seat meets the gusset. The walls'
+material is still crushed into a narrow strip on the sheet: shading hides it, a print would show a
+seam-like jump down the cleft.
+
+Controls: settings popover, Fabric fit, "Taut across the seat" (on by default) and "Stretch across
+the seat" 1-10× (default 4×; `liftSeatAcross` in `render/display.js`, passed to the mannequin as
+`liftOpt.seatAlong` = 1 / it).
+
+Not yet done: the bust (the fold under it is the same kind of problem; the same code with another
+region and frame), bodies other than the teen and older teen checked by eye.
 
 # Limits and open issues **[INFERRED]**
 

@@ -206,7 +206,7 @@ export function FabricFit() {
 		// let the panel show "Fitting…" before the solve holds the page
 		setTimeout(() => {
 			const e = app.engine;
-			e?.setSlide(n.slide, { shrink: n.slideTension, grip: n.slideGrip }, { taut: n.liftTaut, max: n.liftMax, reach: n.liftReach, method: n.liftMethod, ball: n.liftBall });
+			e?.setSlide(n.slide, { shrink: n.slideTension, grip: n.slideGrip }, { taut: n.liftTaut, max: n.liftMax, reach: n.liftReach, method: n.liftMethod, ball: n.liftBall, seat: n.liftSeat, seatAlong: 1 / n.liftSeatAcross });
 			setMs(e?.body.slideMs || null); setBusy(false);
 		}, 30);
 	};
@@ -221,6 +221,12 @@ export function FabricFit() {
 					<CommitSlider value={gripPos(d.slideGrip)} min={0} max={100} step={1} format={(v) => gripOf(v).toFixed(3)} onCommit={(v) => apply({ slideGrip: gripOf(v) })} />
 				</Line>
 			</> : null}
+			<Line label="Taut across the seat"><Toggle value={d.liftSeat} onChange={(v) => apply({ liftSeat: v })} /></Line>
+			{d.liftSeat ? (
+				<Line label="Stretch across the seat (against up it; more pulls the cleft flatter)">
+					<CommitSlider value={d.liftSeatAcross} min={1} max={10} step={0.5} format={(v) => `${v}x`} onCommit={(v) => apply({ liftSeatAcross: v })} />
+				</Line>
+			) : null}
 			<Line label="How fabric spans hollows">
 				<Select value={d.liftMethod} options={LIFT_METHODS} onChange={(v) => apply({ liftMethod: v })} />
 			</Line>
