@@ -234,6 +234,26 @@ the seat" 1-30× (default 4×; `liftSeatAcross` in `render/display.js`, passed t
 30× renders cleanly (one-arm-up pose, no streaks) and differs little from 10×: the small V at the
 bottom comes from the sheet's held edge there, not from the tension.
 
+### The V into the gusset (investigated 2026-10-25, not changed)
+
+Owner asked to make the V where the seat turns under into the gusset shallower. Findings (older
+teen, arms-down, light leotard):[^app-2026-10-25]
+- The V comes from the sheet's held outline at the two corners where the gap between the thighs
+  begins, not from its bottom edge: holding the hips firmly and releasing only the bottom edge made
+  no difference; releasing the outline within 8 cm of the midline removed the V from the seat.
+- But then the two leg openings' edges, which run down into the bottom of the cleft to meet the
+  gusset, stay behind: their trim (`render/rims.js`) stretches into a vertical fin. Partial release
+  (a spring pulling the outline towards the skin, strengths 0.1-1) gave a V plus a fin. Reverted.
+- So a shallower V needs the openings' elastic edges at the gusset to lift out of the cleft with
+  the seat (and the trim to follow them), as real elastic under tension does. Not done.
+- Releasing every outline cell (hips too) floated the seat off the hips.
+
+Also seen: in the stag jump a strip down the upper cleft is not spanned (a crease). The leaning
+cleft makes its walls count as hidden (more than 5 mm behind the skin seen), so they are blended,
+not lifted, and about 1,200 vertices fall under the 45° rule. Lifting hidden walls that face
+sideways did not visibly fix it, and a view direction from the cheeks only made no difference.
+Not fixed.
+
 Not yet done: the bust (the fold under it is the same kind of problem; the same code with another
 region and frame), bodies other than the teen and older teen checked by eye.
 
