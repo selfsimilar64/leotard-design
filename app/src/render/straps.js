@@ -2,7 +2,7 @@
 // topstitching, in the strap's fabric with cloth-space UVs along the strap, plus a soft contact
 // shadow on whatever it lies on (fabric or skin). Straps stack by their layer number where they cross.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, bindScan } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, bindScan, texScaleOf } from '../materials/fabric.js';
 import { strapGrid, markGrid, ACROSS, STRAP_PROFILE } from '../garment/straps.js';
 
 const FABRIC = 0.0012, ABOVE = 0.0009, STACK = 0.0013;
@@ -42,7 +42,7 @@ export class StrapView {
 		this.dispose();
 		const man = this.man;
 		if (!man.garmentPos) return;
-		const P = man.aPos.array, N = man.aGNormal.array, L = man.aLift.array, idx = man.idx;
+		const P = man.gPos ?? man.aPos.array, N = man.aGNormal.array, L = man.aLift.array, idx = man.idx;
 		const at = (sp, A, k = 3, out = []) => { for (let c = 0; c < k; c++) { let v = 0; for (let j = 0; j < 3; j++) v += [sp.b0, sp.b1, sp.b2][j] * A[idx[sp.f * 3 + j] * k + c]; out[c] = v; } return out; };
 		const order = new Map(doc.straps.map((s, i) => [s.id, s.layer ?? i]));
 		for (const [, { grid, strap: sid }] of this.grids) {
@@ -124,7 +124,7 @@ export class StrapView {
 			this.materials.set(s.id, m);
 		}
 		const f = s.fabric ?? {};
-		applyFabric(m, f.fabric ?? 'matte', f.colour ?? '#222222', f.second ?? 'Tone-on-tone');
+		applyFabric(m, f.fabric ?? 'matte', f.colour ?? '#222222', f.second ?? 'Tone-on-tone', null, texScaleOf({ ...f, fabric: f.fabric ?? 'matte' }));
 		m.userData.u.uUV.value = 1;
 		m.userData.u.uRows.value.set(s.edge === 'none' ? 0 : 0.0016, 0);
 		m.userData.u.uThread.value.set(f.colour ?? '#222222').multiplyScalar(0.8);

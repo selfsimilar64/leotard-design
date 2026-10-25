@@ -1112,10 +1112,10 @@
     },
     {
      "sp": {
-      "f": 136401,
+      "f": 197735,
       "b": [
-       0.458035,
-       0.402422
+       0.419054,
+       0.576172
       ]
      },
      "kind": "smooth"
@@ -1152,10 +1152,10 @@
     },
     {
      "sp": {
-      "f": 50243,
+      "f": 99133,
       "b": [
-       0.402309,
-       0.458028
+       0.577352,
+       0.419121
       ]
      },
      "kind": "smooth"
@@ -1468,7 +1468,7 @@
    "mirror": "none",
    "stack": [
     {
-     "fabric": "lace",
+     "fabric": "mesh",
      "colour": "#3a2242",
      "second": "Tone-on-tone",
      "colour2": "#7c70c8",
@@ -1490,7 +1490,7 @@
    "mirror": "none",
    "stack": [
     {
-     "fabric": "lace",
+     "fabric": "mesh",
      "colour": "#3a2242",
      "second": "Tone-on-tone",
      "colour2": "#7c70c8",

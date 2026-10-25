@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { DocumentStore, commandList } from './doc/store.js';
 import { newDocument } from './doc/schema.js';
+import { DEFAULT_START } from './garment/starts.js';
 import './doc/commands-core.js';
 import './doc/commands-garment.js';
 import './doc/commands-reference.js';
@@ -43,8 +44,8 @@ export const VIEWS = {
 	'three-quarter': { dir: [0.55, 0.1, 0.83] }, 'back-three-quarter': { dir: [-0.55, 0.1, -0.83] },
 };
 
-// The design shown on a first start (and instead of an autosaved first-generation design): one of
-// the moodboard collection in designs/ (main.jsx opens it once the bodies are loaded).
+// The moodboard design the tile pictures are rendered with (src/dev/thumbnails.js). A first start
+// shows the plain tank (app.new, main.jsx).
 export const STARTER = 'b2-ombre-crossover';
 export function defaultDocument() {
 	return newDocument('Untitled');
@@ -98,6 +99,9 @@ export class App {
 			landmarkPos: (lm) => engine.pick.pos(landmarks[lm]).toArray(),
 			bodyKey: () => engine.bodyKey,
 			stonesOf: (gen) => engine.stoneRun.stones.filter((s) => s.gen === gen),
+			// a command that built the shell (L0) on its final curves hands it over: the engine re-cuts
+			// on its arrangement (as inheritHook's) instead of building the same one again
+			prebuilt: (g) => { engine.pending = g; },
 		};
 		this.store.hooks.push((tx, touched) => this.inheritHook(tx, touched));
 		engine.viewport.onResize.add((w, h) => engine.overlay.setResolution(w, h));
@@ -110,7 +114,8 @@ export class App {
 	// same undo step. Skipped mid-drag; the drag's settle command runs it once at the end.
 	inheritHook(tx, touched) {
 		const e = this.engine;
-		if (!e || !touched.has('curves') || tx.doc.legacy || this._inGesture) return;
+		// tx.noInherit: the command settled its own panels (block.set opens and covers cells itself)
+		if (!e || !touched.has('curves') || tx.doc.legacy || this._inGesture || tx.noInherit) return;
 		const evaluated = evaluateAll(tx.doc, e.surf, null, e.evaluated);
 		for (const layer of tx.doc.layers) {
 			const prev = e.layers.get(layer.id)?.g;
@@ -145,7 +150,14 @@ export class App {
 	history() { return { undo: this.store.undoStack.map((e) => e.label), redo: this.store.redoStack.map((e) => e.label).reverse() }; }
 
 	// app.file: the designs/ file the design was opened from or last saved to (null for a new one)
-	new(name = 'Untitled') { this.file = null; this.store.load(newDocument(name)); }
+	// A new design is the plain tank (garment/starts.js) on the model and in the scene on show.
+	new(name = 'Untitled') {
+		this.file = null;
+		const d = newDocument(name);
+		if (this.engine) { d.body = structuredClone(this.doc.body); d.scene = structuredClone(this.doc.scene); }
+		this.store.load(d);
+		if (this.engine) { this.exec({ op: 'start.apply', key: DEFAULT_START }); this.store.undoStack.length = 0; }
+	}
 	load(doc) { this.store.load(typeof doc === 'string' ? JSON.parse(doc) : doc); }
 	json() { return JSON.stringify(this.doc, null, 1); }
 

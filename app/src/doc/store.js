@@ -67,16 +67,19 @@ export class DocumentStore {
 		return def.run(tx, cmd);
 	}
 
+	// opts.dryRun: run the command and roll it back, returning its result (what block.set would
+	// remove, say) without changing the document or its history.
 	exec(cmd, opts = {}) {
 		const tx = new Transaction(this);
 		let result;
 		try {
 			result = this._run(tx, cmd);
-			for (const h of this.hooks) h(tx, tx.touched);
+			if (!opts.dryRun) for (const h of this.hooks) h(tx, tx.touched);
 		} catch (e) {
 			tx.rollback();
 			throw e;
 		}
+		if (opts.dryRun) { tx.rollback(); return result; }
 		if (!tx.prims.length) { if (opts.settle) this._emit(tx.touched, 'exec'); return result; }
 		const first = Array.isArray(cmd) ? cmd[0] : cmd;
 		const label = opts.label ?? (Array.isArray(cmd) && cmd.length > 1 ? `${COMMANDS.get(first.op)?.label ?? first.op} (+${cmd.length - 1})` : COMMANDS.get(first.op)?.label ?? first.op);

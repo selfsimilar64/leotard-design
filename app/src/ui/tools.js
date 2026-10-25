@@ -1,21 +1,21 @@
 // Viewport tools: what a pointer does in the 3D view for the active tool. Every edit is a
 // command (app.exec), so tools add nothing the scripting surface lacks.
-//   orbit   left-drag orbits (OrbitControls); a click (no drag) on the garment selects the piece
-//   select  click a line or panel to select it; drag a control point of the selected line
-//           (it slides on the body; a drag is one undo step); Alt-click a line to add a point;
-//           C toggles corner/smooth on the last point touched; Delete removes it (or the line)
+//   move    left-drag orbits; a click (no drag) selects the line or the piece under it; over a
+//           control point of the selected line the drag moves that point instead (it slides on
+//           the body; one undo step); Alt-click a line to add a point; C toggles corner/smooth
+//           on the last point touched; Delete removes it (or the line)
 //   pen     click to place points (Shift = corner); click the first point to close; click on
 //           another line to end there (the end stays attached); Enter or double-click finishes;
 //           Esc cancels
-//   fabric  click a panel to give it the swatch chosen in the inspector
-//   cut     click a panel to cut it out, click an opening to fill it again
-//   decal   click the body to place a logo or lettering (options in the inspector)
-//   eyedrop (from the panel inspector's Pick) while looking through a reference photo, click
-//           the photo where the panel is: the panel's colour is matched to it under the rig
-// In every tool but orbit, right-drag orbits, middle-drag pans and the wheel zooms.
+//   strap   like the pen, but the line becomes a strap
+//   stones, single, erase   stone generators, one stone, the eraser (options in the panel)
+//   decal   click the body to place a logo or lettering (options in the panel)
+//   eyedrop (from the piece's Pick) while looking through a reference photo, click the photo
+//           where the piece is: its colour is matched to it under the rig
+// In every tool but move, right-drag orbits, middle-drag pans and the wheel zooms.
 import * as THREE from 'three';
 import { signal } from '@preact/signals';
-import { tool, selection, notify } from './state.js';
+import { tool, selection, notify, hideOverlay } from './state.js';
 import { toSP } from '../body/surface.js';
 import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
@@ -44,21 +44,25 @@ export class ToolController {
 		window.addEventListener('keydown', (e) => this.key(e));
 		tool.subscribe((t) => this.onTool(t));
 		selection.subscribe(() => this.refreshOverlay());
+		hideOverlay.subscribe(() => this.refreshOverlay());
 	}
 
 	onTool(t) {
 		const c = this.engine.viewport.controls;
-		c.mouseButtons = t === 'orbit'
+		c.mouseButtons = t === 'move'
 			? { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
 			: { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+		c.enabled = true;
 		if (t !== 'pen' && t !== 'strap') this.cancelPen();
-		this.el.style.cursor = t === 'orbit' ? 'grab' : t === 'pen' || t === 'strap' || t === 'eyedrop' ? 'crosshair' : 'default';
+		this.el.style.cursor = t === 'move' ? 'grab' : t === 'pen' || t === 'strap' || t === 'eyedrop' ? 'crosshair' : 'default';
 		this.refreshOverlay();
 	}
 
 	refreshOverlay() {
 		const sel = selection.value;
-		this.engine.setUI({ selected: sel?.kind === 'curves' ? sel.id : null, showPoints: ['select', 'pen', 'strap', 'trim'].includes(tool.value) });
+		// drawing needs to see the line, so the pen and strap tools show the overlay even when hidden
+		this.engine.setUI({ selected: sel?.kind === 'curves' ? sel.id : null, showPoints: ['move', 'pen', 'strap'].includes(tool.value),
+			hidden: hideOverlay.value && !['pen', 'strap'].includes(tool.value) });
 	}
 
 	xy(e) { const r = this.el.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
@@ -83,28 +87,17 @@ export class ToolController {
 	}
 
 	down(e) {
-		if (e.button !== 0 || e.altKey && tool.value !== 'select') return;
+		if (e.button !== 0) return;
 		const t = tool.value, [x, y] = this.xy(e);
-		if (t === 'orbit') { this.press = { x, y, t: performance.now() }; return; }
-		if (t === 'trim') {
-			// edges tool: pick a line (an edge or a seam) to give it a finish in the inspector
-			const c = this.engine.curveAt(x, y, 9);
-			selection.value = c ? { kind: 'curves', id: c.curve } : null;
-			return;
-		}
-		if (t === 'select') {
+		if (t === 'move') {
+			// over a control point of the selected line (the orbit controls were switched off on
+			// hover, see move): drag it; otherwise remember the press: a click selects on release
 			const p = this.pointAt(x, y);
 			if (p) {
 				this.drag = { ...p, gesture: 'drag' + (++this.gestureN) };
 				this.active = { curve: p.curve, i: p.i };
 				this.el.setPointerCapture(e.pointerId);
-				return;
-			}
-			const c = this.engine.curveAt(x, y);
-			if (c && e.altKey && selection.value?.id === c.curve) { this.insertPoint(c); return; }
-			if (c) { selection.value = { kind: 'curves', id: c.curve }; this.active = null; return; }
-			const h = this.engine.pickAt(x, y);
-			selection.value = h?.panel ? { kind: 'panels', id: h.panel } : null;
+			} else this.press = { x, y, t: performance.now(), alt: e.altKey };
 			return;
 		}
 		if (t === 'pen' || t === 'strap') { this.penClick(x, y, e.shiftKey); return; }
@@ -113,7 +106,7 @@ export class ToolController {
 			const h = this.engine.pickAt(x, y);
 			if (!h?.sp) return;
 			const d = toolOptions.value.decal, id = this.run({ op: 'decal.add', at: { sp: toSP(h.sp) }, ...d, layer: h.layer ?? 'L0' });
-			if (id) { selection.value = { kind: 'decals', id }; tool.value = 'select'; }
+			if (id) { selection.value = { kind: 'decals', id }; tool.value = 'move'; }
 			return;
 		}
 		if (t === 'stones' || t === 'single' || t === 'erase') {
@@ -132,20 +125,6 @@ export class ToolController {
 			else this.run({ op: 'stones.erase', at: { sp: toSP(h.sp) }, r: st.eraseR });
 			return;
 		}
-		if (t === 'fabric' || t === 'cut') {
-			const h = this.engine.pickAt(x, y);
-			if (!h?.sp) return;
-			const sw = toolOptions.value.swatch;
-			if (t === 'fabric') {
-				if (h.panel) { this.run({ op: 'panel.set', id: h.panel, ...sw }); selection.value = { kind: 'panels', id: h.panel }; }
-				else notify('That is an opening: use Cut out to fill it first');
-			} else if (h.panel) this.run({ op: 'panel.cut', id: h.panel });
-			else {
-				const removed = this.app.doc.panels.find((p) => p.removed && this.cellOf(p) === this.cellAt(h.sp));
-				if (removed) this.run({ op: 'panel.restore', id: removed.id });
-				else this.run({ op: 'panel.add', at: { sp: toSP(h.sp) }, ...sw });
-			}
-		}
 	}
 
 	async eyedrop(x, y) {
@@ -157,7 +136,7 @@ export class ToolController {
 			const m = await this.app.matchColour({ panel: o.panel, ref: this.app.looking, px, layer: o.layer ?? 0 });
 			notify(m.note ?? `Colour ${m.colour} (photo ${m.photo}${m.rendered ? ', matched under the lights' : ''})`, m.note ? 'error' : undefined);
 		} catch (err) { notify(err.message, 'error'); }
-		tool.value = 'select';
+		tool.value = 'move';
 		selection.value = { kind: 'panels', id: o.panel };
 	}
 
@@ -177,20 +156,30 @@ export class ToolController {
 			const h = this.engine.pickAt(x, y);
 			if (h?.sp) this.previewPen(h.sp);
 		}
+		if (tool.value === 'move' && !this.press) {
+			// the orbit controls act on the same pointer events before this tool does: switch them
+			// off while the pointer is over a control point, so the press drags the point
+			const over = !!this.pointAt(x, y);
+			this.engine.viewport.controls.enabled = !over;
+			this.el.style.cursor = over ? 'move' : 'grab';
+		}
 	}
 
 	up(e) {
-		// orbit: a click that did not turn the view picks the piece under it (or clears the choice)
+		// move: a click that did not turn the view picks the line or the piece under it (or
+		// clears the choice); Alt-click on the selected line adds a point there
 		const pr = this.press;
 		this.press = null;
-		if (pr && tool.value === 'orbit' && e.button === 0) {
+		if (pr && tool.value === 'move' && e.button === 0) {
 			const [x, y] = this.xy(e);
 			if (Math.hypot(x - pr.x, y - pr.y) < 5 && performance.now() - pr.t < 500) {
-				const h = this.engine.pickAt(x, y);
-				selection.value = h?.panel ? { kind: 'panels', id: h.panel } : null;
+				const c = this.engine.curveAt(x, y);
+				if (c && pr.alt && selection.value?.id === c.curve) this.insertPoint(c);
+				else if (c) { selection.value = { kind: 'curves', id: c.curve }; this.active = null; }
+				else { const h = this.engine.pickAt(x, y); selection.value = h?.panel ? { kind: 'panels', id: h.panel } : null; }
 			}
 		}
-		if (this.drag) { this.drag = null; this.app.endGesture(); try { this.el.releasePointerCapture(e.pointerId); } catch { /* already released */ } }
+		if (this.drag) { this.drag = null; this.app.endGesture(); this.engine.viewport.controls.enabled = true; try { this.el.releasePointerCapture(e.pointerId); } catch { /* already released */ } }
 	}
 
 	key(e) {

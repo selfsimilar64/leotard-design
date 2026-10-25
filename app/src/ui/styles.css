@@ -78,6 +78,7 @@ input[type=color] { width: 44px; height: 22px; border: 1px solid var(--line); bo
 .pane-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font: 600 13px/1.2 system-ui, -apple-system, 'Segoe UI', sans-serif; letter-spacing: 0.01em; color: var(--text); }
 .pane-title > span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line { display: grid; gap: 5px; }
+.fit { display: grid; gap: 8px; }
 .line-label { color: var(--dim); font-size: 11px; }
 .note { font-size: 11px; }
 
@@ -91,6 +92,8 @@ input[type=color] { width: 44px; height: 22px; border: 1px solid var(--line); bo
 .tile-initials { color: var(--dim); font: 600 15px system-ui; letter-spacing: 0.04em; }
 .tile:hover .tile-pic { outline-color: #4a4f60; }
 .tile.on .tile-pic { outline-color: var(--accent); }
+.tile:disabled { cursor: not-allowed; opacity: 0.35; }
+.tile:disabled:hover .tile-pic { outline-color: transparent; }
 .tile:focus-visible { outline: none; }
 .tile:focus-visible .tile-pic { outline-color: var(--accent2); }
 .tile-name { font-size: 10.5px; line-height: 1.2; color: var(--dim); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -120,6 +123,13 @@ input[type=color] { width: 44px; height: 22px; border: 1px solid var(--line); bo
 .parts .outliner { padding: 8px 0 0; }
 
 .menu-anchor { position: relative; }
-.popover { position: absolute; right: 0; top: calc(100% + 6px); width: 290px; z-index: 20; display: grid; gap: 8px; padding: 12px 14px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px #000a; }
-.popover .line { grid-template-columns: 130px 1fr; align-items: center; }
+.popover { position: absolute; right: 0; top: calc(100% + 6px); width: 340px; z-index: 20; display: grid; gap: 8px; padding: 12px 14px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px #000a; }
+.popover .line { grid-template-columns: 130px minmax(0, 1fr); align-items: center; } /* minmax: a long select or a slider row must not widen the row past the popover */
 .popover .pane-title { margin-top: 4px; }
+
+/* the Shape pane's question before a change takes something away */
+.ask { margin-top: 4px; padding: 9px 11px; border: 1px solid var(--accent2); border-radius: 8px; background: var(--panel2); display: grid; gap: 8px; font-size: 11.5px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn.primary { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+.gradient { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.flat-export { position: absolute; right: 10px; top: 8px; }

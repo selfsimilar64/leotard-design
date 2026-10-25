@@ -26,6 +26,7 @@ import * as THREE from 'three';
 import { regions } from '../garment/legacy-regions.js';
 import { poseSpec, setDazPoses } from './pose.js';
 import { ccStencil, applyStencil, quadTriangles, readPolys } from './subdivide.js';
+import { slideGarment } from './slide.js';
 
 const abs = Math.abs, min = Math.min, max = Math.max;
 const clamp = (x, a, b) => min(max(x, a), b);
@@ -40,6 +41,7 @@ const BASE = (import.meta.env?.BASE_URL ?? '/') + 'g9/';
 // bust, spine groove, crotch, the front of the armpit). LIFT_MAX caps the span; LIFT_ITER sets how
 // far a bridge can reach (Jacobi diffusion: roughly sqrt(iterations) edges, ~6 mm each).
 const LIFT_MAX = 0.03, LIFT_ITER = 220;
+const SLIDE_WARM = 0.05; // share of the slide's free vertices that may change for a warm start (slideFabric)
 
 // Dress form cuts, in reference-body metres: neck 2.2 cm above the neck base, legs at mid-thigh
 // (swimwear-style "3/4" form, so the leotard's leg openings show), arms just below the armpit.
@@ -52,9 +54,9 @@ export const HEADS = ['none', 'mannequin', 'person'];
 // ---------------------------------------------------------------------------------------------
 
 // Keys of the loaded bodies, for validating body.set (commands-core.js), and the catalogue the UI
-// lists (labels of bodies, poses, expressions).
+// lists (labels of bodies, poses, expressions, hairs).
 export const bodyKeys = [];
-export const catalogue = { bodies: [], poses: [], expressions: [] };
+export const catalogue = { bodies: [], poses: [], expressions: [], hairs: [] };
 
 // get(file, 'json' | 'arrayBuffer') can be replaced (tests read the files from disk).
 export async function loadMannequins(onProgress, get = fetchFile) {
@@ -77,13 +79,14 @@ export async function loadMannequins(onProgress, get = fetchFile) {
 	catalogue.bodies = manifest.bodies.map((b) => ({ key: b.key, label: b.label, years: b.years }));
 	catalogue.poses = manifest.poses;
 	catalogue.expressions = manifest.expressions;
+	catalogue.hairs = manifest.figure?.hairs ?? []; // { key, label, node }: the person's hairs (pipeline/daz/bodies.py HAIRS)
 	setDazPoses(manifest.poses.map((p) => p.key).filter((k) => k !== 'a-pose'));
 	return new Mannequin(manifest, topo, bodies, migrate);
 }
 
 async function fetchFile(f, kind) { const r = await fetch(BASE + f); if (!r.ok) throw new Error(`${f}: ${r.status}`); return r[kind](); }
 
-const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _n = new THREE.Vector3();
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
 
 class Mannequin {
 	constructor(manifest, topo, bodies, migrate) {
@@ -94,6 +97,7 @@ class Mannequin {
 		// the cage's subdivision, checked against the pipeline's triangles (pipeline/g9.py cc_stencil)
 		const cage = readPolys(topo, T.cage);
 		this.stencil = ccStencil(manifest.cage, cage.sizes, cage.ids);
+		this.cagePolys = cage; // the base cage's polygons (the slide's coarse level, cageMesh)
 		const idx = this.idx = new Uint32Array(topo, T.index.offset, T.index.count);
 		const tri = quadTriangles(this.stencil.quads);
 		if (this.stencil.n !== N || tri.length !== idx.length || tri.some((v, i) => v !== idx[i])) throw new Error('Subdivision differs from the pipeline (body/subdivide.js vs pipeline/g9.py)');
@@ -146,6 +150,9 @@ class Mannequin {
 		this.cdf = new Float32Array(this.triangles);
 		this.key = null;
 		this.formKind = 'full'; this.head = 'mannequin';
+		this.slide = true; // the garment slides over the posed body (body/slide.js); false: painted on the skin
+		this.slideCoarse = true; // solved on the base cage, then subdivided (slideCage); false: on the canonical mesh
+		this.slideOpt = { shrink: 0.75, grip: 0.002, iters: 30 }; // tension (rest size 75%), friction, solver passes (defaults: render/display.js)
 	}
 
 	// The canonical mesh of a body's A-pose (cached).
@@ -306,6 +313,7 @@ class Mannequin {
 		if (!b) throw new Error(`No body ${key}`);
 		const spec = poseSpec(pose);
 		this.key = key; this.pose = pose ?? null; this.poseKey = JSON.stringify(pose ?? 'a-pose');
+		this._slid = null; // a new body or pose: the next slide solves afresh
 		this.headKey = this.head;
 		this.cage = this.cageOf(b, pose);
 		// landmarks of what is shown: a Daz pose has its own; arm poses keep the A-pose's
@@ -395,7 +403,8 @@ class Mannequin {
 	// The garment surface on the current body and style: the fabric's lift over hollows, its
 	// normals, AO, and the sampling table stones are scattered with.
 	updateGarment(warm = false) {
-		const N = this.vertices, idx = this.idx, P = this.aPos.array, Nn = this.aNrm.array;
+		this.slideFabric();
+		const N = this.vertices, idx = this.idx, P = this.gPos, Nn = this.gNrm;
 		const h = warm && this.liftBody === this.key ? this.computeLift(P, Nn, undefined, 40, this.aLift.array) : this.computeLift(P, Nn);
 		this.liftBody = this.key;
 		this.aLift.array.set(h);
@@ -422,6 +431,84 @@ class Mannequin {
 
 		for (const a of [this.aAO, this.aLift, this.aGNormal]) a.needsUpdate = true;
 		for (const fn of this.onGarment ?? []) fn();
+	}
+
+	// Where the fabric sits (gPos / gNrm, read by the garment, straps, stones and overlays): in a
+	// pose, the garment slides over the skin under tension (body/slide.js) on its own vertices (the
+	// cover, two rings past each edge so the triangles across an edge move with it); in the A-pose,
+	// or with slide off, the skin itself. Re-solved whenever the body, pose or cover changes.
+	// A small cover change on the same body and pose (a garment edit: under SLIDE_WARM of the cover
+	// differs) starts from the last solve (slideGarment opt.warm): 0.45 s against 1.6 s for a new
+	// neckline in the low lunge, typically 0.1 mm from a fresh solve (p99 0.55 mm, worst 4 mm). A
+	// larger change (a starting point: 18%) solves afresh; after a big change a warm start ended up to
+	// 8 mm off. setBody forgets the last solve (this._slid).
+	slideFabric() {
+		const P = this.aPos.array, Nn = this.aNrm.array, N = this.vertices, S = this.adjStart, A = this.adj, C = this.aCover.array;
+		this.gPos = P; this.gNrm = Nn; this.slideMs = 0;
+		if (!this.slide || this.poseKey === '"a-pose"') return;
+		let free = new Uint8Array(N);
+		for (let i = 0; i < N; i++) free[i] = C[i] > 0 && this.wHead[i] <= 0.5 ? 1 : 0;
+		for (let r = 0; r < 2; r++) {
+			const f2 = free.slice();
+			for (let i = 0; i < N; i++) if (!free[i] && this.wHead[i] <= 0.5) for (let k = S[i]; k < S[i + 1]; k++) if (free[A[k]]) { f2[i] = 1; break; }
+			free = f2;
+		}
+		if (this.slideCoarse) return this.slideCage(free);
+		const prev = this._slid, opt = { free, ...this.slideOpt };
+		if (prev) {
+			let d = 0, n = 0;
+			for (let i = 0; i < N; i++) { if (free[i] !== prev.free[i]) d++; if (free[i]) n++; }
+			if (d <= SLIDE_WARM * n) opt.warm = prev.res;
+		}
+		const res = slideGarment(this, this.restOf(this.bodies[this.key]), P, Nn, opt);
+		this._slid = { free, res };
+		this.gPos = res.pos; this.gNrm = res.nrm; this.slideMs = res.ms;
+	}
+
+	// The slide solved on Daz's base cage (a quarter of the vertices) instead of the canonical mesh:
+	// a fabric cage slides over the posed body's cage, then is subdivided with the body's own
+	// stencil. Fabric resting on the skin cage subdivides to exactly the skin; lifted fabric to a
+	// smooth surface over it. The canonical vertices outside the garment (free: the cover and two
+	// rings) stay on the skin. Cage vertex i is canonical vertex i's control point (subdivision
+	// keeps the old vertices first), so it is free when that vertex is, plus one cage ring.
+	slideCage(free) {
+		const t0 = performance.now(), P = this.aPos.array, Nn = this.aNrm.array, N = this.vertices, cg = this.cageMesh();
+		const nC = cg.vertices, S = cg.adjStart, A = cg.adj;
+		let cf = new Uint8Array(nC);
+		for (let i = 0; i < nC; i++) cf[i] = free[i];
+		const f2 = cf.slice();
+		for (let i = 0; i < nC; i++) if (!cf[i] && this.wHead[i] <= 0.5) for (let k = S[i]; k < S[i + 1]; k++) if (cf[A[k]]) { f2[i] = 1; break; }
+		cf = f2;
+		const cage = this.cage, cn = new Float32Array(nC * 3);
+		vertexNormals(cage, cg.idx, cn);
+		const prev = this._slid, opt = { free: cf, ...this.slideOpt };
+		if (prev?.coarse) {
+			let d = 0, n = 0;
+			for (let i = 0; i < nC; i++) { if (cf[i] !== prev.free[i]) d++; if (cf[i]) n++; }
+			if (d <= SLIDE_WARM * n) opt.warm = prev.res;
+		}
+		const res = slideGarment(cg, this.bodies[this.key].cages['a-pose'], cage, cn, opt);
+		this._slid = { free: cf, res, coarse: true };
+		const G = applyStencil(this.stencil, res.pos), GN = new Float32Array(N * 3);
+		vertexNormals(G, this.idx, GN);
+		for (let i = 0; i < N * 3; i++) if (!free[(i / 3) | 0]) { G[i] = P[i]; GN[i] = Nn[i]; }
+		this.gPos = G; this.gNrm = GN; this.slideMs = performance.now() - t0;
+	}
+
+	// Daz's base cage as a triangle mesh with vertex adjacency (the slide's coarse level), cached.
+	cageMesh() {
+		if (this._cageMesh) return this._cageMesh;
+		const { sizes, ids } = this.cagePolys, V = this.manifest.cage, tris = [], pairs = new Set();
+		for (let f = 0, o = 0; f < sizes.length; o += sizes[f++]) {
+			for (let k = 1; k + 1 < sizes[f]; k++) tris.push(ids[o], ids[o + k], ids[o + k + 1]); // fan
+			for (let k = 0; k < sizes[f]; k++) { const a = ids[o + k], b = ids[o + (k + 1) % sizes[f]]; pairs.add(a < b ? a * V + b : b * V + a); } // polygon edges only
+		}
+		const deg = new Uint32Array(V + 1);
+		for (const k of pairs) { deg[Math.floor(k / V) + 1]++; deg[k % V + 1]++; }
+		for (let i = 0; i < V; i++) deg[i + 1] += deg[i];
+		const adj = new Uint32Array(deg[V]), fill = deg.slice(0, V);
+		for (const k of pairs) { const a = Math.floor(k / V), b = k % V; adj[fill[a]++] = b; adj[fill[b]++] = a; }
+		return (this._cageMesh = { vertices: V, idx: Uint32Array.from(tris), adjStart: deg, adj });
 	}
 
 	// Outward-only membrane: h_i = clamp(mean_j <P_j + h_j N_j - P_i, N_i>, 0, LIFT_MAX). On convex
@@ -606,13 +693,17 @@ class Mannequin {
 			if (!crossing.has(key)) crossing.set(key, { i, j, w: F[i] / (F[i] - F[j]) });
 			return key;
 		};
+		const link = (a, b) => { const l = next.get(a); if (l) l.push(b); else next.set(a, [b]); };
+		// (no arrays per triangle: 2026-10-25, ~5x faster; same crossings in the same order)
 		for (let f = 0; f < this.triangles; f++) {
-			const v = [idx[f * 3], idx[f * 3 + 1], idx[f * 3 + 2]], cross = [];
-			for (let e = 0; e < 3; e++) {
-				const i = v[e], j = v[(e + 1) % 3];
-				if ((F[i] < 0) !== (F[j] < 0)) cross.push(edgeKey(i, j));
-			}
-			if (cross.length === 2) for (const [a, b] of [cross, [cross[1], cross[0]]]) { const l = next.get(a); if (l) l.push(b); else next.set(a, [b]); }
+			const a = idx[f * 3], b = idx[f * 3 + 1], c = idx[f * 3 + 2], sa = F[a] < 0, sb = F[b] < 0, sc = F[c] < 0;
+			if (sa === sb && sb === sc) continue;
+			// edges (a, b), (b, c), (c, a) in that order; a triangle the line crosses has exactly two
+			let k0 = -1, k1 = -1;
+			if (sa !== sb) k0 = edgeKey(a, b);
+			if (sb !== sc) { if (k0 < 0) k0 = edgeKey(b, c); else k1 = edgeKey(b, c); }
+			if (sc !== sa) k1 = edgeKey(c, a);
+			link(k0, k1); link(k1, k0);
 		}
 		// Every crossing point joins exactly two segments: walk them, never stepping back.
 		const loops = [], used = new Set();
@@ -680,11 +771,16 @@ const HEAD_SMOOTH = 30;
 
 export function vertexNormals(P, idx, out) {
 	out.fill(0);
+	// (inline arithmetic, same order as THREE.Vector3's: the same normals, without a temporary
+	// array per triangle; 2026-10-25, ~4x faster on the person's 800k-triangle skin)
 	for (let f = 0; f < idx.length; f += 3) {
 		const a = idx[f] * 3, b = idx[f + 1] * 3, c = idx[f + 2] * 3;
-		_a.fromArray(P, a); _b.fromArray(P, b).sub(_a); _c.fromArray(P, c).sub(_a);
-		_n.crossVectors(_b, _c); // area-weighted
-		for (const o of [a, b, c]) { out[o] += _n.x; out[o + 1] += _n.y; out[o + 2] += _n.z; }
+		const ax = P[a], ay = P[a + 1], az = P[a + 2];
+		const bx = P[b] - ax, by = P[b + 1] - ay, bz = P[b + 2] - az, cx = P[c] - ax, cy = P[c + 1] - ay, cz = P[c + 2] - az;
+		const nx = by * cz - bz * cy, ny = bz * cx - bx * cz, nz = bx * cy - by * cx; // area-weighted
+		out[a] += nx; out[a + 1] += ny; out[a + 2] += nz;
+		out[b] += nx; out[b + 1] += ny; out[b + 2] += nz;
+		out[c] += nx; out[c + 1] += ny; out[c + 2] += nz;
 	}
 	for (let i = 0; i < out.length; i += 3) {
 		const l = Math.hypot(out[i], out[i + 1], out[i + 2]) || 1;

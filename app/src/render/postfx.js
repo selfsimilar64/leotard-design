@@ -45,6 +45,10 @@ export class ScenePass extends Pass {
 		depthTexture.format = THREE.DepthStencilFormat; depthTexture.type = THREE.UnsignedInt248Type;
 		// stencil: a figure's eye film is masked to the visible eyeball (render/figure.js)
 		this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4, stencilBuffer: true, depthTexture });
+		// the stencil is only used while the scene draws; no pass reads it, so the multisampled
+		// target does not resolve it. Resolving it (with the depth, one depth-stencil blit) cost
+		// ~31 ms of a 35 ms frame at 1792x1344 on a GTX 1650 (ANGLE / D3D11), 2026-10-24
+		this.target.resolveStencilBuffer = false;
 		this.copy = new FullScreenQuad(new THREE.ShaderMaterial({
 			uniforms: { tDiffuse: { value: null }, uKeepMark: { value: 1 } },
 			vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',

@@ -1244,7 +1244,7 @@
    "mirror": "none",
    "stack": [
     {
-     "fabric": "lace",
+     "fabric": "mesh",
      "colour": "#eab0bc",
      "second": "Tone-on-tone",
      "colour2": "#fbe3e8",
@@ -1266,7 +1266,7 @@
    "mirror": "both",
    "stack": [
     {
-     "fabric": "lace",
+     "fabric": "mesh",
      "colour": "#eab0bc",
      "second": "Tone-on-tone",
      "colour2": "#fbe3e8",

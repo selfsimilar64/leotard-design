@@ -44,7 +44,7 @@ function keyDirection({ width: W, height: H, data }) {
 export class Viewport {
 	constructor(container) {
 		this.container = container;
-		// HDR, 4x MSAA, bloom, Khronos PBR Neutral tone mapping (keeps fabric colours true)
+		// HDR, MSAA (Display setting, off by default), bloom, Khronos PBR Neutral tone mapping (keeps fabric colours true)
 		const renderer = this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
 		renderer.toneMapping = THREE.NeutralToneMapping;
 		// soft shadows from the studio key (variance shadow maps blur into a softbox-like penumbra)

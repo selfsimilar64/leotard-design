@@ -3,7 +3,7 @@
 // picture (Chips), and a titled block of the panel (Pane).
 import { useEffect, useRef } from 'preact/hooks';
 
-// items: [{ key, label, img?: url, colour?: css colour (a swatch instead of a picture), hint? }]
+// items: [{ key, label, img?: url, colour?: css colour (a swatch instead of a picture), hint?, disabled? }]
 // size: 'm' (default) | 's' | 'l'; a tile without a picture shows its initials until it has one.
 export function Strip({ items, value, onPick, size = 'm', round = false }) {
 	const ref = useRef(null);
@@ -24,7 +24,7 @@ export function Strip({ items, value, onPick, size = 'm', round = false }) {
 
 function Tile({ it, on, round, onPick }) {
 	return (
-		<button class={`tile ${on ? 'on' : ''} ${round ? 'round' : ''}`} title={it.hint ?? it.label} onClick={() => onPick(it.key)}>
+		<button class={`tile ${on ? 'on' : ''} ${round ? 'round' : ''}`} title={it.hint ?? it.label} disabled={it.disabled} onClick={() => onPick(it.key)}>
 			<span class="tile-pic" style={it.colour ? { background: it.colour } : null}>
 				{it.img ? <img src={it.img} alt="" loading="lazy" draggable={false} onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} /> : null}
 				{!it.img && !it.colour ? <span class="tile-initials">{initials(it.label)}</span> : null}

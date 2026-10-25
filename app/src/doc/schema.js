@@ -2,6 +2,7 @@
 // Spec: knowledge/engineering/architecture/design-document-model.md.
 
 import { MESH, migrateBody } from './migrate-g9.js';
+import { RETIRED_FABRICS, RETIRED_SCANS } from '../materials/fabric.js';
 
 export const FORMAT = 'leotard-design';
 export const VERSION = 1;
@@ -41,5 +42,17 @@ export function migrate(doc) {
 	for (const k of LISTS) if (!Array.isArray(doc[k])) doc[k] = [];
 	doc.body = migrateBody(hadBody ? doc.body : base.body, knownBodies);
 	if (old && convertSurface) { convertSurface(doc); doc.mesh = MESH; }
+	retireFabrics(doc);
 	return doc;
+}
+
+// Fabrics taken out of the app (materials/fabric.js RETIRED_FABRICS, RETIRED_SCANS): wherever a look
+// names one (panel stacks, straps, finished edges, the legacy zones), it shows its stand-in fabric, or
+// for a retired scan its base fabric.
+function retireFabrics(o) {
+	if (Array.isArray(o)) { o.forEach(retireFabrics); return; }
+	if (!o || typeof o !== 'object') return;
+	if (typeof o.fabric === 'string' && RETIRED_FABRICS[o.fabric]) o.fabric = RETIRED_FABRICS[o.fabric];
+	if (RETIRED_SCANS.has(o.texture)) { delete o.texture; delete o.texMode; delete o.masks; delete o.texScale; }
+	for (const k in o) retireFabrics(o[k]);
 }

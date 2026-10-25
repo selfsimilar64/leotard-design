@@ -4,7 +4,7 @@
 // garment normal, AO, reference position) and the same fabric shader as the POC draws it
 // (zone 5: no region discards, cloth-space UVs). Changing body only re-interpolates.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, bindScan } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, bindScan, texScaleOf } from '../materials/fabric.js';
 import { cellPiece, cellSignature } from '../garment/pieces.js';
 import { Flattener } from '../garment/flattener.js';
 import { seamKeys, seamDistance, gradientField } from '../garment/fields.js';
@@ -131,7 +131,7 @@ export class GarmentView {
 		for (const p of doc.panels) {
 			if (p.removed || !p.stack?.length) continue;
 			const s = p.stack[0], m = this.material(p.id), u = m.userData.u;
-			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone', s.colour2 ?? null, s.texScale ?? 1);
+			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone', s.colour2 ?? null, texScaleOf(s));
 			// effect strength: how strongly a hologram, film or duochrome shows (1 = the fabric's own)
 			if (s.effect !== undefined && s.effect !== 1) { const e = s.effect; u.uFilmTint.value *= e; u.uHolo.value = Math.min(u.uHolo.value * e, 1); u.uDuo.value *= e; m.iridescence = Math.min(m.iridescence * e, 1); }
 			// sheerness of a mesh or lace net: the share of skin (or lining) seen through it, face on
@@ -216,7 +216,8 @@ export class GarmentView {
 			attr.needsUpdate = true;
 		};
 		const A = geo.attributes;
-		lerp3(man.aPos.array, A.position, false); lerp3(man.aNrm.array, A.normal, true); lerp3(man.aGNormal.array, A.aGNormal, true);
+		// the fabric's own place on the body (slid over the skin in a pose: body/slide.js)
+		lerp3(man.gPos ?? man.aPos.array, A.position, false); lerp3(man.gNrm ?? man.aNrm.array, A.normal, true); lerp3(man.aGNormal.array, A.aGNormal, true);
 		lerp3(man.ref, A.aRef, false); lerp1(man.aLift.array, A.aLift); lerp1(man.aAO.array, A.aAO); lerp1(man.keep, A.aKeep); lerp1(man.form, A.aForm, 2);
 		// tangent round the body (the stretch direction anisotropic shine follows), as the POC's
 		lerp1(man.aTan.array, A.tangent, 4);

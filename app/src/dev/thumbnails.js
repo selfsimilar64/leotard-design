@@ -6,8 +6,11 @@
 //   bodies      every age and build (realistic), full length
 //   poses       every pose (realistic, young adult), full length
 //   expressions the realistic face in each expression, close up
+//   hairs       the realistic head in each hair, three-quarter view from behind (the bun or tail shows)
 //   environments every lighting rig / HDRI studio, with the starter design
-//   blocks      every starting-shape option on the mannequin
+//   blocks      every shape element option on the mannequin (necklines, backs, sleeves, legs,
+//               straps, front tops, waist seams, armholes)
+//   starts      every starting point (garment/starts.js) on the realistic figure
 //   materials   every app fabric (public/thumbs/materials) and scanned fabric (assets/textures/vmod/
 //               thumbs/cloth: renders of licensed scans stay with them) on a twisted strip of cloth
 //   designs     every design in designs/, as it is saved (its own lighting), in the realistic look
@@ -16,6 +19,7 @@ import { STARTER } from '../app.js';
 import { RIGS, APPEARANCES } from '../render/presets.js';
 import { catalogue } from '../body/mannequin.js';
 import { BLOCK_OPTIONS, DEFAULT_BLOCK } from '../garment/blocks.js';
+import { STARTS } from '../garment/starts.js';
 import { thumbName } from '../ui/Inspector.jsx';
 import { FABRICS } from '../materials/fabric.js';
 import { baseFabricFor } from '../materials/textures.js';
@@ -82,6 +86,16 @@ export async function expressions() {
 	}
 }
 
+export async function hairs() {
+	for (const h of catalogue.hairs) {
+		await prepare({ ...REAL, size: 'young', pose: 'a-pose', hair: h.key });
+		await wait(600);
+		const eyes = app.engine.figure.eyes(), c = eyes ? eyes.l.clone().add(eyes.r).multiplyScalar(0.5) : null;
+		const t = c ? [c.x, c.y + 0.01, c.z - 0.06] : [0, 1.5, 0];
+		await put('hairs', h.key, { width: 192, height: 192, view: { position: [t[0] + 0.42, t[1] + 0.12, t[2] - 0.38], target: t, fov: 26 } });
+	}
+}
+
 export async function environments() {
 	for (const k of Object.keys(RIGS)) {
 		await prepare({ ...REAL, size: 'young', pose: 'arms-down' }, { rig: k, envRotation: 0, exposure: 1 });
@@ -90,18 +104,23 @@ export async function environments() {
 	}
 }
 
-export async function blocks() {
+export async function blocks(only = null) { // only: tile names to render ('strap-thin', ...), else all
 	app.new('Blocks');
 	app.exec({ op: 'body.set', ...APPEARANCES.mannequin, size: 'young', pose: 'arms-down' });
 	app.exec({ op: 'scene.set', rig: 'White seamless (photo studio)', envRotation: 0, exposure: 1 });
 	await settle();
 	const e = app.engine, lm = e.body.body.landmarks;
+	// the plain tank's shape, in one colour, so each tile shows only its own element
+	const base = { ...DEFAULT_BLOCK, neck: 'crew', back: 'crew', sleeves: 'tank', leg: 'high', fabric: 'matte', colour: '#1b3fb5' };
 	for (const [group, opts] of Object.entries(BLOCK_OPTIONS)) {
 		for (const o of opts) {
-			app.exec({ op: 'block.apply', ...DEFAULT_BLOCK, [group]: o });
+			if (o === 'wide' || (only && !only.includes(group + '-' + o))) continue; // the tank before straps has no tile
+			app.exec({ op: 'block.apply', ...base, ...(group === 'armhole' ? { sleeves: 'long' } : {}), [group]: o });
+			if (group === 'yoke' && o !== 'none') { const y = app.doc.panels.find((p) => p.block === 'yoke'); if (y) app.exec({ op: 'panel.set', id: y.id, fabric: 'mesh', sheer: 0.35 }); }
+			if (group === 'waist' && o !== 'none') { const l = app.doc.panels.find((p) => p.block === 'lower'); if (l) app.exec({ op: 'panel.set', id: l.id, fabric: 'wet', colour: '#16205c' }); }
 			await wait(500);
 			// the torso, from the back for the back's shapes, legs to mid-thigh for the leg cuts
-			const back = group === 'back', cy = group === 'leg' ? lm.pelvis[1] - 0.02 : lm.chest[1] - 0.02, d = group === 'leg' ? 1.25 : 1.15;
+			const back = group === 'back', cy = group === 'leg' ? lm.pelvis[1] - 0.02 : group === 'waist' ? lm.chest[1] - 0.12 : lm.chest[1] - 0.02, d = group === 'leg' ? 1.25 : 1.15;
 			const side = group === 'sleeves' || group === 'armhole' ? 0.45 : 0.12;
 			await put('blocks', group + '-' + o, { width: 192, height: 192, view: { position: [Math.sin(side) * d * (back ? -1 : 1), cy + 0.08, Math.cos(side) * d * (back ? -1 : 1)], target: [0, cy, 0], fov: 30 } });
 		}
@@ -137,6 +156,15 @@ export async function materials() {
 	}
 }
 
+export async function starts() {
+	await prepare({ ...REAL, size: 'young', pose: 'a-pose' });
+	for (const st of STARTS) {
+		app.exec({ op: 'start.apply', key: st.key });
+		await wait(900);
+		await put('starts', st.key, { view: 'front' });
+	}
+}
+
 export async function designs() {
 	const files = await app.designs();
 	for (const f of files) {
@@ -149,7 +177,7 @@ export async function designs() {
 export async function all() {
 	const keep = app.json(), file = app.file;
 	try {
-		for (const fn of [appearance, bodies, poses, expressions, environments, blocks, materials, designs]) { console.log('thumbnails:', fn.name); await fn(); }
+		for (const fn of [appearance, bodies, poses, expressions, hairs, environments, blocks, starts, materials, designs]) { console.log('thumbnails:', fn.name); await fn(); }
 	} finally {
 		app.load(keep); app.file = file;
 	}

@@ -64,7 +64,7 @@ export class Engine {
 		this.stoneRun = { stones: [], errors: [], dropped: 0 };
 		this.coverHooks = [(cover) => this.straps.markCover(cover)];
 		this.overlay = new Overlay(scene, body);
-		this.ui = { selected: null, hover: null, showPoints: false }; // overlay state from the UI
+		this.ui = { selected: null, hover: null, showPoints: false, hidden: false }; // overlay state from the UI
 		this.timing = { mannequin: 0, garment: null };
 		this.bodyKey = null;
 		this.g = null;          // the shell layer's build (tools and picking use it)
@@ -172,7 +172,7 @@ export class Engine {
 	}
 
 	drawOverlay(doc, evaluated = this.evaluated) {
-		this.overlay.setVisible(!doc.legacy);
+		this.overlay.setVisible(!doc.legacy && !this.ui.hidden);
 		if (evaluated) this.overlay.setCurves(evaluated, doc, this.ui);
 		this.lastEvaluated = evaluated;
 	}
@@ -280,6 +280,16 @@ export class Engine {
 		cm.needsUpdate = true;
 	}
 
+	// The garment sliding over a posed body (body/slide.js): on/off and { shrink, grip }; re-solves
+	// where the fabric sits on the body shown and rebuilds everything that sits on it.
+	setSlide(on, opt) {
+		const b = this.body;
+		b.slide = on; b.slideOpt = { ...b.slideOpt, ...opt };
+		if (!this.app || !b.key) return;
+		b.key = null;
+		this.applyBody(this.app.doc.body, true, false);
+	}
+
 	// Which body, pose, head and expression, full figure or dress form, its finish, its stand.
 	// wait: false applies at once, without waiting for the person's files (see below)
 	applyBody(b, force, wait = true) {
@@ -305,9 +315,9 @@ export class Engine {
 		this.applyFinish(b.finish, b.headFinish);
 		const figure = () => (this.figureReady = this.figure.show(part ? {
 			man: this.body, body: this.body.body, cage: this.body.cage, poseKey: this.body.body.daz ?? 'a-pose', shape: this.body.key + '|' + this.body.poseKey,
-			expression: b.expression, part, keep: this.body.keep, cut: this.body.formKind + '|' + this.body.head,
+			expression: b.expression, hair: b.hair, part, keep: this.body.keep, cut: this.body.formKind + '|' + this.body.head,
 		} : null));
-		// an expression or a skin tone only changes the person
+		// an expression, a hair or a skin tone only changes the person
 		if (!force && key === this.bodyKey) { figure(); return; }
 		// a new size or form reframes the camera; a new pose, head or expression keeps it
 		const shape = b.size + '|' + b.form, reframe = this.bodyKey !== null && this.shapeKey !== shape;
@@ -385,6 +395,12 @@ function layerLift(layer) { const z = layer?.z ?? 0; return z > 0 ? 0.0009 * z :
 // --- stones --------------------------------------------------------------------------------------
 Engine.prototype.syncStones = function (doc) {
 	if (!this.g) return;
+	// placement reads the stones, the lines, where the panels are (not their fabric or colour), the
+	// straps, trims and layers, all on the reference surface (no pose): unchanged, nothing to redo
+	// (a colour change re-ran 2,600 stones, ~0.45 s)
+	const sig = JSON.stringify([doc.stones, doc.placed, doc.curves, doc.panels.map((p) => [p.id, p.seed, p.removed, p.mirror, p.layer]), doc.straps, doc.trims, doc.layers]);
+	if (sig === this.stoneSig) return;
+	this.stoneSig = sig;
 	const t0 = performance.now();
 	const edge = this.edgeKeepOut(doc);
 	const layerZ = new Map(doc.layers.map((l) => [l.id, l.z ?? 0]));

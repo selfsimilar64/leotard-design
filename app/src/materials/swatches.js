@@ -5,7 +5,7 @@
 // degrees) show sparkle and colour shift when the pointer rests on a swatch. Cached per look.
 // (Used by app.swatchSheet. The material picker's tiles are pre-rendered: clothThumb below.)
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, applyTexture } from './fabric.js';
+import { createFabricMaterial, applyFabric, applyTexture, texScaleOf } from './fabric.js';
 
 const PX = 96, SS = 2, SIZE = 0.17;
 let rig = null;
@@ -96,9 +96,10 @@ export function swatch(viewport, look, frames = 1) {
 	const hit = cache.get(key);
 	if (hit) return hit;
 	const r = setup(viewport.renderer), m = r.material;
-	applyFabric(m, look.fabric, look.colour ?? '#888888', look.second ?? 'Tone-on-tone', look.colour2 ?? null);
+	const k = texScaleOf({ fabric: look.fabric, texture: look.texture?.id });
+	applyFabric(m, look.fabric, look.colour ?? '#888888', look.second ?? 'Tone-on-tone', look.colour2 ?? null, k);
 	m.userData.u.uUV.value = 1;
-	applyTexture(m, look.texture ?? null, { recolour: look.texMode === 'recolour', colour: look.colour });
+	applyTexture(m, look.texture ?? null, { scale: k, recolour: look.texMode === 'recolour', colour: look.colour });
 	const env = viewport.scene.environment, out = [];
 	for (let i = 0; i < frames; i++) out.push(draw(r, env, frames === 1 ? 0.15 : 0.15 + 0.35 * Math.sin((i / frames) * Math.PI * 2)));
 	cache.set(key, out);
@@ -181,9 +182,10 @@ function thumbSetup(renderer, w, h, ss) {
 // rig's environment) and two small lights, tone-mapped as the viewport, over `backdrop`.
 export function clothThumb(renderer, env, look, { w = 192, h = 240, ss = 3, backdrop = '#e4e3e0' } = {}) {
 	const r = thumbSetup(renderer, w, h, ss), m = r.material, u = m.userData.u;
-	applyFabric(m, look.fabric, look.colour ?? '#888888', look.second ?? 'Tone-on-tone', look.colour2 ?? null);
+	const k = texScaleOf({ fabric: look.fabric, texture: look.texture?.id }); // at its default texture size
+	applyFabric(m, look.fabric, look.colour ?? '#888888', look.second ?? 'Tone-on-tone', look.colour2 ?? null, k);
 	u.uUV.value = 1;
-	applyTexture(m, look.texture ?? null, { recolour: look.texMode === 'recolour', colour: look.colour });
+	applyTexture(m, look.texture ?? null, { scale: k, recolour: look.texMode === 'recolour', colour: look.colour });
 	m.side = THREE.DoubleSide;
 	r.scene.environment = env;
 	const prev = renderer.getRenderTarget();

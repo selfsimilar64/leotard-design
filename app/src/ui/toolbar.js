@@ -1,19 +1,13 @@
 // The tool rail. Each entry is one interaction mode of the viewport (ui/tools.js implements them).
-// Tools not built yet are listed disabled so the layout is stable while phases land.
+// Move does what a designer does most: turn the model, click a piece or a line, drag a point.
 export const tools = [
-	{ id: 'orbit', label: 'Orbit', icon: '◎', key: 'O' },
-	{ id: 'select', label: 'Select', icon: '➤', key: 'V' },
-	{ sep: 1 },
-	{ id: 'pen', label: 'Pen', icon: '✎', key: 'P' },
-	{ id: 'fabric', label: 'Fabric', icon: '▦', key: 'F' },
-	{ id: 'cut', label: 'Cut out', icon: '✂', key: 'X' },
+	{ id: 'move', label: 'Move', icon: '⬤', key: 'V' },
+	{ id: 'pen', label: 'Draw line', icon: '✎', key: 'P' },
 	{ id: 'strap', label: 'Strap', icon: '⌇', key: 'S' },
-	{ id: 'trim', label: 'Edges', icon: '▭', key: 'T' },
-	{ id: 'decal', label: 'Logo / lettering', icon: 'A', key: 'L' },
-	{ sep: 2 },
+	{ sep: 1 },
 	{ id: 'stones', label: 'Stones', icon: '✦', key: 'G' },
-	{ id: 'single', label: 'Single stone', icon: '•', key: '1' },
+	{ id: 'single', label: 'One stone', icon: '•', key: '1' },
 	{ id: 'erase', label: 'Eraser', icon: '⌫', key: 'D' },
-	{ sep: 3 },
-	{ id: 'trace', label: 'Trace photo', icon: '◫', key: 'R', disabled: true },
+	{ sep: 2 },
+	{ id: 'decal', label: 'Logo / text', icon: 'A', key: 'L' },
 ];

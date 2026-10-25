@@ -5,13 +5,19 @@
 // with the licensed scans); then the colour swatches.
 import { useState, useEffect } from 'preact/hooks';
 import { app } from '../instance.js';
-import { FABRICS } from '../materials/fabric.js';
+import { FABRICS, RETIRED_SCANS } from '../materials/fabric.js';
 import { baseFabricFor } from '../materials/textures.js';
 import { Strip, Line, Swatches } from './Gallery.jsx';
 import { Colour } from './controls.jsx';
 import { thumbName } from './Inspector.jsx';
 
-const KEYS = Object.keys(FABRICS).filter((k) => k !== 'checker');
+// The materials in the order the moodboard uses them (knowledge/domain/moodboard/common-patterns.md:
+// mesh in 83% of garments, matte 45%, wet look and foil 33%, shiny 28%, mystique 28%, then the
+// rarer finishes), the plainest first. The sublimated-ombre fabrics stay out: a gradient is a
+// setting of any piece now; the debug checker too.
+const ORDER = ['matte', 'shiny', 'mystique', 'wet', 'mesh', 'foil', 'hologram', 'glitter', 'velvet', 'illusion', 'liquidholo', 'hologlitter', 'oilslick', 'duochrome', 'glitterfoil', 'pearl', 'chrome', 'crushed', 'glittermesh'];
+const HIDDEN = new Set(['checker', 'ombre', 'ombremystique']);
+const KEYS = [...ORDER.filter((k) => FABRICS[k]), ...Object.keys(FABRICS).filter((k) => !ORDER.includes(k) && !HIDDEN.has(k))];
 
 // Colours most leotards are made in.
 export const PALETTE = ['#0c0c10', '#f4f4f2', '#c8ccd8', '#e6bf58', '#b3122e', '#6b0f22', '#ff4f8b', '#f6b6c8', '#5b2a86', '#b9a3e3',
@@ -20,7 +26,7 @@ export const PALETTE = ['#0c0c10', '#f4f4f2', '#c8ccd8', '#e6bf58', '#b3122e', '
 // the scanned fabrics (filled once the texture manifest has loaded)
 function useScans() {
 	const [list, setList] = useState([]);
-	useEffect(() => { app.engine?.textures?.list().then(setList, () => setList([])); }, []);
+	useEffect(() => { app.engine?.textures?.list().then((l) => setList(l.filter((f) => !RETIRED_SCANS.has(f.id))), () => setList([])); }, []); // less the retired ones
 	return list;
 }
 const scanLabel = (f) => { const s = (f.look ?? f.name).split(/[,(]/)[0].trim(); return s.charAt(0).toUpperCase() + s.slice(1); };

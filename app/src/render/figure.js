@@ -7,7 +7,8 @@
 //  - eyes and mouth: their own cages for the pose (pipeline/daz/convert_bodies.py), subdivided once;
 //  - lashes, brows and tear film: bound to the skin (triangle, barycentric weights, offset; Daz
 //    moves them with the bones but not with the head's shape morphs, so they are re-attached);
-//  - hair: baked per body and pose (arm poses use the A-pose's: the head does not move);
+//  - hair: baked per body and pose (arm poses use the A-pose's: the head does not move); every hair
+//    the pipeline offers is in figure.bin (manifest figure.hairs), the one chosen is shown;
 //  - expressions: the changes of the skin, eyes and mouth cages on the A-pose, turned with the
 //    head's rotation in the pose.
 //
@@ -20,6 +21,7 @@
 //    under the lids, nostrils, lips, ears and the mouth get the contact shadow a shadow map cannot
 //    resolve. Without it the eyes and teeth glow, the main tell of a real-time face.
 import * as THREE from 'three';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { ccStencil, applyStencil, quadTriangles, readPolys } from '../body/subdivide.js';
 import { vertexNormals } from '../body/mannequin.js';
 import { markSkin } from './postfx.js';
@@ -44,13 +46,13 @@ export class FigureView {
 
 	// Show the person for opts = { man, body (manifest entry), cage, poseKey: the Daz pose whose
 	// eyes, mouth and hair to use ('a-pose' for arm poses), shape: what the cage is (body and pose),
-	// expression, part: 'all' | 'head' (the person's head on a mannequin body) |
+	// expression, hair (a key of manifest figure.hairs; the first when unknown), part: 'all' | 'head' (the person's head on a mannequin body) |
 	// 'body' (realistic skin under a mannequin head or none), keep: the mannequin's cut field (canonical mesh), cut: a
 	// key for it }, or nothing (null). Resolves when the meshes are on show. The skin's parts are cut
 	// per pixel at the head bone's skin weight one half, as the mannequin's (render/engine.js).
 	show(opts) {
 		if (!opts) { this.group.visible = false; this.state = null; return this.queue; }
-		const key = [opts.shape, opts.poseKey, opts.expression, opts.part, opts.cut].join('|');
+		const key = [opts.shape, opts.poseKey, opts.expression, opts.hair, opts.part, opts.cut].join('|');
 		if (key === this.state) { this.group.visible = true; return this.queue; }
 		this.state = key;
 		this.queue = this.queue.then(() => (this.state === key ? this.update(opts, key) : null)).catch((e) => console.error('figure', e));
@@ -93,7 +95,7 @@ export class FigureView {
 		return (this.topo = { S2, T2, meshes, F });
 	}
 
-	async update({ man, body, cage, poseKey, expression, shape, part = 'all', keep }, key) {
+	async update({ man, body, cage, poseKey, expression, hair, shape, part = 'all', keep }, key) {
 		const t0 = performance.now();
 		const { S2, T2, meshes, F } = await this.topology(man);
 		const pose = body.poses[poseKey] ? poseKey : 'a-pose';
@@ -126,6 +128,7 @@ export class FigureView {
 		this.uPart.value = { all: 0, body: 1, head: 2 }[part];
 
 		const mats = this.materials(body);
+		const hairs = F.hairs ?? [], hairNode = (hairs.find((h) => h.key === hair) ?? hairs[0])?.node;
 		const fresh = !this.meshes;
 		this.meshes ??= meshes.map((m) => {
 			const g = new THREE.BufferGeometry();
@@ -144,6 +147,9 @@ export class FigureView {
 		});
 		meshes.forEach((m, i) => {
 			const mesh = this.meshes[i], P = mesh.geometry.attributes.position.array, Nn = mesh.geometry.attributes.normal.array;
+			mesh.visible = m.name === 'skin' || (part !== 'body' && (m.name !== 'dazhair' || !hairNode || m.node === hairNode)); // eyes, mouth, lashes, brows, hair: with the head
+			// a part not on show is not posed (the hairs not chosen: ~0.3 s); any change of hair or part runs this again
+			if (!mesh.visible) return;
 			let W, WN; // welded positions and normals of this part
 			if (m.name === 'skin') {
 				W = L2; WN = N2;
@@ -167,11 +173,10 @@ export class FigureView {
 			mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.attributes.normal.needsUpdate = true;
 			mesh.geometry.computeBoundingBox(); mesh.geometry.computeBoundingSphere();
 			mesh.material = m.groups.map((gr) => mats[gr.material] ?? mats.fallback);
-			mesh.visible = m.name === 'skin' || part !== 'body'; // eyes, mouth, lashes, brows, hair: with the head
 		});
 		if (fresh) for (const m of this.meshes) this.group.add(m);
 		// a new expression on the same body and pose only changes the face
-		const bake = shape + '|' + part;
+		const bake = shape + '|' + part + '|' + hairNode;
 		bakeOcclusion(this.renderer, this.meshes.filter((x) => x.visible), !fresh && this.baked === bake);
 		this.baked = bake;
 		if (this.state === key) this.group.visible = true;
@@ -365,9 +370,12 @@ function skinMaterial(mat, sssMap, weight, uPart) {
 // directions over the hemisphere of its normal. Twice: the whole figure, then the head region at
 // 10x the resolution (eye sockets and lips are millimetre-scale). headOnly: only the head pass (an
 // expression changes nothing else); the other vertices keep their last values.
-// Depth is packed into 8-bit RGBA (a quarter of the bytes of a float target to read back) and each
-// pass only visits its own vertices: together about 3x faster than float depth over every vertex.
-const DIRS = 96;
+// The per-vertex test runs on the GPU: every vertex is a texel (position, normal), and after each
+// direction's depth map a full-screen pass adds that direction's weight and lit share into a float
+// target (ping-pong), read back once at the end. Until 2026-10-24 each depth map was read back and
+// tested on the CPU: 2.9 s with the bun hair (12 s with Eirgrid), now ~0.45 s, same values (max
+// difference 0.01). Depth stays packed into 8-bit RGBA, decoded in the pass as the CPU did.
+const DIRS = 96, OCC_W = 2048;
 
 export function bakeOcclusion(renderer, meshes, headOnly = false) {
 	const t0 = performance.now();
@@ -402,20 +410,53 @@ export function bakeOcclusion(renderer, meshes, headOnly = false) {
 	const cam = new THREE.OrthographicCamera();
 	const dirs = fibonacciSphere(DIRS);
 	const prevTarget = renderer.getRenderTarget(), prevClear = renderer.getClearColor(new THREE.Color()), prevAlpha = renderer.getClearAlpha();
-	// each pass's vertices per mesh: the head box's vertices take the fine pass only
-	const v = new THREE.Vector3();
-	const lists = meshes.map((m) => {
-		const P = m.geometry.attributes.position.array, k = P.length / 3, a = [], b = [];
-		for (let i = 0; i < k; i++) { v.fromArray(P, i * 3); (passes[1]?.box.containsPoint(v) ? b : a).push(i); }
-		return [Uint32Array.from(a), Uint32Array.from(b)];
+	// every vertex of every mesh, one texel each: position (w: the pass it takes, 1 in the head box:
+	// the fine pass only) and normal; spare texels have no normal and are never lit or weighted
+	const counts = meshes.map((m) => m.geometry.attributes.position.count), H = Math.ceil(counts.reduce((a, b) => a + b, 0) / OCC_W);
+	const pos = new Float32Array(OCC_W * H * 4), nrm = new Float32Array(OCC_W * H * 4), v = new THREE.Vector3();
+	let o = 0;
+	for (const m of meshes) {
+		const P = m.geometry.attributes.position.array, N = m.geometry.attributes.normal.array;
+		for (let i = 0; i < P.length / 3; i++, o++) {
+			v.fromArray(P, i * 3);
+			pos[o * 4] = P[i * 3]; pos[o * 4 + 1] = P[i * 3 + 1]; pos[o * 4 + 2] = P[i * 3 + 2]; pos[o * 4 + 3] = passes[1]?.box.containsPoint(v) ? 1 : 0;
+			nrm[o * 4] = N[i * 3]; nrm[o * 4 + 1] = N[i * 3 + 1]; nrm[o * 4 + 2] = N[i * 3 + 2];
+		}
+	}
+	const tex = (a) => { const t = new THREE.DataTexture(a, OCC_W, H, THREE.RGBAFormat, THREE.FloatType); t.needsUpdate = true; return t; };
+	const tPos = tex(pos), tNrm = tex(nrm);
+	const acc = [0, 1].map(() => new THREE.WebGLRenderTarget(OCC_W, H, { type: THREE.FloatType, depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }));
+	const accMat = new THREE.ShaderMaterial({
+		uniforms: { tPos: { value: tPos }, tNrm: { value: tNrm }, tAcc: { value: null }, tDepth: { value: null }, uView: { value: new THREE.Matrix4() }, uDir: { value: new THREE.Vector3() }, uS2: { value: 1 }, uRes: { value: 1 }, uFar: { value: 1 }, uBias: { value: 0 }, uPass: { value: 0 } },
+		vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
+		// per vertex: adds this direction's cosine weight (y) and, if nothing in the depth map is in front of it, the same to lit (x)
+		fragmentShader: `uniform sampler2D tPos, tNrm, tAcc, tDepth; uniform mat4 uView; uniform vec3 uDir; uniform float uS2, uRes, uFar, uBias, uPass;
+			void main() {
+				ivec2 ij = ivec2(gl_FragCoord.xy);
+				vec4 acc = texelFetch(tAcc, ij, 0), P = texelFetch(tPos, ij, 0);
+				float c = dot(texelFetch(tNrm, ij, 0).xyz, uDir);
+				gl_FragColor = acc;
+				if (P.w != uPass || c <= 0.0) return;
+				vec3 q = (uView * vec4(P.xyz, 1.0)).xyz;
+				ivec2 px = ivec2(floor((q.xy * uS2 + 0.5) * uRes));
+				int R = int(uRes);
+				if (px.x < 0 || px.y < 0 || px.x >= R || px.y >= R) return;
+				vec4 b = floor(texelFetch(tDepth, px, 0) * 255.0 + 0.5);
+				float z = (b.x + b.y / 255.0 + b.z / 65025.0 + b.w / 16581375.0) / 255.0 * uFar;
+				bool lit = z == 0.0 || -q.z <= z + uBias * (1.0 + 1.5 * sqrt(1.0 - c * c) / max(c, 0.2));
+				gl_FragColor = acc + vec4(lit ? c : 0.0, c, 0.0, 0.0);
+			}`,
+		depthTest: false, depthWrite: false, blending: THREE.NoBlending,
 	});
-	const occ = meshes.map((m) => ({ lit: new Float32Array(m.geometry.attributes.position.count), w: new Float32Array(m.geometry.attributes.position.count) }));
+	const quad = new FullScreenQuad(accMat), u = accMat.uniforms;
+	renderer.setClearColor(0x000000, 0);
+	for (const t of acc) { renderer.setRenderTarget(t); renderer.clear(); }
+	let read = 0;
 	passes.forEach((pass, pi) => {
 		if (headOnly && pi === 0) return;
-		const rt = new THREE.WebGLRenderTarget(pass.res, pass.res, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: true });
-		const buf = new Uint8Array(pass.res * pass.res * 4);
+		const rt = new THREE.WebGLRenderTarget(pass.res, pass.res, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: true, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false });
 		const pc = pass.box.getCenter(new THREE.Vector3()), half = pass.box.getSize(new THREE.Vector3()).length() / 2;
-		renderer.setClearColor(0x000000, 0);
+		u.tDepth.value = rt.texture; u.uS2.value = 0.5 / half; u.uRes.value = pass.res; u.uBias.value = pass.bias; u.uPass.value = pi;
 		for (const d of dirs) {
 			cam.left = -half; cam.right = half; cam.top = half; cam.bottom = -half;
 			cam.near = 0.01; cam.far = radius * 2 + half * 2 + 1;
@@ -424,38 +465,30 @@ export function bakeOcclusion(renderer, meshes, headOnly = false) {
 			cam.up.set(Math.abs(d.y) > 0.9 ? 1 : 0, Math.abs(d.y) > 0.9 ? 0 : 1, 0);
 			cam.lookAt(pc); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
 			renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, cam);
-			renderer.readRenderTargetPixels(rt, 0, 0, pass.res, pass.res, buf);
-			const e = cam.matrixWorldInverse.elements, R = pass.res, s2 = 0.5 / half, far = cam.far;
-			meshes.forEach((m, mi) => {
-				const P = m.geometry.attributes.position.array, N = m.geometry.attributes.normal.array, o = occ[mi], list = lists[mi][pi];
-				for (let q = 0; q < list.length; q++) {
-					const k = list[q], i = k * 3;
-					const c = N[i] * d.x + N[i + 1] * d.y + N[i + 2] * d.z;
-					if (c <= 0) continue;
-					const x = P[i], y = P[i + 1], z0 = P[i + 2];
-					const vx = e[0] * x + e[4] * y + e[8] * z0 + e[12], vy = e[1] * x + e[5] * y + e[9] * z0 + e[13], vz = e[2] * x + e[6] * y + e[10] * z0 + e[14];
-					const px = Math.floor((vx * s2 + 0.5) * R), py = Math.floor((vy * s2 + 0.5) * R);
-					if (px < 0 || py < 0 || px >= R || py >= R) continue;
-					const t = (py * R + px) * 4;
-					const z = (buf[t] + buf[t + 1] / 255 + buf[t + 2] / 65025 + buf[t + 3] / 16581375) / 255 * far;
-					o.w[k] += c;
-					if (z === 0 || -vz <= z + pass.bias * (1 + 1.5 * Math.sqrt(1 - c * c) / Math.max(c, 0.2))) o.lit[k] += c;
-				}
-			});
+			u.uView.value.copy(cam.matrixWorldInverse); u.uDir.value.copy(d); u.uFar.value = cam.far;
+			u.tAcc.value = acc[read].texture;
+			renderer.setRenderTarget(acc[1 - read]); quad.render(renderer);
+			read = 1 - read;
 		}
 		rt.dispose();
 	});
+	const res = new Float32Array(OCC_W * H * 4);
+	renderer.readRenderTargetPixels(acc[read], 0, 0, OCC_W, H, res);
 	renderer.setRenderTarget(prevTarget); renderer.setClearColor(prevClear, prevAlpha);
+	o = 0;
 	meshes.forEach((m, mi) => {
-		const o = occ[mi], raw = m.userData.occRaw ??= new Float32Array(o.lit.length).fill(1);
-		const update = (k) => { raw[k] = o.w[k] > 0 ? Math.min(1, o.lit[k] / o.w[k] * 1.08) : 1; };
-		if (!headOnly) for (const k of lists[mi][0]) update(k);
-		for (const k of lists[mi][1]) update(k);
+		const raw = m.userData.occRaw ??= new Float32Array(counts[mi]).fill(1);
+		for (let k = 0; k < counts[mi]; k++, o++) {
+			if (headOnly && pos[o * 4 + 3] !== 1) continue;
+			const lit = res[o * 4], w = res[o * 4 + 1];
+			raw[k] = w > 0 ? Math.min(1, lit / w * 1.08) : 1;
+		}
 		const a = Float32Array.from(raw);
 		smoothOcclusion(m.geometry, a);
 		m.geometry.setAttribute('aOcc', new THREE.BufferAttribute(a, 1));
 	});
-	depthMat.dispose();
+	for (const x of [depthMat, accMat, tPos, tNrm, ...acc]) x.dispose();
+	quad.dispose();
 	console.info(`figure occlusion bake${headOnly ? ' (head)' : ''} ${(performance.now() - t0).toFixed(0)} ms`);
 }
 

@@ -3,10 +3,13 @@
 import { defineCommand } from './store.js';
 import { resolvePoint } from '../curves/points.js';
 import { toSP } from '../body/surface.js';
-import { makeBlock, BLOCK_OPTIONS } from '../garment/blocks.js';
+import { makeBlock, blockFabric, blockKeyOf, blockOf, fitToStrap, BLOCK_OPTIONS, DEFAULT_BLOCK, ELEMENT_CURVES, ELEMENT_PANELS } from '../garment/blocks.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
-import { panelAt } from '../garment/build.js';
-import { projectNear } from '../curves/evaluate.js';
+import { STARTS } from '../garment/starts.js';
+import { panelAt, buildGarment, evaluateAll, cellSeed } from '../garment/build.js';
+import { projectNear, evaluateCurve } from '../curves/evaluate.js';
+import { mirrorSP } from '../curves/points.js';
+import { fromSP } from '../body/surface.js';
 
 const ROLES = ['seam', 'edge', 'print', 'guide', 'strap-path', 'trim-path'];
 const MIRRORS = ['none', 'both'];
@@ -56,12 +59,19 @@ function findPanel(tx, a) {
 	throw new Error('Name the panel by id or by a point: { id } or { at: { front: [x, y] } }');
 }
 
+const blockOpts = (a) => Object.fromEntries(Object.keys(BLOCK_OPTIONS).map((k) => [k, a[k]]));
+const BLOCK_NAMES = new Set(['Neckline', 'Back opening', 'Leg line', 'Armhole', 'Sleeve seam', 'Cuff', 'Side seam', 'Shoulder seam', 'Crotch seam', 'Underarm seam', 'Raglan seam (front)', 'Raglan seam (back)', 'Yoke seam', 'Waist seam']);
+const optsList = Object.entries(BLOCK_OPTIONS).map(([k, v]) => `${k}?: ${v.join('|')}`).join(', ');
+
+// The whole garment from a block (every line and panel of the shell replaced); lines and panels
+// carry their block key so block.set can later swap one element.
 defineCommand('block.apply', {
-	label: 'Start from block', args: `{ neck?: ${BLOCK_OPTIONS.neck.join('|')}, back?: ${BLOCK_OPTIONS.back.join('|')}, sleeves?: ${BLOCK_OPTIONS.sleeves.join('|')}, leg?: ${BLOCK_OPTIONS.leg.join('|')}, armhole?: ${BLOCK_OPTIONS.armhole.join('|')}, fabric?, colour?, second? }`,
+	label: 'Start from block', args: `{ ${optsList}, fabric?, colour?, second? }`,
 	run(tx, a) {
 		const ctx = ctxOf(tx);
 		const stack = [{ fabric: a.fabric ?? 'mystique', colour: a.colour ?? '#2b1d6e', second: a.second ?? 'Tone-on-tone' }];
-		const blk = makeBlock(ctx.man, ctx.surf, { neck: a.neck, back: a.back, sleeves: a.sleeves, leg: a.leg, armhole: a.armhole }, stack);
+		const opts = fitToStrap({ ...DEFAULT_BLOCK, ...Object.fromEntries(Object.entries(blockOpts(a)).filter(([, v]) => v !== undefined)) });
+		const blk = makeBlock(ctx.man, ctx.surf, opts, stack);
 		tx.set('legacy', null);
 		for (const c of tx.doc.curves.filter((c) => (c.layer ?? 'L0') === 'L0').map((c) => c.id)) tx.remove('curves', c);
 		for (const p of tx.doc.panels.filter((p) => (p.layer ?? 'L0') === 'L0').map((p) => p.id)) tx.remove('panels', p);
@@ -69,10 +79,161 @@ defineCommand('block.apply', {
 		for (const c of blk.curves) ids.set(c.key, tx.newId('c'));
 		for (const { key, ...c } of blk.curves) {
 			c.points = c.points.map((p) => (p.on ? { ...p, on: { ...p.on, curve: ids.get(p.on.curve) } } : p));
-			tx.insert('curves', { id: ids.get(key), layer: 'L0', ...c });
+			tx.insert('curves', { id: ids.get(key), layer: 'L0', block: key, ...c });
 		}
-		for (const p of blk.panels) tx.insert('panels', { id: tx.newId('p'), layer: 'L0', mirror: 'none', ...p });
-		tx.set('meta/block', { neck: a.neck, back: a.back, sleeves: a.sleeves, leg: a.leg, armhole: a.armhole });
+		for (const { key, ...p } of blk.panels) tx.insert('panels', { id: tx.newId('p'), layer: 'L0', block: key, mirror: 'none', ...p });
+		tx.set('meta/block', opts);
+	},
+});
+
+// A starting point (garment/starts.js): the block, then the pieces' materials and the stones,
+// as one undo step. Only the leotard changes.
+defineCommand('start.apply', {
+	label: 'Start from', args: `{ key: ${STARTS.map((s) => s.key).join('|')} }`,
+	run(tx, a) {
+		const st = STARTS.find((s) => s.key === a.key);
+		if (!st) throw new Error('key must be one of: ' + STARTS.map((s) => s.key).join(', '));
+		tx.exec({ op: 'block.apply', ...st.block, ...st.fabric });
+		for (const o of ['stones', 'placed', 'straps', 'trims', 'bands', 'decals', 'details', 'hardware']) for (const x of tx.doc[o].slice()) tx.remove(o, x.id);
+		for (const l of tx.doc.layers.slice()) if (l.id !== 'L0') tx.exec({ op: 'layer.remove', id: l.id });
+		const panelOf = (key) => tx.doc.panels.find((p) => p.block === key)?.id, curveOf = (key) => tx.doc.curves.find((c) => c.block === key)?.id;
+		for (const [key, patch] of Object.entries(st.panels ?? {})) { const id = panelOf(key); if (id) tx.exec({ op: 'panel.set', id, ...patch }); }
+		for (const g of st.stones ?? []) {
+			const on = g.on?.panel ? { panel: panelOf(g.on.panel) } : g.on?.curve ? { curve: curveOf(g.on.curve) } : undefined;
+			const params = g.params?.from?.curve ? { ...g.params, from: { curve: curveOf(g.params.from.curve) } } : g.params;
+			if ((on && !Object.values(on)[0]) || (g.params?.from?.curve && !params.from.curve)) continue;
+			tx.exec({ op: 'stones.add', ...g, on, params });
+		}
+		tx.set('meta/start', st.key);
+	},
+});
+
+// --- changing one element of the shape ---------------------------------------------------------------
+// block.set { neck: 'v' } regenerates only the lines the neckline owns (ELEMENT_CURVES) and keeps
+// everything else: the other block lines as the designer left them, drawn lines (re-attached by
+// position where they end on a replaced line), panels and their materials (by id, so stones and
+// gradients on them survive), stones, straps, trims. Cells the new block opens (a keyhole) lose
+// their panel; cells it covers (a smaller neck) take their neighbour's fabric. What had to go is
+// returned, so the panel can ask first (exec with { dryRun: true }).
+
+// Drop a block line and what hung on it. The impact lists what the designer added and loses:
+// stones and straps on the line, drawn lines that ended on it (kept, but no longer attached).
+function removeCurve(tx, c, impact, doomed = new Set([c.id])) {
+	for (const t of tx.doc.trims) if (t.on.includes(c.id)) { const keep = t.on.filter((x) => x !== c.id); if (keep.length) tx.set(['trims', t.id, 'on'], keep); else tx.remove('trims', t.id); }
+	for (const g of tx.doc.stones.slice()) if (g.on?.curve === c.id || g.params?.from?.curve === c.id) { impact.stones.push(g.name || g.kind); tx.remove('stones', g.id); }
+	for (const s of tx.doc.straps.slice()) if (s.path === c.id) { impact.straps.push(s.id); tx.remove('straps', s.id); }
+	for (const o of tx.doc.curves) if (!doomed.has(o.id)) o.points.forEach((p, i) => { if (p.on?.curve === c.id) { if (!impact.lines.includes(o.name || o.id)) impact.lines.push(o.name || o.id); tx.set(['curves', o.id, 'points', String(i), 'on'], undefined); } });
+	tx.remove('curves', c.id);
+}
+// Drop a panel and its stones; a piece the designer made (not the block's) is reported.
+function removePanel(tx, p, impact) {
+	for (const g of tx.doc.stones.slice()) if (g.on?.panel === p.id) { impact.stones.push(g.name || g.kind); tx.remove('stones', g.id); }
+	if (!blockKeyOf(p)) impact.pieces.push(p.name || p.id);
+	tx.remove('panels', p.id);
+}
+// Points of other lines attached to `old` move to the nearest place on its replacement, by position.
+function reattach(tx, old, replacement, surf) {
+	let e = null, em = null;
+	const evalOf = (mirror) => evaluateCurve(replacement, surf, { mirror: mirror ? (sp) => mirrorSP(sp, surf) : null });
+	const tOf = (c, pos) => { let bi = 0, bd = Infinity; c.pts.forEach((q, i) => { const d = q.distanceToSquared(pos); if (d < bd) { bd = d; bi = i; } }); return c.s[bi] / Math.max(c.s[c.s.length - 1], 1e-9); };
+	for (const o of tx.doc.curves) {
+		if (o.id === old.id) continue;
+		o.points.forEach((p, i) => {
+			if (p.on?.curve !== old.id || !p.sp) return;
+			e ??= evalOf(false);
+			let pos = surf.pos(fromSP(p.sp)), c = e;
+			if (p.on.mirror) { if (replacement.mirror === 'both') c = em ??= evalOf(true); else pos = surf.pos(mirrorSP(fromSP(p.sp), surf)); }
+			tx.set(['curves', o.id, 'points', String(i), 'on', 't'], tOf(c, pos));
+		});
+	}
+}
+
+defineCommand('block.set', {
+	label: 'Change shape', args: `{ ${optsList} } (one or more elements; the rest of the design is kept)`,
+	run(tx, a) {
+		const ctx = ctxOf(tx), { man, surf } = ctx;
+		const cur = blockOf(tx.doc);
+		const asked = Object.keys(BLOCK_OPTIONS).filter((k) => a[k] !== undefined);
+		for (const k of asked) oneOf(k, a[k], BLOCK_OPTIONS[k]);
+		// a strap that does not allow the neckline or back changes them too (an asked-for one that
+		// does not go with the strap is an error)
+		const next = fitToStrap({ ...cur, ...Object.fromEntries(asked.map((k) => [k, a[k]])) }, asked);
+		const changed = Object.keys(BLOCK_OPTIONS).filter((k) => next[k] !== cur[k]);
+		const impact = { lines: [], pieces: [], stones: [], straps: [] };
+		if (!changed.length) return impact;
+		const L0 = (o) => (o.layer ?? 'L0') === 'L0';
+		if (!tx.doc.curves.some(L0)) { tx.exec({ op: 'block.apply', ...next }); return impact; } // nothing to keep yet
+		tx.noInherit = true;
+		const panels0 = tx.doc.panels.filter((p) => L0(p));
+		const front = panels0.find((p) => blockKeyOf(p) === 'front' && !p.removed) ?? panels0.find((p) => !p.removed);
+		const stack = front?.stack?.length ? structuredClone(front.stack) : undefined;
+		const blk = makeBlock(man, surf, next, stack), oldBlk = makeBlock(man, surf, cur), wasFabric = blockFabric(man, surf, cur);
+		const prevG = ctx.garment('L0');
+
+		// 1. lines of the changed elements: replaced in place (same id), added, or removed
+		const keys = new Set(changed.flatMap((k) => ELEMENT_CURVES[k]));
+		const byKey = new Map();
+		for (const c of tx.doc.curves) if (L0(c)) { const k = blockKeyOf(c); if (k && !byKey.has(k)) byKey.set(k, c); }
+		const ids = new Map([...byKey].map(([k, c]) => [k, c.id]));
+		for (const c of blk.curves) if (keys.has(c.key) && !ids.has(c.key)) ids.set(c.key, tx.newId('c'));
+		const mapOn = (pts) => pts.map((p) => (p.on ? { ...p, on: { ...p.on, curve: ids.get(p.on.curve) ?? p.on.curve } } : p));
+		for (const { key, ...c } of blk.curves) {
+			if (!keys.has(key)) continue;
+			const old = byKey.get(key), pts = mapOn(c.points);
+			if (!old) { tx.insert('curves', { id: ids.get(key), layer: 'L0', block: key, ...c, points: pts }); continue; }
+			reattach(tx, old, { ...old, points: pts, closed: c.closed, mirror: c.mirror }, surf);
+			tx.set(['curves', old.id, 'points'], pts);
+			if (old.role !== c.role) tx.set(['curves', old.id, 'role'], c.role);
+			if (!!old.closed !== !!c.closed) tx.set(['curves', old.id, 'closed'], c.closed);
+			if ((old.mirror ?? 'none') !== c.mirror) tx.set(['curves', old.id, 'mirror'], c.mirror);
+			if (old.name !== c.name && BLOCK_NAMES.has(old.name)) tx.set(['curves', old.id, 'name'], c.name); // an armhole that becomes a sleeve seam
+			if (!old.block) tx.set(['curves', old.id, 'block'], key);
+		}
+		const have = new Set(blk.curves.map((c) => c.key));
+		const doomed = oldBlk.curves.map(({ key }) => byKey.get(key)).filter((c) => c && keys.has(blockKeyOf(c)) && !have.has(blockKeyOf(c)));
+		const doomedIds = new Set(doomed.map((c) => c.id));
+		for (const c of doomed) removeCurve(tx, c, impact, doomedIds);
+
+		// 2. the block panels the changed elements own: re-seated (same id) or added
+		const pkeys = new Set(changed.flatMap((k) => ELEMENT_PANELS[k] ?? []));
+		const pByKey = new Map();
+		for (const p of panels0) { const k = blockKeyOf(p); if (k && !pByKey.has(k)) pByKey.set(k, p); }
+		for (const p of blk.panels) {
+			if (!pkeys.has(p.key)) continue;
+			const old = pByKey.get(p.key);
+			if (old) { tx.set(['panels', old.id, 'seed'], p.seed); if (!old.block) tx.set(['panels', old.id, 'block'], p.key); continue; }
+			// a new yoke is mesh in the front's colour, as most moodboard yokes are
+			const st = p.key === 'yoke' ? [{ fabric: 'mesh', colour: p.stack[0]?.colour ?? '#888888', second: 'Tone-on-tone', sheer: 0.3 }] : p.stack;
+			tx.insert('panels', { id: tx.newId('p'), layer: 'L0', block: p.key, name: p.name, seed: p.seed, mirror: p.mirror, stack: st });
+		}
+
+		// 3. every cell of the re-cut shell: opened by the block, covered by it, or claimed by a panel
+		const evaluated = evaluateAll(tx.doc, surf, null, ctx.evaluated);
+		const g = buildGarment(tx.doc, surf, { layer: 'L0', evaluated });
+		ctx.prebuilt?.(g); // the engine re-cuts on this arrangement (the curves are final here) instead of building it again
+		const panels = tx.doc.panels.slice(), byId = new Map(panels.map((p) => [p.id, p]));
+		const claimed = new Set();
+		for (const s of g.seeds) if (s.cell >= 0 && g.panelIds[g.cellPanel[s.cell]] === s.panel) claimed.add(s.panel);
+		const orphans = new Set(panels.filter((p) => L0(p) && !p.removed && !claimed.has(p.id)).map((p) => p.id));
+		for (let c = 0; c < g.arr.cells.length; c++) {
+			const sp = cellSeed(g.arr, surf, c), pi = g.cellPanel[c], p = pi >= 0 ? byId.get(g.panelIds[pi]) : null;
+			const now = blk.fabric(sp), before = wasFabric(sp);
+			if (!now) { if (before && p && !p.removed) orphans.add(p.id); continue; } // opened by the block (a kept opening keeps its panel)
+			if (p) continue;
+			// fabric without a panel: the panel that was here is re-seated, a split piece is copied,
+			// a newly covered cell takes its biggest neighbour's fabric
+			const from = prevG ? panelAt(prevG, tx.doc, surf, sp) : null, src = from ? byId.get(from) : null;
+			if (src && !src.removed && orphans.has(src.id)) { tx.set(['panels', src.id, 'seed'], toSP(sp)); orphans.delete(src.id); claimed.add(src.id); continue; }
+			let copy = src && !src.removed ? src : null;
+			if (!copy) {
+				let bl = 0;
+				for (const [n, l] of g.arr.cellAdj[c]) { const q = g.cellPanel[n] >= 0 ? byId.get(g.panelIds[g.cellPanel[n]]) : null; if (q && !q.removed && l > bl) { bl = l; copy = q; } }
+			}
+			tx.insert('panels', { id: tx.newId('p'), layer: 'L0', name: copy?.name ?? 'Piece', seed: toSP(sp), mirror: 'none', stack: structuredClone(copy?.stack ?? stack ?? [{ fabric: 'matte', colour: '#888888', second: 'Tone-on-tone' }]) });
+		}
+		for (const id of orphans) removePanel(tx, byId.get(id), impact);
+		tx.set('meta/block', next);
+		return impact;
 	},
 });
 
@@ -165,6 +326,9 @@ function setStackFields(tx, p, a, layer = 0) {
 	if (a.ombre && !a.ombre.colour) throw new Error('ombre needs a colour: { colour, curve | axis: [x, y, z], start, end } (metres)');
 	if (a.ombre?.curve && !tx.doc.curves.some((c) => c.id === a.ombre.curve)) throw new Error('ombre: no line ' + a.ombre.curve);
 	if (a.print && !a.print.src) throw new Error('print needs src (an image URL) and size [w, h] in metres');
+	// a new fabric or scan starts at its own default texture size (materials/fabric.js texScaleOf)
+	const cur = p.stack[layer];
+	if (cur && a.texScale === undefined && ((a.fabric !== undefined && a.fabric !== cur.fabric) || (a.texture !== undefined && (a.texture ?? undefined) !== cur.texture))) tx.set([...base, 'texScale'], undefined);
 	for (const k of ['fabric', 'colour', 'second', 'colour2', 'effect', 'sheer', 'grain', 'print', 'ombre', 'texture', 'texMode', 'texScale', 'texNormal', 'masks']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
 }
 

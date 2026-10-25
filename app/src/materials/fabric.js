@@ -10,7 +10,6 @@
 // own geometry, already placed, carrying topstitching. Every zone honours the dress-form cut
 // (aKeep < 0 is discarded when uClip is on).
 import * as THREE from 'three';
-import { laceTexture } from './lace.js';
 
 const PARS_VERTEX = /* glsl */`
 attribute float aCover;
@@ -145,10 +144,6 @@ uniform vec2 uFilmRange;   // film thickness, nm
 uniform float uFilmWarp;   // how much the swirls fold over each other
 uniform float uFilmTint;   // share of the film's colour shown in the cloth's own colour (hologram prints)
 float gFilm = .5;
-uniform float uLace;       // 1 = lace motifs (tLace: 0 net, ~.7 dense toile, 1 cord) over the mesh net
-uniform sampler2D tLace;
-uniform float uLaceSize;   // metres per repeat
-uniform vec3 uLaceColor;   // colour of the motifs and cord (the fabric colour is the net's)
 uniform float uPrint;      // 1 = sublimation print (tPrint, rgba) tiled in pattern space
 uniform sampler2D tPrint;
 uniform vec2 uPrintSize;   // metres per repeat
@@ -414,13 +409,6 @@ const FABRIC_FRAGMENT = /* glsl */`
 		// what is under the net is lit through it too: light crosses the net on the way in and
 		// again on the way out, so skin or lining shows at openK^2 (a dark net darkens it twice)
 		a = 1. - ( 1. - a ) * openK;
-		// lace: dense toile and raised cord motifs over the net
-		if ( uLace > .5 ) {
-			float lm = texture2D( tLace, q / uLaceSize ).r;
-			a = max( a, lm );
-			normal = bumpN( normal, lm * .00025 );
-			diffuseColor.rgb = mix( diffuseColor.rgb, uLaceColor, smoothstep( .3, .9, lm ) );
-		}
 		// two layers of mesh over the seam allowance
 		if ( uSeam > .5 ) a = mix( 1. - ( 1. - a ) * ( 1. - a ), a, smoothstep( uSeamAllow - .0006, uSeamAllow + .0006, vSeam ) );
 		diffuseColor.a *= max( a, flakeMask );
@@ -573,7 +561,6 @@ export function createFabricMaterial(zone) {
 		uSkin: { value: 0 }, uSeam: { value: 0 }, uSeamAllow: { value: 0.006 }, uClipShell: { value: 0 },
 		uDuo: { value: 0 }, uDuoColor: { value: new THREE.Color() }, uDuoPow: { value: 2 },
 		uFilm: { value: 0 }, uFilmScale: { value: 0.04 }, uFilmRange: { value: new THREE.Vector2(250, 700) }, uFilmWarp: { value: 1.5 }, uFilmTint: { value: 0 },
-		uLace: { value: 0 }, tLace: { value: null }, uLaceSize: { value: 0.16 }, uLaceColor: { value: new THREE.Color() },
 		uPrint: { value: 0 }, tPrint: { value: null }, uPrintSize: { value: new THREE.Vector2(0.2, 0.2) }, uPrintOffset: { value: new THREE.Vector2() },
 		uDecals: { value: 0 }, uDecalM: { value: [0, 1, 2, 3].map(() => new THREE.Matrix4()) }, uDecalRect: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
 		uDecalLook: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uDecalCol: { value: [0, 1, 2, 3].map(() => new THREE.Color()) }, tDecal: { value: null },
@@ -610,34 +597,55 @@ export const FABRICS = {
 	// multiple of the scan's own). TX-00001482 is a scuba knit whose face stands in for matte tricot,
 	// scaled to tricot's 0.38 mm wale (owner's choice, 2026-10-24); without the scan (the textures are
 	// never bundled) the procedural knit shows.
-	matte: { label: 'Matte lycra', roughness: 0.8, sheen: 0.1, sheenRoughness: 0.6, sheenTint: 0.1, knit: 1, scan: { id: 'TX-00001482', scale: 0.81 } },
+	// texScale: the texture size a piece of this fabric starts at (the panel's texScale; owner's
+	// review, 2026-10-24). A scanned fabric's is in SCAN_SCALE.
+	matte: { label: 'Matte lycra', roughness: 0.8, sheen: 0.1, sheenRoughness: 0.6, sheenTint: 0.1, knit: 1, scan: { id: 'TX-00001482', scale: 0.81 }, texScale: 1.85 },
 	checker: { label: 'UV checker (debug)', roughness: 0.8, checker: 0.02 },
 	shiny: { label: 'Shiny tricot', roughness: 0.4, sheen: 0.2, sheenRoughness: 0.5, anisotropy: 0.6, knit: 1 },
-	wet: { label: 'Wet look (cire)', roughness: 0.36, clearcoat: 1, clearcoatRoughness: 0.1, anisotropy: 0.3 },
-	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.22, rough: 0.27, colorVar: 0.3 } },
+	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
+	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
+	// full mirror clear coat (1 at 0.1) read as latex, the step above it on the gloss ladder
+	// (knowledge/domain/fabrics/shiny-tricot-and-wet-look.md; owner's review, 2026-10-24).
+	wet: { label: 'Wet look (cire)', roughness: 0.32, sheen: 0.15, sheenRoughness: 0.5, clearcoat: 0.55, clearcoatRoughness: 0.2, anisotropy: 0.5, knit: 1 },
+	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.22, rough: 0.27, colorVar: 0.3 }, texScale: 0.75 },
 	hologram: { label: 'Hologram foil dots', roughness: 0.62, knit: 1, flake: { pitch: 0.0009, dotR: 0.37, presence: 1, tilt: 0.22, rough: 0.22, colorVar: 0.3, holo: 0.6, holoFreq: 0.9, holoJit: 0.5 } },
-	shattered: { label: 'Shattered glass hologram', roughness: 0.5, flake: { pitch: 0.0045, dotR: 0.6, presence: 1, tilt: 0.3, rough: 0.12, colorVar: 0.5, holo: 0.9, holoFreq: 1.8, holoJit: 1.4 } },
-	foil: { label: 'Liquid metallic foil', metalness: 1, roughness: 0.2, bump: { amp: 0.45, scale: 0.0028 } },
+	// The foils, film and velvets used to carry a value-noise "crinkle" bump (amp 0.1-0.7) from the
+	// POC: crumpled foil, not foil on a knit pulled tight over a body. On skin-tight fabric tension
+	// pulls that out; what is left is the knit under the foil (knit), and on crushed velvet a faint
+	// pile crush (owner's review, 2026-10-24).
+	foil: { label: 'Liquid metallic foil', metalness: 1, roughness: 0.2, knit: 1 },
 	glitter: { label: 'Glitter', roughness: 0.6, flake: { pitch: 0.0003, dotR: 0.58, presence: 0.94, tilt: 0.5, rough: 0.15, colorVar: 0.6 } },
 	hologlitter: { label: 'Holographic glitter', roughness: 0.6, flake: { pitch: 0.0003, dotR: 0.58, presence: 0.94, tilt: 0.5, rough: 0.15, colorVar: 0.5, holo: 0.7, holoFreq: 2.5, holoJit: 1.2 } },
-	velvet: { label: 'Stretch velvet', roughness: 1, sheen: 1, sheenRoughness: 0.4, velvet: true, bump: { amp: 0.1, scale: 0.012 } },
-	crushed: { label: 'Crushed velvet', roughness: 1, sheen: 1, sheenRoughness: 0.3, velvet: true, bump: { amp: 0.7, scale: 0.007 } },
-	pearl: { label: 'Iridescent film', metalness: 1, roughness: 0.24, iridescence: 1, bump: { amp: 0.25, scale: 0.004 } },
+	velvet: { label: 'Stretch velvet', roughness: 1, sheen: 1, sheenRoughness: 0.4, velvet: true },
+	crushed: { label: 'Crushed velvet', roughness: 1, sheen: 1, sheenRoughness: 0.3, velvet: true, bump: { amp: 0.12, scale: 0.012 } },
+	pearl: { label: 'Iridescent film', metalness: 1, roughness: 0.24, iridescence: 1, knit: 1 },
 	mesh: { label: 'Stretch mesh (sheer)', roughness: 0.75, sheen: 0.3, sheenRoughness: 0.6, mesh: { pitch: 0.0007, holeR: 0.35 } },
 	glittermesh: { label: 'Glitter mesh', roughness: 0.75, mesh: { pitch: 0.0007, holeR: 0.35 }, flake: { pitch: 0.0005, dotR: 0.5, presence: 0.1, tilt: 0.5, rough: 0.1, colorVar: 0.5 } },
 	ombre: { label: 'Sublimated ombré', roughness: 0.74, sheen: 0.35, sheenRoughness: 0.6, knit: 1, ombre: true },
 	ombremystique: { label: 'Ombré mystique', roughness: 0.62, knit: 1, ombre: true, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.22, rough: 0.27, colorVar: 0.3 } },
 	// Moodboard looks added in P3 (realism upgrade R7b). film: thin-film swirls { scale m, range nm, warp };
-	// duo: { pow } shift towards the second colour at grazing angles; lace: { size m per repeat }.
+	// duo: { pow } shift towards the second colour at grazing angles.
 	liquidholo: { label: 'Liquid hologram (opal)', roughness: 0.3, metalness: 0.25, iridescence: 1, film: { scale: 0.08, range: [300, 820], warp: 2.5, tint: 0.32 },
-		flake: { pitch: 0.0005, dotR: 0.45, presence: 0.025, tilt: 0.5, rough: 0.1, colorVar: 0.3, holo: 0.35, holoFreq: 2.5, holoJit: 1.2 } },
-	oilslick: { label: 'Oil-slick foil', metalness: 1, roughness: 0.22, iridescence: 1, film: { scale: 0.05, range: [320, 980], warp: 1.6 }, bump: { amp: 0.3, scale: 0.004 } },
-	duochrome: { label: 'Duochrome foil', metalness: 1, roughness: 0.24, duo: { pow: 2.2 }, bump: { amp: 0.3, scale: 0.0035 } },
-	chrome: { label: 'Mirror chrome', metalness: 1, roughness: 0.06, bump: { amp: 0.12, scale: 0.02 } },
+		flake: { pitch: 0.0005, dotR: 0.45, presence: 0.025, tilt: 0.5, rough: 0.1, colorVar: 0.3, holo: 0.35, holoFreq: 2.5, holoJit: 1.2 }, texScale: 3.25 },
+	oilslick: { label: 'Oil-slick foil', metalness: 1, roughness: 0.22, iridescence: 1, film: { scale: 0.05, range: [320, 980], warp: 1.6 }, knit: 1, texScale: 3.25 },
+	duochrome: { label: 'Duochrome foil', metalness: 1, roughness: 0.24, duo: { pow: 2.2 }, knit: 1 },
+	chrome: { label: 'Mirror chrome', metalness: 1, roughness: 0.06, knit: 1 },
 	glitterfoil: { label: 'Glitter-grain foil', metalness: 1, roughness: 0.3, flake: { pitch: 0.00035, dotR: 0.58, presence: 1, tilt: 0.35, rough: 0.18, colorVar: 0.25 } },
-	lace: { label: 'Lace (floral, on net)', roughness: 0.7, sheen: 0.3, sheenRoughness: 0.6, mesh: { pitch: 0.0011, holeR: 0.28 }, lace: { size: 0.3 } },
 	illusion: { label: 'Illusion mesh (very sheer)', roughness: 0.8, sheen: 0.2, sheenRoughness: 0.6, mesh: { pitch: 0.0006, holeR: 0.46 } },
 };
+
+// The texture size a scanned fabric starts at (as FABRICS' texScale; owner's review, 2026-10-24):
+// pink organza with glitter, pink oil-slick vegan leather.
+export const SCAN_SCALE = { 'TX-00007116': 1.25, 'TX-00004730': 4 };
+// A piece's texture size: its own, else its fabric's (or scan's) default.
+export const texScaleOf = (look) => look.texScale ?? (look.texture ? SCAN_SCALE[look.texture] : FABRICS[look.fabric]?.texScale) ?? 1;
+
+// Fabrics the owner took out of the app (review, 2026-10-24) and what a design that used one shows
+// instead (doc/schema.js migrate): lace and shattered glass hologram. Retired scans are hidden from
+// the picker and dropped from a design, which then shows its base fabric (textures.js baseFabricFor);
+// TX-00001482 stays loadable, as matte lycra's own scan.
+export const RETIRED_FABRICS = { lace: 'mesh', shattered: 'hologram' };
+export const RETIRED_SCANS = new Set(['TX-00006026', 'TX-00005344', 'TX-00004683', 'TX-00001482', 'TX-00003863']); // opal metallic double knit, black mesh tulle, green tricot with holofoil dots, royal blue scuba, pink glitter double knit
 
 export const SECOND = ['Tone-on-tone', 'Silver', 'Gold', 'White', 'Black'];
 const _hsl = {};
@@ -656,8 +664,8 @@ function secondColour(base, mode, forOmbre, out) {
 const _c = new THREE.Color();
 // colour2: an explicit second colour (hex) for the foil, the ombre's far end or the duochrome
 // shift, instead of the `second` choice. scale: the size of the fabric's texture (glitter and foil
-// dots, mesh holes, lace repeat, film swirls, foil crinkle) as a multiple of its own, the panel's
-// texScale; a scanned texture takes the same multiple (applyTexture).
+// dots, mesh holes, film swirls, crushed-velvet bump) as a multiple of its own, the panel's
+// texScale (texScaleOf); a scanned texture takes the same multiple (applyTexture).
 export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	const f = FABRICS[key] ?? FABRICS.matte, u = m.userData.u, fl = f.flake, base = _c.set(colour).clone();
 	const two = (forOmbre, out) => (colour2 ? out.set(colour2) : secondColour(base, second, forOmbre, out));
@@ -688,9 +696,6 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	}
 	u.uFilm.value = f.film ? 1 : 0;
 	if (f.film) { u.uFilmScale.value = f.film.scale * scale; u.uFilmRange.value.fromArray(f.film.range); u.uFilmWarp.value = f.film.warp; u.uFilmTint.value = f.film.tint ?? 0; }
-	u.uLace.value = f.lace ? 1 : 0;
-	// lace: the second colour (custom) is the motifs' and cord's; otherwise a lighter tone of the net
-	if (f.lace) { u.tLace.value = laceTexture(); u.uLaceSize.value = f.lace.size * scale; if (colour2) u.uLaceColor.value.set(colour2); else u.uLaceColor.value.copy(base).multiplyScalar(1.12); }
 	u.uMesh.value = f.mesh ? 1 : 0;
 	if (f.mesh) { u.uMeshPitch.value = f.mesh.pitch * scale; u.uHoleR.value = f.mesh.holeR; }
 	u.uBumpAmp.value = f.bump?.amp ?? 0;
@@ -711,9 +716,9 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 // stack entry, a strap's fabric or a finished edge ({ fabric, colour, texture?, texMode?, texScale?,
 // texNormal?, masks? }).
 function scanOf(look) {
-	if (look.texture) return { id: look.texture, opts: { scale: look.texScale ?? 1, recolour: look.texMode === 'recolour', colour: look.colour, masks: look.masks, normal: look.texNormal } };
+	if (look.texture) return { id: look.texture, opts: { scale: texScaleOf(look), recolour: look.texMode === 'recolour', colour: look.colour, masks: look.masks, normal: look.texNormal } };
 	const d = FABRICS[look.fabric]?.scan;
-	return d ? { id: d.id, opts: { scale: d.scale * (look.texScale ?? 1), recolour: true, colour: look.colour, normal: look.texNormal } } : null;
+	return d ? { id: d.id, opts: { scale: d.scale * texScaleOf(look), recolour: true, colour: look.colour, normal: look.texNormal } } : null;
 }
 
 // Bind a look's scan (scanOf) to a material once it has loaded, after applyFabric. Shared by panels,

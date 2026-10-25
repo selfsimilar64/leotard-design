@@ -5,9 +5,9 @@ import { Section, Row, Select, Colour, Slider, Toggle, run } from './controls.js
 import { selection, tool } from './state.js';
 import { toolOptions } from './tools.js';
 import { StoneToolOptions } from './inspect-stones.jsx';
-import { FABRICS, SECOND } from '../materials/fabric.js';
+import { FABRICS, SECOND, texScaleOf } from '../materials/fabric.js';
 import { MaterialPicker } from './FabricPicker.jsx';
-import { Pane, More, Line } from './Gallery.jsx';
+import { Pane, More, Line, Chips } from './Gallery.jsx';
 import { DecalToolOptions } from './inspect-decals.jsx';
 
 const fabricOptions = Object.entries(FABRICS).map(([k, f]) => [k, f.label]);
@@ -46,15 +46,14 @@ function CurveInspector({ sel, doc }) {
 const AXES = { height: { axis: [0, 1, 0], min: 0.5, max: 1.6, label: 'Height' }, across: { axis: [1, 0, 0], min: -0.4, max: 0.4, label: 'Left to right' }, diagonal: { axis: [0.7071, 0.7071, 0], min: 0.2, max: 1.3, label: 'Diagonal' } };
 function GradientRows({ p, s, doc }) {
 	const o = s.ombre, set = (patch) => run({ op: 'panel.set', id: p.id, ombre: patch === null ? null : { ...o, ...patch } });
-	if (!o) return <Row label="Gradient"><button class="btn" onClick={() => run({ op: 'panel.set', id: p.id, ombre: { colour: '#101018', axis: AXES.height.axis, start: 1.25, end: 0.85 } })}>Add gradient</button></Row>;
+	if (!o) return null;
 	const mode = o.curve ? 'line:' + o.curve : Object.keys(AXES).find((k) => JSON.stringify(AXES[k].axis) === JSON.stringify(o.axis)) ?? 'height';
 	const lines = doc.curves.filter((c) => c.role !== 'guide').map((c) => ['line:' + c.id, 'From line ' + (c.name || c.id)]);
 	const range = o.curve ? { min: 0, max: 0.6 } : AXES[mode] ?? AXES.height;
 	const pick = (v) => v.startsWith('line:') ? set({ curve: v.slice(5), axis: undefined, start: 0, end: 0.25 }) : set({ curve: undefined, axis: AXES[v].axis, start: (AXES[v].min + AXES[v].max) / 2 + 0.2, end: (AXES[v].min + AXES[v].max) / 2 - 0.2 });
 	return (
 		<>
-			<Row label="Gradient"><Colour value={o.colour} onChange={(v, g) => run({ op: 'panel.set', id: p.id, ombre: { ...o, colour: v }, gesture: g })} /><button class="btn" onClick={() => set(null)}>Remove</button></Row>
-			<Row label="Along"><Select value={mode} options={[...Object.entries(AXES).map(([k, a]) => [k, a.label]), ...lines]} onChange={pick} /></Row>
+			<Row label="Gradient along"><Select value={mode} options={[...Object.entries(AXES).map(([k, a]) => [k, a.label]), ...lines]} onChange={pick} /></Row>
 			<Row label="Starts"><Slider value={o.start} min={range.min} max={range.max} step={0.005} format={mm} onChange={(v, g) => run({ op: 'panel.set', id: p.id, ombre: { ...o, start: v }, gesture: g })} /></Row>
 			<Row label="Full colour"><Slider value={o.end} min={range.min} max={range.max} step={0.005} format={mm} onChange={(v, g) => run({ op: 'panel.set', id: p.id, ombre: { ...o, end: v }, gesture: g })} /></Row>
 		</>
@@ -67,31 +66,56 @@ function PanelInspector({ sel, doc }) {
 	const s = p.stack?.[0] ?? {};
 	const set = (patch, gesture) => run({ op: 'panel.set', id: p.id, ...patch, ...(gesture ? { gesture } : {}) });
 	const n = doc.panels.filter((x) => x.layer === p.layer).indexOf(p) + 1;
+	const f = FABRICS[s.fabric];
 	return (
 		<Pane title={p.name || 'Piece ' + n} aside={<button class="btn" title="Back to the whole design (Esc)" onClick={() => { selection.value = null; }}>Done</button>}>
-			{p.removed ? <div class="dim note">This piece is cut out (an opening).</div>
-				: <>
-					<MaterialPicker look={{ fabric: s.fabric, colour: s.colour ?? '#888888', second: s.second ?? 'Tone-on-tone', colour2: s.colour2 ?? null, texture: s.texture ?? null, texMode: s.texMode }} set={set} />
-					{/* the size of a scan's weave or print, or of a fabric's glitter, dots, holes, lace, swirls */}
-					<Line label="Texture size"><Slider value={s.texScale ?? 1} min={0.25} max={4} step={0.05} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ texScale: v }, g)} /></Line>
-				</>}
+			{p.removed ? <>
+				<div class="dim note">This piece is cut out: an opening.</div>
+				<div><button class="btn" onClick={() => run({ op: 'panel.restore', id: p.id })}>Fill it with fabric</button></div>
+			</> : <>
+				<MaterialPicker look={{ fabric: s.fabric, colour: s.colour ?? '#888888', second: s.second ?? 'Tone-on-tone', colour2: s.colour2 ?? null, texture: s.texture ?? null, texMode: s.texMode }} set={set} />
+				<Gradient p={p} s={s} doc={doc} />
+				{f?.mesh ? <Line label="Sheerness"><Slider value={s.sheer ?? (3.6276 * f.mesh.holeR ** 2) ** 2} min={0} max={0.95} step={0.01} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ sheer: v }, g)} /></Line> : null}
+				<div class="actions"><button class="btn" title="Make this piece an opening (a keyhole, a cut-out)" onClick={() => run({ op: 'panel.cut', id: p.id })}>Cut out</button></div>
+			</>}
 			<More>
+				{/* the size of a scan's weave or print, or of a fabric's glitter, dots, holes, lace, swirls */}
+				<Row label="Texture size"><Slider value={texScaleOf(s)} min={0.25} max={4} step={0.05} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ texScale: v }, g)} /></Row>
 				<Row label="Name"><input type="text" value={p.name ?? ''} onChange={(e) => run({ op: 'panel.set', id: p.id, name: e.currentTarget.value })} /></Row>
-				<Row label="Opening"><button class="btn" onClick={() => run({ op: p.removed ? 'panel.restore' : 'panel.cut', id: p.id })}>{p.removed ? 'Fill with fabric' : 'Cut out this piece'}</button></Row>
 				<Row label="Colour from photo"><button class="btn" title="Pick the colour from a reference photo (look through it, then click the piece)" onClick={() => { toolOptions.value = { ...toolOptions.value, eyedrop: { panel: p.id, layer: 0 } }; tool.value = 'eyedrop'; }}>Pick</button></Row>
 				<Row label="Foil / second"><Select value={s.colour2 ? 'custom' : s.second ?? 'Tone-on-tone'} options={[...SECOND, ['custom', 'Custom colour']]} onChange={(v) => run(v === 'custom' ? { op: 'panel.set', id: p.id, colour2: s.colour2 ?? '#c0c0c8' } : { op: 'panel.set', id: p.id, second: v, colour2: null })} /></Row>
 				{s.colour2 ? <Row label="Second colour"><Colour value={s.colour2} onChange={(v, g) => run({ op: 'panel.set', id: p.id, colour2: v, gesture: g })} /></Row> : null}
-				{FABRICS[s.fabric]?.film || FABRICS[s.fabric]?.duo || FABRICS[s.fabric]?.flake?.holo || FABRICS[s.fabric]?.iridescence ? <Row label="Effect"><Slider value={s.effect ?? 1} min={0} max={2} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, effect: v, gesture: g })} /></Row> : null}
-				{FABRICS[s.fabric]?.mesh ? <Row label="Sheerness"><Slider value={s.sheer ?? (3.6276 * FABRICS[s.fabric].mesh.holeR ** 2) ** 2} min={0} max={0.95} step={0.01} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, sheer: v, gesture: g })} /></Row> : null}
+				{f?.film || f?.duo || f?.flake?.holo || f?.iridescence ? <Row label="Effect"><Slider value={s.effect ?? 1} min={0} max={2} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, g) => set({ effect: v }, g)} /></Row> : null}
 				<GradientRows p={p} s={s} doc={doc} />
 				<Row label="Print image"><input type="text" placeholder="/moodboard/... or URL" value={s.print?.src ?? ''} onChange={(e) => run({ op: 'panel.set', id: p.id, print: e.currentTarget.value ? { src: e.currentTarget.value, size: s.print?.size ?? [0.2, 0.2] } : null })} /></Row>
 				{s.print ? <Row label="Print repeat"><Slider value={s.print.size?.[0] ?? 0.2} min={0.02} max={0.8} step={0.005} format={mm} onChange={(v, g) => run({ op: 'panel.set', id: p.id, print: { ...s.print, size: [v, v * (s.print.size?.[1] ?? 0.2) / (s.print.size?.[0] ?? 0.2)] }, gesture: g })} /></Row> : null}
-				<Row label="Grain"><Slider value={s.grain ?? 0} min={-Math.PI / 2} max={Math.PI / 2} step={0.01} format={(v) => (v * 180 / Math.PI).toFixed(0) + '°'} onChange={(v, g) => run({ op: 'panel.set', id: p.id, grain: v, gesture: g })} /></Row>
+				<Row label="Grain"><Slider value={s.grain ?? 0} min={-Math.PI / 2} max={Math.PI / 2} step={0.01} format={(v) => (v * 180 / Math.PI).toFixed(0) + '°'} onChange={(v, g) => set({ grain: v }, g)} /></Row>
 				<Row label="Mirrored"><span class="dim">{p.mirror === 'both' ? 'Yes, both sides' : 'No'}</span></Row>
 			</More>
 		</Pane>
 	);
 }
+
+// The piece's colour gradient as a designer picks it: a second colour and a direction. The
+// positions it runs between are under More settings (GradientRows).
+const DIRECTIONS = [['height', 'Down'], ['across', 'Across'], ['diagonal', 'Diagonal']];
+function Gradient({ p, s, doc }) {
+	const o = s.ombre, set = (patch) => run({ op: 'panel.set', id: p.id, ombre: patch === null ? null : { ...o, ...patch } });
+	const mode = o?.curve ? 'line' : Object.keys(AXES).find((k) => JSON.stringify(AXES[k].axis) === JSON.stringify(o?.axis)) ?? 'height';
+	const add = () => run({ op: 'panel.set', id: p.id, ombre: { colour: darker(s.colour ?? '#888888'), axis: AXES.height.axis, start: 1.3, end: 0.85 } });
+	return (
+		<Line label="Gradient">
+			<div class="gradient">
+				<Chips value={o ? 'on' : 'off'} options={[['off', 'None'], ['on', 'Fade to']]} onPick={(v) => (v === 'on' ? (o ? null : add()) : set(null))} />
+				{o ? <Colour value={o.colour} onChange={(v, g) => run({ op: 'panel.set', id: p.id, ombre: { ...o, colour: v }, gesture: g })} /> : null}
+				{o && !o.curve ? <Chips value={mode} options={DIRECTIONS} onPick={(v) => set({ curve: undefined, axis: AXES[v].axis, start: (AXES[v].min + AXES[v].max) / 2 + 0.2, end: (AXES[v].min + AXES[v].max) / 2 - 0.2 })} /> : null}
+				{o?.curve ? <span class="dim">from line {doc.curves.find((c) => c.id === o.curve)?.name || o.curve}</span> : null}
+			</div>
+		</Line>
+	);
+}
+// a darker shade of a hex colour (the default far end of a fade)
+const darker = (hex) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * 0.3).toString(16).padStart(2, '0')).join('');
 
 // Edge finish of a line: elastic, binding or none on an edge; piping on a seam; bands on edges.
 function FinishSection({ c, doc }) {
@@ -158,19 +182,6 @@ export function ToolOptions() {
 			<Row label="Width"><Slider value={o.strapWidth} min={0.003} max={0.04} step={0.0005} format={mm} onChange={(v) => set({ strapWidth: v })} /></Row>
 			<Row label="Fabric"><Select value={o.swatch.fabric} options={fabricOptions} onChange={(v) => set({ swatch: { ...o.swatch, fabric: v } })} /></Row>
 			<Row label="Colour"><Colour value={o.swatch.colour} onChange={(v) => set({ swatch: { ...o.swatch, colour: v } })} /></Row>
-		</Section>
-	);
-	if (t === 'trim') return (
-		<Section title="Edges">
-			<div class="dim">Click an edge or a seam to choose its finish (elastic, binding, piping) or add a band.</div>
-		</Section>
-	);
-	if (t === 'fabric' || t === 'cut') return (
-		<Section title={t === 'fabric' ? 'Fabric swatch' : 'Cut out'}>
-			{t === 'cut' ? <div class="dim">Click a panel to cut it out; click an opening to fill it with this swatch.</div> : <div class="dim">Click a panel to give it this swatch.</div>}
-			<Row label="Fabric"><Select value={o.swatch.fabric} options={fabricOptions} onChange={(v) => set({ swatch: { ...o.swatch, fabric: v } })} /></Row>
-			<Row label="Colour"><Colour value={o.swatch.colour} onChange={(v) => set({ swatch: { ...o.swatch, colour: v } })} /></Row>
-			<Row label="Foil / second"><Select value={o.swatch.second} options={SECOND} onChange={(v) => set({ swatch: { ...o.swatch, second: v } })} /></Row>
 		</Section>
 	);
 	return null;

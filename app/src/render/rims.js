@@ -3,8 +3,8 @@
 // (garment/edges.js). The finish of a loop comes from the document's trims (the trim naming one
 // of the loop's curves), else turned self-fabric elastic. Rebuilt when the cut or the body changes.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, bindScan } from '../materials/fabric.js';
-import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
+import { createFabricMaterial, applyFabric, bindScan, texScaleOf } from '../materials/fabric.js';
+import { TRIMS, KAPPA_MAX, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 import { openingLoops } from '../garment/edges.js';
 
 export class Rims {
@@ -109,7 +109,7 @@ export class Rims {
 					const nn = Nn[i].normalize(), t = P[(i + 1) % n].clone().sub(P[(i - 1 + n) % n]).normalize();
 					const d = new THREE.Vector3().crossVectors(nn, t).normalize();
 					if (d.dot(In[i]) < 0) d.negate();
-					frames.push({ p: P[i], n: nn, d, kap: THREE.MathUtils.clamp(Kp[i], -30, 30) });
+					frames.push({ p: P[i], n: nn, d, kap: THREE.MathUtils.clamp(Kp[i], -KAPPA_MAX, KAPPA_MAX) });
 					scale.push(1);
 				}
 				built.push({ frames, scale, pts, length });
@@ -131,7 +131,7 @@ export class Rims {
 		let m = this.materials.get(key);
 		if (!m) {
 			m = createFabricMaterial(4);
-			applyFabric(m, fin.fabric, fin.colour, fin.second);
+			applyFabric(m, fin.fabric, fin.colour, fin.second, null, texScaleOf(fin));
 			bindScan(m, fin, this.textures); // its fabric's default scan, as on the panels
 			const T = TRIMS[fin.kind];
 			m.userData.u.uRows.value.set(T.rows[0], T.rows[1]);

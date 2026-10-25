@@ -41,4 +41,19 @@ describe('curve sampling', () => {
 		}
 		expect(bad).toEqual([]);
 	});
+	it('no point of a sleeveless design is stored on the arm', () => {
+		// a point traced against the inner arm in the A-pose (it lies on the side of the chest) is
+		// part of the arm: in a pose the outline runs up the arm to it (owner's screenshot,
+		// 2026-10-21: B5's upper back opening; B12's lining edge had the same)
+		const man = B.man, idx = man.idx, bad = [];
+		for (const f of fs.readdirSync(DESIGNS).filter((x) => /^b\d+-.*\.json$/.test(x))) {
+			const doc = JSON.parse(fs.readFileSync(path.join(DESIGNS, f), 'utf8'));
+			if (doc.meta?.block?.sleeves !== 'tank') continue;
+			for (const c of doc.curves) c.points.forEach((pt, i) => {
+				const w = Math.max(...[0, 1, 2].map((k) => man.wArm[idx[pt.sp.f * 3 + k]]));
+				if (w > 0.8) bad.push(`${f} ${c.id} (${c.name}) point ${i}: arm weight ${w.toFixed(2)}`);
+			});
+		}
+		expect(bad).toEqual([]);
+	});
 });

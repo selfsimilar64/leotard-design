@@ -1,6 +1,5 @@
 import { render } from 'preact';
 import { app } from './instance.js';
-import { STARTER } from './app.js';
 import { Shell, useShortcuts } from './ui/Shell.jsx';
 import { rev, stats, display } from './ui/state.js';
 import { loadDisplay } from './render/display.js';
@@ -23,11 +22,13 @@ async function start(el) {
 	viewport.applyDisplay(display.value = loadDisplay());
 	const t0 = performance.now();
 	const body = await loadMannequins();
+	const d = display.value;
+	body.slide = d.slide; body.slideOpt = { ...body.slideOpt, shrink: d.slideTension, grip: d.slideGrip };
 	const engine = new Engine(viewport, body, buildReference(body));
 	engine.timing.load = performance.now() - t0;
 	app.attach(engine);
 	app.tools = new ToolController(app, engine);
-	if (app.fresh) await app.open(STARTER).catch((e) => console.warn('starter design', e.message));
+	if (app.fresh) app.new();
 	rev.value++;
 	setInterval(() => { stats.value = { ...viewport.stats, stones: engine.stoneCount?.() ?? 0 }; }, 500);
 }

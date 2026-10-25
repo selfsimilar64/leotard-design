@@ -35,6 +35,11 @@ export const TRIMS = {
 	},
 };
 const INSET = 0.004; // fabric cut pulled back under the rim (must stay inside every profile's width)
+// Largest curvature (1/m) the rim's profile bends by to follow the fabric across it. 30 (a 3.3 cm
+// radius) was too little where a pose folds the fabric into a crease (the groin in the low lunge):
+// the fabric rose through the rim's inner half. 120 follows it; higher changes nothing there.
+// Used here and by render/rims.js.
+export const KAPPA_MAX = 120;
 const STEP = 0.0015; // sample spacing along an edge
 
 // Smooth a closed loop of numbers or vectors with a box filter of +-r samples, `passes` times.
@@ -140,7 +145,7 @@ export class Trim {
 				const nn = Nn[i].normalize(), t = P[(i + 1) % n].clone().sub(P[(i - 1 + n) % n]).normalize();
 				const d = new THREE.Vector3().crossVectors(nn, t).normalize();
 				if (d.dot(In[i]) < 0) d.negate();
-				const kap = THREE.MathUtils.clamp(K[i], -30, 30);
+				const kap = THREE.MathUtils.clamp(K[i], -KAPPA_MAX, KAPPA_MAX);
 				frames.push({ p: P[i], n: nn, d, kap });
 				// Width available beside the edge: walk inward until the cover field peaks (the middle
 				// of a strap) or turns back down.
