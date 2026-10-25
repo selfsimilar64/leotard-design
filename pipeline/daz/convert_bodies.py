@@ -11,7 +11,8 @@
 #   bodies/<body>/<pose>.bin          cage positions, metres (Float32 xyz)
 #   bodies/<body>/arm-<l|r>-<arm>.bin cage with one arm posed, the other in the a-pose
 #   figure.bin           the person's render meshes: skin (subdivided twice), eyes and mouth (once),
-#                        lashes, brows, tear film (bound to the skin), hair (Eirgrid)
+#                        lashes, brows, tear film (bound to the skin), the hairs (bodies.py HAIRS:
+#                        Eirgrid, and the Character Creator hairs fitted by fit_hair.py)
 #   figure/<body>/<pose>.bin          eyes cage, mouth cage, hair positions (a-pose and Daz poses)
 #   figure/<body>/expr-<key>.bin      expression changes of the skin, eyes and mouth cages (metres,
 #                        a-pose frame; the app turns them with the head's rotation in a pose)
@@ -31,6 +32,7 @@ import bodies as B
 SRC = B.OUT
 OUT = os.path.join(ROOT, 'app', 'public', 'g9')
 TEX = os.path.join(OUT, 'textures')
+HAIR_DIR = os.path.join(SRC, '..', 'hairs')
 MESH = 'g9-sd1'
 
 # Daz figure (node name) -> render part and its subdivision levels
@@ -74,7 +76,29 @@ def scene_topology():
 		FUV = [VT[f[1]] for f in fs]
 		FUV = [u - np.floor(u.mean(0)) for u in FUV]
 		out[name] = dict(faces=F, fuv=FUV, mats=[f[2].replace('_', ' ') for f in fs], P=pts[name] / 100.0)
+	# the fitted Character Creator hairs (fit_hair.py): on the bare figure, like the Daz nodes
+	for h in B.HAIRS:
+		f = os.path.join(HAIR_DIR, h['key'], 'hair.obj')
+		if not h.get('zip'): continue
+		if not os.path.exists(f): print('   no fitted hair %s (python pipeline/daz/fit_hair.py)' % h['key']); continue
+		V, VT, faces, _, _ = g9.read_obj(f)
+		out[h['node']] = dict(faces=[np.array(x[0]) for x in faces], fuv=[VT[x[1]] - np.floor(VT[x[1]].mean(0)) for x in faces],
+			mats=[x[2].replace('_', ' ') for x in faces], P=V / 100.0, fitted=True)
 	return out
+
+
+def cranium(fig, P, eyes):
+	"""Cage vertices that move with the skull alone (head bone weight ~1, 2 cm and more above the eyes;
+	Daz cm): the fitted hairs follow their similarity from the bare figure to each body and pose."""
+	return np.nonzero((fig['weights']['head'] > 0.99) & (P[:, 1] > eyes[:, 1].mean() + 2))[0]
+
+
+def carry_fitted(scene, bare_cage, cage, ids):
+	"""Positions (Daz cm) of the fitted hairs on a body and pose: the bare figure's cranium -> this one's
+	(similarity), applied to the hair; hair_shift then seats the roots on the skin."""
+	import fit_hair
+	s, R, t = fit_hair.umeyama(bare_cage[ids], cage[ids])
+	return {n: s * (sc['P'] * 100) @ R.T + t for n, sc in scene.items() if sc.get('fitted')}
 
 
 def render_topology(faces, fuv, mats, levels, nV):
@@ -175,6 +199,9 @@ def body_materials(key, parts):
 	"""Material of every render group, from the body's own materials.json (its skin set)."""
 	mats = json.load(open(B.body_dir(key) + 'materials.json'))
 	bare = json.load(open(B.body_dir('bare') + 'materials.json'))  # the hair's (the same preset on every body)
+	for h in B.HAIRS:  # the fitted hairs' maps (fit_hair.py), in Daz terms
+		f = os.path.join(HAIR_DIR, h['key'], 'materials.json')
+		if h.get('zip') and os.path.exists(f): bare[h['node']] = json.load(open(f))
 	out = {}
 	for node, (part, groups) in parts.items():
 		mm = (mats.get(node) or bare[node])['materials']
@@ -387,6 +414,8 @@ def run(keys=None):
 	manifest['bodies'] = []
 	bare_eyes = g9.read_pts(B.body_dir('bare') + 'zero.pts')['Genesis9Eyes']  # seat_eyes
 	bare_bones = json.load(open(B.body_dir('bare') + 'zero.bones.json'))
+	bare_cage = bare['Genesis9'] * 100
+	cran = cranium(fig, bare_cage, bare_eyes)
 	ref_cage = None
 	for b in bodies:
 		key, d = b['key'], B.body_dir(b['key'])
@@ -403,6 +432,7 @@ def run(keys=None):
 		for p in [{'key': 'a-pose'}] + B.POSES:
 			pk = p['key']
 			pts = rest if pk == 'a-pose' else g9.read_pts(d + pk + '.pts')
+			pts.update(carry_fitted(scene, bare_cage, pts['Genesis9'], cran))
 			bones = rbones if pk == 'a-pose' else json.load(open(d + pk + '.bones.json'))
 			C = M(pts['Genesis9'])
 			C.astype('<f4').tofile(os.path.join(OUT, 'bodies', key, pk + '.bin'))
@@ -440,7 +470,8 @@ def run(keys=None):
 	manifest['poses'] = [{'key': 'a-pose', 'label': 'Mannequin stance (A-pose)'}] + [{'key': p['key'], 'label': p['label']} for p in B.POSES]
 	manifest['arms'] = B.ARMS
 	manifest['expressions'] = [{'key': e['key'], 'label': e['label']} for e in B.EXPRESSIONS]
-	manifest['figure'] = {'meshes': fmeshes, 'moving': [parts[n][0] for n in moving],
+	manifest['figure'] = {'meshes': fmeshes,
+		'hairs': [{'key': h['key'], 'label': h['label'], 'node': h['node']} for h in B.HAIRS if h['node'] in scene], 'moving': [parts[n][0] for n in moving],
 		'movingVertices': [len(scene[n]['P']) for n in moving], 'expression': ['skin', 'eyes', 'mouth'],
 		'expressionVertices': [nC, len(scene['Genesis9Eyes']['P']), len(scene['Genesis9Mouth']['P'])]}
 	if ref_cage is not None:

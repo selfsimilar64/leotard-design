@@ -238,6 +238,9 @@
 			}
 			var names = Object.keys(job.morphs || {});
 			for (var k = 0; k < names.length; k++) if (!setModifier(g9, names[k], job.morphs[names[k]])) log.push(job.key + ": no modifier " + names[k]);
+			// Skillful Routine poses write 0 to the breast controls (BreastsFlatten, In-Out, Up-Down, ...),
+			// so the body's morphs are set again after each pose preset.
+			function reshape() { for (var k = 0; k < names.length; k++) setModifier(g9, names[k], job.morphs[names[k]]); }
 			figs = figures();
 			for (var i = 0; i < figs.length; i++) {
 				var lod = figs[i].getObject().getCurrentShape().findProperty("lodlevel");
@@ -249,6 +252,7 @@
 				resetPose(g9);
 				if (ps.preset && !apply(ps.preset, g9)) log.push(job.key + "/" + ps.key + ": pose failed " + ps.preset);
 				if (!apply(spec.neutral, g9)) log.push(job.key + ": neutral face failed");
+				reshape();
 				var sides = ["l", "r"], sol = {};
 				for (var si = 0; si < 2; si++) {
 					var a = ps.aim && ps.aim[sides[si]];

@@ -48,10 +48,40 @@ _ST = P9 + 'Characters/CaramelDream3D/Stacy/MATERIAL/'
 STACY = [_ST + 'Stacy Skin.duf', [_ST + 'Eyes/Stacy Eyes 00.duf', 'Genesis9Eyes'], [_ST + 'Stacy Eyelashes 01.duf', 'Genesis9Eyelashes']]
 STACY_MORPHS = {'CD Stacy Head': 1}
 EIRGRID = [P9 + 'Hair/Daz Originals/Eirgrid Hair/Eirgrid Hair G9.duf', [P9 + 'Hair/Daz Originals/Eirgrid Hair/Materials Iray/Eirgrid 10 M Brown.duf', 'Eirgrid']]
+# The hairs the app offers (body.hair). Eirgrid is baked by Daz with every figure; the others are
+# Character Creator hair cards from the owner's free downloads (2026-10-21), fitted to the bare
+# Genesis 9 head by fit_hair.py and carried per body and pose by convert_bodies.py (the head's
+# cranium similarity, then hair_shift like Eirgrid). node: the figure.bin mesh's node name.
+# zip / blend_archive: the download and the .blend inside it; objects: what blend_to_obj.py writes
+# (hair, CC head, CC eyes); materials: CC material -> app material name; head, eyes: CC materials
+# used for the fit; scalp: the cap materials (kept closer to the skin); tint: the colour (display
+# values) when the CC diffuse map is not the hair's colour (plain: leave that map out).
+_DL = os.path.join(os.path.expanduser('~'), 'Downloads')
+HAIRS = [
+	dict(key='eirgrid', label='Long braids', node='aprilyshEirgridHair_428373'),
+	dict(key='high-ponytail', label='High ponytail', node='CCHighPonytail',
+		zip=os.path.join(_DL, 'female hair.zip'), blend_archive='Blender File.rar', objects=['Hair', 'Body', 'Eye'],
+		# its scalp cap is invisible in the original (shader Opacity 0) and left out; its diffuse map is a
+		# near-black strand pattern in another layout than the cut-out (white along the edges, which showed
+		# as white flakes), coloured in Character Creator: a plain brown, the bun's average, instead
+		materials={'High_polytail_Transparency': 'Ponytail'}, scalp=[], tint=[0.42, 0.27, 0.19], plain=True,
+		head='Std_Skin_Head', eyes=['Std_Eye_L', 'Std_Eye_R']),
+	dict(key='bun-bangs', label='High bun with bangs', node='CCBunBangs',
+		zip=os.path.join(_DL, 'next-gen 3d female bun bangs hairstyle pbr real-time ready.zip'), blend_archive='blender file.zip',
+		objects=['Hair_TUR', 'Scalp', 'Body', 'Eye'],
+		materials={'Haircard_01_Transparency': 'Bun Card 1', 'Haircard_02_Transparency': 'Bun Card 2',
+			'Haircard_03_Transparency': 'Bun Card 3', 'Haircard_04_Transparency': 'Bun Card 4', 'Scalp1_Transparency': 'Bun Scalp'},
+		scalp=['Scalp1_Transparency'], head='Skin_Head', eyes=['Eye_L', 'Eye_R']),
+]
 
 ATHLETIC = {'body_bs_FlexGluteClenchL': 0.35, 'body_bs_FlexGluteClenchR': 0.35, 'body_bs_FlexQuadL': 0.3,
 	'body_bs_FlexQuadR': 0.3, 'body_bs_FlexCalfL': 0.3, 'body_bs_FlexCalfR': 0.3,
 	'body_bs_FlexHamstringL': 0.2, 'body_bs_FlexHamstringR': 0.2}
+# Sports-bra bust (owner, 2026-10-25): every body past childhood is flattened fully and the breasts drawn
+# slightly together. Shape and pectoral controls only; bake_bodies.dsa sets them again after each pose
+# preset (Skillful Routine poses write 0 to every breast control). What was compared:
+# knowledge decisions/2026-10-25-sports-bra-bust.md.
+BUST = {'body_ctrl_BreastsFlatten': 1, 'body_ctrl_BreastsIn-Out': 0.5}
 
 # Body types. stature: the body is scaled uniformly to it (metres). The adults keep the recipes of
 # the earlier wrapped Daz bodies (knowledge: daz-bodies); ages come from Growing Up. Characters are
@@ -63,17 +93,17 @@ BODIES = [
 	dict(key='child-6', label='Child, about 6', years=6, stature=1.17, skin=1, presets=[AGE_P('5-6')], morphs={}),
 	dict(key='child', label='Child, about 9', years=9, stature=1.33, skin=1, presets=[AGE_P('9-10')], morphs={}),
 	dict(key='teen', label='Young teen, about 13', years=13, stature=1.55, skin=2, presets=[AGE_P('young-teen')],
-		morphs={'Kat_figure_ctrl_Character': 1}),
-	dict(key='older-teen', label='Older teen, about 16', years=16, stature=1.6, skin=3, presets=[AGE_P('older-teen')], morphs={}),
+		morphs={'Kat_figure_ctrl_Character': 1, **BUST}),
+	dict(key='older-teen', label='Older teen, about 16', years=16, stature=1.6, skin=3, presets=[AGE_P('older-teen')], morphs={**BUST}),
 	dict(key='petite', label='Petite athlete', years=18, stature=1.53, skin=3, presets=[],
 		morphs={'BaseFeminine_figure_ctrl_Character': 1, 'BaseFeminine_body_bs_Body': -0.5, 'body_bs_ProportionShoulderWidth': -0.35,
-			'body_bs_ProportionChestWidth': -0.3, 'body_ctrl_BreastsFlatten': 0.5, **ATHLETIC}),
+			'body_bs_ProportionChestWidth': -0.3, **ATHLETIC, **BUST}),
 	dict(key='young', label='Young adult, athletic', years=18, stature=1.61, skin=2, presets=[],
-		morphs={'Kat_figure_ctrl_Character': 1, **ATHLETIC}),
+		morphs={'Kat_figure_ctrl_Character': 1, **ATHLETIC, **BUST}),
 	dict(key='adult', label='Adult, about 30', years=30, stature=1.64, skin=4, presets=[],
-		morphs={'BaseFeminine_figure_ctrl_Character': 1, **{k: v * 0.8 for k, v in ATHLETIC.items()}}),
+		morphs={'BaseFeminine_figure_ctrl_Character': 1, **{k: v * 0.8 for k, v in ATHLETIC.items()}, **BUST}),
 	dict(key='broad', label='Adult, broader build', years=30, stature=1.66, skin=4, presets=[],
-		morphs={'Amala_figure_ctrl_Character': 1}),
+		morphs={'Amala_figure_ctrl_Character': 1, **BUST}),
 ]
 REF = 'young'
 
