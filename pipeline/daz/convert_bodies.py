@@ -114,15 +114,45 @@ VALUES = ['Diffuse Color', 'Translucency Weight', 'Dual Lobe Specular Weight', '
 	'Top Coat Roughness', 'SSS Color', 'Transmitted Color', 'Diffuse Roughness', 'Glossy Reflectivity']
 _done = set()
 
+# The nipples are painted out of every torso map (the skin's "Body" surface: colour, normal, roughness,
+# translucency, AO), so no sheer panel or render glitch can ever show them. Centres (u, v in the Body
+# tile) are the UVs of the cage vertices Genesis 9's nipple morph moves (body_bs_NipplesFeminine_HD3:
+# 24108 24193 24317 24330, mirrored 24644 24725 24840 24853); every G9 skin set (Feminine01-04, CD Stacy)
+# shares the UV layout. The geometry needs nothing: the nipple shape is HD detail only (8 base deltas
+# under 1 mm), which the app never loads.
+CHEST = [(0.6027, 0.6990), (0.3973, 0.6990)]
+CHEST_R = 0.04     # fill radius, fraction of the tile (82 px at 2048): Feminine03's areola and halo
+CHEST_DONOR = 0.1  # clean upper-chest skin this far above (fraction of the tile) gives the fill its grain
 
-def texture(path, size):
+
+def clear_chest(im):
+	"""Paint out the nipples: Poisson-clone (OpenCV seamlessClone) a disc of upper-chest skin over each,
+	so the fill keeps the skin's grain and blends into the colours around it."""
+	import cv2
 	from PIL import Image
-	name = os.path.splitext(os.path.basename(path))[0].replace(' ', '_') + '_%d.jpg' % size
+	a = np.array(im)
+	grey = a.ndim == 2
+	if grey: a = np.repeat(a[:, :, None], 3, 2)
+	h, w = a.shape[:2]
+	r, dy = int(round(CHEST_R * w)), int(round(CHEST_DONOR * h))
+	mask = np.zeros((2 * r + 5, 2 * r + 5), np.uint8)
+	cv2.circle(mask, (r + 2, r + 2), r, 255, -1)
+	for u, v in CHEST:
+		x, y = int(round(u * w)), int(round((1 - v) * h))
+		donor = np.ascontiguousarray(a[y - dy - r - 2:y - dy + r + 3, x - r - 2:x + r + 3])
+		a = cv2.seamlessClone(donor, a, mask.copy(), (x, y), cv2.NORMAL_CLONE)  # it alters the mask: a reused one left the second nipple in
+	return Image.fromarray(a[:, :, 0] if grey else a)
+
+
+def texture(path, size, chest=False):
+	from PIL import Image
+	name = os.path.splitext(os.path.basename(path))[0].replace(' ', '_') + ('_%d_clear.jpg' if chest else '_%d.jpg') % size
 	dst = os.path.join(TEX, name)
 	if name not in _done and not os.path.exists(dst):
 		im = Image.open(path)
 		im = im.convert('RGB') if im.mode not in ('L', 'RGB') else im
 		if max(im.size) > size: im = im.resize((size, size * im.size[1] // im.size[0]), Image.LANCZOS)
+		if chest: im = clear_chest(im)
 		im.save(dst, quality=92)
 	_done.add(name)
 	return 'textures/' + name
@@ -134,7 +164,8 @@ def material(props, part, name):
 	for k, prop in MAPS.items():
 		e = props.get(prop)
 		if e and e.get('map') and os.path.exists(e['map']):
-			out['maps'][k] = texture(e['map'], 4096 if big and k in ('map', 'normalMap', 'detailNormalMap') else 2048)
+			out['maps'][k] = texture(e['map'], 4096 if big and k in ('map', 'normalMap', 'detailNormalMap') else 2048,
+				chest=part == 'skin' and name == 'Body' and k != 'detailNormalMap')
 	for prop in VALUES:
 		if prop in props: out['values'][prop] = props[prop]['v']
 	return out

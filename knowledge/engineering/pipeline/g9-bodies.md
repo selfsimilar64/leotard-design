@@ -115,6 +115,17 @@ Two pitfalls found on the first Stacy bake:
    (`hair_shift`); expression changes; materials and textures; the MakeHuman migration map and the
    design frame (below).
 
+**No nipples (2026-10-24, owner).** Every torso map (the skin's `Body` surface: colour, normal,
+roughness, translucency, AO; not the tiled detail normal) has the nipples painted out at convert time
+(`clear_chest` in `convert_bodies.py`, written as `*_2048_clear.jpg`), so a sheer front panel or a
+render glitch can never show them. Each is an OpenCV Poisson clone (`seamlessClone`) of a disc of
+upper-chest skin 0.1 of the tile above it, radius 0.04 of the tile (82 px at 2048, sized for
+Feminine03's areola and halo). The centres are the UVs of the 8 cage vertices Genesis 9's
+`body_bs_NipplesFeminine_HD3` morph moves (24108, 24193, 24317, 24330 and mirrored 24644, 24725,
+24840, 24853); all G9 skin sets (Feminine01-04, CD Stacy) share that UV layout. The shape needs no
+change: G9's nipple geometry is HD detail only (base deltas under 1 mm), which the pipeline never loads.
+The MakeHuman mannequins were already smoothed there ([mannequin pipeline](/engineering/pipeline/mannequin-pipeline.md)).
+
 # In the app
 
 - **Subdivision**: `body/subdivide.js` builds the Catmull-Clark stencil (sparse matrix) from the
