@@ -92,7 +92,7 @@ def leg_weight():
 	return _legw
 
 
-def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff=1.0, along=1.0, thick=0.15, relax=0.01, verbose=True):
+def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff=1.0, along=1.0, thick=0.15, relax=0.01, verbose=True, node_all=False, fill=0, cling=0.0):
 	"""A fresh cloth: a regular grid over the seat as seen from behind and a little below, laid on the
 	skin's envelope from that view (so no extra material sits in the cleft), held where the band's
 	free weight is ~0, then pulled taut (tension-only springs, stronger across than along when
@@ -117,7 +117,7 @@ def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff
 	cov = np.isfinite(s)
 	wgrid = np.where(cov, o[..., 0], 0)
 	from scipy.ndimage import binary_dilation
-	node = cov & binary_dilation(wgrid > 0.02, iterations=2)
+	node = cov & (wgrid > 1e-3) if node_all else cov & binary_dilation(wgrid > 0.02, iterations=2)
 	# keep the nodes and the quads between them
 	idx = -np.ones(node.shape, int); idx[node] = np.arange(node.sum())
 	q = []
@@ -156,9 +156,24 @@ def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff
 		X += stiff * dX / np.maximum(cnt, 1)[:, None]
 		X += (relax * inv)[:, None] * ((A @ X) / deg[:, None] - X)
 		_, j = tree.query(X)
+		if cling > 0:
+			# cling: the fabric is drawn onto the skin (cut to the body, gripping it); against the
+			# tension this lets it dip smoothly into hollows, deeper where they are wider
+			tow = BP[j] - X; gl = np.linalg.norm(tow, axis=1)
+			pull = (gl > thick) & (inv > 0)
+			X[pull] += (cling * np.minimum(1.0, (gl[pull] - thick) / 0.2) / gl[pull])[:, None] * tow[pull]
+			_, j = tree.query(X)
 		dd = np.einsum('ij,ij->i', X - BP[j], BN[j])
 		pen = (dd < thick) & (inv > 0)
 		X[pen] += (thick - dd[pen])[:, None] * BN[j[pen]]
+	# fill narrow dents (cloth points that slipped into the slot's opening): in the view, the cloth
+	# may only come towards the camera, to its neighbours' mean, never go back
+	for _ in range(fill):
+		VW = to_v(X)
+		M = (A @ VW) / deg[:, None]
+		up = (M[:, 2] > VW[:, 2]) & (inv > 0)
+		VW[up, 2] = M[up, 2]
+		X = from_v(VW)
 	if verbose:
 		gap, _ = tree.query(X)
 		print('grid drape %.1f s: %d nodes, gap max %.2f median %.2f cm' % (time.time() - t0, n, gap.max(), np.median(gap)))
@@ -169,8 +184,115 @@ def run_grid(P, **kw):
 	L = landmarks(P)
 	free, inside = region(P, L, **{k: v for k, v in kw.items() if k in ('w_lo', 'w_hi', 'w_soft', 'top_soft', 'front_soft', 'front', 'bot', 'bot_soft')})
 	free = np.where(inside, 0.002 + free, 0)
-	X, CF = drape_grid(P, free, **{k: v for k, v in kw.items() if k in ('tilt', 'h', 'off', 'shrink', 'iters', 'stiff', 'along', 'thick', 'relax')})
+	X, CF = drape_grid(P, free, **{k: v for k, v in kw.items() if k in ('tilt', 'h', 'off', 'shrink', 'iters', 'stiff', 'along', 'thick', 'relax', 'node_all', 'fill', 'cling')})
+	dip = kw.get('dip', 0.0)
+	if dip > 0:
+		# a soft valley: the cloth sinks back towards the skin under it by `dip` of the gap,
+		# the gap blurred over the cloth so the valley is wide and smooth
+		from scipy.spatial import cKDTree
+		S, quads = D.C.subdiv(); PS = S @ P
+		TS = g9.triangles(quads)
+		BP, _ = g9.surface_samples(PS, TS, g9.vertex_normals(PS, TS), 0.2)
+		gap, j = cKDTree(BP).query(X)
+		dirn = BP[j] - X; dirn /= np.maximum(np.linalg.norm(dirn, axis=1, keepdims=True), 1e-9)
+		A = D.adjacency(len(X), CF); deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1)
+		g = gap.copy(); dv = dirn * gap[:, None]
+		for _ in range(kw.get('dip_blur', 60)):
+			g = (A @ g + g) / (deg + 1); dv = (A @ dv + dv) / (deg + 1)[:, None]
+		dvn = dv / np.maximum(np.linalg.norm(dv, axis=1, keepdims=True), 1e-9)
+		X = X + (dip * g)[:, None] * dvn
 	lw = kw.get('leg_keep')
 	ft = free if lw is None else free * (1 - sstep((leg_weight() - lw) / 0.4))
-	Q, _ = D.transfer(P, ft, X, CF)
+	Q, _ = D.transfer(P, ft, X, CF, relax=kw.get('relax_t', 30), step=kw.get('step_t', 0.5))
+	if kw.get('embed'): Q = embed(P, Q, X, CF, ft, tilt=kw.get('tilt', 30.0), t_in=kw.get('t_in', 0.3))
+	if kw.get('untangle'): Q, _ = untangle(P, Q, X, CF, ft, tilt=kw.get('untangle_tilt', 0.0), spread=kw.get('spread', True))
 	return Q, dict(L=L, free=free, X=X, CF=CF)
+
+
+def untangle(P, Q, X, CF, free, tilt=30.0, hidden=0.3, floor=0.35, iters=2000, h=0.15, spread_min=0.05, keep_height=True, spread=True):
+	"""The cleft's two walls must not cross at the midline (their overlap is the hairline). Wall
+	vertices (band skin that lay well behind the cloth) get a new sideways position solved as a
+	harmonic function over the mesh: fixed at 0 along the cleft's floor (|x| small) and at their
+	settled x where the wall meets the cheek, so each wall unrolls in order onto its own half. Then
+	each goes onto the cloth at that place, seen from the tilted back view."""
+	from scipy.spatial import cKDTree
+	F = fig(); A = F['A']; deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1)
+	t = np.radians(tilt)
+	d = np.array([0, np.sin(t), np.cos(t)]); e2 = np.array([0, np.cos(t), -np.sin(t)])
+	to_v = lambda R: np.stack([R[:, 0], R @ e2, -(R @ d)], 1)
+	from_v = lambda V: np.outer(V[:, 0], [1, 0, 0]) + np.outer(V[:, 1], e2) - np.outer(V[:, 2], d)
+	# how far each band vertex lay behind the cloth (seen from the view)
+	TC = g9.triangles(CF)
+	VX = to_v(X)
+	x0, y0 = VX[:, 0].min() - 1, VX[:, 1].min() - 1
+	nx = int((VX[:, 0].max() + 1 - x0) / h) + 1; ny = int((VX[:, 1].max() + 1 - y0) / h) + 1
+	cz, _ = B.raster(VX, TC, np.zeros((len(VX), 1)), x0, y0, h, nx, ny)
+	ok = np.isfinite(cz)
+	from scipy.ndimage import distance_transform_edt
+	if (~ok).any():
+		_, (iy, ix) = distance_transform_edt(~ok, return_indices=True); cz = cz[iy, ix]
+	VP = to_v(P)
+	czP = B.sample(cz, x0, y0, h, VP[:, 0], VP[:, 1])
+	behind = czP - VP[:, 2]
+	wall = (free > 0.5) & (behind > hidden)
+	xs = Q[:, 0].copy()
+	fix_floor = wall & (np.abs(P[:, 0]) < floor)
+	xs[fix_floor] = 0.0
+	# spread: every band vertex with real freedom is solved, so the walls share the band's width
+	band = ((free > spread_min) & F['body']) if spread else np.zeros(len(P), bool)
+	unk = (band | wall) & ~fix_floor
+	wall = unk | fix_floor
+	for _ in range(iters):
+		M = (A @ xs) / deg
+		xs[unk] = M[unk]
+	# keep each side on its side
+	sgn = np.sign(P[:, 0]); xs[unk] = sgn[unk] * np.maximum(sgn[unk] * xs[unk], 0)
+	R = Q.copy()
+	VQ = to_v(Q)
+	VQ[wall, 0] = xs[wall]
+	if keep_height: VQ[wall, 1] = VP[wall, 1]
+	# onto the cloth where the cloth is in front; faded by the free weight like the transfer
+	wt = np.clip(free / 0.7, 0, 1); wt = wt * wt * (3 - 2 * wt); wt[fix_floor] = 1
+	tz = B.sample(cz, x0, y0, h, VQ[wall, 0], VQ[wall, 1]) - 0.1
+	VQ[wall, 2] = np.where(wt[wall] > 0, tz, VQ[wall, 2])
+	R[wall] = Q[wall] + wt[wall, None] * (from_v(VQ[wall]) - Q[wall])
+	return R, wall
+
+
+def embed(P, Q, X, CF, free, tilt=30.0, t_in=0.3, h=0.15, thick=0.1):
+	"""Fold-free layout of the band's skin on the cloth (a Tutte embedding): in the view plane
+	(behind, `tilt` below), every band vertex with free >= t_in sits at the mean of its mesh
+	neighbours, the rest stay where the transfer put them (the fixed boundary). A layout made
+	this way cannot fold over itself, so the cleft walls spread out instead of crossing at the
+	midline. Then each goes onto the cloth along the view direction."""
+	import scipy.sparse as sps
+	from scipy.sparse.linalg import spsolve
+	from scipy.ndimage import distance_transform_edt
+	F = fig(); A = F['A'].tocsr()
+	t = np.radians(tilt)
+	d = np.array([0, np.sin(t), np.cos(t)]); e2 = np.array([0, np.cos(t), -np.sin(t)])
+	to_v = lambda R: np.stack([R[:, 0], R @ e2, -(R @ d)], 1)
+	from_v = lambda V: np.outer(V[:, 0], [1, 0, 0]) + np.outer(V[:, 1], e2) - np.outer(V[:, 2], d)
+	VX = to_v(X); TC = g9.triangles(CF)
+	x0, y0 = VX[:, 0].min() - 1, VX[:, 1].min() - 1
+	nx = int((VX[:, 0].max() + 1 - x0) / h) + 1; ny = int((VX[:, 1].max() + 1 - y0) / h) + 1
+	cz, _ = B.raster(VX, TC, np.zeros((len(VX), 1)), x0, y0, h, nx, ny)
+	ok = np.isfinite(cz)
+	if (~ok).any():
+		_, (iy, ix) = distance_transform_edt(~ok, return_indices=True); cz = cz[iy, ix]
+	inner = (free >= t_in) & F['body']
+	idx = np.where(inner)[0]; pos = -np.ones(len(P), int); pos[idx] = np.arange(len(idx))
+	VQ = to_v(Q)
+	Ai = A[idx]
+	deg = np.asarray(Ai.sum(1)).ravel()
+	# L u = 0 on the inner vertices: deg_i u_i - sum_inner u_j = sum_boundary u_j
+	coo = Ai.tocoo()
+	jin = pos[coo.col] >= 0
+	M = sps.csr_matrix((-np.ones(jin.sum()), (coo.row[jin], pos[coo.col[jin]])), shape=(len(idx), len(idx))) + sps.diags(deg)
+	bnd = sps.csr_matrix((np.ones((~jin).sum()), (coo.row[~jin], coo.col[~jin])), shape=(len(idx), len(P)))
+	R = Q.copy(); VR = VQ.copy()
+	for c in (0, 1):
+		VR[idx, c] = spsolve(M.tocsc(), bnd @ VQ[:, c])
+	VR[idx, 2] = B.sample(cz, x0, y0, h, VR[idx, 0], VR[idx, 1]) - thick
+	R[idx] = from_v(VR[idx])
+	return R

@@ -27,3 +27,9 @@ Chosen settings (owner): Daz BreastsFlatten 0.25, BreastsIn-Out 1.0, lift 2 cm, 
   cleft; tension 4x across vs along), `run_grid` (thigh skin kept still: `leg_keep`).
 - `seatrun.py out bodies "{name: kwargs}" title`: comparison runs.
 - Current settings: `run_grid(P, along=0.25, front=1.0, front_soft=3.0, w_lo=1.5, w_hi=4.5, w_soft=2.5, top_soft=6.0, leg_keep=0.3)`.
+- 2026-10-25 later: `drape_grid(cling=...)` draws the cloth onto the skin against its tension, so
+  it dips smoothly into the cleft (older teen, cleft 1.5-3.7 cm deep: cling 0 -> 0.4-1.0 cm dip,
+  0.002 -> 1.2-1.9, 0.005 -> 1.3-2.2, 0.01 -> 1.4-2.5; the tension ratio `along` barely matters).
+  `embed` (fold-free Tutte layout of the band's skin on the cloth, `t_in` 0.15) removes the midline
+  hairline, which was the two walls' skin sheared onto the cloth; `untangle` and `fill` were tries.
+  Owner's target (moodboard back views): fabric sits a little into the cleft, smoothly, cheeks read separate.
