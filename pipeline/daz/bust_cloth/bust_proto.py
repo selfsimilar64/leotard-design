@@ -4,7 +4,7 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.ndimage import gaussian_filter, map_coordinates, binary_dilation
 
-REPO = r'C:/Users/mattj/leotard-design'
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))).replace(os.sep, '/')
 sys.path.insert(0, REPO + '/pipeline')
 import g9
 S_DIR = os.path.dirname(os.path.abspath(__file__))

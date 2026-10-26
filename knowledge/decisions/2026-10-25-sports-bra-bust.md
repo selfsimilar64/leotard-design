@@ -3,7 +3,8 @@ type: Decision
 title: "Sports-bra bust: Daz BreastsFlatten at 1 and In-Out at 0.5 on every body past childhood"
 description: "Owner decision of 2026-10-25: the bodies' natural bust read wrong for an athlete in a sports bra or lined leotard. Every body from the young teen up is baked with body_ctrl_BreastsFlatten 1 and body_ctrl_BreastsIn-Out 0.5; only shape and pectoral controls, re-applied after each pose preset so they hold in all poses. Extending flatten past 1, the HyperionStudio shapes, lift and a procedural compression shape were compared and set aside for now."
 tags: [decision, bodies, daz, genesis-9, bust, pose]
-status: stable
+status: deprecated
+superseded_by: /decisions/2026-10-25-sports-bra-cloth-bust.md
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-25T12:00:00Z }
 sources:
   - id: owner
@@ -18,7 +19,7 @@ sources:
 
 # Decision
 
-**To be superseded** by the [sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md) (owner, later the same day) once that recipe is baked into the bodies; until then this is what the bodies carry.
+**Superseded** by the [sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md) (built into the bodies 2026-10-26).
 
 Every body past childhood (`teen`, `older-teen`, `petite`, `young`, `adult`, `broad`) is baked with
 `body_ctrl_BreastsFlatten` 1 and `body_ctrl_BreastsIn-Out` 0.5 (`bodies.py BUST`); the children

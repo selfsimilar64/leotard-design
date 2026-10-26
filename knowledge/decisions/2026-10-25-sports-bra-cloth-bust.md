@@ -3,7 +3,7 @@ type: Decision
 title: "Sports-bra bust by taut cloth: flatten 25%, in-out 1, lift 2 cm, then a cloth drape baked into the skin"
 description: "Owner decision of 2026-10-25: the bust is shaped by a procedural recipe that works on any body (Daz BreastsFlatten 0.25 and BreastsIn-Out 1.0, a 2 cm lift, then our own taut-membrane cloth drape over a bra band, the skin settled onto it), replacing flatten 1 / in-out 0.5. Prototype in pipeline/daz/bust_cloth/; not baked into the bodies yet."
 tags: [decision, bodies, daz, genesis-9, bust, cloth, technique]
-status: draft
+status: stable
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-25T23:00:00Z }
 sources:
   - id: owner
@@ -48,10 +48,12 @@ were the bought alternative). What was tried (young adult, A-pose):[^owner]
 
 # Consequences / how to apply
 
-- Not in the bake yet. To do: compute in each body's a-pose, turn the change into a rest-space
-  shape (undo the a-pose skinning, or compute on a zero-pose bake), load it into Daz as a morph
-  per body so poses carry it, and dial it in `reshape()` with the other bust morphs; check poses.
-- The other bodies (petite, adult, broad) have not been run.
+- Built in (2026-10-26, owner: "build both shapes into the bodies"): `pipeline/daz/shapes.py` at
+  convert time, drawn on the A-pose and carried into every pose and arm pose (offsets turned with
+  their neighbourhood, as Daz skins a morph) rather than a Daz morph file. Checked first in 12 Daz
+  poses on teen, older teen, young and adult (normal shading, `app/captures/bust-cloth/bust-poses/`):
+  no tears or creases; in inverted and lying poses Daz's breast bones still move the bust, so some
+  separation returns there, as on the bodies before.
 - Time: about 35 s per body (drape) on the development laptop.
 - Levers that change the look: the Daz starting shape and the lift (strongest), the band's edges,
   a stronger pull across than along (not tried). Not tightness.

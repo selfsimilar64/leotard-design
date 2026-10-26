@@ -126,13 +126,19 @@ Feminine03's areola and halo). The centres are the UVs of the 8 cage vertices Ge
 change: G9's nipple geometry is HD detail only (base deltas under 1 mm), which the pipeline never loads.
 The MakeHuman mannequins were already smoothed there ([mannequin pipeline](/engineering/pipeline/mannequin-pipeline.md)).
 
-**Sports-bra bust (2026-10-25, owner).** Every body from the young teen up is baked with
-`body_ctrl_BreastsFlatten` 1 and `body_ctrl_BreastsIn-Out` 0.5 (`bodies.py BUST`). **Pitfall:**
-every Skillful Routine pose preset writes 0 to all the breast controls (flatten included) and the
-pectoral rotations, so before 2026-10-25 the petite body's flatten held only in the A-pose and
-arm poses; `bake_bodies.dsa reshape()` sets the job's morphs again after each pose preset. Flatten
-is clamped at 1 by Daz. What else was compared and why it was set aside:
-[sports-bra bust](/decisions/2026-10-25-sports-bra-bust.md).
+**Sports-bra bust and smoothed cleft (2026-10-26, owner).** Every body from the young teen up is
+baked with `body_ctrl_BreastsFlatten` 0.25 and `body_ctrl_BreastsIn-Out` 1.0 (`bodies.py BUST`, the
+starting shape), then `shapes.py` reshapes the skin cage at convert time
+([taut-cloth bust](/decisions/2026-10-25-sports-bra-cloth-bust.md),
+[smoothed cleft](/decisions/2026-10-26-seat-cleft-cloth.md)): the bust is lifted 2 cm and our taut
+cloth drawn over it once on the A-pose, then carried into every pose and arm pose (each offset
+turned with its neighbourhood, as Daz skins a morph); the gluteal cleft (all eight bodies) is spanned
+by a grid cloth drawn on each Daz pose's own body. Results are cached in
+`out/bodies/<key>/shaped/` (keyed on the settings and the `.pts` time); a first convert of all
+bodies takes about 2 hours, `--no-shapes` skips the step. **Pitfall:** every Skillful Routine pose
+preset writes 0 to all the breast controls (flatten included) and the pectoral rotations;
+`bake_bodies.dsa reshape()` sets the job's morphs again after each pose preset. Flatten is clamped
+at 1 by Daz. Earlier choice: [flatten 1, in-out 0.5](/decisions/2026-10-25-sports-bra-bust.md).
 
 # In the app
 

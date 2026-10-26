@@ -8,7 +8,8 @@
 #   manifest.json        bodies (each with its poses, arm poses, expressions, landmarks, neck cut),
 #                        pose and expression lists, file offsets of topology.bin and figure.bin
 #   topology.bin         cage polygons, canonical triangles (subdivided once), body-part weights
-#   bodies/<body>/<pose>.bin          cage positions, metres (Float32 xyz)
+#   bodies/<body>/<pose>.bin          cage positions, metres (Float32 xyz), shaped by shapes.py
+#                        (sports-bra bust, smoothed cleft)
 #   bodies/<body>/arm-<l|r>-<arm>.bin cage with one arm posed, the other in the a-pose
 #   figure.bin           the person's render meshes: skin (subdivided twice), eyes and mouth (once),
 #                        lashes, brows, tear film (bound to the skin), the hairs (bodies.py HAIRS:
@@ -28,12 +29,14 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.dirname(HERE))
 import g9
 import bodies as B
+import shapes
 
 SRC = B.OUT
 OUT = os.path.join(ROOT, 'app', 'public', 'g9')
 TEX = os.path.join(OUT, 'textures')
 HAIR_DIR = os.path.join(SRC, '..', 'hairs')
 MESH = 'g9-sd1'
+SHAPES = True  # shapes.py: sports-bra bust and smoothed cleft on the skin cage (--no-shapes: the bake as is)
 
 # Daz figure (node name) -> render part and its subdivision levels
 PARTS = {'Genesis9': ('skin', 2), 'Genesis9Eyes': ('eyes', 1), 'Genesis9Mouth': ('mouth', 1),
@@ -376,6 +379,8 @@ def run(keys=None):
 	# the reference body's A-pose subdivided by Python: app/test/subdivide.test.js checks the app's own
 	# subdivision (body/subdivide.js, the twin of g9.cc_stencil) against it
 	ref_a = g9.read_pts(B.body_dir(B.REF) + 'a-pose.pts')['Genesis9']
+	if SHAPES:  # the same shaped cage the app reads as bodies/<ref>/a-pose.bin
+		ref_a = shapes.Shaper(next(b for b in B.BODIES if b['key'] == B.REF), B.body_dir(B.REF), ref_a).pose('a-pose', ref_a)
 	ry0 = ref_a[:, 1].min(); rs = next(b for b in B.BODIES if b['key'] == B.REF)['stature'] / (ref_a[:, 1].max() - ry0)
 	manifest['topology']['check'] = topo.add(S1 @ ((ref_a - [0, ry0, 0]) * rs), '<f4')
 	topo.write(os.path.join(OUT, 'topology.bin'))
@@ -422,6 +427,9 @@ def run(keys=None):
 		print('BODY', key, flush=True)
 		rest = g9.read_pts(d + 'a-pose.pts')
 		rbones = json.load(open(d + 'a-pose.bones.json'))
+		# the sports-bra bust and the smoothed cleft (shapes.py), cached per body and pose
+		shaper = shapes.Shaper(b, d, rest['Genesis9']) if SHAPES else None
+		if shaper: rest['Genesis9'] = shaper.pose('a-pose', rest['Genesis9'])
 		C0 = rest['Genesis9']
 		y0 = C0[:, 1].min()
 		s = b['stature'] / (C0[:, 1].max() - y0)  # Daz cm -> app metres, scaled to the stature
@@ -432,6 +440,8 @@ def run(keys=None):
 		for p in [{'key': 'a-pose'}] + B.POSES:
 			pk = p['key']
 			pts = rest if pk == 'a-pose' else g9.read_pts(d + pk + '.pts')
+			if shaper and pk != 'a-pose': pts['Genesis9'] = shaper.pose(pk, pts['Genesis9'])
+			print('   %s' % pk, flush=True)
 			pts.update(carry_fitted(scene, bare_cage, pts['Genesis9'], cran))
 			bones = rbones if pk == 'a-pose' else json.load(open(d + pk + '.bones.json'))
 			C = M(pts['Genesis9'])
@@ -455,7 +465,9 @@ def run(keys=None):
 				f = d + 'arm-%s-%s.pts' % (side, a)
 				if not os.path.exists(f): print('   missing', f); continue
 				ak = '%s-%s' % (side, a)
-				M(g9.read_pts(f)['Genesis9']).astype('<f4').tofile(os.path.join(OUT, 'bodies', key, 'arm-' + ak + '.bin'))
+				A = g9.read_pts(f)['Genesis9']
+				if shaper: A = shaper.arm(ak, A)
+				M(A).astype('<f4').tofile(os.path.join(OUT, 'bodies', key, 'arm-' + ak + '.bin'))
 				entry['arms'][ak] = 'bodies/%s/arm-%s.bin' % (key, ak)
 		base = g9.read_pts(d + 'expr-neutral.pts')
 		for e in B.EXPRESSIONS:
@@ -487,4 +499,5 @@ def run(keys=None):
 
 
 if __name__ == '__main__':
+	SHAPES = '--no-shapes' not in sys.argv
 	run([a for a in sys.argv[1:] if not a.startswith('--')] or None)

@@ -77,11 +77,12 @@ HAIRS = [
 ATHLETIC = {'body_bs_FlexGluteClenchL': 0.35, 'body_bs_FlexGluteClenchR': 0.35, 'body_bs_FlexQuadL': 0.3,
 	'body_bs_FlexQuadR': 0.3, 'body_bs_FlexCalfL': 0.3, 'body_bs_FlexCalfR': 0.3,
 	'body_bs_FlexHamstringL': 0.2, 'body_bs_FlexHamstringR': 0.2}
-# Sports-bra bust (owner, 2026-10-25): every body past childhood is flattened fully and the breasts drawn
-# slightly together. Shape and pectoral controls only; bake_bodies.dsa sets them again after each pose
-# preset (Skillful Routine poses write 0 to every breast control). What was compared:
-# knowledge decisions/2026-10-25-sports-bra-bust.md.
-BUST = {'body_ctrl_BreastsFlatten': 1, 'body_ctrl_BreastsIn-Out': 0.5}
+# Sports-bra bust (owner, 2026-10-25): the Daz starting shape of every body past childhood, a quarter
+# flattened and the breasts drawn together; shapes.py then lifts it and drapes our taut cloth over it
+# (knowledge decisions/2026-10-25-sports-bra-cloth-bust.md; before: flatten 1, in-out 0.5,
+# decisions/2026-10-25-sports-bra-bust.md). Shape and pectoral controls only; bake_bodies.dsa sets them
+# again after each pose preset (Skillful Routine poses write 0 to every breast control).
+BUST = {'body_ctrl_BreastsFlatten': 0.25, 'body_ctrl_BreastsIn-Out': 1.0}
 
 # Body types. stature: the body is scaled uniformly to it (metres). The adults keep the recipes of
 # the earlier wrapped Daz bodies (knowledge: daz-bodies); ages come from Growing Up. Characters are

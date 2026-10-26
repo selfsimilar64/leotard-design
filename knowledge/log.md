@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-10-26
+* **Decision**: [Seat cleft cloth](/decisions/2026-10-26-seat-cleft-cloth.md): the gluteal cleft smoothed on every body by a grid cloth drawn on each pose's body (cleft only, gentle dip). Built in with the [taut-cloth bust](/decisions/2026-10-25-sports-bra-cloth-bust.md) by `pipeline/daz/shapes.py` at convert time; bodies re-baked with flatten 0.25, in-out 1.0 ([Genesis 9 bodies](/engineering/pipeline/g9-bodies.md)). The earlier [flatten 1 bust](/decisions/2026-10-25-sports-bra-bust.md) is deprecated.
+
 ## 2026-10-25
 * **Update**: [Sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md) recipe extended to the seat, cleft only (owner): a fresh grid cloth laid over the seat from behind and below, pulled 4x harder across than along, held at the crotch, thigh skin kept still; the cleft becomes a smooth seat with a faint midline hairline and a soft V into the crotch on the teens and young adult (A-pose only). Cloth made from the skin's own mesh sagged back into the cleft (the walls' extra material). Prototype `pipeline/daz/bust_cloth/seat_proto.py`.
 * **Decision**: [Sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md): owner chose a procedural recipe for every body (Daz flatten 0.25, in-out 1.0, 2 cm lift, our own taut-membrane drape over a bra band, skin settled onto it) over bought per-character shapes; prototype in `pipeline/daz/bust_cloth/`, not baked yet. Blender cloth failed (breasts through the cloth); an unconverged drape left the chest ~1 cm proud (shelf and edge lines); tightness barely changes a taut drape.
