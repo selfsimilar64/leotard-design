@@ -123,7 +123,7 @@ function FinishSection({ c, doc }) {
 	const t = doc.trims.find((x) => x.on.includes(c.id));
 	const kind = t?.kind ?? (c.role === 'edge' ? 'elastic' : 'none');
 	const kinds = c.role === 'edge' ? [['elastic', 'Turned elastic'], ['binding', 'Contrast binding'], ['none', 'Raw / laser cut']] : [['none', 'Plain seam'], ['piping', 'Piping'], ['tape', 'Flat tape']];
-	const f = t?.fabric ?? { fabric: 'satin', colour: '#ffffff', second: 'Tone-on-tone' };
+	const f = t?.fabric ?? { fabric: 'shiny', colour: '#ffffff', second: 'Tone-on-tone' };
 	const set = (patch) => run({ op: 'trim.set', on: c.id, kind, fabric: f, ...patch });
 	return (
 		<Section title="Finish">

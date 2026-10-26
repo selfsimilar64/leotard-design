@@ -1,5 +1,6 @@
 import { render } from 'preact';
 import { app } from './instance.js';
+import { withKnownPose } from './app.js';
 import { Shell, useShortcuts } from './ui/Shell.jsx';
 import { rev, stats, display } from './ui/state.js';
 import { loadDisplay } from './render/display.js';
@@ -27,6 +28,8 @@ async function start(el) {
 	body.liftOpt = { taut: d.liftTaut, max: d.liftMax, reach: d.liftReach, method: d.liftMethod, ball: d.liftBall, seat: d.liftSeat, seatAlong: 1 / d.liftSeatAcross };
 	const engine = new Engine(viewport, body, buildReference(body));
 	engine.timing.load = performance.now() - t0;
+	// a resumed autosave may name a dropped pose: fix it before the engine shows the design
+	if (!app.fresh && withKnownPose(app.doc) !== app.doc) app.load(app.doc);
 	app.attach(engine);
 	app.tools = new ToolController(app, engine);
 	if (app.fresh) app.new();

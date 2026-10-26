@@ -32,6 +32,7 @@ import { toSP as toSPLocal } from './body/surface.js';
 import { migrate, setSurfaceConverter } from './doc/schema.js';
 import { MESH, surfaceConverter } from './doc/migrate-g9.js';
 import { bodyKeys } from './body/mannequin.js';
+import { poseSpec } from './body/pose.js';
 
 // Ends a drag: touches the curves so the garment is re-cut and new cells get their panels, inside
 // the drag's own history entry.
@@ -158,7 +159,7 @@ export class App {
 		this.store.load(d);
 		if (this.engine) { this.exec({ op: 'start.apply', key: DEFAULT_START }); this.store.undoStack.length = 0; }
 	}
-	load(doc) { this.store.load(typeof doc === 'string' ? JSON.parse(doc) : doc); }
+	load(doc) { this.store.load(withKnownPose(typeof doc === 'string' ? JSON.parse(doc) : doc)); }
 	json() { return JSON.stringify(this.doc, null, 1); }
 
 	async save(name = this.doc.meta.name || 'design') {
@@ -487,6 +488,11 @@ export class App {
 	stoneStats() { return { ...this.engine.stoneView.stats(), dropped: this.engine.stoneRun.dropped, errors: this.engine.stoneRun.errors }; }
 }
 
+// A design saved with a pose that no longer exists (poses were culled on 2026-10-26) falls back to
+// the mannequin stance instead of leaving the viewport blank. Needs the bodies loaded (DAZ_POSES).
+export function withKnownPose(doc) {
+	try { poseSpec(doc?.body?.pose); return doc; } catch { return { ...doc, body: { ...doc.body, pose: 'a-pose' } }; }
+}
 function loadAutosave() {
 	try { const s = localStorage.getItem(AUTOSAVE); return s ? JSON.parse(s) : null; } catch { return null; }
 }

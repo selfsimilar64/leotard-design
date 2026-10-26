@@ -8,6 +8,7 @@
 * [questions/](questions/) - Product questions only the owner can settle; each records options, a recommendation and, once answered, the answer and the resulting decision.
 * [requirements/](requirements/) - What the product must be able to do, stated as capabilities with acceptance checks.
 * [roadmap/](roadmap/) - The phased build plan, its gates and the benchmark designs it is measured against.
+* [tutorials/](tutorials/) - Step-by-step walkthroughs of the designer app written for a new user: each rebuilds one real leotard from its photos with the app's own tools, teaching the basic editing tools on the way.
 
 # Product Vision
 

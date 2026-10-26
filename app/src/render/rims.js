@@ -87,7 +87,7 @@ export class Rims {
 						const inside = new THREE.Vector3().crossVectors(nn, tt).normalize();
 						recs.push({ p, n: nn, inside, kappa: 0, ref: atSp(R, sp, new THREE.Vector3()), keep: 1, sleeve: 0 });
 					}
-					const fin = { kind: t.kind, fabric: t.fabric?.fabric ?? 'satin', colour: t.fabric?.colour ?? '#ffffff', second: t.fabric?.second ?? 'Tone-on-tone' };
+					const fin = { kind: t.kind, fabric: t.fabric?.fabric ?? 'shiny', colour: t.fabric?.colour ?? '#ffffff', second: t.fabric?.second ?? 'Tone-on-tone' };
 					const key2 = JSON.stringify(fin);
 					let gr = groups.get(key2);
 					if (!gr) groups.set(key2, gr = { fin, loops: [] });
