@@ -10,7 +10,7 @@ os.makedirs(out, exist_ok=True)
 Pa = B.cage(body); L = SP.landmarks(Pa)
 free, ins = SP.region(Pa, L, **{k: v for k, v in Dg.KW.items() if k in ('w_lo', 'w_hi', 'w_soft', 'top_soft', 'front_soft', 'front')})
 seat = free > 0.3; T = B.fig()['tris']
-ortho = float(sys.argv[7]) if len(sys.argv) > 7 else 0.30
+ortho = (float(sys.argv[7]) if len(sys.argv) > 7 else 0.30) * (Pa[:, 1].max() - Pa[:, 1].min()) / 164.0
 low = (sys.argv[8] == 'bottom') if len(sys.argv) > 8 else False
 bot = seat & (Pa[:, 1] < L['cy'] + 4)
 items = []

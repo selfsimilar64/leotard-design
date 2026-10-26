@@ -68,3 +68,8 @@ Findings, older teen, poses draped per pose (`run_posed`):
   0.001 gives the depth of skin cling 0.002.
 - Best so far (B2): `jump=1.0, cling=0.001, cling_mode='pressure', smooth_settle=True, slide=True,
   lam=5.0, mu=0.05` with the KW in `diag.py`.
+- B3 = B2 + `cut_mode='edge', cut_core=0.5` (the grid is cut wherever its depth jumps outside the
+  cleft's core, not only at a thigh). `fullrun.sh`: all 8 bodies x 31 poses, normal sheets in
+  `app/captures/bust-cloth/seat-all-poses/`. Reviewed by eye: clean on all bodies and poses except a
+  faint crease beside the cleft in the floor split (young, adult, petite) and a thin sliver in the
+  9-year-old's stag jump; the 6-year-old's cleft is too shallow for the band to change much.

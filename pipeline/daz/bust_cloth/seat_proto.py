@@ -108,7 +108,7 @@ def view_basis(tilt, dvec=None):
 	return d, e1, e2
 
 
-def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff=1.0, along=1.0, thick=0.15, relax=0.01, verbose=True, node_all=False, fill=0, cling=0.0, dvec=None, jump=None, cling_mode='skin'):
+def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff=1.0, along=1.0, thick=0.15, relax=0.01, verbose=True, node_all=False, fill=0, cling=0.0, dvec=None, jump=None, cling_mode='skin', cut_mode='leg', cut_core=0.5):
 	"""A fresh cloth: a regular grid over the seat as seen from behind and a little below, laid on the
 	skin's envelope from that view (so no extra material sits in the cleft), held where the band's
 	free weight is ~0, then pulled taut (tension-only springs, stronger across than along when
@@ -146,7 +146,9 @@ def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff
 			if min(a, b, c, e) >= 0:
 				zz = (s[j, i], s[j, i + 1], s[j + 1, i + 1], s[j + 1, i])
 				ll = (lgrid[j, i], lgrid[j, i + 1], lgrid[j + 1, i + 1], lgrid[j + 1, i])
-				if jump is not None and max(zz) - min(zz) > jump and max(ll) > 0.5:
+				ww = (wgrid[j, i], wgrid[j, i + 1], wgrid[j + 1, i + 1], wgrid[j + 1, i])
+				edge = (max(ll) > 0.5) if cut_mode == 'leg' else (min(ww) < cut_core)
+				if jump is not None and max(zz) - min(zz) > jump and edge:
 					cut.update((a, b, c, e)); continue  # a depth jump (one surface in front of another)
 				q.append((a, e, c, b))
 	CF = np.array(q)
@@ -225,7 +227,7 @@ def run_grid(P, **kw):
 		# the cloth itself stays off the thighs: held softly along the crease where thigh skin begins
 		free = free * (1 - sstep((leg_weight() - lc) / kw.get('leg_soft', 0.4)))
 	free = np.where(inside, 0.002 + free, 0)
-	X, CF = drape_grid(P, free, **{k: v for k, v in kw.items() if k in ('tilt', 'h', 'off', 'shrink', 'iters', 'stiff', 'along', 'thick', 'relax', 'node_all', 'fill', 'cling', 'jump', 'cling_mode')})
+	X, CF = drape_grid(P, free, **{k: v for k, v in kw.items() if k in ('tilt', 'h', 'off', 'shrink', 'iters', 'stiff', 'along', 'thick', 'relax', 'node_all', 'fill', 'cling', 'jump', 'cling_mode', 'cut_mode', 'cut_core')})
 	dip = kw.get('dip', 0.0)
 	if dip > 0:
 		# a soft valley: the cloth sinks back towards the skin under it by `dip` of the gap,
@@ -372,7 +374,7 @@ def run_posed(P_a, P_pose, **kw):
 		N = g9.vertex_normals(Pal, F['tris'])
 		m = free > 0.3
 		dvec = -(N[m] * free[m, None]).sum(0)
-	X, CF = drape_grid(Pal, free, dvec=dvec, **{k: v for k, v in kw.items() if k in ('tilt', 'h', 'off', 'shrink', 'iters', 'stiff', 'along', 'thick', 'relax', 'node_all', 'fill', 'cling', 'jump', 'cling_mode')})
+	X, CF = drape_grid(Pal, free, dvec=dvec, **{k: v for k, v in kw.items() if k in ('tilt', 'h', 'off', 'shrink', 'iters', 'stiff', 'along', 'thick', 'relax', 'node_all', 'fill', 'cling', 'jump', 'cling_mode', 'cut_mode', 'cut_core')})
 	lw = kw.get('leg_keep')
 	ft = free if lw is None else free * (1 - sstep((leg_weight() - lw) / kw.get('leg_keep_soft', 0.4)))
 	md = kw.get('max_depth')
