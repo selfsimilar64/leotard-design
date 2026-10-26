@@ -55,16 +55,19 @@ EIRGRID = [P9 + 'Hair/Daz Originals/Eirgrid Hair/Eirgrid Hair G9.duf', [P9 + 'Ha
 # zip / blend_archive: the download and the .blend inside it; objects: what blend_to_obj.py writes
 # (hair, CC head, CC eyes); materials: CC material -> app material name; head, eyes: CC materials
 # used for the fit; scalp: the cap materials (kept closer to the skin); tint: the colour (display
-# values) when the CC diffuse map is not the hair's colour (plain: leave that map out).
+# values) multiplying the colour map; strands: the archive in the zip with the maps the .blend links
+# but lacks: the colour, roughness and specular maps are then made from the hair shader's maps
+# (fit_hair.strand_maps) and the app shades it as strands (figure.js).
 _DL = os.path.join(os.path.expanduser('~'), 'Downloads')
 HAIRS = [
 	dict(key='eirgrid', label='Long braids', node='aprilyshEirgridHair_428373'),
 	dict(key='high-ponytail', label='Slicked-back high bun', node='CCHighPonytail',  # key kept from its first, wrong label: designs and commands name a hair by key
 		zip=os.path.join(_DL, 'female hair.zip'), blend_archive='Blender File.rar', objects=['Hair', 'Body', 'Eye'],
 		# its scalp cap is invisible in the original (shader Opacity 0) and left out; its diffuse map is a
-		# near-black strand pattern in another layout than the cut-out (white along the edges, which showed
-		# as white flakes), coloured in Character Creator: a plain brown, the bun's average, instead
-		materials={'High_polytail_Transparency': 'Ponytail'}, scalp=[], tint=[0.42, 0.27, 0.19], plain=True,
+		# flat near-black in another layout than the cut-out (white along the edges, which showed as white
+		# flakes): the strand maps instead, tinted a mid brown (in the app, this tint matches a Blender
+		# render of the original shader given the earlier plain brown 0.42, 0.27, 0.19; 2026-10-26)
+		materials={'High_polytail_Transparency': 'Ponytail'}, scalp=[], tint=[0.27, 0.19, 0.145], strands='texture.rar',
 		head='Std_Skin_Head', eyes=['Std_Eye_L', 'Std_Eye_R']),
 	dict(key='bun-bangs', label='High bun with bangs', node='CCBunBangs',
 		zip=os.path.join(_DL, 'next-gen 3d female bun bangs hairstyle pbr real-time ready.zip'), blend_archive='blender file.zip',

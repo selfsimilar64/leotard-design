@@ -46,10 +46,10 @@ store page is checked.
     come from lighting: the bump map (same layout as the cut-out, Bump Strength 0.01; also wired as
     a normal map at 0.4), roughness and specular-mask maps (`_roughness.png`, `_HSpecMap.png`, only in
     the zip's `texture.rar`: the .blend links them but lacks them) and a fresnel highlight added to
-    the base colour. `fit_hair.strand_maps` writes a grey strand colour (0.15 + 3 x bump), roughness
+    the base colour. `fit_hair.strand_maps` writes a grey strand colour (0.5 + 1.8 x bump; 0.15 + 3 x left sparse hairline cards near-black), roughness
     (x 0.948, the shader's Roughness Strength) and specular weight (2 x specular map x mask);
-    `figure.js` shades a hair that brings a roughness map with them, tinted `[0.30, 0.21, 0.16]`:
-    roughness x 0.85, specular 0.8, bump scale 5 (the glints along the strands), sheen 0.25,
+    `figure.js` shades a hair that brings a roughness map with them, tinted `[0.27, 0.19, 0.145]`:
+    roughness x 0.85, specular 0.55 (0.8 set off the bloom on the crown), bump scale 4 (the glints along the strands), sheen 0.25,
     anisotropy 0.7 along v. Matched by eye against a Blender Eevee render of the original shader
     (sun 3 + world 0.8, Filmic High Contrast, diffuse replaced by 0.42, 0.27, 0.19). Left: faint dark
     lines at some card edges, glints a little whiter than Blender's, and the normal-map tilt not

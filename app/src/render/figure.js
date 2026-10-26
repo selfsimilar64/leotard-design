@@ -245,6 +245,14 @@ export class FigureView {
 				alphaTest: 0.05, alphaToCoverage: true, side: THREE.DoubleSide,
 				roughness: 0.5, specularIntensity: 0.5, sheen: 0.4, sheenRoughness: 0.45, sheenColor: tint.clone().multiplyScalar(0.6),
 			});
+			if (M.roughnessMap) {
+				// strand shading (a Character Creator hair with the Reallusion shader's maps, fit_hair.strand_maps):
+				// grey strand colour, per-strand roughness and specular weight, strong strand bump for the
+				// glints, highlights stretched along the strands (they run along v); matched by eye to a
+				// Blender render of the original shader (2026-10-26)
+				Object.assign(mat, { roughnessMap: T('roughnessMap'), roughness: 0.85, specularColorMap: T('specWeightMap'), specularIntensity: 0.55,
+					bumpScale: 4, sheen: 0.25, anisotropy: 0.7, anisotropyRotation: Math.PI / 2 });
+			}
 			return withOcclusion(mat, 0.5);
 		}
 		if (part === 'tear') {

@@ -150,10 +150,37 @@ def fit(h, verbose=True):
 		r = maps.get(m, {})
 		mp = lambda k: os.path.join(exp, r[k]).replace('\\', '/') if k in r else None
 		# in Daz terms, so convert_bodies.material reads them like a Daz hair's
-		mats[name] = {'Diffuse Color': {'v': h.get('tint', [1, 1, 1]), 'map': None if h.get('plain') else mp('diffuse')},
+		mats[name] = {'Diffuse Color': {'v': h.get('tint', [1, 1, 1]), 'map': mp('diffuse')},
 			'Cutout Opacity': {'v': 1, 'map': mp('alpha')}, 'Bump Strength': {'v': 1, 'map': mp('bump')}}
+		if h.get('strands'): mats[name].update(strand_maps(h, work, m, mp('bump')))
 	json.dump({'node': h['node'], 'materials': mats}, open(os.path.join(work, 'materials.json'), 'w'), indent=1)
 	return os.path.join(work, 'hair.obj')
+
+
+STRAND_ALBEDO = (0.5, 1.8)  # grey colour = offset + gain x bump (bump ~0.1 in the gaps, ~0.3 on strands; a lower offset left sparse cards near-black at the hairline)
+
+
+def strand_maps(h, work, m, bump):
+	"""A Character Creator hair whose look comes from lighting rather than colour (bodies.py HAIRS
+	`strands`): its diffuse map is a flat near-black in another layout than the cards, and the
+	Reallusion hair shader adds the strands through the bump map (same layout as the cut-out) and its
+	roughness and specular-mask maps (in the download's `textures` archive, not in the .blend).
+	Writes, beside hair.obj: a grey strand colour from the bump (the app tints it by Diffuse Color),
+	the roughness (x the shader's Roughness Strength) and the specular weight (the shader's Specular
+	Map x Specular Mask, x2: 1 = the default 4 % reflectance). Returns them in Daz terms."""
+	from PIL import Image
+	tex = os.path.join(work, 'tex')
+	if not os.path.isdir(tex):
+		with zipfile.ZipFile(h['zip']) as z: inner = z.extract(h['strands'], work)
+		subprocess.run([SEVENZIP, 'x', '-y', '-o' + tex, inner], check=True, stdout=subprocess.DEVNULL)
+		os.remove(inner)
+	find = lambda f: next(os.path.join(dp, f) for dp, _, fs in os.walk(tex) if f in fs)
+	grey = lambda f: np.asarray(Image.open(f).convert('L'), dtype=np.float64) / 255
+	save = lambda a, f: Image.fromarray((np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8)).save(os.path.join(work, f), quality=92) or os.path.join(work, f).replace('\\', '/')
+	rough = grey(find(m + '_roughness.png'))
+	return {'Diffuse Color': {'v': h['tint'], 'map': save(STRAND_ALBEDO[0] + STRAND_ALBEDO[1] * grey(bump), m + '_strands.jpg')},
+		'Specular Lobe 1 Roughness': {'v': 1, 'map': save(rough * 0.948, m + '_roughness.jpg')},
+		'Dual Lobe Specular Weight': {'v': 1, 'map': save(2 * rough * grey(find(m + '_HSpecMap.png')), m + '_specular.jpg')}}
 
 
 def main():
