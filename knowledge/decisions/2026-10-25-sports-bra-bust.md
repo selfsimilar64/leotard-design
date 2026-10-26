@@ -18,6 +18,8 @@ sources:
 
 # Decision
 
+**To be superseded** by the [sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md) (owner, later the same day) once that recipe is baked into the bodies; until then this is what the bodies carry.
+
 Every body past childhood (`teen`, `older-teen`, `petite`, `young`, `adult`, `broad`) is baked with
 `body_ctrl_BreastsFlatten` 1 and `body_ctrl_BreastsIn-Out` 0.5 (`bodies.py BUST`); the children
 are unchanged. Only changes that hold in every pose are used.[^owner]
