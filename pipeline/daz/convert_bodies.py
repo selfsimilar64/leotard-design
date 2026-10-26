@@ -484,7 +484,8 @@ def run(keys=None):
 	manifest['expressions'] = [{'key': e['key'], 'label': e['label']} for e in B.EXPRESSIONS]
 	manifest['figure'] = {'meshes': fmeshes,
 		'hairs': [{'key': h['key'], 'label': h['label'], 'node': h['node']} for h in B.HAIRS if h['node'] in scene], 'moving': [parts[n][0] for n in moving],
-		'movingVertices': [len(scene[n]['P']) for n in moving], 'expression': ['skin', 'eyes', 'mouth'],
+		# the node of each moving block: every hair's part is 'dazhair', so the app tells them apart by node
+		'movingNodes': list(moving), 'movingVertices': [len(scene[n]['P']) for n in moving], 'expression': ['skin', 'eyes', 'mouth'],
 		'expressionVertices': [nC, len(scene['Genesis9Eyes']['P']), len(scene['Genesis9Mouth']['P'])]}
 	if ref_cage is not None:
 		try:

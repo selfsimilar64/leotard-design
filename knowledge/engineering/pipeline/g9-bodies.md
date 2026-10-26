@@ -202,8 +202,10 @@ Data: about 560 MB in `app/public/g9/` (per pose 5 MB for the hair).
 
 # Open
 
-- Hair: only Eirgrid (long braids) is installed with an Interactive License option unknown; a
-  competition bun or ponytail needs a purchase ([figure scenes](/engineering/pipeline/daz-figures.md)).
+- Hair: the app offers Eirgrid (long braids; Interactive License option unknown) and two free
+  Character Creator hairs, a slicked-back high bun and a high bun with bangs
+  ([free character assets](/engineering/pipeline/free-character-assets.md); licence terms not
+  checked). A ponytail still needs another hair ([figure scenes](/engineering/pipeline/daz-figures.md)).
 - Arm-pose aims are a few degrees off their targets ('down' worst); tighten if a photo match needs it.
 
 [^owner]: Product owner, 2026-10-21.

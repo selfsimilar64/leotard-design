@@ -59,7 +59,7 @@ EIRGRID = [P9 + 'Hair/Daz Originals/Eirgrid Hair/Eirgrid Hair G9.duf', [P9 + 'Ha
 _DL = os.path.join(os.path.expanduser('~'), 'Downloads')
 HAIRS = [
 	dict(key='eirgrid', label='Long braids', node='aprilyshEirgridHair_428373'),
-	dict(key='high-ponytail', label='High ponytail', node='CCHighPonytail',
+	dict(key='high-ponytail', label='Slicked-back high bun', node='CCHighPonytail',  # key kept from its first, wrong label: designs and commands name a hair by key
 		zip=os.path.join(_DL, 'female hair.zip'), blend_archive='Blender File.rar', objects=['Hair', 'Body', 'Eye'],
 		# its scalp cap is invisible in the original (shader Opacity 0) and left out; its diffuse map is a
 		# near-black strand pattern in another layout than the cut-out (white along the edges, which showed

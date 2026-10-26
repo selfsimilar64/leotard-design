@@ -11,7 +11,7 @@
 
 # Reference
 
-* [Free character assets added 2026-10-21 (Stacy, breasts pack, two hairs)](free-character-assets.md) (draft) - What the owner's free downloads of 2026-10-21 are and how they could be used: Stacy (CaramelDream3D) and a breasts pack (HyperionStudio) are Genesis 9 morphs installed in the Daz library; the two hairs are Character Creator hair-card exports, not Daz content, and need refitting to Genesis 9 first. Stacy's face and skin are the app's person on every body since 2026-10-21 (Genesis 9 bodies); the rest is not wired into the pipeline yet.
+* [Free character assets added 2026-10-21 (Stacy, breasts pack, two hairs)](free-character-assets.md) (draft) - What the owner's free downloads of 2026-10-21 are and how they could be used: Stacy (CaramelDream3D) and a breasts pack (HyperionStudio) are Genesis 9 morphs installed in the Daz library; the two hairs are Character Creator hair-card exports, not Daz content, fitted to Genesis 9 by fit_hair.py and offered in the app (slicked-back high bun; high bun with bangs). Stacy's face and skin are the app's person on every body since 2026-10-21 (Genesis 9 bodies).
 
 # Section
 

@@ -104,10 +104,15 @@ export class FigureView {
 			expression && expression !== 'neutral' && body.expressions[expression] ? this.file(body.expressions[expression]) : null,
 		]);
 		if (this.state !== key) return;
-		// per-pose positions: eyes cage, mouth cage, hair
+		// per-pose positions: eyes cage, mouth cage, hair; by part and by node (every hair's part is
+		// 'dazhair': keyed by part alone, each hair was drawn with the last one's positions)
 		const moving = {};
 		let o = 0;
-		F.moving.forEach((part, i) => { const n = F.movingVertices[i] * 3; moving[part] = Float32Array.from(new Float32Array(poseBuf, o * 4, n)); o += n; });
+		F.moving.forEach((part, i) => {
+			const n = F.movingVertices[i] * 3;
+			moving[part] = Float32Array.from(new Float32Array(poseBuf, o * 4, n)); o += n;
+			if (F.movingNodes) moving[F.movingNodes[i]] = moving[part];
+		});
 		// expression: changes of the skin, eyes and mouth cages, turned with the head
 		const skinCage = Float32Array.from(cage);
 		if (exprBuf) {
@@ -164,7 +169,7 @@ export class FigureView {
 			}
 			else if (m.stencil) { W = applyStencil(m.stencil, moving[m.name]); WN = new Float32Array(W.length); vertexNormals(W, m.tris, WN); }
 			else if (m.bind) { W = bound(m.bind, L2, N2, T2); WN = weldedNormals(W, m); }
-			else { W = moving[m.name]; WN = weldedNormals(W, m); }
+			else { W = moving[m.node] ?? moving[m.name]; WN = weldedNormals(W, m); }
 			for (let r = 0; r < m.vertices; r++) {
 				const j = m.map[r] * 3;
 				P[r * 3] = W[j]; P[r * 3 + 1] = W[j + 1]; P[r * 3 + 2] = W[j + 2];

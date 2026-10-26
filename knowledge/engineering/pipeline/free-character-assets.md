@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Free character assets added 2026-10-21 (Stacy, breasts pack, two hairs)
-description: "What the owner's free downloads of 2026-10-21 are and how they could be used: Stacy (CaramelDream3D) and a breasts pack (HyperionStudio) are Genesis 9 morphs installed in the Daz library; the two hairs are Character Creator hair-card exports, not Daz content, and need refitting to Genesis 9 first. Stacy's face and skin are the app's person on every body since 2026-10-21 (Genesis 9 bodies); the rest is not wired into the pipeline yet."
+description: "What the owner's free downloads of 2026-10-21 are and how they could be used: Stacy (CaramelDream3D) and a breasts pack (HyperionStudio) are Genesis 9 morphs installed in the Daz library; the two hairs are Character Creator hair-card exports, not Daz content, fitted to Genesis 9 by fit_hair.py and offered in the app (slicked-back high bun; high bun with bangs). Stacy's face and skin are the app's person on every body since 2026-10-21 (Genesis 9 bodies)."
 tags: [daz, genesis9, morphs, hair, assets, pipeline]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-21T13:30:00Z }
@@ -33,12 +33,19 @@ store page is checked.
 
 # Not installed
 
-- **Two hairs** (a short style with a small high bun, ~5.4k vertices; a high bun with bangs,
-  ~52k vertices of hair cards): Reallusion Character Creator exports (Maya, Blender, FBX, OBJ,
-  Unreal), placed on a Character Creator head, no rigging, no Daz files. To use one: fit it to the
-  bare Genesis 9 head in Blender, then either make it a Daz wearable (Transfer Utility, head bone)
-  and list it instead of `EIRGRID`, or attach it in `convert_bodies.py` with the head bone's rigid
-  move per pose plus `hair_shift`. Either is 1-10 % of Eirgrid's 428k vertices. The app draws every
-  `dazhair` mesh today, so more than one hair needs a hair choice keyed by node.
+- **Two hairs**, Reallusion Character Creator exports (Maya, Blender, FBX, OBJ, Unreal) placed on a
+  Character Creator head, no rigging, no Daz files. Both are fitted to the bare Genesis 9 head by
+  `pipeline/daz/fit_hair.py` and carried per body and pose by `convert_bodies.py` (the head's cranium
+  similarity, then `hair_shift`); the app offers them beside Eirgrid (`bodies.py HAIRS`):
+  - `female hair.zip`, key `high-ponytail`, label **Slicked-back high bun** (renamed 2026-10-26:
+    it is a bun, no ponytail and no bangs; the key stays because designs and commands use it):
+    ~5k vertices. Its scalp cap is invisible in the original and left out; its diffuse map is in
+    another layout than the cut-out, so it is drawn a plain brown (`plain`, `tint`), which reads
+    flat beside the bun with bangs.
+  - `next-gen 3d female bun bangs ...zip`, key `bun-bangs`, **High bun with bangs**: ~52k vertices.
+  - Until 2026-10-26 every hair after the first was drawn with the last hair's per-pose positions
+    (the app keyed them by part, `dazhair`, which all hairs share), so the slicked-back bun showed as
+    shards and Eirgrid as bun-bangs' first vertices; the manifest now carries `movingNodes` and
+    `app/src/render/figure.js` reads each hair by node.
 - **Corset 1 for Genesis 9** (DigitalDrift clothing) was also in Downloads; the owner did not list
   it, so it was left alone.
