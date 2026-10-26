@@ -109,42 +109,25 @@ BODIES = [
 REF = 'young'
 
 # Poses. 'a-pose': the mannequin stance (upper arm 13 degrees from vertical, a little forward;
-# elbow bent 14 degrees forward), the rest pose every design is drawn in. Daz poses: all 30 of
-# Skillful Routine (3D Sugar), the first eight chosen in 2026-10 as the ones that show a leotard
-# best, the rest added on the owner's request (2026-10-21); the app's pose picker lists them in
-# this order. n: the pose's number in the pack (SR G9 Feminine NN ...); the props some of its
+# elbow bent 14 degrees forward), the rest pose every design is drawn in. Daz poses: 13 of the 30 in
+# Skillful Routine (3D Sugar), the first five chosen in 2026-10 as the ones that show a leotard
+# best, the rest added on the owner's request (2026-10-21); 17 others were removed on the owner's
+# request (2026-10-26). The app's pose picker lists them in this order. n: the pose's number in the pack (SR G9 Feminine NN ...); the props some of its
 # previews show (ball, hoop) are not part of the figure.
 UPPER_DIR = [math.sin(math.radians(13)), -math.cos(math.radians(13)), 0.06]
 ELBOW_BEND = math.radians(14)
 POSES = [
 	dict(key='standing', label='Standing, presenting', n=5),
 	dict(key='arms-outstretched', label='Arms outstretched', n=1),
-	dict(key='one-arm-up', label='One arm up', n=10),
 	dict(key='passe', label='On one leg, hands behind head', n=8),
-	dict(key='releve-arms-up', label='On one leg, arms up', n=18),
-	dict(key='split-leap', label='Split leap', n=16),
 	dict(key='stag-jump', label='Stag jump', n=25),
 	dict(key='kneeling', label='Kneeling', n=13),
 	dict(key='lunge-arms-up', label='Low lunge, arms up', n=2),
-	dict(key='lying-legs-up', label='Lying, legs up', n=3),
 	dict(key='handstand', label='Handstand', n=4),
-	dict(key='legs-up', label='Legs up, on the hands', n=6),
-	dict(key='chest-stand', label='Chest stand', n=7),
 	dict(key='cartwheel-low', label='Cartwheel, low', n=9),
-	dict(key='lying-leg-up', label='Lying, one leg up', n=11),
-	dict(key='one-arm-balance', label='One-arm balance', n=12),
-	dict(key='lying', label='Lying on the floor', n=14),
-	dict(key='swinging', label='Swinging', n=15),
 	dict(key='back-arched', label='Bridge, back arched', n=17),
 	dict(key='lunge-arm-up', label='Lunge, arm up', n=19),
-	dict(key='kneeling-leg-up', label='Kneeling, one leg up', n=20),
-	dict(key='cartwheel', label='Cartwheel', n=21),
 	dict(key='kneeling-arm-up', label='Kneeling, arm up', n=22),
-	dict(key='jump-arched', label='Jump, back arched', n=23),
-	dict(key='walkover', label='Walkover', n=24),
-	dict(key='floor-split', label='Split on the floor', n=26),
-	dict(key='elbow-balance', label='Elbow balance', n=27),
-	dict(key='pirouette', label='Pirouette', n=28),
 	dict(key='arms-open', label='Arms open', n=29),
 	dict(key='one-knee', label='On one knee', n=30),
 ]
