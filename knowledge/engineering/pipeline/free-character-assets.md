@@ -39,9 +39,21 @@ store page is checked.
   similarity, then `hair_shift`); the app offers them beside Eirgrid (`bodies.py HAIRS`):
   - `female hair.zip`, key `high-ponytail`, label **Slicked-back high bun** (renamed 2026-10-26:
     it is a bun, no ponytail and no bangs; the key stays because designs and commands use it):
-    ~5k vertices. Its scalp cap is invisible in the original and left out; its diffuse map is in
-    another layout than the cut-out, so it is drawn a plain brown (`plain`, `tint`), which reads
-    flat beside the bun with bangs.
+    ~5k vertices. Its scalp cap is invisible in the original and left out. **Strand shading**
+    (2026-10-26, owner: as close to the Blender render as possible, colour as a tintable grey):
+    the Reallusion hair shader (`rl_hair_shader` v1.1.8, Enable Color off) takes its colour from a
+    diffuse map that is a flat near-black (mean 0.02) in another layout than the cards; the strands
+    come from lighting: the bump map (same layout as the cut-out, Bump Strength 0.01; also wired as
+    a normal map at 0.4), roughness and specular-mask maps (`_roughness.png`, `_HSpecMap.png`, only in
+    the zip's `texture.rar`: the .blend links them but lacks them) and a fresnel highlight added to
+    the base colour. `fit_hair.strand_maps` writes a grey strand colour (0.15 + 3 x bump), roughness
+    (x 0.948, the shader's Roughness Strength) and specular weight (2 x specular map x mask);
+    `figure.js` shades a hair that brings a roughness map with them, tinted `[0.30, 0.21, 0.16]`:
+    roughness x 0.85, specular 0.8, bump scale 5 (the glints along the strands), sheen 0.25,
+    anisotropy 0.7 along v. Matched by eye against a Blender Eevee render of the original shader
+    (sun 3 + world 0.8, Filmic High Contrast, diffuse replaced by 0.42, 0.27, 0.19). Left: faint dark
+    lines at some card edges, glints a little whiter than Blender's, and the normal-map tilt not
+    reproduced (Blender normalises the grey map, so it is a near-constant ~40 degree tilt).
   - `next-gen 3d female bun bangs ...zip`, key `bun-bangs`, **High bun with bangs**: ~52k vertices.
   - Until 2026-10-26 every hair after the first was drawn with the last hair's per-pose positions
     (the app keyed them by part, `dazhair`, which all hairs share), so the slicked-back bun showed as

@@ -4,7 +4,7 @@
 
 # Playbook
 
-* [Tutorial: a black mesh-and-crystal leotard, step by step](black-mesh-sash-leotard.md) (draft) - A first walkthrough of the designer app for a new user: rebuild a black 3/4-sleeve leotard with a mesh yoke, a keyhole back, a mesh sash band outlined in crystals, scattered stones and a hip logo, learning the Shape pane, the piece pane (materials, colour, sheerness), the Draw line tool, the Stones and Logo tools, edge finishes, hiding lines, posing and saving.
+* [Tutorial: a black mesh-and-crystal leotard, step by step](black-mesh-sash-leotard.md) (draft) - A first walkthrough of the designer app for a new user: rebuild a black 3/4-sleeve leotard with a peaked mesh yoke, a diagonal crystal seam from the yoke's apex to the waist, a mesh wedge tapering across the front and a reversed wedge across the back, a keyhole under a straight bound bandeau seam, scattered stones and a hip logo; learning the Shape pane, the piece pane (materials, colour, sheerness), the Draw line tool with ends attached to seams, the Stones and Logo tools, edge finishes, hiding lines, posing and saving.
 
 # Section
 

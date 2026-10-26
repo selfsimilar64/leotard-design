@@ -5,7 +5,7 @@
  "meta": {
   "name": "Tutorial black mesh sash",
   "author": "",
-  "created": "2026-10-26T18:46:40.142Z",
+  "created": "2026-10-26T19:25:09.706Z",
   "notes": "",
   "block": {
    "neck": "crew",
@@ -20,11 +20,11 @@
   "start": "plain-tank"
  },
  "ids": {
-  "c": 14,
-  "p": 10,
-  "g": 8,
-  "d": 2,
-  "t": 7
+  "c": 17,
+  "p": 11,
+  "g": 13,
+  "t": 5,
+  "d": 2
  },
  "body": {
   "size": "young",
@@ -33,7 +33,8 @@
   "expression": "neutral",
   "finish": "Realistic skin (Daz)",
   "headFinish": "Matte white fibreglass",
-  "pose": "a-pose"
+  "pose": "a-pose",
+  "hair": "bun-bangs"
  },
  "scene": {
   "rig": "White seamless (photo studio)",
@@ -1203,7 +1204,7 @@
    "id": "c10",
    "layer": "L0",
    "role": "seam",
-   "name": "Front yoke seam",
+   "name": "Yoke edge",
    "closed": false,
    "mirror": "none",
    "shape": {
@@ -1214,38 +1215,28 @@
    "points": [
     {
      "sp": {
-      "f": 95006,
+      "f": 94924,
       "b": [
-       0.171131,
-       0.017779
+       0.57585,
+       0.405294
       ]
      },
      "kind": "corner",
      "on": {
       "curve": "c3",
-      "t": 0.17916108820521748,
+      "t": 0.32919010734865367,
       "mirror": true
      }
     },
     {
      "sp": {
-      "f": 90570,
+      "f": 193841,
       "b": [
-       0.205783,
-       0.172376
+       0.354151,
+       0.271791
       ]
      },
-     "kind": "smooth"
-    },
-    {
-     "sp": {
-      "f": 188029,
-      "b": [
-       0.295475,
-       0.597364
-      ]
-     },
-     "kind": "smooth"
+     "kind": "corner"
     },
     {
      "sp": {
@@ -1267,6 +1258,167 @@
    "id": "c11",
    "layer": "L0",
    "role": "seam",
+   "name": "Front wedge upper",
+   "closed": false,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 196267,
+      "b": [
+       0.082822,
+       0.867526
+      ]
+     },
+     "kind": "corner",
+     "on": {
+      "curve": "c4",
+      "t": 0.3608964376634034
+     }
+    },
+    {
+     "sp": {
+      "f": 184243,
+      "b": [
+       0.223331,
+       0.317235
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 190307,
+      "b": [
+       0.860899,
+       0.129421
+      ]
+     },
+     "kind": "corner",
+     "on": {
+      "curve": "c4",
+      "t": 0.6336915876761593,
+      "mirror": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "c12",
+   "layer": "L0",
+   "role": "seam",
+   "name": "Front wedge lower",
+   "closed": false,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 83765,
+      "b": [
+       0.129421,
+       0.860899
+      ]
+     },
+     "kind": "corner",
+     "on": {
+      "curve": "c4",
+      "t": 0.6336842712279704
+     }
+    },
+    {
+     "sp": {
+      "f": 83814,
+      "b": [
+       0.384606,
+       0.544676
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 94452,
+      "b": [
+       0.748368,
+       0.230439
+      ]
+     },
+     "kind": "corner",
+     "on": {
+      "curve": "c4",
+      "t": 0.680224949794765,
+      "mirror": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "c13",
+   "layer": "L0",
+   "role": "seam",
+   "name": "Diagonal",
+   "closed": false,
+   "mirror": "none",
+   "shape": {
+    "mod": "none",
+    "amp": 0,
+    "period": 0
+   },
+   "points": [
+    {
+     "sp": {
+      "f": 93217,
+      "b": [
+       0.231923,
+       0.344031
+      ]
+     },
+     "kind": "corner",
+     "on": {
+      "curve": "c10",
+      "t": 0.4511673761407321
+     }
+    },
+    {
+     "sp": {
+      "f": 199005,
+      "b": [
+       0.670772,
+       0.151627
+      ]
+     },
+     "kind": "smooth"
+    },
+    {
+     "sp": {
+      "f": 190278,
+      "b": [
+       0.635983,
+       0.307812
+      ]
+     },
+     "kind": "corner",
+     "on": {
+      "curve": "c11",
+      "t": 0.8590128570695603
+     }
+    }
+   ]
+  },
+  {
+   "id": "c14",
+   "layer": "L0",
+   "role": "seam",
    "name": "Back yoke seam",
    "closed": false,
    "mirror": "none",
@@ -1278,27 +1430,37 @@
    "points": [
     {
      "sp": {
-      "f": 89130,
+      "f": 189737,
       "b": [
-       0.128243,
-       0.277636
+       0.30824,
+       0.100364
       ]
      },
      "kind": "corner",
      "on": {
       "curve": "c3",
-      "t": 0.5392640847297941
+      "t": 0.529785246479442
      }
     },
     {
      "sp": {
-      "f": 97112,
+      "f": 197799,
       "b": [
-       0.526754,
-       0.225862
+       0.580476,
+       0.325796
       ]
      },
-     "kind": "smooth"
+     "kind": "corner"
+    },
+    {
+     "sp": {
+      "f": 199836,
+      "b": [
+       0.551486,
+       0.435445
+      ]
+     },
+     "kind": "corner"
     },
     {
      "sp": {
@@ -1318,11 +1480,11 @@
    ]
   },
   {
-   "id": "c12",
+   "id": "c15",
    "layer": "L0",
    "role": "seam",
-   "name": "Band upper edge",
-   "closed": true,
+   "name": "Back wedge upper",
+   "closed": false,
    "mirror": "none",
    "shape": {
     "mod": "none",
@@ -1332,62 +1494,51 @@
    "points": [
     {
      "sp": {
-      "f": 196402,
+      "f": 98292,
       "b": [
-       0.064146,
-       0.763179
+       0.661083,
+       0.255833
+      ]
+     },
+     "kind": "corner",
+     "on": {
+      "curve": "c4",
+      "t": 0.2853321550761702,
+      "mirror": true
+     }
+    },
+    {
+     "sp": {
+      "f": 97418,
+      "b": [
+       0.277077,
+       0.188351
       ]
      },
      "kind": "smooth"
     },
     {
      "sp": {
-      "f": 83615,
+      "f": 83582,
       "b": [
-       0.310812,
-       0.439696
+       0.155858,
+       0.834243
       ]
      },
-     "kind": "smooth"
-    },
-    {
-     "sp": {
-      "f": 89554,
-      "b": [
-       0.298743,
-       0.298976
-      ]
-     },
-     "kind": "smooth"
-    },
-    {
-     "sp": {
-      "f": 190165,
-      "b": [
-       0.279273,
-       0.578483
-      ]
-     },
-     "kind": "smooth"
-    },
-    {
-     "sp": {
-      "f": 200157,
-      "b": [
-       0.055031,
-       0.597821
-      ]
-     },
-     "kind": "smooth"
+     "kind": "corner",
+     "on": {
+      "curve": "c4",
+      "t": 0.5328013365527181
+     }
     }
    ]
   },
   {
-   "id": "c13",
+   "id": "c16",
    "layer": "L0",
    "role": "seam",
-   "name": "Band lower edge",
-   "closed": true,
+   "name": "Back wedge lower",
+   "closed": false,
    "mirror": "none",
    "shape": {
     "mod": "none",
@@ -1397,53 +1548,42 @@
    "points": [
     {
      "sp": {
-      "f": 184166,
+      "f": 190425,
       "b": [
-       0.022558,
-       0.412308
+       0.246557,
+       0.746035
+      ]
+     },
+     "kind": "corner",
+     "on": {
+      "curve": "c4",
+      "t": 0.4779151458609698,
+      "mirror": true
+     }
+    },
+    {
+     "sp": {
+      "f": 89822,
+      "b": [
+       0.499674,
+       0.003305
       ]
      },
      "kind": "smooth"
     },
     {
      "sp": {
-      "f": 83818,
+      "f": 184284,
       "b": [
-       0.50586,
-       0.435581
+       0.458182,
+       0.535996
       ]
      },
-     "kind": "smooth"
-    },
-    {
-     "sp": {
-      "f": 193303,
-      "b": [
-       0.060016,
-       0.178437
-      ]
-     },
-     "kind": "smooth"
-    },
-    {
-     "sp": {
-      "f": 94507,
-      "b": [
-       0.200148,
-       0.457923
-      ]
-     },
-     "kind": "smooth"
-    },
-    {
-     "sp": {
-      "f": 190296,
-      "b": [
-       0.657598,
-       0.288123
-      ]
-     },
-     "kind": "smooth"
+     "kind": "corner",
+     "on": {
+      "curve": "c4",
+      "t": 0.5788731240500313
+     }
     }
    ]
   }
@@ -1454,7 +1594,7 @@
    "layer": "L0",
    "block": "front",
    "mirror": "none",
-   "name": "Front",
+   "name": "Left bodice",
    "seed": {
     "f": 196782,
     "b": [
@@ -1508,7 +1648,8 @@
     {
      "fabric": "mesh",
      "colour": "#0c0c10",
-     "second": "Tone-on-tone"
+     "second": "Tone-on-tone",
+     "sheer": 0.37
     }
    ]
   },
@@ -1536,6 +1677,67 @@
   {
    "id": "p5",
    "layer": "L0",
+   "name": "Lower front",
+   "seed": {
+    "f": 92791,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "matte",
+     "colour": "#0c0c10",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p6",
+   "layer": "L0",
+   "name": "Front wedge",
+   "seed": {
+    "f": 200335,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "mesh",
+     "colour": "#0c0c10",
+     "second": "Tone-on-tone",
+     "sheer": 0.37
+    }
+   ]
+  },
+  {
+   "id": "p7",
+   "layer": "L0",
+   "name": "Right bodice",
+   "seed": {
+    "f": 198168,
+    "b": [
+     0.333333,
+     0.333333
+    ]
+   },
+   "mirror": "none",
+   "stack": [
+    {
+     "fabric": "matte",
+     "colour": "#0c0c10",
+     "second": "Tone-on-tone"
+    }
+   ]
+  },
+  {
+   "id": "p8",
+   "layer": "L0",
    "name": "Back yoke",
    "seed": {
     "f": 90612,
@@ -1555,11 +1757,11 @@
    ]
   },
   {
-   "id": "p6",
+   "id": "p9",
    "layer": "L0",
-   "name": "Lower front",
+   "name": "Back",
    "seed": {
-    "f": 92791,
+    "f": 200255,
     "b": [
      0.333333,
      0.333333
@@ -1575,31 +1777,11 @@
    ]
   },
   {
-   "id": "p7",
+   "id": "p10",
    "layer": "L0",
-   "name": "Lower back",
+   "name": "Back wedge",
    "seed": {
     "f": 99737,
-    "b": [
-     0.333333,
-     0.333333
-    ]
-   },
-   "mirror": "none",
-   "stack": [
-    {
-     "fabric": "matte",
-     "colour": "#0c0c10",
-     "second": "Tone-on-tone"
-    }
-   ]
-  },
-  {
-   "id": "p8",
-   "layer": "L0",
-   "name": "Front band",
-   "seed": {
-    "f": 200338,
     "b": [
      0.333333,
      0.333333
@@ -1614,32 +1796,12 @@
      "sheer": 0.37
     }
    ]
-  },
-  {
-   "id": "p9",
-   "layer": "L0",
-   "name": "Back band",
-   "seed": {
-    "f": 200255,
-    "b": [
-     0.333333,
-     0.333333
-    ]
-   },
-   "mirror": "none",
-   "stack": [
-    {
-     "fabric": "mesh",
-     "colour": "#0c0c10",
-     "second": "Tone-on-tone"
-    }
-   ]
   }
  ],
  "straps": [],
  "trims": [
   {
-   "id": "t2",
+   "id": "t1",
    "on": [
     "c1"
    ],
@@ -1651,7 +1813,7 @@
    }
   },
   {
-   "id": "t3",
+   "id": "t2",
    "on": [
     "c7"
    ],
@@ -1663,7 +1825,7 @@
    }
   },
   {
-   "id": "t4",
+   "id": "t3",
    "on": [
     "c8"
    ],
@@ -1675,21 +1837,9 @@
    }
   },
   {
-   "id": "t5",
+   "id": "t4",
    "on": [
-    "c10"
-   ],
-   "kind": "tape",
-   "fabric": {
-    "fabric": "shiny",
-    "colour": "#0c0c10",
-    "second": "Tone-on-tone"
-   }
-  },
-  {
-   "id": "t6",
-   "on": [
-    "c11"
+    "c14"
    ],
    "kind": "tape",
    "fabric": {
@@ -1705,10 +1855,10 @@
    "id": "d1",
    "at": {
     "sp": {
-     "f": 188204,
+     "f": 188090,
      "b": [
-      0.692027,
-      0.182253
+      0.083237,
+      0.357091
      ]
     }
    },
@@ -1727,13 +1877,13 @@
   {
    "id": "g1",
    "kind": "row",
-   "name": "",
+   "name": "Yoke edge rows",
    "on": {
-    "curve": "c11"
+    "curve": "c10"
    },
    "params": {
     "size": "ss12",
-    "rows": 1,
+    "rows": 2,
     "offset": 0.004,
     "gap": 1.15
    },
@@ -1747,9 +1897,9 @@
   {
    "id": "g2",
    "kind": "row",
-   "name": "",
+   "name": "Diagonal row",
    "on": {
-    "curve": "c12"
+    "curve": "c13"
    },
    "params": {
     "size": "ss12",
@@ -1767,9 +1917,9 @@
   {
    "id": "g3",
    "kind": "row",
-   "name": "",
+   "name": "Front wedge upper row",
    "on": {
-    "curve": "c13"
+    "curve": "c11"
    },
    "params": {
     "size": "ss12",
@@ -1787,9 +1937,9 @@
   {
    "id": "g4",
    "kind": "row",
-   "name": "",
+   "name": "Front wedge lower row",
    "on": {
-    "curve": "c10"
+    "curve": "c12"
    },
    "params": {
     "size": "ss12",
@@ -1806,8 +1956,48 @@
   },
   {
    "id": "g5",
+   "kind": "row",
+   "name": "Back wedge upper row",
+   "on": {
+    "curve": "c15"
+   },
+   "params": {
+    "size": "ss12",
+    "rows": 1,
+    "offset": 0.004,
+    "gap": 1.15
+   },
+   "stone": "Crystal AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 31689
+  },
+  {
+   "id": "g6",
+   "kind": "row",
+   "name": "Back wedge lower row",
+   "on": {
+    "curve": "c16"
+   },
+   "params": {
+    "size": "ss12",
+    "rows": 1,
+    "offset": 0.004,
+    "gap": 1.15
+   },
+   "stone": "Crystal AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 39608
+  },
+  {
+   "id": "g7",
    "kind": "fill",
-   "name": "",
+   "name": "Left bodice scatter",
    "on": {
     "panel": "p1"
    },
@@ -1821,12 +2011,31 @@
    "colourRamp": null,
    "shape": "round",
    "mirror": "none",
-   "seed": 31689
+   "seed": 47527
   },
   {
-   "id": "g6",
+   "id": "g8",
    "kind": "fill",
-   "name": "",
+   "name": "Right bodice scatter",
+   "on": {
+    "panel": "p7"
+   },
+   "params": {
+    "size": "ss8",
+    "pattern": "random",
+    "gap": 6
+   },
+   "stone": "Crystal AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 55446
+  },
+  {
+   "id": "g9",
+   "kind": "fill",
+   "name": "Sleeve scatter",
    "on": {
     "panel": "p3"
    },
@@ -1840,12 +2049,12 @@
    "colourRamp": null,
    "shape": "round",
    "mirror": "none",
-   "seed": 39608
+   "seed": 63365
   },
   {
-   "id": "g7",
+   "id": "g10",
    "kind": "row",
-   "name": "",
+   "name": "Cuff rows",
    "on": {
     "curve": "c8"
    },
@@ -1860,7 +2069,73 @@
    "colourRamp": null,
    "shape": "round",
    "mirror": "none",
-   "seed": 47527
+   "seed": 71284
+  },
+  {
+   "id": "g11",
+   "kind": "scatter",
+   "name": "Apex fan (left)",
+   "on": {
+    "panel": "p1"
+   },
+   "params": {
+    "from": {
+     "curve": "c10",
+     "t": 0.45
+    },
+    "near": 0.85,
+    "far": 0,
+    "distance": 0.06,
+    "sizes": [
+     {
+      "size": "ss10",
+      "weight": 1
+     },
+     {
+      "size": "ss8",
+      "weight": 2
+     }
+    ]
+   },
+   "stone": "Crystal AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 79203
+  },
+  {
+   "id": "g12",
+   "kind": "scatter",
+   "name": "Apex fan (right)",
+   "on": {
+    "panel": "p7"
+   },
+   "params": {
+    "from": {
+     "curve": "c10",
+     "t": 0.45
+    },
+    "near": 0.85,
+    "far": 0,
+    "distance": 0.06,
+    "sizes": [
+     {
+      "size": "ss10",
+      "weight": 1
+     },
+     {
+      "size": "ss8",
+      "weight": 2
+     }
+    ]
+   },
+   "stone": "Crystal AB",
+   "palette": null,
+   "colourRamp": null,
+   "shape": "round",
+   "mirror": "none",
+   "seed": 87122
   }
  ],
  "placed": [],
