@@ -33,3 +33,14 @@ Chosen settings (owner): Daz BreastsFlatten 0.25, BreastsIn-Out 1.0, lift 2 cm, 
   `embed` (fold-free Tutte layout of the band's skin on the cloth, `t_in` 0.15) removes the midline
   hairline, which was the two walls' skin sheared onto the cloth; `untangle` and `fill` were tries.
   Owner's target (moodboard back views): fabric sits a little into the cleft, smoothly, cheeks read separate.
+- Owner chose cling 0.002. Spurs where the seat met the gusset were skin just behind the crotch
+  dragged 2-4.6 cm back onto the cloth: `front=-3.0` (the band ends 3 cm behind the crotch point)
+  removes them. Settings now: `along=0.25, front=-3.0, front_soft=3.0, w_lo=1.5, w_hi=4.5,
+  w_soft=2.5, top_soft=6.0, leg_keep=0.3, embed=True, t_in=0.15, cling=0.002`.
+- Poses (`poses_seat.py`): carrying the a-pose change into a pose (`posecarry.carry`, offsets
+  turned with each neighbourhood) pleats the opened cleft in the split leap, stag jump and lunge.
+  Draping each baked pose instead (`run_posed`: a-pose band, posed mesh rigidly fitted to the
+  a-pose pelvis, `per_pose=True`) is clean in standing, kneeling, lunge and split leap; the stag
+  jump (one leg raised, seat twisted) keeps a dark crumple beside the cleft. Tried for it and
+  dropped: cloth kept off the thighs (`leg_cloth`), a narrower band, a view following the seat's
+  normal (`follow`, worse everywhere). Not baked: per-pose drapes would replace a single morph.

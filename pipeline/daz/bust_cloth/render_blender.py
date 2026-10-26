@@ -32,7 +32,7 @@ for it in J['items']:
 		ob = bpy.context.selected_objects[0]; ob.data.materials.clear(); ob.data.materials.append(mat)
 		for p in ob.data.polygons: p.use_smooth = True
 		cur = (it['obj'], ob)
-	t = Vector(it['target']); a = {'front': 0, '34': 35, 'side': 90, 'back': 180, 'back34': 145, 'low': 180}.get(it['view'], 0)
+	t = Vector(it['target']); a = it['az'] if 'az' in it else {'front': 0, '34': 35, 'side': 90, 'back': 180, 'back34': 145, 'low': 180}.get(it['view'], 0)
 	e = it.get('elev', -40 if it['view'] == 'low' else 0)
 	d = it.get('dist', 1.2)
 	ce = math.cos(math.radians(e))

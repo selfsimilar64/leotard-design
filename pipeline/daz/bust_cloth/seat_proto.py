@@ -92,7 +92,23 @@ def leg_weight():
 	return _legw
 
 
-def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff=1.0, along=1.0, thick=0.15, relax=0.01, verbose=True, node_all=False, fill=0, cling=0.0):
+def view_basis(tilt, dvec=None):
+	"""View frame: d into the body, e1 sideways (close to x), e2 up the view. Default: from behind,
+	`tilt` degrees below; dvec: a given direction into the body (then tilted the same way)."""
+	t = np.radians(tilt)
+	if dvec is None:
+		d = np.array([0, np.sin(t), np.cos(t)])
+	else:
+		b = np.asarray(dvec, float); b /= np.linalg.norm(b)
+		up = np.array([0, 1.0, 0]) - b[1] * b; up /= np.linalg.norm(up)
+		d = b * np.cos(t) + up * np.sin(t)
+	e1 = np.array([1.0, 0, 0]) - d[0] * d; e1 /= np.linalg.norm(e1)
+	e2 = np.cross(d, e1)
+	if e2[1] < 0: e2 = -e2
+	return d, e1, e2
+
+
+def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff=1.0, along=1.0, thick=0.15, relax=0.01, verbose=True, node_all=False, fill=0, cling=0.0, dvec=None):
 	"""A fresh cloth: a regular grid over the seat as seen from behind and a little below, laid on the
 	skin's envelope from that view (so no extra material sits in the cleft), held where the band's
 	free weight is ~0, then pulled taut (tension-only springs, stronger across than along when
@@ -102,18 +118,20 @@ def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff
 	t0 = time.time()
 	S, quads = D.C.subdiv(); PS = S @ P; fs = S @ free
 	TS = g9.triangles(quads); NS = g9.vertex_normals(PS, TS)
-	t = np.radians(tilt)
-	d = np.array([0, np.sin(t), np.cos(t)]); e2 = np.array([0, np.cos(t), -np.sin(t)])
-	to_v = lambda Q: np.stack([Q[:, 0], Q @ e2, -(Q @ d)], 1)
-	from_v = lambda V: np.outer(V[:, 0], [1, 0, 0]) + np.outer(V[:, 1], e2) - np.outer(V[:, 2], d)
+	d, e1, e2 = view_basis(tilt, dvec)
+	to_v = lambda Q: np.stack([Q @ e1, Q @ e2, -(Q @ d)], 1)
+	from_v = lambda V: np.outer(V[:, 0], e1) + np.outer(V[:, 1], e2) - np.outer(V[:, 2], d)
 	reg = fs > 1e-3
 	Vr = to_v(PS[reg])
 	x0, y0 = Vr[:, 0].min(), Vr[:, 1].min()
 	nx = int((Vr[:, 0].max() - x0) / h) + 1; ny = int((Vr[:, 1].max() - y0) / h) + 1
 	lo, hi = PS[reg].min(0) - 6, PS[reg].max(0) + 6
 	sel = ((PS[TS] > lo) & (PS[TS] < hi)).all(2).all(1)
+	# the starting view sees the seat itself: thigh skin away from the band cannot hide it
+	lws = S @ leg_weight()
+	vis = sel & ~((lws[TS] > 0.6) & (fs[TS] < 1e-3)).all(1)
 	Vall = to_v(PS)
-	s, o = B.raster(Vall, TS[sel], fs[:, None], x0, y0, h, nx, ny)
+	s, o = B.raster(Vall, TS[vis], fs[:, None], x0, y0, h, nx, ny)
 	cov = np.isfinite(s)
 	wgrid = np.where(cov, o[..., 0], 0)
 	from scipy.ndimage import binary_dilation
@@ -183,6 +201,10 @@ def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff
 def run_grid(P, **kw):
 	L = landmarks(P)
 	free, inside = region(P, L, **{k: v for k, v in kw.items() if k in ('w_lo', 'w_hi', 'w_soft', 'top_soft', 'front_soft', 'front', 'bot', 'bot_soft')})
+	lc = kw.get('leg_cloth')
+	if lc is not None:
+		# the cloth itself stays off the thighs: held softly along the crease where thigh skin begins
+		free = free * (1 - sstep((leg_weight() - lc) / kw.get('leg_soft', 0.4)))
 	free = np.where(inside, 0.002 + free, 0)
 	X, CF = drape_grid(P, free, **{k: v for k, v in kw.items() if k in ('tilt', 'h', 'off', 'shrink', 'iters', 'stiff', 'along', 'thick', 'relax', 'node_all', 'fill', 'cling')})
 	dip = kw.get('dip', 0.0)
@@ -259,7 +281,7 @@ def untangle(P, Q, X, CF, free, tilt=30.0, hidden=0.3, floor=0.35, iters=2000, h
 	return R, wall
 
 
-def embed(P, Q, X, CF, free, tilt=30.0, t_in=0.3, h=0.15, thick=0.1):
+def embed(P, Q, X, CF, free, tilt=30.0, t_in=0.3, h=0.15, thick=0.1, dvec=None):
 	"""Fold-free layout of the band's skin on the cloth (a Tutte embedding): in the view plane
 	(behind, `tilt` below), every band vertex with free >= t_in sits at the mean of its mesh
 	neighbours, the rest stay where the transfer put them (the fixed boundary). A layout made
@@ -269,10 +291,9 @@ def embed(P, Q, X, CF, free, tilt=30.0, t_in=0.3, h=0.15, thick=0.1):
 	from scipy.sparse.linalg import spsolve
 	from scipy.ndimage import distance_transform_edt
 	F = fig(); A = F['A'].tocsr()
-	t = np.radians(tilt)
-	d = np.array([0, np.sin(t), np.cos(t)]); e2 = np.array([0, np.cos(t), -np.sin(t)])
-	to_v = lambda R: np.stack([R[:, 0], R @ e2, -(R @ d)], 1)
-	from_v = lambda V: np.outer(V[:, 0], [1, 0, 0]) + np.outer(V[:, 1], e2) - np.outer(V[:, 2], d)
+	d, e1, e2 = view_basis(tilt, dvec)
+	to_v = lambda R: np.stack([R @ e1, R @ e2, -(R @ d)], 1)
+	from_v = lambda V: np.outer(V[:, 0], e1) + np.outer(V[:, 1], e2) - np.outer(V[:, 2], d)
 	VX = to_v(X); TC = g9.triangles(CF)
 	x0, y0 = VX[:, 0].min() - 1, VX[:, 1].min() - 1
 	nx = int((VX[:, 0].max() + 1 - x0) / h) + 1; ny = int((VX[:, 1].max() + 1 - y0) / h) + 1
@@ -296,3 +317,42 @@ def embed(P, Q, X, CF, free, tilt=30.0, t_in=0.3, h=0.15, thick=0.1):
 	VR[idx, 2] = B.sample(cz, x0, y0, h, VR[idx, 0], VR[idx, 1]) - thick
 	R[idx] = from_v(VR[idx])
 	return R
+
+
+def kabsch(Pfrom, Pto, w=None):
+	"""Rigid transform (R, t) with R @ p + t mapping Pfrom onto Pto (least squares, weights w)."""
+	w = np.ones(len(Pfrom)) if w is None else w
+	ca = (Pfrom * w[:, None]).sum(0) / w.sum(); cb = (Pto * w[:, None]).sum(0) / w.sum()
+	H = ((Pfrom - ca) * w[:, None]).T @ (Pto - cb)
+	U, s, Vt = np.linalg.svd(H)
+	dd = np.sign(np.linalg.det(Vt.T @ U.T))
+	R = Vt.T @ np.diag([1, 1, dd]) @ U.T
+	return R, cb - R @ ca
+
+
+def run_posed(P_a, P_pose, **kw):
+	"""The cleft cloth on a posed body: the band is the a-pose's (same vertices), the posed mesh is
+	turned into the a-pose's frame by the best rigid fit of the pelvis region, draped, turned back."""
+	L = landmarks(P_a)
+	free, inside = region(P_a, L, **{k: v for k, v in kw.items() if k in ('w_lo', 'w_hi', 'w_soft', 'top_soft', 'front_soft', 'front', 'bot', 'bot_soft')})
+	lc = kw.get('leg_cloth')
+	if lc is not None: free = free * (1 - sstep((leg_weight() - lc) / kw.get('leg_soft', 0.4)))
+	free = np.where(inside, 0.002 + free, 0)
+	F = fig()
+	W = F['weights']
+	pel = sum(W[k] for k in ('pelvis', 'hip') if k in W)
+	sel = (pel > 0.5) | (free > 0.01)
+	R, t = kabsch(P_pose[sel], P_a[sel], pel[sel] + free[sel])
+	Pal = P_pose @ R.T + t
+	dvec = None
+	if kw.get('follow'):
+		# look at the seat along its own direction in this pose (minus its mean outward normal)
+		N = g9.vertex_normals(Pal, F['tris'])
+		m = free > 0.3
+		dvec = -(N[m] * free[m, None]).sum(0)
+	X, CF = drape_grid(Pal, free, dvec=dvec, **{k: v for k, v in kw.items() if k in ('tilt', 'h', 'off', 'shrink', 'iters', 'stiff', 'along', 'thick', 'relax', 'node_all', 'fill', 'cling')})
+	lw = kw.get('leg_keep')
+	ft = free if lw is None else free * (1 - sstep((leg_weight() - lw) / 0.4))
+	Q, _ = D.transfer(Pal, ft, X, CF)
+	if kw.get('embed'): Q = embed(Pal, Q, X, CF, ft, tilt=kw.get('tilt', 30.0), t_in=kw.get('t_in', 0.15), dvec=dvec)
+	return (Q - t) @ R
