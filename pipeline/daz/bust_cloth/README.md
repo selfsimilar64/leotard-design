@@ -73,3 +73,12 @@ Findings, older teen, poses draped per pose (`run_posed`):
   `app/captures/bust-cloth/seat-all-poses/`. Reviewed by eye: clean on all bodies and poses except a
   faint crease beside the cleft in the floor split (young, adult, petite) and a thin sliver in the
   9-year-old's stag jump; the 6-year-old's cleft is too shallow for the band to change much.
+
+## Bust in poses (2026-10-26)
+
+`bake_bust_poses.py` bakes the owner's starting shape (flatten 0.25, in-out 1.0) in the a-pose and
+12 Daz poses; `bustposes.py` drapes the bust once in the a-pose and carries the change into each
+pose (`posecarry.carry`, as a Daz morph would be). Normal-shaded sheets for teen, older teen,
+young and adult in `app/captures/bust-cloth/bust-poses/`: no tears, creases or folds in any pose;
+the merged, lifted shape holds in upright poses. In inverted and lying poses Daz's own breast
+bones still move the bust, so some separation returns there (as in the body today).
