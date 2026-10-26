@@ -18,7 +18,7 @@ def adjacency(n, faces):
 	return A
 
 
-def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stiff=0.5, relax=0.05, verbose=True, hard_pin=False):
+def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stiff=0.5, relax=0.05, verbose=True, hard_pin=False, start=None, along=1.0):
 	"""P: cage (cm). free: per cage vertex 0..1 (0 held on the skin, > 0 inside the bra band).
 	Returns the cloth (positions, quads) on the subdivided patch."""
 	t0 = time.time()
@@ -33,7 +33,7 @@ def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stif
 	n = len(used)
 	w = np.clip(fs[used] / 0.25, 0, 1)  # how freely each cloth vertex moves (0: held on the skin)
 	X0 = PS[used]
-	X = X0 + (off * w)[:, None] * NS[used]
+	X = X0 + (off * w)[:, None] * NS[used] if start is None else start(PS[used], NS[used], w)
 	A = adjacency(n, CF); deg = np.asarray(A.sum(1)).ravel()
 	for _ in range(smooth_n):
 		X += (w * 0.6)[:, None] * ((A @ X) / deg[:, None] - X)
@@ -41,6 +41,10 @@ def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stif
 	E = np.concatenate([CF[:, [0, 1]], CF[:, [1, 2]], CF[:, [2, 3]], CF[:, [3, 0]], CF[:, [0, 2]], CF[:, [1, 3]]])
 	E = np.unique(np.sort(E, 1), axis=0)
 	L0 = np.linalg.norm(X0[E[:, 0]] - X0[E[:, 1]], axis=1) * (1 - shrink)
+	# along < 1: the fabric pulls harder across (x) than along (y, z): per-edge stiffness by direction
+	ed = X0[E[:, 1]] - X0[E[:, 0]]
+	c2 = ed[:, 0] ** 2 / np.maximum((ed ** 2).sum(1), 1e-12)
+	ke = c2 + along * (1 - c2)
 	# collider: the body's surface near the patch (trunk and arms), as dense samples with normals
 	lo, hi = X.min(0) - 5, X.max(0) + 5
 	tsel = ((PS[TS] > lo) & (PS[TS] < hi)).all(2).all(1)
@@ -53,7 +57,7 @@ def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stif
 		d = X[E[:, 1]] - X[E[:, 0]]; L = np.linalg.norm(d, axis=1)
 		over = L > L0
 		corr = np.zeros_like(d)
-		corr[over] = (d[over] * ((L[over] - L0[over]) / np.maximum(L[over], 1e-9))[:, None])
+		corr[over] = (d[over] * (ke[over] * (L[over] - L0[over]) / np.maximum(L[over], 1e-9))[:, None])
 		wa, wb = inv[E[:, 0]], inv[E[:, 1]]; ws = np.maximum(wa + wb, 1e-9)
 		dX = np.zeros_like(X); cnt[:] = 0
 		np.add.at(dX, E[:, 0], corr * (wa / ws)[:, None]); np.add.at(dX, E[:, 1], -corr * (wb / ws)[:, None])

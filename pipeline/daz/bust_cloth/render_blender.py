@@ -23,6 +23,7 @@ def light(name, rot, energy, size=3):
 light('key', (55, 0, 35), 3.0, 8)
 light('fill', (70, 0, -60), 0.9, 20)
 light('top', (15, 0, 180), 1.0, 10)
+LZ = {n: bpy.data.objects[n].rotation_euler[2] for n in ('key', 'fill', 'top')}
 cur = None
 for it in J['items']:
 	if cur is None or cur[0] != it['obj']:
@@ -31,10 +32,13 @@ for it in J['items']:
 		ob = bpy.context.selected_objects[0]; ob.data.materials.clear(); ob.data.materials.append(mat)
 		for p in ob.data.polygons: p.use_smooth = True
 		cur = (it['obj'], ob)
-	t = Vector(it['target']); a = {'front': 0, '34': 35, 'side': 90}[it['view']]
+	t = Vector(it['target']); a = {'front': 0, '34': 35, 'side': 90, 'back': 180, 'back34': 145, 'low': 180}.get(it['view'], 0)
+	e = it.get('elev', -40 if it['view'] == 'low' else 0)
 	d = it.get('dist', 1.2)
-	cam.location = t + Vector((math.sin(math.radians(a)) * d, -math.cos(math.radians(a)) * d, 0.0))
-	cam.rotation_euler = (math.radians(90), 0, math.radians(a))
+	ce = math.cos(math.radians(e))
+	cam.location = t + Vector((math.sin(math.radians(a)) * d * ce, -math.cos(math.radians(a)) * d * ce, math.sin(math.radians(e)) * d))
+	cam.rotation_euler = (math.radians(90 - e), 0, math.radians(a))
+	for nm, z0 in LZ.items(): bpy.data.objects[nm].rotation_euler[2] = z0 + math.radians(a)
 	cam.data.type = 'ORTHO'; cam.data.ortho_scale = it.get('ortho', 0.42)
 	scn.render.filepath = it['out']
 	bpy.ops.render.render(write_still=True)
