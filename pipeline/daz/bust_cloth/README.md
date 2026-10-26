@@ -44,3 +44,27 @@ Chosen settings (owner): Daz BreastsFlatten 0.25, BreastsIn-Out 1.0, lift 2 cm, 
   jump (one leg raised, seat twisted) keeps a dark crumple beside the cleft. Tried for it and
   dropped: cloth kept off the thighs (`leg_cloth`), a narrower band, a view following the seat's
   normal (`follow`, worse everywhere). Not baked: per-pose drapes would replace a single morph.
+
+## Seat in poses: artifact hunt (2026-10-26)
+
+Owner: get rid of the artifacts on all bodies and poses; judge on normal-shaded renders
+(`render_blender.py` `shade: normal`), the owner's eyes are the final say. Tools: `diag.score`
+(creases > 20 degrees, flipped and squashed triangles the change added; it also counts folds hidden
+inside the closed cleft, so it filters, the renders decide), `sweep_score.py`, `vis.py` (normal
+sheets, `bottom` zooms on the cleft's lower end), `clothvis.py` (the cloth alone).
+Findings, older teen, poses draped per pose (`run_posed`):
+- Knots sat in the bottom 2 cm of the cleft. Starting the cloth higher (`bot`) or ending it further
+  from the crotch (`front`) only lowered the score by removing the effect (cleft came back).
+- Smoothing the skin's displacement: same, the cleft came back.
+- In the stag jump and kneeling the cloth itself was broken: cells bridging a thigh in front of
+  the seat in the starting view. `jump` cuts the grid where the depth jumps and a thigh is involved,
+  holding the cut edge.
+- Skin onto cloth: nearest point + `embed` (fold-free layout) rippled the wall seen edge-on in the
+  stag jump; `settle_smooth` (one sparse solve: thin-plate smoothness + pull to the cloth) is clean
+  there but brings the midline line back; `settle_slide` (pull only onto the cloth's surface,
+  point-to-plane, the skin slides along it) is clean in stag jump, kneeling and lunge.
+- The line left was a groove in the cloth: cling towards the nearest skin pulls the cloth over the
+  slot into it. `cling_mode='pressure'` (an even pressure along the cloth's normal) sags smoothly;
+  0.001 gives the depth of skin cling 0.002.
+- Best so far (B2): `jump=1.0, cling=0.001, cling_mode='pressure', smooth_settle=True, slide=True,
+  lam=5.0, mu=0.05` with the KW in `diag.py`.
