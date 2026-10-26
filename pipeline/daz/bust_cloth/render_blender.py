@@ -14,8 +14,33 @@ w = bpy.data.worlds.new('w'); scn.world = w; w.use_nodes = True
 w.node_tree.nodes['Background'].inputs[0].default_value = (0.03, 0.035, 0.045, 1)
 w.node_tree.nodes['Background'].inputs[1].default_value = 0.6
 mat = bpy.data.materials.new('skin'); mat.use_nodes = True
-bs = mat.node_tree.nodes['Principled BSDF']
-bs.inputs['Base Color'].default_value = (0.78, 0.76, 0.74, 1); bs.inputs['Roughness'].default_value = 0.45
+SHADE = J.get('shade', 'clay')
+if SHADE in ('normal', 'zebra'):
+	scn.view_settings.view_transform = 'Standard'
+	nt = mat.node_tree; nt.nodes.clear()
+	outn = nt.nodes.new('ShaderNodeOutputMaterial'); em = nt.nodes.new('ShaderNodeEmission')
+	geo = nt.nodes.new('ShaderNodeNewGeometry')
+	nt.links.new(em.outputs[0], outn.inputs['Surface'])
+	if SHADE == 'normal':
+		# world normal as colour: x red, y green, z blue (each -1..1 -> 0..1)
+		mul = nt.nodes.new('ShaderNodeVectorMath'); mul.operation = 'MULTIPLY_ADD'
+		mul.inputs[1].default_value = (0.5, 0.5, 0.5); mul.inputs[2].default_value = (0.5, 0.5, 0.5)
+		nt.links.new(geo.outputs['Normal'], mul.inputs[0]); nt.links.new(mul.outputs[0], em.inputs['Color'])
+	else:
+		# isophote stripes: bands of equal angle between the normal and the view; any bump or
+		# crease shows as a kink or knot in the stripes
+		dot = nt.nodes.new('ShaderNodeVectorMath'); dot.operation = 'DOT_PRODUCT'
+		nt.links.new(geo.outputs['Normal'], dot.inputs[0]); nt.links.new(geo.outputs['Incoming'], dot.inputs[1])
+		m = nt.nodes.new('ShaderNodeMath'); m.operation = 'MULTIPLY'; m.inputs[1].default_value = J.get('stripes', 14.0)
+		nt.links.new(dot.outputs['Value'], m.inputs[0])
+		fr = nt.nodes.new('ShaderNodeMath'); fr.operation = 'FRACT'; nt.links.new(m.outputs[0], fr.inputs[0])
+		ramp = nt.nodes.new('ShaderNodeValToRGB'); ramp.color_ramp.interpolation = 'CONSTANT'
+		ramp.color_ramp.elements[0].color = (0.05, 0.05, 0.06, 1); ramp.color_ramp.elements[1].position = 0.5
+		ramp.color_ramp.elements[1].color = (0.92, 0.92, 0.9, 1)
+		nt.links.new(fr.outputs[0], ramp.inputs[0]); nt.links.new(ramp.outputs[0], em.inputs['Color'])
+if SHADE == 'clay':
+	bs = mat.node_tree.nodes['Principled BSDF']
+	bs.inputs['Base Color'].default_value = (0.78, 0.76, 0.74, 1); bs.inputs['Roughness'].default_value = 0.45
 cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam')); scn.collection.objects.link(cam); scn.camera = cam
 def light(name, rot, energy, size=3):
 	l = bpy.data.objects.new(name, bpy.data.lights.new(name, 'SUN')); l.data.energy = energy; l.data.angle = math.radians(size)
