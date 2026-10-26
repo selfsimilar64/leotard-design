@@ -96,15 +96,10 @@ BODIES = [
 	dict(key='teen', label='Young teen, about 13', years=13, stature=1.55, skin=2, presets=[AGE_P('young-teen')],
 		morphs={'Kat_figure_ctrl_Character': 1, **BUST}),
 	dict(key='older-teen', label='Older teen, about 16', years=16, stature=1.6, skin=3, presets=[AGE_P('older-teen')], morphs={**BUST}),
-	dict(key='petite', label='Petite athlete', years=18, stature=1.53, skin=3, presets=[],
-		morphs={'BaseFeminine_figure_ctrl_Character': 1, 'BaseFeminine_body_bs_Body': -0.5, 'body_bs_ProportionShoulderWidth': -0.35,
-			'body_bs_ProportionChestWidth': -0.3, **ATHLETIC, **BUST}),
 	dict(key='young', label='Young adult, athletic', years=18, stature=1.61, skin=2, presets=[],
 		morphs={'Kat_figure_ctrl_Character': 1, **ATHLETIC, **BUST}),
 	dict(key='adult', label='Adult, about 30', years=30, stature=1.64, skin=4, presets=[],
 		morphs={'BaseFeminine_figure_ctrl_Character': 1, **{k: v * 0.8 for k, v in ATHLETIC.items()}, **BUST}),
-	dict(key='broad', label='Adult, broader build', years=30, stature=1.66, skin=4, presets=[],
-		morphs={'Amala_figure_ctrl_Character': 1, **BUST}),
 ]
 REF = 'young'
 

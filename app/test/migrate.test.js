@@ -53,7 +53,7 @@ describe('migrating MakeHuman designs', () => {
 		expect(g.seeds.every((s) => s.cell >= 0)).toBe(true);
 	});
 	it('maps the old body choices', () => {
-		expect(migrateBody({ size: 'daz-broad', form: 'headless' }, bodyKeys)).toMatchObject({ size: 'broad', form: 'full', head: 'none' });
+		expect(migrateBody({ size: 'daz-broad', form: 'headless' }, bodyKeys)).toMatchObject({ size: 'adult', form: 'full', head: 'none' });
 		expect(migrateBody({ size: 'fig-kid9-salute', form: 'full' }, bodyKeys)).toMatchObject({ size: 'young', head: 'person' });
 		expect(migrateBody({ size: 'teen', form: 'torso' }, bodyKeys)).toMatchObject({ size: 'teen', form: 'torso', head: 'mannequin', expression: 'neutral' });
 	});

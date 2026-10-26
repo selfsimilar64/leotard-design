@@ -38,7 +38,7 @@ on load. All output is derived from the owner's licensed Daz content and stays l
 
 | Field | Values | Notes |
 |---|---|---|
-| `size` (body type) | `child-6`, `child`, `teen`, `older-teen`, `petite`, `young` (reference), `adult`, `broad` | Growing Up ages and character controllers; scaled to a stature |
+| `size` (body type) | `child-6`, `child`, `teen`, `older-teen`, `young` (reference), `adult` (`petite` and `broad` removed 2026-10-26 on the owner's request; their designs load on `young` and `adult`) | Growing Up ages and character controllers; scaled to a stature |
 | `pose` | arm poses (`a-pose`, `arms-down`, `hands-on-hips`, … or `{ left, right }` of `rest/down/front/thigh/hip/up`), Daz poses: 13 of the 30 in Skillful Routine since 2026-10-26 (`standing`, `arms-outstretched`, `passe`, `stag-jump`, `kneeling`, `lunge-arms-up`, `handstand`, `cartwheel-low`, `back-arched`, `lunge-arm-up`, `kneeling-arm-up`, `arms-open`, `one-knee`: `bodies.py POSES`; the other 17 were dropped on the owner's request, so a design saved in one of them no longer loads its pose) | arm poses keep the old names, so photo-matched designs keep their pose; the panel lists only the A-pose and the Daz poses |
 | `head` | `none` (cut flat under the chin), `mannequin` (bald head, smoothed), `person` (face, eyes, mouth, lashes, brows, Eirgrid hair) | replaces `form: 'headless'` and the `fig-*` scene bodies |
 | `expression` | `neutral`, `smile` (SR 13, teeth), `soft-smile` (SR 26), `focused` (SR 16) | person only |

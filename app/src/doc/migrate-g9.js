@@ -9,8 +9,9 @@ import { Surface, toSP } from '../body/surface.js';
 
 export const MESH = 'g9-sd1';
 
-// Old body keys -> body types (body/mannequin.js manifest).
-const SIZES = { 'daz-petite': 'petite', 'daz-young': 'young', 'daz-adult': 'adult', 'daz-broad': 'broad' };
+// Old body keys -> body types (body/mannequin.js manifest). The petite and broader bodies were
+// removed (2026-10-26): their designs move to the nearest body kept.
+const SIZES = { 'daz-petite': 'young', 'daz-young': 'young', 'daz-adult': 'adult', 'daz-broad': 'adult', petite: 'young', broad: 'adult' };
 
 // The body section of any saved design -> { size, form, head, expression, pose, finish, headFinish }.
 export function migrateBody(b, bodyKeys = []) {

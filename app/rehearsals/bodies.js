@@ -9,8 +9,8 @@ export const COMBOS = [
 	{ size: 'young', pose: 'hands-on-hips', head: 'none' },
 	{ size: 'teen', pose: 'standing', head: 'person', expression: 'smile' },
 	{ size: 'child', pose: 'arms-outstretched', head: 'person', expression: 'soft-smile' },
-	{ size: 'broad', pose: 'passe', head: 'mannequin' },
-	{ size: 'adult', pose: 'split-leap', head: 'person', expression: 'focused' },
+	{ size: 'older-teen', pose: 'passe', head: 'mannequin' },
+	{ size: 'adult', pose: 'stag-jump', head: 'person', expression: 'focused' },
 ];
 
 // The whole body, from the front three-quarter, framed on the mesh's bounds.

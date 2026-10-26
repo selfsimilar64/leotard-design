@@ -8,7 +8,7 @@ import { poseSpec, POSES, ARMS, DAZ_POSES } from '../body/pose.js';
 import { bodyKeys, catalogue, HEADS } from '../body/mannequin.js';
 import { GLARE } from '../render/glare.js';
 
-const SIZES = ['child-6', 'child', 'teen', 'older-teen', 'petite', 'young', 'adult', 'broad'];
+const SIZES = ['child-6', 'child', 'teen', 'older-teen', 'young', 'adult'];
 
 function oneOf(name, v, list) {
 	if (!list.includes(v)) throw new Error(`${name} must be one of: ${list.join(', ')} (got ${JSON.stringify(v)})`);
