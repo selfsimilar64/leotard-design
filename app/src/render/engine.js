@@ -36,7 +36,8 @@ export class Engine {
 		this.headSkin = createFabricMaterial(3);
 		// cut bodies (dress form, no head) are open tubes under their caps: show the inside, not the background
 		this.skin.side = this.headSkin.side = THREE.DoubleSide;
-		// the body's own geometry plus closed eyes for the mannequin head (body.eyeCaps): same attributes
+		// the body's own geometry plus closed eyes for the mannequin head (body.eyeCaps, left out when
+		// the figure draws the eyeballs in its finish: applyBody): same attributes
 		const caps = body.eyeCaps(), ix = new Uint32Array(body.idx.length + caps.length);
 		ix.set(body.idx); ix.set(caps, body.idx.length);
 		const piece = (mat) => {
@@ -305,9 +306,9 @@ export class Engine {
 		const key = JSON.stringify([b.size, b.form, head, pose, b.finish === REALISTIC_SKIN]);
 		// what the figure draws: its head (a person's), its skin below the head (realistic skin), or both
 		const torso = b.form === 'torso', person = head === 'person' && !torso, real = b.finish === REALISTIC_SKIN && !torso;
-		// (or only the hair, in the mannequin head's finish, on the mannequin head)
-		const hair = !torso && !real && head === 'mannequin' && !!b.mannequinHair;
-		const part = person && real ? 'all' : person ? 'head' : real ? 'body' : hair ? 'hair' : null;
+		// (or, on the mannequin head, its eyeballs and hair in the head's finish)
+		const sculpt = !torso && !real && head === 'mannequin';
+		const part = person && real ? 'all' : person ? 'head' : real ? 'body' : sculpt ? (b.mannequinHair ? 'hair' : 'eyes') : null;
 		// A new body or pose with the person on show first waits for the person's files: then the
 		// body, the garment and the person change in the same frame. (The garment used to move at
 		// once while the person stood in the old pose for a second or two, bare where the leotard was.)
@@ -356,6 +357,8 @@ export class Engine {
 		scene.add(this.stand);
 		this.skinMesh.visible = !real;
 		this.headMesh.visible = !torso && head === 'mannequin';
+		// the closed lids (body.eyeCaps, after the body's triangles) only where no eyeballs are drawn
+		this.headMesh.geometry.setDrawRange(0, sculpt ? body.idx.length : Infinity);
 		figure();
 		const s = torso ? 0.9 : 0.75, blob = this.viewport.blob;
 		blob.scale.set(s, s, 1); blob.position.z = torso ? body.crotch.z : 0;

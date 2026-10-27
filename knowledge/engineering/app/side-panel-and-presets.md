@@ -98,6 +98,13 @@ hair colour. `finishSurface` (`render/figure.js`) is the one place a finish beco
 the skin pieces, cut caps and sculpted hair. `appearanceOf` counts head 'none' or 'mannequin' as the
 mannequin look; picking the Mannequin tile still resets to no head.
 
+The mannequin head also shows the person's **eyeballs** in its finish (owner, 2026-10-27: the
+closed lids `body.eyeCaps` read as empty sockets): `FigureView` part `'eyes'` (or `'hair'`, eyes and
+hair) whenever the mannequin head is on a mannequin finish, and `applyBody` then draws the head
+without the lid caps (`setDrawRange` to the body's own triangles). Sculpted eyeballs drop the iris
+normal map and the baked occlusion; the cornea film (additive) is not drawn; the carved pupil
+dimple is the eyeball's own shape.
+
 The realistic person is **Stacy** (CaramelDream3D) on every body since 2026-10-21: every body is
 baked with her face morph, skin, eyes and lashes (`pipeline/daz/bodies.py STACY`, see
 [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md)), and `FigureView.materials(body)` uses the

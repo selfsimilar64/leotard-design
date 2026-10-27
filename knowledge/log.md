@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Update**: [Side panel and presets](/engineering/app/side-panel-and-presets.md#appearances-and-skin-renderpresetsjs-renderfigurejs): the mannequin head showed empty eye sockets (owner); it now shows the eyeballs in the mannequin's material and colour, with or without hair. The custom colour picker also applies while dragging (it had only changed the saved design).
 * **Update**: [Side panel and presets](/engineering/app/side-panel-and-presets.md#appearances-and-skin-renderpresetsjs-renderfigurejs): owner asked for a head and hair on the mannequin in its own material. The Mannequin look gains Head and Hair switches and a Hairstyle row; the hair is the person's hair mesh in the mannequin's finish and colour (a sculpted wig: polished gold, matte white...).
 
 ## 2026-10-26
