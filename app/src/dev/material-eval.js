@@ -31,6 +31,7 @@ function views() {
 		return { position: [t[0] + Math.sin(b) * dist, t[1] + 0.02, t[2] + Math.cos(b) * dist], target: t, fov: 30 };
 	};
 	return {
+		full: { ...at(3.2, 0.2, -0.15, 0.1), size: [774, 940] }, // the whole figure, where sparkle should blend into a shimmer
 		torso: { ...at(1.35, 0.2, 0.0, 0.1), size: [774, 940] },
 		near: { ...at(0.45, 0.15, -0.08, 0.02), size: [900, 700] },
 		macro: { ...at(0.17, 0.1, -0.1, 0), size: [900, 700] },
@@ -49,7 +50,7 @@ export async function prepare(fabric, colour) {
 	if (scan) await app.engine.textures.get(scan);
 	app.exec({ op: 'scene.set', ...SETUP });
 	await app.engine.figureReady;
-	await app.engine.viewport.hdri(RIGS[SETUP.rig].hdri);
+	if (RIGS[SETUP.rig].hdri) await app.engine.viewport.hdri(RIGS[SETUP.rig].hdri); // light-only rigs have none
 	await wait(1500);
 }
 
@@ -69,11 +70,43 @@ export async function shoot(fabric, colour, tag, distances = ['torso', 'near', '
 	try { return await capture(fabric, colour, tag, distances, bloom); } finally { for (const k of Object.keys(F[fabric])) delete F[fabric][k]; Object.assign(F[fabric], saved); }
 }
 
+// Sparkle check: the same views with the lights turned round the figure by each of `turns` (degrees),
+// written as <fabric>-<tag>-t<turn>-<distance>.png. Glints should come and go between turns; a
+// pattern that stays put is a texture, not sparkle. HDRI rigs turn the room (envRotation) and swing
+// the small glint light beside the camera round the figure (the loft's key glint sits behind the
+// figure, so only that one can flash towards the camera); light-only rigs turn their light ring.
+export async function sweep(fabric, colour, tag, turns = [0, 3, 6], distances = ['torso', 'near', 'macro'], tweak = null) {
+	const F = await appFabrics(), saved = { ...F[fabric] };
+	if (tweak) Object.assign(F[fabric], tweak);
+	const vp = app.engine.viewport, out = [], place = vp.placeHdriLights, Y = { x: 0, y: 1, z: 0 };
+	try {
+		await prepare(fabric, colour);
+		const env = vp.settings.envRotation, ring = vp.rig.rotation.y, a = Math.PI / 180;
+		for (const t of turns) {
+			if (vp.hdriOn) {
+				vp.settings.envRotation = env + t * a;
+				vp.placeHdriLights = function () { place.call(this); this.lights[1].position.applyAxisAngle(Y, t * a); }; // runs every frame
+				vp.placeHdriLights(); // and now: a hidden pane runs no frames
+			} else vp.rig.rotation.y = ring + t * a;
+			out.push(...await shots(fabric, `${tag}-t${t}`, distances, false));
+		}
+		vp.settings.envRotation = env; vp.rig.rotation.y = ring;
+	} finally {
+		delete vp.placeHdriLights; // back to the prototype's
+		for (const k of Object.keys(F[fabric])) delete F[fabric][k]; Object.assign(F[fabric], saved);
+	}
+	return out;
+}
+
 // Bloom is off in these captures: the loft HDRI's walls are bright enough that even its low setting
 // lays a pale veil over dark fabric (a dark green lost a third of its saturation, 2026-10-24), and a
 // product photo has none. Its strength is set each animation frame, so it is zeroed per render.
 async function capture(fabric, colour, tag, distances, bloom) {
 	await prepare(fabric, colour);
+	return shots(fabric, tag, distances, bloom);
+}
+
+async function shots(fabric, tag, distances, bloom) {
 	const vp = app.engine.viewport, cam = vp.getCamera(), V = views(), out = [];
 	for (const d of distances) {
 		const v = V[d];

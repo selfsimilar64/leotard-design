@@ -71,7 +71,9 @@ rubs.[^notes-fab] See [stretch-dependent appearance](/engineering/rendering/fabr
 No dot diameter, pitch or coverage is published for any mystique; values must be fitted from swatch
 photographs.[^notes-fab] The proof of concept takes a different far-field shortcut (single lobe with
 averaged parameters plus pixel-sized tilted cells to keep sparkle); see
-[fabric shader](/engineering/poc/fabric-shader.md).
+[fabric shader](/engineering/poc/fabric-shader.md). The app's mystique also averages those cells'
+tilts by dot count far away, so the sparkle blends into a shimmer: see
+[photo match: mystique](/engineering/rendering/fabric-shading/photo-match-mystique.md).
 
 [^notes-shade]: Research notes: real-time fabric shading, Q4 inferences and Q15 table
 [^notes-fab]: Research notes: fabrics and materials, Q4 inferences and gaps, Q9

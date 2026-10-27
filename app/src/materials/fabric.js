@@ -92,6 +92,7 @@ uniform float uDotR;       // flake radius, in cells (0.577 fills the hex cell)
 uniform float uPresence;   // fraction of cells that carry a flake
 uniform float uTilt;       // random flake tilt (tangent of the typical angle)
 uniform float uFoilRough;
+uniform float uBlend;      // 1 = flat foil dots whose sparkle averages into a shimmer far away
 uniform float uColorVar;   // per-flake brightness variation
 uniform vec3 uFoilColor;
 uniform float uHolo;       // 0..1 share of rainbow in the foil colour
@@ -344,7 +345,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 		float r = fp / uPitch; // pixel size in cells
 
 		float w = smoothstep( .22, .6, r ); // 0 = flakes resolved, 1 = flakes smaller than a pixel
-		float nearMask = 0., rvNear = 0., rvFar = 0.;
+		float nearMask = 0., rvNear = 0., rvFar = 0., farDots = 1.;
 		vec3 nearTilt = vec3( 0. ), farTilt = vec3( 0. );
 
 		// Near: resolve each flake as a disc in a hex cell with its own tilt. (The two branches
@@ -361,15 +362,16 @@ const FABRIC_FRAGMENT = /* glsl */`
 		}
 
 		// Far: flakes are smaller than a pixel. Keep the sparkle by tilting cells that track the
-		// pixel size (about 1.6 px, blended across two octaves so they do not pop), and carry
-		// the foil coverage as a metal fraction.
+		// pixel size (about 1.6 px; 1 px for blending foil dots, below, whose sparkle fades anyway;
+		// blended across two octaves so they do not pop), and carry the foil coverage as a metal fraction.
 		if ( w > 0. ) {
-			float lod = max( log2( r * 1.6 ), 0. );
+			float lod = max( log2( r * mix( 1.6, 1., uBlend ) ), 0. );
 			float l0 = floor( lod ), lf = lod - l0, s0 = exp2( l0 );
 			vec3 ta = hash32( floor( qc / s0 ) + l0 * 7.13 );
 			vec3 tb = hash32( floor( qc / ( s0 * 2. ) ) + ( l0 + 1. ) * 7.13 );
 			farTilt = mix( ta, tb, lf ) * 2. - 1.;
 			rvFar = ta.z;
+			farDots = s0 * s0 * mix( 1., 4., lf ) * 1.155 * uPresence; // flakes in a cell (1.155 per unit² on the hex lattice)
 		}
 		float coverage = min( 3.6276 * uDotR * uDotR, 1. ) * uPresence;
 		// sparse flakes stay sparse far away: only a coverage share of the pixel-sized cells carry one
@@ -377,7 +379,14 @@ const FABRIC_FRAGMENT = /* glsl */`
 		float farOn = coverage > .3 ? coverage : step( fract( rvFar * 7.31 ), coverage );
 
 		flakeMask = mix( nearMask, farOn, w );
-		vec3 tilt = mix( nearTilt, farTilt, w );
+		// Flat foil dots (uBlend: mystique): a cell holds several dots whose tilts average out (spread /
+		// sqrt(n)), and the spread that is lost widens the foil's highlight instead (Toksvig: alpha² += 2
+		// slope variance), so the sparkle blends into a smooth shimmer with distance, as in product photos.
+		// Glitter keeps a full-strength tilt per cell: real glitter still sparkles across a room.
+		float keep = mix( 1., inversesqrt( max( farDots, 1. ) ), w * uBlend );
+		float foilA = uFoilRough * uFoilRough;
+		float foilRough = sqrt( sqrt( foilA * foilA + ( 1. - keep * keep ) * uTilt * uTilt * .667 ) );
+		vec3 tilt = mix( nearTilt, farTilt * keep, w );
 		float rv = mix( rvNear, rvFar, w );
 
 		vec3 nF = normalize( normal + ( tilt - normal * dot( tilt, normal ) ) * uTilt );
@@ -394,7 +403,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 		}
 		diffuseColor.rgb = mix( diffuseColor.rgb, fc, flakeMask );
 		metalnessFactor = mix( metalnessFactor, 1., flakeMask );
-		roughnessFactor = mix( roughnessFactor, uFoilRough, flakeMask );
+		roughnessFactor = mix( roughnessFactor, foilRough, flakeMask );
 		normal = normalize( mix( normal, nF, mix( nearMask, coverage > .3 ? 1. : farOn, w ) ) );
 	}
 
@@ -548,7 +557,7 @@ export function createFabricMaterial(zone) {
 		uTrimInset: { value: 0 }, uTrimWidth: { value: 0 }, uRows: { value: new THREE.Vector2() }, uThread: { value: new THREE.Color() },
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
-		uFoilRough: { value: 0.2 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uFoilRough: { value: 0.2 }, uBlend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
@@ -587,7 +596,8 @@ export function createFabricMaterial(zone) {
 
 // Sheen is left off the foil and glitter fabrics on purpose: it roughly doubles the cost of every
 // light and is invisible next to the foil.
-// Flake fields: pitch (m), dotR (cells), presence, tilt, rough, colorVar, holo, holoFreq, holoJit.
+// Flake fields: pitch (m), dotR (cells), presence, tilt, rough, colorVar, holo, holoFreq, holoJit, blend
+// (1: flat foil dots whose sparkle averages into a shimmer far away; mystique, from its 2026-10-27 audit).
 export const FABRICS = {
 	// Matte lycra's sheen is low and close to its own colour: at 0.4 and a third white (the tint is
 	// mixed in linear light, so a third white is nearly white on a dark colour) a dark green's
@@ -607,7 +617,7 @@ export const FABRICS = {
 	// full mirror clear coat (1 at 0.1) read as latex, the step above it on the gloss ladder
 	// (knowledge/domain/fabrics/shiny-tricot-and-wet-look.md; owner's review, 2026-10-24).
 	wet: { label: 'Wet look (cire)', roughness: 0.32, sheen: 0.15, sheenRoughness: 0.5, clearcoat: 0.55, clearcoatRoughness: 0.2, anisotropy: 0.5, knit: 1 },
-	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.22, rough: 0.27, colorVar: 0.3 }, texScale: 0.75 },
+	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.15, rough: 0.12, colorVar: 0.1, blend: 1 }, texScale: 0.75 },
 	hologram: { label: 'Hologram foil dots', roughness: 0.62, knit: 1, flake: { pitch: 0.0009, dotR: 0.37, presence: 1, tilt: 0.22, rough: 0.22, colorVar: 0.3, holo: 0.6, holoFreq: 0.9, holoJit: 0.5 } },
 	// The foils, film and velvets used to carry a value-noise "crinkle" bump (amp 0.1-0.7) from the
 	// POC: crumpled foil, not foil on a knit pulled tight over a body. On skin-tight fabric tension
@@ -622,7 +632,7 @@ export const FABRICS = {
 	mesh: { label: 'Stretch mesh (sheer)', roughness: 0.75, sheen: 0.3, sheenRoughness: 0.6, mesh: { pitch: 0.0007, holeR: 0.35 } },
 	glittermesh: { label: 'Glitter mesh', roughness: 0.75, mesh: { pitch: 0.0007, holeR: 0.35 }, flake: { pitch: 0.0005, dotR: 0.5, presence: 0.1, tilt: 0.5, rough: 0.1, colorVar: 0.5 } },
 	ombre: { label: 'Sublimated ombré', roughness: 0.74, sheen: 0.35, sheenRoughness: 0.6, knit: 1, ombre: true },
-	ombremystique: { label: 'Ombré mystique', roughness: 0.62, knit: 1, ombre: true, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.22, rough: 0.27, colorVar: 0.3 } },
+	ombremystique: { label: 'Ombré mystique', roughness: 0.62, knit: 1, ombre: true, flake: { pitch: 0.00075, dotR: 0.4, presence: 0.97, tilt: 0.15, rough: 0.12, colorVar: 0.1, blend: 1 } },
 	// Moodboard looks added in P3 (realism upgrade R7b). film: thin-film swirls { scale m, range nm, warp };
 	// duo: { pow } shift towards the second colour at grazing angles.
 	liquidholo: { label: 'Liquid hologram (opal)', roughness: 0.3, metalness: 0.25, iridescence: 1, film: { scale: 0.08, range: [300, 820], warp: 2.5, tint: 0.32 },
@@ -685,7 +695,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	u.uFlake.value = fl ? 1 : 0;
 	if (fl) {
 		u.uPitch.value = fl.pitch * scale; u.uDotR.value = fl.dotR; u.uPresence.value = fl.presence; u.uTilt.value = fl.tilt;
-		u.uFoilRough.value = fl.rough; u.uColorVar.value = fl.colorVar ?? 0; u.uHolo.value = fl.holo ?? 0; u.uHoloFreq.value = fl.holoFreq ?? 3; u.uHoloJit.value = fl.holoJit ?? 0.2;
+		u.uFoilRough.value = fl.rough; u.uBlend.value = fl.blend ?? 0; u.uColorVar.value = fl.colorVar ?? 0; u.uHolo.value = fl.holo ?? 0; u.uHoloFreq.value = fl.holoFreq ?? 3; u.uHoloJit.value = fl.holoJit ?? 0.2;
 		two(false, u.uFoilColor.value);
 	}
 	u.uDuo.value = f.duo ? 1 : 0;

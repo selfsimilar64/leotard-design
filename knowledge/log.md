@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Creation**: [Photo match: mystique](/engineering/rendering/fabric-shading/photo-match-mystique.md): owner-requested realism audit against four product photos and the swatch sheet. Mystique dots were a coarse square mosaic at every distance; now sharper, flatter foil dots whose tilts average by dot count far away (`blend` flake field, mystique and ombré mystique only), giving grainy-edged highlight patches over a deep base. Glitter unchanged (averaging it turned glitter into satin). `material-eval.js` gains `sweep()` and a 3.2 m view.
 * **Update**: [Side panel and presets](/engineering/app/side-panel-and-presets.md#appearances-and-skin-renderpresetsjs-renderfigurejs): the mannequin head showed empty eye sockets (owner); it now shows the eyeballs in the mannequin's material and colour, with or without hair. The custom colour picker also applies while dragging (it had only changed the saved design).
 * **Update**: [Side panel and presets](/engineering/app/side-panel-and-presets.md#appearances-and-skin-renderpresetsjs-renderfigurejs): owner asked for a head and hair on the mannequin in its own material. The Mannequin look gains Head and Hair switches and a Hairstyle row; the hair is the person's hair mesh in the mannequin's finish and colour (a sculpted wig: polished gold, matte white...).
 
