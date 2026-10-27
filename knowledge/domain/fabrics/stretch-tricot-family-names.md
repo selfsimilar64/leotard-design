@@ -31,6 +31,10 @@ sources:
     resource: conversation with the product owner, 2026-10-27 (Claude Code session)
     title: Owner asks which fabrics are representative before tuning shiny tricot
     author: human:mattj
+  - id: owner-refs
+    resource: conversation with the product owner, 2026-10-27 (Claude Code session)
+    title: "Owner's ten reference images: Charisma shiny nylon tricot swatch, Polished Nylon Spandex chintz swatch, GK teal cire tank (3), GK navy stretch satin tank (2), Nike red nylon leotard (body and close-ups)"
+    author: human:mattj
 ---
 
 # Takeaway
@@ -93,6 +97,29 @@ readings of product photos, not measurements:
 Two consequences for rendering: the shiny rungs share a **glint grain** that the matte rung lacks,
 and even the glossiest plain tricot does not mirror the room (only the coated "Liquid" and foils do).
 
+# Owner's reference photos (2026-10-27)
+
+Ten images from the owner, with the makers' compositions as the owner relayed them.[^owner-refs]
+**[INFERRED]** readings of the photos:
+
+| Reference | Content | What the light does |
+|---|---|---|
+| Charisma shiny nylon tricot swatch (mauve), 200 g/m² | 80% nylon / 20% spandex | Broad, low-contrast sheen; a fine frost-like **speckle of glints** over every lit area; fine wale lines visible in the folds |
+| "Polished Nylon Spandex" chintz swatch (teal), 190 g/m² | 83/17 | Bright sheen bands along fold crests, much brighter than the shiny tricot; the glint grain is dense and visible *inside* the highlights; surface reads slightly crinkled, not mirror-smooth |
+| GK teal tank, three shots (studio back, seated back, front on white) | Cire 83/17 nylon (body); SubFuse/SoftLux 82/18 polyester (stripes) | On a body: soft-edged bright highlight patches on every curve (bust, glute, shoulder blade) over a deep saturated base; strong lit/unlit contrast; no room reflection. In the front shot a faint speckle shows in the highlights. Same 83/17 as the chintz swatch, so **[INFERRED]** cire and "polished"/chintz are one finish. The polyester stripes and binding are near-matte. |
+| GK navy tank, two shots | Stretch Satin 76/24 nylon (bodice); SoftLux 83/17 polyester (lower panel); mesh 80/20 (sides) | Satin: the smoothest highlights of the set, broad and silky, grading from deep navy to bright lavender-blue, **no visible grain**. The SoftLux panel beside it has only a faint, wide sheen: a matte-rung reference in the same photo. |
+| Nike red leotard, body shot and two close-ups | 80/20 nylon | Moderate, wide, low-contrast sheen. Close up, the face is a heathered speckle of bright points along clear vertical wale columns: the glints of plain shiny tricot. |
+
+What these change in the ladder below:
+
+- **Glint grain** separates the rungs: none on matte; a fine speckle across the whole lit surface
+  on shiny tricot; dense grain inside the highlights on cire; *none* on stretch satin, whose
+  shine is smooth. Satin and cire differ more by grain than by gloss.
+- **At body distance** shiny tricot, satin and cire separate by highlight brightness and
+  contrast: shiny is wide and soft, satin broad and silky, cire bright and patchy.
+- **Matte reference**: the GK SoftLux panels (polyester) sit beside cire and satin in the same
+  photos, which is the cleanest matte-vs-shiny comparison available.
+
 # Proposed representative set (for the owner to confirm)
 
 **[INFERRED]** Proposal, not an owner decision. The owner asked for a selection that represents
@@ -103,9 +130,9 @@ materials:
 | Rung | App fabric today | Look to hit |
 |---|---|---|
 | Matte | `matte` | Broad diffuse, faint grazing sheen, no glints |
-| Shiny | `shiny` | Soft sheen stretched across the knit direction plus sparse fine glints |
-| Satin-look | none | Stronger, broader directional sheen; dark-to-bright flip as the surface turns |
-| Wet look (cire) | `wet` | Bright soft highlights with glints, high lit/unlit contrast, no room reflection |
+| Shiny | `shiny` | Wide soft sheen plus a fine speckle of glints over the lit surface |
+| Satin-look | none | Broad, silky, smooth highlights with no grain; deep-to-bright flip as the surface turns |
+| Wet look (cire) | `wet` | Bright soft-edged highlight patches with dense grain inside them, high lit/unlit contrast, no room reflection |
 | Liquid (coated) | none; `foil`/`chrome` are metals | Latex-like glossy coat; optional, rare in gymnastics |
 
 Beyond the ladder, the families that represent competition leotards are mystique, hologram foil,
@@ -123,3 +150,4 @@ asks for.
 [^wiki-luster]: Wikipedia, "Luster (textiles)": lustre grade terms
 [^wiki-spandex]: Wikipedia, "Spandex": Lycra trademark, spandex and elastane as one fibre
 [^owner]: Owner's request, 2026-10-27
+[^owner-refs]: Owner's reference images, 2026-10-27, with compositions as relayed by the owner
