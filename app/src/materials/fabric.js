@@ -721,6 +721,15 @@ export const FABRICS = {
 	satinB: { ...SATIN_TRY, label: 'Satin try B (most reflective)', roughness: 0.3, sheen: 0.15, anisotropy: 0.9, ior: 2.6 },
 	satinC: { ...SATIN_TRY, label: 'Satin try C', roughness: 0.18, anisotropy: 0.7, ior: 1.8 },
 	satinD: { ...SATIN_TRY, label: 'Satin try D', roughness: 0.14, anisotropy: 0.6, ior: 2.0 },
+	// Try F: the shine in the dye's colour (dyeSheen). Satin's broad sheen is mostly light that went into
+	// the smooth, slightly clear filaments and came back out dye-filtered; only a few percent bounces
+	// white off the surface. GK's navy satin in a warm gym shows vivid royal-blue bands and no white;
+	// under a big white softbox the peaks go pale lavender, never white. The earlier tries reflected
+	// white only, which read as plastic (try 2) or as grey haze where the sheen spreads (C).
+	// gain 6 / sat 1.3 / white 0.15 overshot: pale periwinkle over most of the panel and wet-looking white
+	// streaks; 3 / 1.8 / 0.05 gives royal-blue bands over deep navy (owner's setup, Green loft hall, 2026-10-27).
+	satinFC: { ...SATIN_TRY, label: 'Satin try F (C shape, coloured shine)', roughness: 0.18, anisotropy: 0.7, dyeSheen: { gain: 3, sat: 1.8, white: 0.05 } },
+	satinFE: { ...SATIN_TRY, label: 'Satin try F (E shape, coloured shine)', roughness: 0.2, anisotropy: 0.5, dyeSheen: { gain: 3, sat: 1.8, white: 0.05 } },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
 	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
 	// full mirror clear coat (1 at 0.1) read as latex, the step above it on the gloss ladder
@@ -810,6 +819,16 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
 	m.anisotropy = f.anisotropy ?? 0;
 	m.ior = f.ior ?? 1.5; // satin: its long floats reflect more than a plain knit face (a stronger specular)
+	// dyeSheen { gain, sat, white }: the specular in the dye's hue (brightened to full value, saturation
+	// pushed by sat), gain x the plain 4%; the white surface reflection left as a faint clear coat.
+	m.specularIntensity = 1;
+	if (f.dyeSheen) {
+		const d = f.dyeSheen, c = [base.r, base.g, base.b], mx = Math.max(...c, 1e-4);
+		const n = c.map((v) => v / mx), l = 0.2126 * n[0] + 0.7152 * n[1] + 0.0722 * n[2];
+		const t = n.map((v) => Math.max(l + (v - l) * d.sat, 0)), tm = Math.max(...t, 1e-4);
+		m.specularColor.setRGB(...t.map((v) => (v / tm) * d.gain));
+		m.clearcoat = d.white; m.clearcoatRoughness = f.roughness;
+	} else m.specularColor.setRGB(1, 1, 1);
 	m.iridescence = f.iridescence ?? 0;
 	m.iridescenceIOR = 1.8;
 	m.iridescenceThicknessRange = [200, 520];

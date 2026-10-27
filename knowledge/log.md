@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Update**: [Gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md#coloured-shine-try-f): real satin's shine is mostly the dye's colour, not white; new `dyeSheen` setting and two try-F satins (C and E shapes) tuned in the owner's setup.
 * **Update**: [Gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md#satin-tries-in-the-picker-for-the-owner): the six earlier satin tries added to the picker for the owner to compare by eye.
 * **Update**: [Photo match: the tricot gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md): matte, shiny, new stretch satin and wet look share the scuba scan (roughness map relative to each fabric's own, weaker relief on glossier rungs) and a new yarn-glint layer that fades at body distance; drape-eval cloth gained a tangent (anisotropic fabrics were black on it).
 * **Update**: [Lycra, spandex, tricot](/domain/fabrics/stretch-tricot-family-names.md#owners-reference-photos-2026-10-27): second batch read: GK Primatex has a faint wide sheen; GK navy stretch satin video shows horizontal highlight bands across the chest that slide as she turns; woven satin close-ups show glints along diagonal lines.

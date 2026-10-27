@@ -63,6 +63,26 @@ Stretch satin (try E): `satin1` first try (roughness 0.3, anisotropy 0.85, glint
 `SATIN_TRY`. Remove the losers (and their tiles in `public/thumbs/materials/`) once the owner
 picks one.[^owner]
 
+# Coloured shine (try F)
+
+The owner saw tries 2, C and E as slightly plastic or greyed. A second GK photo of the navy
+satin (warm gym light) shows vivid royal-blue bands and no white anywhere on the satin. Under GK's
+big white softbox the peaks go pale lavender, never white.[^owner] **[INFERRED]** Satin's broad
+sheen is mostly light that entered the smooth, slightly clear filaments and left dye-filtered. Only
+a few percent reflects white off the surface. Every earlier try had a white specular only, which
+reads as plastic (2) or as grey haze where the sheen spreads (C).
+
+`dyeSheen { gain, sat, white }` on a fabric (`applyFabric`) sets three's `specularColor` to the
+dye's hue: normalised to full value, saturation pushed by `sat`, times `gain` (so F0 = 4% x gain in
+that hue). The white surface part is a faint clear coat (`white`) at the fabric's roughness.
+`specularIntensity` is reset to 1 and `specularColor` to white for every other fabric. Two fabrics
+use it: `satinFC` (C's shape) and `satinFE` (E's shape).
+
+Tuned in the owner's own setup (Green loft hall, room 161°, navy #1f2338, five angles):
+gain 6 / sat 1.3 / white 0.15 overshot (pale periwinkle over most of the panel, wet-looking white
+streaks). 3 / 1.8 / 0.05 gives royal-blue bands over deep navy. 2 / 2.4 was deeper still and also
+plausible. Captures: `app/captures/satin-compare/`.
+
 # Test cloth fix
 
 `app/src/dev/drape-eval.js`'s cloth had no `tangent` attribute, so every anisotropic fabric
