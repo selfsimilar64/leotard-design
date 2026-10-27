@@ -10,7 +10,7 @@ export async function build(app, o = {}) {
 	const navy = '#1f2a66', lav = o.lav ?? '#a79cf2', peri = o.peri ?? '#5a6bd8';
 	app.new('B13 midriff arch');
 	X({ op: 'body.set', size: 'child', finish: 'Athlete skin, light', pose: 'hands-in-front' });
-	X({ op: 'scene.set', rig: 'Gym (overhead lights)' });
+	X({ op: 'scene.set', rig: 'White loft studio' });
 	X({ op: 'block.apply', neck: 'crew', back: 'crew', sleeves: 'tank', leg: 'standard', fabric: 'shiny', colour: lav });
 	await settle();
 	// the vesica insert, pointed top and bottom

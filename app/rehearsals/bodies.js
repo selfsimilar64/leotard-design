@@ -24,7 +24,7 @@ async function shot(app, name, o = {}) {
 
 export async function sheet(app, design, combos = COMBOS) {
 	if (design) await app.open(design);
-	app.exec({ op: 'scene.set', rig: 'White seamless (photo studio)', glare: 'plain' });
+	app.exec({ op: 'scene.set', rig: 'White loft studio', glare: 'plain' });
 	const out = [];
 	for (const [i, c] of combos.entries()) {
 		app.exec({ op: 'body.set', form: 'full', expression: 'neutral', ...c });

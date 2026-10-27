@@ -11,7 +11,7 @@ export async function build(app, o = {}) {
 	const w = [o.w1 ?? 0.985, o.w2 ?? 0.967, o.w3 ?? 0.957, o.w4 ?? 0.945];
 	app.new('B3 tone-on-tone S-band');
 	X({ op: 'body.set', finish: 'Athlete skin, light', pose: 'arms-down' });
-	X({ op: 'scene.set', rig: o.rig ?? 'Grey seamless (photo studio)', rotateLights: false });
+	X({ op: 'scene.set', rig: o.rig ?? 'White loft studio' });
 	X({ op: 'block.apply', neck: 'crew', back: 'crew', sleeves: 'long', leg: 'standard', armhole: 'set-in', fabric: 'matte', colour: plum });
 	await settle();
 	const side = id('Side seam'), neck = id('Neckline'), arm = id('Sleeve seam');

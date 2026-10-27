@@ -302,11 +302,11 @@ function Environment({ s }) {
 	return (
 		<Pane title="Scene">
 			<Strip value={s.rig} onPick={(v) => run({ op: 'scene.set', rig: v })}
-				items={Object.keys(RIGS).map((k) => ({ key: k, label: k.replace(/ \((?:photo studio|ring of small lights|overhead lights|soft)\)$/, ''), hint: k, img: thumb('environments', k) }))} />
+				items={Object.keys(RIGS).map((k) => ({ key: k, label: k, hint: k, img: thumb('environments', k) }))} />
 			<Line label="Brightness"><Slider value={s.exposure} min={0.3} max={2.5} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => run({ op: 'scene.set', exposure: v, gesture: g })} /></Line>
 			<More>
 				<Line label="Turn the room"><Slider value={s.envRotation} min={0} max={6.283} format={(v) => Math.round(v * 180 / Math.PI) + '°'} onChange={(v, g) => run({ op: 'scene.set', envRotation: v, gesture: g })} /></Line>
-				{r.hdri ? <Backdrop s={s} r={r} /> : null}
+				<Backdrop s={s} r={r} />
 				<Line label="Sparkle glow"><Slider value={s.bloom} min={0} max={1.2} onChange={(v, g) => run({ op: 'scene.set', bloom: v, gesture: g })} /></Line>
 				<Line label="Crystal glare"><Chips value={s.glare ?? 'plain'} options={GLARES} onPick={(v) => run({ op: 'scene.set', glare: v })} /></Line>
 				{(s.glare ?? 'plain') !== 'plain' ? (
@@ -315,7 +315,6 @@ function Environment({ s }) {
 						<Line label="Glare strength"><Slider value={s.glareStrength ?? GLARE_STRENGTH} min={0} max={2} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => run({ op: 'scene.set', glareStrength: v, gesture: g })} /></Line>
 					</>
 				) : null}
-				{!r.fixed ? <Line label="Circling lights"><Toggle value={s.rotateLights} onChange={(v) => run({ op: 'scene.set', rotateLights: v })} /></Line> : null}
 			</More>
 		</Pane>
 	);

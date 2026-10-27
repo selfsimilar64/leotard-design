@@ -2,8 +2,6 @@
 
 export const SCENE = {
 	camera: { fov: 30, position: [0.25, 1.1, 2.5], target: [0, 0.99, 0] },
-	lightSpin: 0.35, // rad/s the light rig turns when "Rotate lights" is on
-	envFollow: 0.5,  // the environment turns at this fraction of the rig's angle
 };
 
 // Mannequin surfaces. Retail mannequins are matte white fibreglass by default (gloss, skin tones
@@ -66,28 +64,11 @@ export const MANNEQUIN_FINISHES = {
 	'Athlete skin, deep': { colour: 0x5f3b28, roughness: 0.42, skin: 1, clearcoat: 0.16, clearcoatRoughness: 0.3 },
 };
 
-// Eight point lights, re-aimed per preset. Small bright lights are what make foil, glitter and
-// crystals sparkle; the environment only supplies the soft fill.
-const ring = (n, r, y, cd) => Array.from({ length: 8 }, (_, i) => i < n
-	? { p: [r * Math.sin(i / n * Math.PI * 2 + 0.4), y, r * Math.cos(i / n * Math.PI * 2 + 0.4)], cd, c: i % 2 ? 0xfff1dc : 0xe6f0ff }
-	: { p: [0, 5, 0], cd: 0, c: 0xffffff });
+// Photographed studios (render/viewport.js hdri): the HDRI lights the figure and is the room around
+// it, its floor projected onto the ground the figure stands on. Only these since 2026-10-27 (owner:
+// the light-only and softbox rigs were removed; designs naming one open in DEFAULT_RIG).
+export const DEFAULT_RIG = 'White loft studio';
 export const RIGS = {
-	'Arena (ring of small lights)': { env: 0.4, bg: 0.1, lights: ring(6, 4.2, 4.4, 38) },
-	'Studio (soft)': { env: 0.75, bg: 0.25, lights: [{ p: [2.4, 3, 3.4], cd: 30, c: 0xfff4e6 }, { p: [-3, 2.4, 1.8], cd: 12, c: 0xe8f0ff }, { p: [0.5, 3, -3.5], cd: 16, c: 0xffffff }, ...ring(0).slice(3)] },
-	'Single spotlight': { env: 0.07, bg: 0.02, lights: [{ p: [1.3, 3.8, 3.4], cd: 230, c: 0xffffff }, ...ring(0).slice(1)] },
-	// Photo-studio rigs (render/studio.js): fixed softboxes as area lights, a seamless backdrop, a
-	// matching reflection room, and two small glint lights at the softbox centres (crystals need
-	// a small bright source to sparkle). area: { p, s: [w, h] m, at, L: luminance, c }
-	'White seamless (photo studio)': studioRig(0xf4f4f2, { back: 1.1, sides: 0.75, top: 0.5, floor: 0.9, front: 0.5 }, 1.0, 0.35),
-	'Grey seamless (photo studio)': studioRig(0x7d7f84, { back: 1, sides: 0.6, top: 0.45, floor: 0.8, front: 0.4 }, 0.85, 0.1),
-	'Gym (overhead lights)': {
-		fixed: true, env: 0.5, bg: 1, backdrop: 0xb9ab95, room: { back: 0.55, sides: 0.5, top: 0.35, floor: 0.4, front: 0.45 },
-		areas: [-1.6, 0, 1.6].map((x) => ({ p: [x, 4.2, 0.9], s: [0.6, 2.4], at: [x, 0, 0.9], L: 9, c: 0xfff6ea })),
-		envLights: [-4.8, -3.2, 3.2, 4.8].map((x) => ({ p: [x, 4.2, 0.9], s: [0.6, 2.4], at: [x, 0, 0.9], L: 9, c: 0xfff6ea })),
-		lights: [{ p: [0, 4.1, 1.6], cd: 10, c: 0xfff6ea }, { p: [1.6, 4.1, -0.6], cd: 6, c: 0xfff6ea }, ...ring(0).slice(2)],
-	},
-	// Photographed studios (render/viewport.js hdri): the HDRI lights the figure and is the room
-	// around it, its floor projected onto the ground the figure stands on.
 	'White loft studio': hdriRig('brown_photostudio_02_4k.hdr'),
 	'Window loft studio': hdriRig('brown_photostudio_01_4k.hdr'),
 	'Parquet studio, sunlit': hdriRig('brown_photostudio_06_4k.hdr'),
@@ -101,23 +82,5 @@ export const RIGS = {
 // direction (found when it loads), glint: candela of the small lights there and at the camera
 // that crystals need to sparkle.
 function hdriRig(file, o = {}) {
-	return { hdri: file, fixed: true, env: 1, bg: 1, bloomK: 0.4, height: 1.6, turn: 0, sun: 0.8, glint: 5, lights: ring(0), ...o };
-}
-
-// glow: the backdrop's own light (paper lit by background lights), as a share of its colour
-function studioRig(backdrop, room, k, glow) {
-	return {
-		fixed: true, env: 0.5 * k, bg: 1, backdrop, room, glow, bloomK: 0.4, // catalogue photos show little glow
-		areas: [
-			{ p: [-1.7, 2.2, 2.3], s: [1.2, 1.6], at: [0, 1.15, 0], L: 5.5 * k, c: 0xffffff }, // key: front left, above (part of it, see shadow)
-			{ p: [2.0, 1.5, 2.1], s: [1.0, 1.4], at: [0, 1.0, 0], L: 5 * k, c: 0xffffff },    // fill: front right
-			{ p: [0, 2.6, -1.3], s: [1.4, 0.5], at: [0, 1.2, 0], L: 7 * k, c: 0xffffff },     // hair light behind, for the rim
-		],
-		// a white card beside the camera: small in the diffuse fill, but what foil, spangles and
-		// the crystals' mirror backs reflect when they face the lens (as in catalogue photos)
-		envLights: [{ p: [0.3, 1.3, 3.4], s: [3.0, 2.2], at: [0, 1.1, 0], L: 2.5 * k, c: 0xffffff }],
-		lights: [{ p: [-1.7, 2.2, 2.3], cd: 7 * k, c: 0xffffff }, { p: [2.0, 1.5, 2.1], cd: 3 * k, c: 0xffffff }, ...ring(0).slice(2)],
-		// the rest of the key, from the same direction, as a directional light that casts soft shadows
-		shadow: { from: [-1.7, 2.2, 2.3], E: 0.75 * k },
-	};
+	return { hdri: file, env: 1, bg: 1, bloomK: 0.4, height: 1.6, turn: 0, sun: 0.8, glint: 5, ...o };
 }

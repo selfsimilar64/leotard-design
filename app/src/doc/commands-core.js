@@ -70,12 +70,11 @@ defineCommand('body.set', {
 });
 
 defineCommand('scene.set', {
-	label: 'Change lighting', args: '{ rig?, exposure?, bloom?, envRotation?, rotateLights?, glare?: plain|star|star6|arena, glareSize?: 0.2-2.5, glareStrength?: 0-2, backdrop?: room|plain, backdropColour?, roomHeight?, roomSize? }',
+	label: 'Change lighting', args: '{ rig?, exposure?, bloom?, envRotation?, glare?: plain|star|star6|arena, glareSize?: 0.2-2.5, glareStrength?: 0-2, backdrop?: room|plain, backdropColour?, roomHeight?, roomSize? }',
 	run(tx, a) {
 		setFields(tx, 'scene', a, {
 			rig: (v) => oneOf('rig', v, Object.keys(RIGS)),
 			exposure: num('exposure', 0.05, 5), bloom: num('bloom', 0, 3), envRotation: num('envRotation', -100, 100),
-			rotateLights: (v) => { if (typeof v !== 'boolean') throw new Error('rotateLights must be true or false'); },
 			glare: (v) => oneOf('glare', v, Object.keys(GLARE)),
 			glareSize: num('glareSize', 0.2, 2.5), glareStrength: num('glareStrength', 0, 2),
 			backdrop: (v) => oneOf('backdrop', v, ['plain', 'room']),

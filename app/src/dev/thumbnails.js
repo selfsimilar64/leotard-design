@@ -49,7 +49,7 @@ function fullLength(turn = 0.18) {
 	return { position: [cx + Math.sin(turn) * d, cy + 0.05, cz + Math.cos(turn) * d], target: [cx, cy, cz], fov };
 }
 
-async function prepare(body, scene = { rig: 'White seamless (photo studio)', envRotation: 0, exposure: 1 }) {
+async function prepare(body, scene = { rig: 'White loft studio', envRotation: 0, exposure: 1 }) {
 	await app.open(STARTER, body);
 	app.exec({ op: 'scene.set', ...scene });
 	await settle();
@@ -115,7 +115,7 @@ export async function environments() {
 export async function blocks(only = null) { // only: tile names to render ('strap-thin', ...), else all
 	app.new('Blocks');
 	app.exec({ op: 'body.set', ...APPEARANCES.mannequin, size: 'young', pose: 'arms-down' });
-	app.exec({ op: 'scene.set', rig: 'White seamless (photo studio)', envRotation: 0, exposure: 1 });
+	app.exec({ op: 'scene.set', rig: 'White loft studio', envRotation: 0, exposure: 1 });
 	await settle();
 	const e = app.engine, lm = e.body.body.landmarks;
 	// the plain tank's shape, in one colour, so each tile shows only its own element
@@ -150,7 +150,7 @@ const putCanvas = async (url, cv) => {
 };
 
 export async function materials() {
-	app.exec({ op: 'scene.set', rig: 'White seamless (photo studio)', envRotation: 0, exposure: 1 });
+	app.exec({ op: 'scene.set', rig: 'White loft studio', envRotation: 0, exposure: 1 });
 	await settle(300);
 	const e = app.engine, renderer = e.viewport.renderer, env = e.viewport.scene.environment;
 	for (const k of Object.keys(FABRICS)) {

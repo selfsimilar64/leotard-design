@@ -9,7 +9,7 @@ export async function build(app, o = {}) {
 	const royal = o.royal ?? '#1d48b4', navy = '#141a52';
 	app.new('B11 converging fan');
 	X({ op: 'body.set', finish: 'Athlete skin, light', pose: 'left-hand-on-hip' });
-	X({ op: 'scene.set', rig: o.rig ?? 'Studio (soft)', rotateLights: false });
+	X({ op: 'scene.set', rig: o.rig ?? 'White loft studio' });
 	X({ op: 'block.apply', neck: 'high', back: 'crew', sleeves: 'three-quarter', leg: 'standard', armhole: 'raglan', fabric: 'shiny', colour: royal });
 	await settle();
 	const neck = id('Neckline'), ragF = id('Raglan seam (front)'), ty = o.ty ?? 0.985;

@@ -10,7 +10,7 @@ export async function build(app, o = {}) {
 	const black = '#0b0b0f', tq = o.tq ?? '#5ac8d4', mesh = { fabric: 'mesh', colour: '#121216', sheer: o.sheer ?? 0.12 };
 	app.new('B2 ombre with crossover bands');
 	X({ op: 'body.set', finish: 'Athlete skin, light', pose: 'arms-down' });
-	X({ op: 'scene.set', rig: 'White seamless (photo studio)' });
+	X({ op: 'scene.set', rig: 'White loft studio' });
 	X({ op: 'block.apply', neck: 'high', back: 'crew', sleeves: 'long', leg: o.leg ?? 'competition', armhole: 'raglan', fabric: 'matte', colour: black });
 	await settle();
 	// competition leg cut (2026-10-20): the bands sit 3.5 cm higher so their side ends stay on the

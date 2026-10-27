@@ -9,7 +9,7 @@ export async function build(app, o = {}) {
 	const black = '#0a0a0d', meshF = { fabric: 'mesh', colour: '#101014', sheer: o.sheer ?? 0.1 };
 	app.new('B7 asymmetric wedges');
 	X({ op: 'body.set', finish: 'Athlete skin, light', pose: { left: 'down', right: 'hip' } });
-	X({ op: 'scene.set', rig: 'White seamless (photo studio)', glare: 'star' });
+	X({ op: 'scene.set', rig: 'White loft studio', glare: 'star' });
 	X({ op: 'block.apply', neck: 'high', back: 'crew', sleeves: 'three-quarter', leg: 'standard', armhole: 'set-in', fabric: 'matte', colour: black });
 	await settle();
 	const side = id('Side seam'), neck = id('Neckline');

@@ -3,6 +3,7 @@
 
 import { MESH, migrateBody } from './migrate-g9.js';
 import { RETIRED_FABRICS, RETIRED_SCANS } from '../materials/fabric.js';
+import { RIGS, DEFAULT_RIG } from '../render/presets.js';
 
 export const FORMAT = 'leotard-design';
 export const VERSION = 1;
@@ -18,7 +19,7 @@ export function newDocument(name = 'Untitled') {
 		// the mannequin appearance (render/presets.js APPEARANCES): the default since 2026-10-26 (owner),
 		// the realistic person being the final check of how it looks on a gymnast
 		body: { size: 'young', form: 'full', head: 'none', expression: 'neutral', finish: 'Matte white fibreglass', headFinish: 'Matte white fibreglass', pose: 'a-pose' },
-		scene: { rig: 'White seamless (photo studio)', rotateLights: false, exposure: 1, bloom: 0.18, envRotation: 0, glare: 'plain' },
+		scene: { rig: DEFAULT_RIG, exposure: 1, bloom: 0.18, envRotation: 0, glare: 'plain' },
 		// first-generation garment (analytic regions, garment/legacy.js), kept so old files open;
 		// null for every design made with the cut-and-sew tools
 		legacy: null,
@@ -44,6 +45,9 @@ export function migrate(doc) {
 	doc.body = migrateBody(hadBody ? doc.body : base.body, knownBodies);
 	if (old && convertSurface) { convertSurface(doc); doc.mesh = MESH; }
 	retireFabrics(doc);
+	// lighting rigs taken out of the app (render/presets.js RIGS): the design opens in the default studio
+	if (!RIGS[doc.scene.rig]) doc.scene.rig = DEFAULT_RIG;
+	delete doc.scene.rotateLights; // only the removed light rigs could circle
 	return doc;
 }
 

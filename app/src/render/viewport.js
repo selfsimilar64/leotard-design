@@ -7,11 +7,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { GroundedSkybox } from 'three/addons/objects/GroundedSkybox.js';
-import { SCENE, RIGS } from './presets.js';
-import { studioEnvironment, cyclorama } from './studio.js';
+import { SCENE, RIGS, DEFAULT_RIG } from './presets.js';
 import { GlarePass, GLARE_SIZE, GLARE_STRENGTH } from './glare.js';
 import { ScenePass, SkinPass, AOPass } from './postfx.js';
 
@@ -74,9 +72,7 @@ export class Viewport {
 		controls.addEventListener('end', () => { this.moving = false; this.stillAt = performance.now(); });
 
 		const pmrem = this.pmrem = new THREE.PMREMGenerator(renderer);
-		this.envs = new Map(); // rig name -> PMREM texture (studio rigs reflect their own softboxes)
-		this.roomEnv = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
-		scene.environment = this.roomEnv;
+		scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture; // until the first studio has loaded
 		scene.background = scene.environment;
 		scene.backgroundBlurriness = 0.7;
 
@@ -95,12 +91,10 @@ export class Viewport {
 		composer.addPass(this.glare);
 		composer.addPass(new OutputPass());
 
-		// Eight point lights, re-aimed per preset (see RIGS in presets.js).
+		// Glint lights: placed by placeHdriLights (the first two; the rest stay off).
 		this.rig = new THREE.Group();
 		scene.add(this.rig);
 		this.lights = Array.from({ length: 8 }, () => { const l = new THREE.PointLight(0xffffff, 0, 0, 2); this.rig.add(l); return l; });
-		// Softboxes of the photo-studio rigs (created on first use: the LTC tables are 130 kB)
-		this.areas = [];
 		// The shadowing part of a studio key: area lights cannot cast shadows in three.js, so part
 		// of the key's light comes from this directional light instead (rig.shadow).
 		const sun = this.sun = new THREE.DirectionalLight(0xffffff, 0);
@@ -110,10 +104,7 @@ export class Viewport {
 		sun.shadow.radius = 9; sun.shadow.blurSamples = 16; sun.shadow.bias = -0.0004;
 		this.world.add(sun); this.world.add(sun.target);
 
-		// Dark studio floor with a soft contact shadow under the stand.
-		const floor = this.floor = new THREE.Mesh(new THREE.CircleGeometry(4, 96), new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.85 }));
-		floor.rotation.x = -Math.PI / 2; floor.position.y = -0.0085;
-		this.world.add(floor);
+		// A soft contact shadow under the stand.
 		const c = document.createElement('canvas'); c.width = c.height = 128;
 		const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
 		gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.25)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
@@ -121,9 +112,6 @@ export class Viewport {
 		const blob = this.blob = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
 		blob.rotation.x = -Math.PI / 2; blob.position.y = -0.0082;
 		this.world.add(blob);
-		this.cyc = cyclorama();
-		this.cyc.visible = false;
-		this.world.add(this.cyc);
 		// HDRI studios (rig.hdri): loaded once each; the room drawn as a skybox with a ground, and a
 		// floor that shows only shadows (the key's) laid on that ground
 		this.hdris = new Map(); // file -> Promise<{ tex, env, key: Vector3, sky }>
@@ -132,7 +120,7 @@ export class Viewport {
 		catcher.rotation.x = -Math.PI / 2; catcher.position.y = -0.0085; catcher.receiveShadow = true; catcher.visible = false;
 		this.world.add(catcher);
 
-		this.settings = { rig: 'Arena (ring of small lights)', rotateLights: false, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1, dynamicRes: true };
+		this.settings = { rig: DEFAULT_RIG, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1, dynamicRes: true };
 		this.onFrame = new Set();
 		this.onResize = new Set();
 		this.stats = { fps: 0, cpuMs: 0, triangles: 0, width: 0, height: 0 };
@@ -178,60 +166,15 @@ export class Viewport {
 
 	applyScene(s) {
 		Object.assign(this.settings, s);
-		const r = RIGS[this.settings.rig] ?? RIGS['Arena (ring of small lights)'];
-		// Unused lights are hidden, not dimmed: every visible light is paid for on every pixel.
-		r.lights.forEach((d, i) => { const l = this.lights[i]; l.position.fromArray(d.p); l.intensity = d.cd; l.color.set(d.c); l.visible = d.cd > 0; });
+		const r = RIGS[this.settings.rig] ?? RIGS[DEFAULT_RIG];
 		this.scene.environmentIntensity = r.env;
 		this.scene.backgroundIntensity = r.bg;
-		const areas = r.areas ?? [];
-		if (areas.length && !this.areas.length) {
-			RectAreaLightUniformsLib.init();
-			for (let i = 0; i < 4; i++) { const l = new THREE.RectAreaLight(0xffffff, 0, 1, 1); l.visible = false; this.scene.add(l); this.areas.push(l); }
-		}
-		this.areas.forEach((l, i) => {
-			const a = areas[i];
-			l.visible = !!a;
-			if (!a) return;
-			l.position.fromArray(a.p); l.width = a.s[0]; l.height = a.s[1]; l.intensity = a.L; l.color.set(a.c ?? 0xffffff);
-			l.lookAt(new THREE.Vector3().fromArray(a.at ?? [0, 1, 0]));
-		});
-		const sh = r.shadow, sun = this.sun;
-		sun.visible = !!sh;
-		if (sh) {
-			sun.target.position.set(0, 1.0, 0);
-			sun.position.fromArray(sh.from).sub(sun.target.position).normalize().multiplyScalar(4).add(sun.target.position);
-			sun.intensity = sh.E; sun.color.set(sh.c ?? 0xffffff);
-			sun.shadow.camera.updateProjectionMatrix();
-		}
 		this.glare.setPreset(this.settings.glare ?? 'plain', { size: this.settings.glareSize ?? GLARE_SIZE, strength: this.settings.glareStrength ?? GLARE_STRENGTH });
-		this.rigFixed = !!r.fixed;
-		this.showHdri(null);
-		if (r.hdri) {
-			// until the studio has loaded, the last environment stays on show
-			const want = this.settings.rig;
-			this.cyc.visible = false; this.floor.visible = false;
-			this.hdri(r.hdri).then((h) => { if (this.settings.rig === want) this.showHdri(r, h); }, (e) => console.error('hdri', e));
-			this.bloomK = r.bloomK ?? 1;
-			this.rig.rotation.y = 0;
-			return;
-		}
 		this.bloomK = r.bloomK ?? 1;
-		if (r.fixed) this.rig.rotation.y = 0;
-		let env = this.envs.get(this.settings.rig);
-		if (!env) {
-			env = r.room ? this.pmrem.fromScene(studioEnvironment(r), 0.01).texture : this.roomEnv;
-			this.envs.set(this.settings.rig, env);
-		}
-		this.scene.environment = env;
-		// a backdrop rig shows its seamless paper; the others the blurred room and the dark floor
-		const bd = r.backdrop != null;
-		this.cyc.visible = bd; this.floor.visible = !bd;
-		if (bd) {
-			this.cyc.material.color.set(r.backdrop);
-			this.cyc.material.emissive.set(r.backdrop).multiplyScalar(r.glow ?? 0);
-			this.scene.background = this.cyc.material.color.clone();
-		}
-		else this.scene.background = env;
+		this.showHdri(null);
+		// until the studio has loaded, the last environment stays on show
+		const want = this.settings.rig;
+		this.hdri(r.hdri).then((h) => { if (this.settings.rig === want) this.showHdri(r, h); }, (e) => console.error('hdri', e));
 	}
 
 	// An HDRI studio: its equirectangular image (the skybox), the lighting prefiltered from it, and
@@ -313,9 +256,7 @@ export class Viewport {
 		this.timer.update();
 		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
 		if (!this.container.clientWidth) return; // pane not laid out yet
-		if (s.rotateLights && !this.photo && !this.rigFixed) this.rig.rotation.y += dt * SCENE.lightSpin;
 		if (this.hdriOn) this.placeHdriLights();
-		else this.scene.environmentRotation.y = this.scene.backgroundRotation.y = s.envRotation + this.rig.rotation.y * SCENE.envFollow;
 		this.renderer.toneMappingExposure = s.exposure;
 		this.bloom.strength = s.bloom * (this.bloomK ?? 1);
 		this.lights[0].getWorldPosition(this.keyDir).sub(this.controls.target).normalize();
@@ -358,7 +299,7 @@ export class Viewport {
 		run(); // warm up: compiles any shader variant not yet seen
 		const t = performance.now(); run();
 		const ms = (performance.now() - t) / n;
-		if (this.rigFixed) this.rig.rotation.y = r0; // studio lights stay where they were
+		this.rig.rotation.y = r0; // the lights stay where they were
 		if (size) { cam.aspect = aspect; this.resize(); }
 		return ms;
 	}

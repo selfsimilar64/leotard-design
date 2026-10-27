@@ -46,7 +46,7 @@ export async function body(app, name, o = {}) {
 // A design on a person: body and face captures (show-<size>-<pose>-body.png, -face.png).
 export async function showcase(app, who, design, o = {}) {
 	await app.open(design);
-	app.exec({ op: 'scene.set', rig: o.rig ?? 'White seamless (photo studio)' });
+	app.exec({ op: 'scene.set', rig: o.rig ?? 'White loft studio' });
 	await useFigure(app, who);
 	const name = 'show-' + (who.size ?? app.doc.body.size) + '-' + (typeof who.pose === 'string' ? who.pose : 'a-pose');
 	await body(app, name + '-body', o.body);

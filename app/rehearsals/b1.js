@@ -16,7 +16,7 @@ export async function build(app, o = {}) {
 	const pink = o.pink ?? '#f2b9c3', navy = '#1f2a55', laceNet = '#eab0bc', laceCord = '#fbe3e8';
 	app.new('B1 lace wrap with bow');
 	X({ op: 'body.set', finish: 'Athlete skin, light', pose: 'hands-in-front' });
-	X({ op: 'scene.set', rig: 'White seamless (photo studio)' });
+	X({ op: 'scene.set', rig: 'White loft studio' });
 	X({ op: 'block.apply', neck: 'crew', back: 'v', sleeves: 'tank', leg: 'standard', fabric: 'matte', colour: pink });
 	await settle();
 	const side = id('Side seam'), vy = o.vy ?? 0.955;
