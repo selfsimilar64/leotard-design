@@ -658,8 +658,11 @@ export const FABRICS = {
 	// (2026-10-27); at 75% (the owner's 2026-10-24 pick) they blurred into a satin sheen at swatch distance.
 	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.42, presence: 0.97, tilt: 0.15, rough: 0.12, colorVar: 0.1, blend: 1, maze: 1 }, texScale: 1.33 },
 	// Opal mystique: the foil dots carry a soft rainbow that turns with the surface (an iridescent foil;
-	// a dyed knit cannot change colour with the angle)
-	opalmystique: { label: 'Opal mystique', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.42, presence: 0.97, tilt: 0.15, rough: 0.12, colorVar: 0.1, blend: 1, maze: 1, holo: 0.35, holoFreq: 3.2, holoJit: 0.15 }, texScale: 1.33 },
+	// a dyed knit cannot change colour with the angle). Its rate is a thin film's: about half to one
+	// and a half spectra from face on to 60 degrees, holoFreq ~0.6-1.8; 1 in the middle. (3.2, a
+	// diffraction foil's rate, ringed the body with rainbows; owner, 2026-10-27.) Panels can scale it
+	// (rainbow, render/garment.js).
+	opalmystique: { label: 'Opal mystique', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.42, presence: 0.97, tilt: 0.15, rough: 0.12, colorVar: 0.1, blend: 1, maze: 1, holo: 0.35, holoFreq: 1, holoJit: 0.15 }, texScale: 1.33 },
 	hologram: { label: 'Hologram foil dots', roughness: 0.62, knit: 1, flake: { pitch: 0.0009, dotR: 0.37, presence: 1, tilt: 0.22, rough: 0.22, colorVar: 0.3, holo: 0.6, holoFreq: 0.9, holoJit: 0.5 } },
 	// The foils, film and velvets used to carry a value-noise "crinkle" bump (amp 0.1-0.7) from the
 	// POC: crumpled foil, not foil on a knit pulled tight over a body. On skin-tight fabric tension

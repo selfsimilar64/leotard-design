@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Update**: [Photo match: mystique](/engineering/rendering/fabric-shading/photo-match-mystique.md#rainbow-speed-2026-10-27): rainbow rate from physics (no published data): diffraction foils about 3.3 in shader units, thin-film opal 0.6-1.8; Opal mystique 3.2 -> 1; new per-panel Rainbow speed.
 * **Update**: [Photo match: mystique](/engineering/rendering/fabric-shading/photo-match-mystique.md) round 3 on a crumpled test cloth (`app/src/dev/drape-eval.js`): denser maze of short chains (sum of six waves), dots at 133% (reverses the owner's 75% of [2026-10-24](/decisions/2026-10-24-owner-fabric-review.md), flagged), new Opal mystique (rainbow in the foil dots), Liquid hologram (opal) retuned to an electric-foil close-up; picker tiles re-rendered in the White loft.
 * **Decision**: [Photographed (HDRI) studios only](/decisions/2026-10-27-hdri-lighting-only.md): the light-only and softbox rigs and the circling-lights switch are removed; designs naming one open in the White loft studio, which is also the material test scene. [Scripting surface](/engineering/app/scripting-surface.md) and [studio rigs](/engineering/app/studio-and-fabric-looks.md) updated.
 * **Update**: [Photo match: mystique](/engineering/rendering/fabric-shading/photo-match-mystique.md) round 2 from the owner's close-ups and swatch video: dots in winding chains (`maze`), dye and foil kept apart where a pixel is part of each (two-tone mystique showed the foil colour everywhere); two-tone is mystique with a custom foil colour, not duochrome.

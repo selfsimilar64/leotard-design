@@ -134,6 +134,9 @@ export class GarmentView {
 			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone', s.colour2 ?? null, texScaleOf(s));
 			// effect strength: how strongly a hologram, film or duochrome shows (1 = the fabric's own)
 			if (s.effect !== undefined && s.effect !== 1) { const e = s.effect; u.uFilmTint.value *= e; u.uHolo.value = Math.min(u.uHolo.value * e, 1); u.uDuo.value *= e; m.iridescence = Math.min(m.iridescence * e, 1); }
+			// rainbow speed: how fast a hologram's or opal's colours run through the spectrum as the
+			// surface turns (1 = the fabric's own)
+			if (s.rainbow !== undefined && s.rainbow !== 1) { u.uHoloFreq.value *= s.rainbow; u.uFilmHue.value.y *= s.rainbow; }
 			// sheerness of a mesh or lace net: the share of skin (or lining) seen through it, face on
 			// (light crosses the net twice, so the open share is its square root; materials/fabric.js)
 			if (s.sheer !== undefined && u.uMesh.value > 0.5) u.uHoleR.value = Math.sqrt(Math.sqrt(Math.min(Math.max(s.sheer, 0), 0.95)) / 3.6276);

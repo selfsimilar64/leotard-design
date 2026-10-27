@@ -168,6 +168,32 @@ reads darker and more foil-coloured overall, flat it reads foil-coloured and bri
 light (one strong key over the camera, dark surroundings) is not one of the loft's orientations.
 Close up, dots, chains and the knit between them match well.
 
+# Rainbow speed (2026-10-27)
+
+Owner: Opal mystique's colours changed too fast on the leotard (holoFreq 3.2 ringed the bust and
+hips with rainbows; it was set on the 20 cm test cloth). Asked what rate is physically right and
+for a per-panel control.
+
+No maker, mill or shop publishes a grating period or film thickness for dancewear foils
+([data gaps](/domain/fabrics/fabric-data-gaps.md)); a search found only 1990s rainbow-film patents
+and spectroscopy gratings. The rate follows from the mechanism instead. **[INFERRED]**
+- **Diffraction (holographic / rainbow / "electric" foil)**: first order sin(out) - sin(in) = lambda / d.
+  With d about 1 um (the bundle's working value, [holographic diffraction](/engineering/rendering/fabric-shading/holographic-diffraction.md)),
+  400-700 nm spans 0.3 in sine: one full rainbow per about 17 degrees of viewing direction, about
+  9 degrees of surface tilt, and only where a bright light's diffracted order reaches the eye. In
+  the shader's terms (`spectrum()` has period 1, phase = dot(reflection, hd) x rate) that is a rate
+  of about 3.3. So Liquid hologram's `film.hue` 3.2 is about right for a diffraction foil.
+- **Thin film (opal, pearl, iridescent foil)**: the reflected colour follows 2 n t cos(theta_t);
+  for n 1.5, cos(theta_t) falls from 1 to 0.82 between face-on and 60 degrees, an 18% shift in
+  wavelength: about half the visible spectrum for a first-order film, up to one and a half for
+  second or third order (paler colours). Rate about 0.6-1.8. Opal mystique `holoFreq` 3.2 -> 1.
+- Our rainbow direction `hd` is fixed, not computed from the lights, so both are approximations.
+
+`rainbow` panel field (`panel.set { rainbow }`, 0.2-3, 1 = the fabric default) multiplies
+`uHoloFreq` and `uFilmHue.y` (`render/garment.js applyMaterials`); "Rainbow speed" slider under
+"Effect" for fabrics with `flake.holo` or `film.tint` (`ui/inspect-garment.jsx`). Panels only (not
+straps or finished edges).
+
 # Open
 
 - **Lighting decides the look.** Under the (since removed) Studio (soft) rig the patches appeared;
