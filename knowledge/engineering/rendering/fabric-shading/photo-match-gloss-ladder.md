@@ -54,6 +54,15 @@ anisotropy 0.5 and ior 1.6 keep distinct bands over deep navy. **[INFERRED]** It
 and less contrasty than GK's photo, which was lit by a frontal studio light the White loft does
 not have; revisit if a frontal-key studio is added.
 
+# Satin tries in the picker (for the owner)
+
+The owner asked to judge the earlier tries by eye, so all six are fabrics in the picker after
+Stretch satin (try E): `satin1` first try (roughness 0.3, anisotropy 0.85, glint 0.12, sheen
+0.15), `satin2` (0.22, 0.9), `satinA` (0.22, 0.9, ior 2.2, sheen 0.4 at half white), `satinB`
+(0.3, 0.9, ior 2.6), `satinC` (0.18, 0.7, ior 1.8), `satinD` (0.14, 0.6, ior 2.0); shared fields in
+`SATIN_TRY`. Remove the losers (and their tiles in `public/thumbs/materials/`) once the owner
+picks one.[^owner]
+
 # Test cloth fix
 
 `app/src/dev/drape-eval.js`'s cloth had no `tangent` attribute, so every anisotropic fabric

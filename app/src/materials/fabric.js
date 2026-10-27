@@ -679,6 +679,9 @@ export function createFabricMaterial(zone) {
 // Flake fields: pitch (m), dotR (cells), presence, tilt, rough, colorVar, holo, holoFreq, holoJit, blend
 // (1: flat foil dots whose sparkle averages into a shimmer far away), bend (cells: the dot lattice's
 // rows curve from patch to patch); blend and bend are mystique's, from its 2026-10-27 audit.
+// Shared by the satin tries in FABRICS (satin1 ... satinD): what they had in common with satin.
+const SATIN_TRY = { sheen: 0.1, sheenRoughness: 0.5, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
+	glint: { pitch: 0.00016, dotR: 0.4, presence: 0.06, tilt: 0.2, rough: 0.08, colorVar: 0.4, strength: 1 } };
 export const FABRICS = {
 	// Matte lycra's sheen is low and close to its own colour: at 0.4 and a third white (the tint is
 	// mixed in linear light, so a third white is nearly white on a dark colour) a dark green's
@@ -707,8 +710,17 @@ export const FABRICS = {
 	// and more reflective than shiny tricot (ior 1.6), but anisotropy 0.85-0.9 or ior 2+ smeared the
 	// loft's bright ceiling over the whole chest as a grey haze; 0.5 keeps bands over deep colour
 	// (material-eval, navy, 2026-10-27).
-	satin: { label: 'Stretch satin', roughness: 0.2, sheen: 0.1, sheenRoughness: 0.5, anisotropy: 0.5, ior: 1.6, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
+	satin: { label: 'Stretch satin (try E, chosen)', roughness: 0.2, sheen: 0.1, sheenRoughness: 0.5, anisotropy: 0.5, ior: 1.6, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
 		glint: { pitch: 0.00016, dotR: 0.4, presence: 0.06, tilt: 0.2, rough: 0.08, colorVar: 0.4, strength: 1 } },
+	// The satin tries before the one above, kept in the picker for the owner to judge by eye (owner,
+	// 2026-10-27; knowledge/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md). Remove the
+	// losers once the owner has chosen.
+	satin1: { ...SATIN_TRY, label: 'Satin try 1 (first)', roughness: 0.3, sheen: 0.15, anisotropy: 0.85, ior: 1.5, glint: { ...SATIN_TRY.glint, presence: 0.12 } },
+	satin2: { ...SATIN_TRY, label: 'Satin try 2 (glossier)', roughness: 0.22, sheen: 0.15, anisotropy: 0.9, ior: 1.5 },
+	satinA: { ...SATIN_TRY, label: 'Satin try A (reflective, glow)', roughness: 0.22, sheen: 0.4, sheenTint: 0.5, anisotropy: 0.9, ior: 2.2 },
+	satinB: { ...SATIN_TRY, label: 'Satin try B (most reflective)', roughness: 0.3, sheen: 0.15, anisotropy: 0.9, ior: 2.6 },
+	satinC: { ...SATIN_TRY, label: 'Satin try C', roughness: 0.18, anisotropy: 0.7, ior: 1.8 },
+	satinD: { ...SATIN_TRY, label: 'Satin try D', roughness: 0.14, anisotropy: 0.6, ior: 2.0 },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
 	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
 	// full mirror clear coat (1 at 0.1) read as latex, the step above it on the gloss ladder
