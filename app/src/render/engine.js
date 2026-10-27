@@ -270,13 +270,15 @@ export class Engine {
 	}
 
 	// Mannequin finishes: the body's (or the realistic skin, drawn by the figure; the caps and the
-	// dress form then take the plain skin tone) and the mannequin head's.
-	applyFinish(name, headName = name) {
+	// dress form then take the plain skin tone) and the mannequin head's. colour ('#rrggbb', the
+	// body's colour) recolours the mannequin finishes, not the realistic skin.
+	applyFinish(name, headName = name, colour) {
 		const real = name === REALISTIC_SKIN;
-		const f = MANNEQUIN_FINISHES[real ? 'Skin tone' : name] ?? MANNEQUIN_FINISHES['Matte white fibreglass'];
-		setFinish(this.skin, f); setFinish(this.headSkin, MANNEQUIN_FINISHES[headName] ?? f);
+		const tint = (f) => (colour && !real ? { ...f, colour } : f);
+		const f = tint(MANNEQUIN_FINISHES[real ? 'Skin tone' : name] ?? MANNEQUIN_FINISHES['Matte white fibreglass']);
+		setFinish(this.skin, f); setFinish(this.headSkin, MANNEQUIN_FINISHES[headName] ? tint(MANNEQUIN_FINISHES[headName]) : f);
 		const cm = this.capMaterial;
-		cm.color.set(f.colour); cm.roughness = f.roughness; cm.clearcoat = f.clearcoat ?? 0; cm.sheen = f.sheen ?? 0;
+		cm.color.set(f.colour); cm.roughness = f.roughness; cm.metalness = f.metalness ?? 0; cm.clearcoat = f.clearcoat ?? 0; cm.sheen = f.sheen ?? 0;
 		cm.needsUpdate = true;
 	}
 
@@ -314,7 +316,7 @@ export class Engine {
 			return;
 		}
 		this.pendingBody = null;
-		this.applyFinish(b.finish, b.headFinish);
+		this.applyFinish(b.finish, b.headFinish, b.colour);
 		const figure = () => (this.figureReady = this.figure.show(part ? {
 			man: this.body, body: this.body.body, cage: this.body.cage, poseKey: this.body.body.daz ?? 'a-pose', shape: this.body.key + '|' + this.body.poseKey,
 			expression: b.expression, hair: b.hair, part, keep: this.body.keep, cut: this.body.formKind + '|' + this.body.head,
@@ -381,9 +383,11 @@ export class Engine {
 // A mannequin finish (render/presets.js) on a skin piece's material.
 function setFinish(m, f) {
 	const u = m.userData.u;
-	m.color.set(f.colour); m.roughness = f.roughness;
+	m.color.set(f.colour); m.roughness = f.roughness; m.metalness = f.metalness ?? 0;
 	m.clearcoat = f.clearcoat ?? 0; m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
-	m.sheen = f.sheen ?? 0; m.sheenRoughness = 0.7; m.sheenColor.set(0xffffff);
+	m.sheen = f.sheen ?? 0; m.sheenRoughness = f.sheenRoughness ?? 0.7;
+	// velvet's sheen is its own colour, lightened; the others' white
+	if (f.sheenSelf) m.sheenColor.set(f.colour).lerp(new THREE.Color(0xffffff), 0.35); else m.sheenColor.set(0xffffff);
 	u.uKnit.value = f.knit ?? 0;
 	u.uTape.value = f.tape ? 1 : 0;
 	u.uSkin.value = f.skin ?? 0;

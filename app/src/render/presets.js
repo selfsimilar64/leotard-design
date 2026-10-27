@@ -19,9 +19,23 @@ export const APPEARANCES = {
 	mannequin: { form: 'full', head: 'none', finish: 'Matte white fibreglass' },
 	realistic: { form: 'full', head: 'person', finish: REALISTIC_SKIN },
 };
+// The mannequin look takes any mannequin finish (the panel's Material choice), not only its default.
 export function appearanceOf(b) {
-	return Object.keys(APPEARANCES).find((k) => Object.entries(APPEARANCES[k]).every(([f, v]) => (b[f] ?? (f === 'head' ? 'mannequin' : undefined)) === v)) ?? null;
+	return Object.keys(APPEARANCES).find((k) => Object.entries(APPEARANCES[k]).every(([f, v]) =>
+		k === 'mannequin' && f === 'finish' ? b.finish in MANNEQUIN_FINISHES : (b[f] ?? (f === 'head' ? 'mannequin' : undefined)) === v)) ?? null;
 }
+
+// The Material choice of the mannequin look (ui/Inspector.jsx Character): a finish each, in the
+// finish's own colour until the body's colour (body.colour, '#rrggbb') is set; that colour then
+// stays across materials.
+export const MANNEQUIN_MATERIALS = [
+	['Matte white fibreglass', 'Matte plastic'],
+	['Gloss white', 'Gloss plastic'],
+	['Polished metal', 'Polished metal'],
+	['Brushed metal', 'Brushed metal'],
+	['Flocked velvet', 'Flocked velvet'],
+	['Linen, no tapes', 'Linen'],
+];
 
 // The realistic person is Stacy on every body, in her own skin (pipeline/daz/bodies.py STACY);
 // the four Genesis 9 skin tones of the picker went with her (owner, 2026-10-21).
@@ -33,6 +47,11 @@ export const MANNEQUIN_FINISHES = {
 	'Matte black': { colour: 0x1e1e22, roughness: 0.45, clearcoat: 0.4, clearcoatRoughness: 0.3 },
 	'Linen dress form': { colour: 0xd8ccb4, roughness: 0.92, sheen: 0.35, knit: 1, tape: true },
 	'Linen, no tapes': { colour: 0xd8ccb4, roughness: 0.92, sheen: 0.35, knit: 1 },
+	// Display-mannequin metals (chrome and satin-brushed steel; the colour makes gold, bronze...)
+	// and flocked velvet (matte, a soft rim of sheen in its own colour).
+	'Polished metal': { colour: 0xd4d6da, roughness: 0.12, metalness: 1 },
+	'Brushed metal': { colour: 0xc4c6ca, roughness: 0.36, metalness: 1 },
+	'Flocked velvet': { colour: 0x26262b, roughness: 1, sheen: 1, sheenRoughness: 0.45, sheenSelf: true },
 	// Athlete skin (realism upgrade R5): wrap lighting that reaches further past the terminator in
 	// red (light scattered under the skin), slight roughness variation, a little clearcoat for oil.
 	'Athlete skin, fair': { colour: 0xe9c2a8, roughness: 0.5, skin: 1, clearcoat: 0.08, clearcoatRoughness: 0.35 },

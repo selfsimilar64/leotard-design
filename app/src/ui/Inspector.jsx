@@ -12,7 +12,7 @@ import { Slider, Toggle, Colour, Select, run } from './controls.jsx';
 import { Strip, Pane, Line, Chips, More, Swatches } from './Gallery.jsx';
 import { GLARE_SIZE, GLARE_STRENGTH } from '../render/glare.js';
 import { BACKDROP_COLOUR, ROOM_SIZE } from '../render/viewport.js';
-import { RIGS, appearanceOf } from '../render/presets.js';
+import { RIGS, appearanceOf, MANNEQUIN_FINISHES, MANNEQUIN_MATERIALS } from '../render/presets.js';
 import { inspectors } from './inspectors.js';
 import { ToolOptions } from './inspect-garment.jsx';
 import { StoneCounts } from './inspect-stones.jsx';
@@ -167,6 +167,7 @@ function Character({ b }) {
 				{ key: 'realistic', label: 'Realistic', hint: 'A real person: face, hair and skin', img: thumb('appearance', 'realistic') },
 				{ key: 'mannequin', label: 'Mannequin', hint: 'Headless plastic mannequin, same body', img: thumb('appearance', 'mannequin') },
 			]} />
+			{look === 'mannequin' ? <MannequinLook b={b} /> : null}
 			<Line label="Age and build"><Strip value={b.size} onPick={(v) => run({ op: 'body.set', size: v })} items={sizes} /></Line>
 			<Line label="Pose"><Strip value={poseKey} onPick={(v) => run({ op: 'body.set', pose: v })} items={poses} /></Line>
 			{real && catalogue.expressions.length ? (
@@ -178,6 +179,25 @@ function Character({ b }) {
 				</More>
 			) : null}
 		</Pane>
+	);
+}
+
+// The mannequin's material and colour. The first swatch is the material's own colour (body.colour
+// unset); any other colour stays when the material changes.
+const MANNEQUIN_COLOURS = ['#f2f1ee', '#c9a48f', '#8a6a55', '#9a9b9f', '#1e1e22', '#d9b46a', '#c99a86', '#9fb3c8'];
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+function MannequinLook({ b }) {
+	const own = hex(MANNEQUIN_FINISHES[b.finish].colour), colour = b.colour ?? own;
+	const set = (patch, g) => run({ op: 'body.set', ...patch, gesture: g });
+	return (
+		<>
+			<Line label="Material"><Strip size="s" value={b.finish} onPick={(v) => set({ finish: v })}
+				items={MANNEQUIN_MATERIALS.map(([k, label]) => ({ key: k, label, img: thumb('mannequin', k) }))} /></Line>
+			<Line label="Colour">
+				<Swatches value={colour} colours={[own, ...MANNEQUIN_COLOURS.filter((c) => c !== own)]} onPick={(c) => set({ colour: c === own ? null : c })}
+					custom={<Colour value={colour} onChange={(v, g) => set({ colour: v }, g)} />} />
+			</Line>
+		</>
 	);
 }
 

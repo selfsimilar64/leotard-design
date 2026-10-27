@@ -3,6 +3,7 @@
 //   const t = await import('/src/dev/thumbnails.js'); await t.all();      // or t.designs(), t.bodies(), ...
 // It changes the open design; the design open before is put back at the end. Groups:
 //   appearance  realistic and mannequin, full length
+//   mannequin   every mannequin material (the Material choice), in its own colour, full length
 //   bodies      every age and build (realistic), full length
 //   poses       every pose (realistic, young adult), full length
 //   expressions the realistic face in each expression, close up
@@ -16,7 +17,7 @@
 //   designs     every design in designs/, as it is saved (its own lighting), in the realistic look
 import { app } from '../instance.js';
 import { STARTER } from '../app.js';
-import { RIGS, APPEARANCES } from '../render/presets.js';
+import { RIGS, APPEARANCES, MANNEQUIN_MATERIALS } from '../render/presets.js';
 import { catalogue } from '../body/mannequin.js';
 import { BLOCK_OPTIONS, DEFAULT_BLOCK } from '../garment/blocks.js';
 import { STARTS } from '../garment/starts.js';
@@ -58,6 +59,13 @@ export async function appearance() {
 	for (const k of Object.keys(APPEARANCES)) {
 		await prepare({ ...REAL, ...APPEARANCES[k], size: 'young', pose: 'a-pose' });
 		await put('appearance', k, { view: fullLength() });
+	}
+}
+
+export async function mannequin() {
+	for (const [k] of MANNEQUIN_MATERIALS) {
+		await prepare({ ...REAL, ...APPEARANCES.mannequin, finish: k, colour: null, size: 'young', pose: 'a-pose' });
+		await put('mannequin', k, { view: fullLength() });
 	}
 }
 
@@ -177,7 +185,7 @@ export async function designs() {
 export async function all() {
 	const keep = app.json(), file = app.file;
 	try {
-		for (const fn of [appearance, bodies, poses, expressions, hairs, environments, blocks, starts, materials, designs]) { console.log('thumbnails:', fn.name); await fn(); }
+		for (const fn of [appearance, mannequin, bodies, poses, expressions, hairs, environments, blocks, starts, materials, designs]) { console.log('thumbnails:', fn.name); await fn(); }
 	} finally {
 		app.load(keep); app.file = file;
 	}

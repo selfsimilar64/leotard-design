@@ -73,6 +73,16 @@ replaces it), object ids in the parts list.
 `APPEARANCES.realistic = { form: 'full', head: 'person', finish: 'Realistic skin (Daz)' }`;
 `appearanceOf(body)` gives the one a design matches (or null for older combinations).
 
+**Mannequin material and colour** (owner, 2026-10-26): under the Mannequin look the Model pane
+shows a Material row (`MANNEQUIN_MATERIALS`: Matte plastic, Gloss plastic, Polished metal, Brushed
+metal, Flocked velvet, Linen; each a `MANNEQUIN_FINISHES` key) and a Colour row. `body.colour`
+('#rrggbb', or null/absent for the finish's own colour) tints every mannequin finish (body, mannequin
+head, cut caps) in `Engine.applyFinish`, never the realistic skin, and stays when the material
+changes; the first swatch is the material's own colour and clears it. `appearanceOf` counts any
+`MANNEQUIN_FINISHES` finish with no head as the mannequin look. Finishes may carry `metalness`,
+`sheenRoughness` and `sheenSelf` (sheen in the lightened base colour, for velvet). Tile pictures:
+`public/thumbs/mannequin/`, rendered by `dev/thumbnails.js mannequin()`.
+
 The realistic person is **Stacy** (CaramelDream3D) on every body since 2026-10-21: every body is
 baked with her face morph, skin, eyes and lashes (`pipeline/daz/bodies.py STACY`, see
 [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md)), and `FigureView.materials(body)` uses the
