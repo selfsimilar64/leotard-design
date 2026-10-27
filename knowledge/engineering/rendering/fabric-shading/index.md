@@ -6,6 +6,10 @@
 
 * [Fabric texture sources compared](fabric-texture-sources.md) (draft) - Where scanned or procedural fabric textures can come from (CC0 sites, general paid libraries, Adobe Substance 3D Assets, fashion-CAD libraries such as VMOD, individual sellers), what each offers for leotard fabrics (lace, mesh, sequin, glitter, velvet) and what its licence implies for shipping inside the app; recommends CC0 first, Substance for parametric variety, VMOD only with written permission.
 
+# Roadmap
+
+* [Plan: the thread-model satin in the photographed (HDRI) studios](microcylinder-satin-hdri-plan.md) (draft) - Plan agreed with the owner on 2026-10-27 to make the microcylinder satin hold up in the HDRI studios: calibrate its energy (a white-furnace test) so no studio-specific gain is needed, re-tune by eye at full quality, add occlusion and the HDRI rigs' direct lights, then compare against GK photos in every studio; fidelity first, optimisation only afterwards with the owner's go-ahead.
+
 # Section
 
 * [Fabric shading](about.md) - How each leotard fabric family is shaded in real time: a GGX base plus optional sheen, anisotropy, coat, thin-film, diffraction and coverage layers, the custom techniques (foil dots, diffraction, velvet pile, mesh over skin, stretch, neon), starting values and calibration.

@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Creation**: [Plan: thread-model satin in HDRI studios](/engineering/rendering/fabric-shading/microcylinder-satin-hdri-plan.md) (energy check, full-quality re-tune, occlusion, direct lights, all-studio comparison; stripes and speed later). The satin's blurred sampling reverted to full quality (owner).
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md#in-the-app-first-version-2026-10-27): stripes were sharp per-sample lookups; now 7 x 6 blurred lookups, 33.7 to 16.2 ms a frame, no stripes. New two-light [Softbox studio, key and fill](/decisions/2026-10-27-softbox-studio-for-satin.md).
 * **Decision**: [Softbox studio for satin](/decisions/2026-10-27-softbox-studio-for-satin.md): one analytic studio added back (six large softboxes, round infinity cove, dark reflection room with bright boxes).
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md#in-the-app-first-version-2026-10-27): first in-app version (Satin (thread model)) by environment cone tracing; navy shows GK-like blue bands; light colours still flat.

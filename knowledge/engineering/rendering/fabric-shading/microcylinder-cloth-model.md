@@ -111,6 +111,11 @@ prefiltered environment roughness is roughly the blur's angle in radians. The co
 2 ms over Stretch satin) with no stripes. A least blur of 0.15 showed the softboxes as blotches;
 0.35 lost definition.
 
+**Reverted the same day (owner).** The blurred 7 × 6 variant is undone: its effect on fidelity is
+unknown, and the look must be settled at full quality first. The full sampling (28 × 12,
+roughness 0.2, about 35 ms) is back, stripes included. The 7 × 6 numbers stay here for the later
+optimisation phase. Next steps: [HDRI plan](/engineering/rendering/fabric-shading/microcylinder-satin-hdri-plan.md).
+
 **Status:** on navy it shows soft blue bands across the chest, like GK's video. Light colours
 (pink) still read flat, partly because the studio lights from every side. Not yet judged by the
 owner. Cost not yet profiled (28 × 12 environment lookups per pixel).
