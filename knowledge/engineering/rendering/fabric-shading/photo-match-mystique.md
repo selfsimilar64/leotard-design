@@ -125,6 +125,49 @@ Result: in the White loft at 170 or 270 degrees, burgundy/teal reads as burgundy
 highlight patches, like the reference; at 0 and 90 degrees the loft's bright walls fill the
 reflections and it reads teal everywhere.[^session-2026-10-27]
 
+# Round 3: a crumpled test cloth, regular, two-tone and opal (2026-10-27)
+
+The owner asked to nail regular, two-tone and opal mystique against the shop close-ups, testing
+on a crumpled piece of cloth if easier, plus a check of the app's holographic look against an
+"electric foiled spandex" close-up (pale, pastel rainbow bands along the folds).[^owner-2026-10-27]
+
+**Test scene `app/src/dev/drape-eval.js`**: a 40 cm square of cloth swirled into folds round a
+gathered centre, drawn by the real fabric shader in the open viewport (White loft, room at 170
+degrees, bloom off, everything else hidden), captured as `captures/drape-eval/<fabric>-<tag>-<view>.png`
+at `swatch` (about 20 cm across) and `close` (about 6 cm). `face: 'front'` (default) stands it
+upright facing the room's front as a leotard front; `'up'` lays it flat on a table, mirroring
+the loft's bright ceiling (the high-key light-table look of the holographic photo).
+`d.shoot(fabric, { colour, colour2, second }, tag, views, tweak, face)`.
+
+Findings and changes (`app/src/materials/fabric.js`):
+- **Maze rebuilt**: the warped stripes made long zebra lines with wide bare gaps (owner: too much
+  space). Now a sum of six waves of one wavelength in six directions, phases drifting with slow
+  noise; dots within `MAZE_GAP` 0.3 cells of its zero lines are left out (`MAZE_K` 1.65, lines
+  about 1.9 cells apart, `MAZE_KEEP` 0.72). Gives short, densely packed chains turning every way,
+  as in the close-ups. Dot radius 0.42 (0.46 nearly touched within a chain).
+- **Dot size 75% -> 133%** (`texScale`, about 1 mm between dots). From the swatch video (dots about
+  1 mm apart against the gloved hands) and the close-ups; at 75% the far blend (`uBlend`) already
+  smoothed the dots at swatch distance into a satin sheen. Reverses the owner's 75% pick of
+  2026-10-24, flagged to the owner.
+- **Opal mystique** (`opalmystique`, in the picker after mystique): mystique whose foil dots carry
+  the soft angle rainbow (`holo` 0.35, `holoFreq` 3.2, `holoJit` 0.15). Rendering the rainbow in
+  the knit instead (film tint) looked almost the same at swatch distance and differed only close
+  up; the foil was chosen because a dyed knit cannot change colour with angle. **[INFERRED]**
+- **Two-tone** needs no preset: mystique with a custom foil colour.
+- **Liquid hologram (opal)** retuned to the electric-foil photo: film `tint` 0.32 -> 0.65 and a
+  new `film.hue` [per swirl, per angle] = [0.3, 3.2] (was fixed 1.6, 0.45 in the shader, now
+  `uFilmHue`): the rainbow now follows the folds instead of swirling across flat cloth. Its sparse
+  sparkle flakes were removed (they read as dark specks on the pale foil). Rejected: a full-metal
+  foil with the flake rainbow (dark and over-saturated; the photo's foil is pale everywhere).
+- Material picker tiles (`public/thumbs/materials`) re-rendered in the White loft (the seamless
+  studio they were lit by is gone); `dev/thumbnails.js materials(only)` renders a subset.
+
+Remaining gap at swatch distance: in the shop photos the knit colour (burgundy, plum) fills the
+folds that face away and the foil colour only the highlight bands; upright in the loft our cloth
+reads darker and more foil-coloured overall, flat it reads foil-coloured and bright. The photos'
+light (one strong key over the camera, dark surroundings) is not one of the loft's orientations.
+Close up, dots, chains and the knit between them match well.
+
 # Open
 
 - **Lighting decides the look.** Under the (since removed) Studio (soft) rig the patches appeared;
