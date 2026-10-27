@@ -75,6 +75,7 @@ export const RIGS = {
 	'Parquet studio, sunlit': hdriRig('brown_photostudio_06_4k.hdr'),
 	'Green loft hall': hdriRig('photo_studio_loft_hall_4k.hdr'),
 	'Neon studio': hdriRig('ferndale_studio_12_4k.hdr'),
+	'Small photo studio': hdriRig('studio_small_09_4k.hdr'), // owner's addition, 2026-10-27 (Poly Haven, CC0)
 	// A softbox studio lit by analytic area lights (render/studio.js), for testing fabric models that
 	// need exact light shapes (satin; owner, 2026-10-27). High-key catalogue lighting: a big key, a
 	// broad fill, two strip lights for the rims, an overhead scrim and a low front bounce, all large

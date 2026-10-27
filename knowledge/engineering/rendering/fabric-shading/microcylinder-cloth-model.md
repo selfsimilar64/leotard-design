@@ -170,6 +170,14 @@ Result: red reads as bright, saturated red satin with flowing bands in the Softb
 two-light studio and the White loft, at about the same brightness as matte red in the same light.
 70 ms a frame at 1280 × 1000.
 
+**Showcase (2026-10-27).** The owner chose to leave the softbox area lights off for now. A 12-colour
+sheet in the White loft studio (plain tank, all panels `satinmicro`, teen mannequin, A-pose,
+camera [0.3, 1.06, 1.75] → [0, 0.98, 0], fov 30). The room's turn was chosen by measurement:
+the standard deviation of luminance over the satin's pixels (royal blue #2a4fd0, 300 × 420)
+across 0-330° in 30° steps, refined near the peak. That gave std 32.4 at **248°** (32.2 at 240°,
+31.0 at 30°, minimum 8.8 at 150°). Captures `app/captures/satin-micro/show-*.png`. Every colour,
+pastels and white included, keeps visible banding.
+
 **Earlier status (by-eye version):** on navy it showed soft blue bands across the chest, like GK's video. Light colours
 (pink) still read flat, partly because the studio lights from every side. Not yet judged by the
 owner. Cost not yet profiled (28 × 12 environment lookups per pixel).

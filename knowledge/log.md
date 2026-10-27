@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Update**: New HDRI studio "Small photo studio" (`studio_small_09_4k.hdr`, owner's addition, Poly Haven CC0) in `RIGS`; thread-model satin [showcase](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md) in 12 colours in the White loft at 248° (the turn with the most shading variance).
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): energy scale 14.6 from a white-room measurement (white dye returns all the light), direct point/spot/directional lights through the thread model; softbox area lights not hooked (froze the app at full sampling). Red now reads bright and saturated.
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): paper-exact version (owner: no by-eye tuning). Both thread sets from Table II, lobe-width lookups, quadrature for broad terms, no extra diffuse or gain; consistent across softbox and HDRI studios, very dark, 76 ms a frame.
 * **Creation**: [Plan: thread-model satin in HDRI studios](/engineering/rendering/fabric-shading/microcylinder-satin-hdri-plan.md) (energy check, full-quality re-tune, occlusion, direct lights, all-studio comparison; stripes and speed later). The satin's blurred sampling reverted to full quality (owner).
