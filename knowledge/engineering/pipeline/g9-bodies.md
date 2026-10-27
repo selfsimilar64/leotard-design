@@ -66,7 +66,17 @@ controller), her skin (`Stacy Skin.duf`: 4K maps, the same seven surfaces as the
 skins), eyes (`Stacy Eyes 00`, on `Genesis9Eyes`) and lashes (`Stacy Eyelashes 01`, on
 `Genesis9Eyelashes`): `bodies.py STACY`, `STACY_MORPHS`. Not her body morph, so the eight ages and
 builds keep their shapes. Stage 2 applies the same face (the app adds each arm's change from the
-A-pose cage, so both stages must have the same shape). The bare figure stays unshaped. See
+A-pose cage, so both stages must have the same shape). The bare figure stays unshaped.
+
+**The adults wear her face unblended (owner, 2026-10-26).** A character controller
+(`Kat_figure_ctrl_Character`, `BaseFeminine_figure_ctrl_Character`) only dials its head half
+(`*_head_bs_Head`) and body half (`*_body_bs_body` / `_Body`) at 1, so on top of it Stacy's head morph
+gave a blend of two faces (a rounder, softer jaw than hers). An Iray render of the app's young adult
+beside Stacy as shipped (her head and body morphs) showed it; the young adult and adult now take the
+body half only (`Kat_body_bs_body`, `BaseFeminine_body_bs_Body`). The teen keeps Kat's whole controller
+and the children and teens their Growing Up age presets, which shape the face on purpose. The same
+comparison showed the larger gap is the app's drawing of the face (hard black lash and brow cut-outs,
+eyes reading wide open, flat skin shading), not the character. See
 [free character assets](/engineering/pipeline/free-character-assets.md).
 
 Two pitfalls found on the first Stacy bake:

@@ -15,8 +15,9 @@ export function newDocument(name = 'Untitled') {
 		format: FORMAT, version: VERSION, mesh: MESH,
 		meta: { name, author: '', created: new Date().toISOString(), notes: '' },
 		ids: {},
-		// the realistic appearance (render/presets.js APPEARANCES)
-		body: { size: 'young', form: 'full', head: 'person', expression: 'neutral', finish: 'Realistic skin (Daz)', headFinish: 'Matte white fibreglass', pose: 'a-pose' },
+		// the mannequin appearance (render/presets.js APPEARANCES): the default since 2026-10-26 (owner),
+		// the realistic person being the final check of how it looks on a gymnast
+		body: { size: 'young', form: 'full', head: 'none', expression: 'neutral', finish: 'Matte white fibreglass', headFinish: 'Matte white fibreglass', pose: 'a-pose' },
 		scene: { rig: 'White seamless (photo studio)', rotateLights: false, exposure: 1, bloom: 0.18, envRotation: 0, glare: 'plain' },
 		// first-generation garment (analytic regions, garment/legacy.js), kept so old files open;
 		// null for every design made with the cut-and-sew tools

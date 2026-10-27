@@ -73,6 +73,11 @@ replaces it), object ids in the parts list.
 `APPEARANCES.realistic = { form: 'full', head: 'person', finish: 'Realistic skin (Daz)' }`;
 `appearanceOf(body)` gives the one a design matches (or null for older combinations).
 
+New documents start on the **mannequin** look (`doc/schema.js newDocument`, owner 2026-10-26: a
+neutral form keeps attention on the design; the realistic person is the final check of how it
+looks on a gymnast). Before that they started realistic. Saved designs keep the look they were
+saved with, and *New* keeps the look on show.
+
 **Mannequin material and colour** (owner, 2026-10-26): under the Mannequin look the Model pane
 shows a Material row (`MANNEQUIN_MATERIALS`: Matte plastic, Gloss plastic, Polished metal, Brushed
 metal, Flocked velvet, Linen; each a `MANNEQUIN_FINISHES` key) and a Colour row. `body.colour`
