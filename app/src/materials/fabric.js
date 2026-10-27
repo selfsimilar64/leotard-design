@@ -93,7 +93,7 @@ uniform float uPresence;   // fraction of cells that carry a flake
 uniform float uTilt;       // random flake tilt (tangent of the typical angle)
 uniform float uFoilRough;
 uniform float uBlend;      // 1 = flat foil dots whose sparkle averages into a shimmer far away
-uniform float uMaze;       // 1 = dots printed in winding chains (mystique's maze screen), not an even lattice
+uniform float uBend;       // cells the dot lattice is bent by (mystique: rows curving from patch to patch)
 uniform float uColorVar;   // per-flake brightness variation
 uniform vec3 uFoilColor;
 uniform float uHolo;       // 0..1 share of rainbow in the foil colour
@@ -165,10 +165,6 @@ uniform sampler2D tDecal;
 uniform vec4 uWrinkle[ 3 ];
 uniform vec4 uWrinkleN[ 3 ];
 
-// Maze screen (uMaze): wave number of the maze (zero lines about pi / MAZE_K = 1.9 cells apart), the
-// half-width of the gaps along them (cells), and the share of lattice dots that leaves.
-const float MAZE_K = 1.65, MAZE_GAP = .3, MAZE_KEEP = .72;
-
 vec3 hash32( vec2 p ) {
 	vec3 p3 = fract( vec3( p.xyx ) * vec3( .1031, .1030, .0973 ) );
 	p3 += dot( p3, p3.yxz + 33.33 );
@@ -184,6 +180,13 @@ float vnoise( vec2 p ) {
 	f = f * f * ( 3. - 2. * f );
 	return mix( mix( hash21( i ), hash21( i + vec2( 1, 0 ) ), f.x ),
 		mix( hash21( i + vec2( 0, 1 ) ), hash21( i + 1. ), f.x ), f.y );
+}
+// Mystique's dot screen (uBend): grains about GRAIN cells across, each its own turned honeycomb, bent
+// by a slow displacement (cells, two octaves) so the rows also curve within a grain.
+const float GRAIN = 9.;
+vec2 bendOf( vec2 c ) {
+	return ( vec2( vnoise( c * .045 ), vnoise( c * .045 + 19.7 ) ) - .5 ) * 2. * uBend
+		+ ( vec2( vnoise( c * .11 + 3.3 ), vnoise( c * .11 + 8.1 ) ) - .5 ) * .7 * uBend;
 }
 // xy = offset from the cell centre, zw = cell id. Centres are 1 apart.
 vec4 hexCell( vec2 p ) {
@@ -321,6 +324,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 	// moire): the loop's two legs first, then the courses, then the wale columns. The grooves
 	// between the wales are deeper than the gap between a loop's legs, and a little darker.
 	// A scanned texture brings its own knit, so this one is off under a scan.
+	vec3 nCloth = normal; // before the knit: what mystique's foil dots lie on (below)
 	if ( uKnit > 0. && uTex < .5 ) {
 		const vec2 kp = vec2( .00038, .00023 ); // wale, course pitch (m)
 		float fw = 1. - smoothstep( .3, .5, fp / kp.x ), fc = 1. - smoothstep( .3, .5, fp / kp.y );
@@ -359,28 +363,45 @@ const FABRIC_FRAGMENT = /* glsl */`
 		// Near: resolve each flake as a disc in a hex cell with its own tilt. (The two branches
 		// are skipped where they contribute nothing; most pixels only ever need one of them.)
 		if ( w < 1. ) {
-			vec4 hc = hexCell( qc );
-			vec3 rn = hash32( hc.zw );
-			// Nudge each flake off the lattice centre (it still fits its own cell): a perfect grid
-			// beats against the pixel grid and shows moire at mid distance.
-			vec2 jit = ( hash32( hc.zw + 3.7 ).xy - .5 ) * 2. * max( .5 - uDotR, 0. );
-			nearMask = ( 1. - smoothstep( uDotR - r * .7, uDotR + r * .7, length( hc.xy - jit ) ) ) * step( rn.z, uPresence );
-			// Mystique's foil is printed in winding chains of dots with bare gaps between them, like a
-			// fingerprint (close-ups and a swatch video, 2026-10-27): densely packed, short chains turning
-			// every way. A sum of six waves of one wavelength in six directions, their phases drifting
-			// slowly so it never repeats, has maze-like zero lines (as Turing patterns do); dots within
-			// MAZE_GAP cells of a zero line are left out, the gaps between chains.
-			if ( uMaze > 0. ) {
-				vec2 c = qc - hc.xy;
-				float f = 0.; vec2 gf = vec2( 0. );
-				for ( int i = 0; i < 6; i ++ ) {
-					float a = float( i ) * .5236 + .2, ph = 6.283 * vnoise( c * .04 + float( i ) * 17.3 );
-					vec2 d = vec2( cos( a ), sin( a ) ) * MAZE_K;
-					f += cos( dot( c, d ) + ph ); gf -= sin( dot( c, d ) + ph ) * d;
+			// Mystique's dots are packed evenly, like marbles pressed together: in small patches they sit
+			// in honeycomb rows, each patch's rows running their own way and curving a little, which reads
+			// as short wavy chains (shop close-up, 2026-10-27). So: grains of about GRAIN cells (a jittered
+			// grid), each with its own turned and shifted lattice; a point takes the dot under it from its two
+			// nearest grains, each kept only if the dot's centre lies in that grain (dots are never cut by a
+			// grain's edge). The lattice is looked up in gently bent coordinates (uBend), and the offset to
+			// the dot's centre is taken back through the bend (its Jacobian) so the dots stay round.
+			vec2 qn = qc, off = vec2( 9. ), did = vec2( 0. ); mat2 unbend = mat2( 1. );
+			if ( uBend > 0. ) {
+				vec2 b0 = bendOf( qc );
+				qn = qc + b0;
+				unbend = inverse( mat2( 1. ) + mat2( bendOf( qc + vec2( .5, 0. ) ) - b0, bendOf( qc + vec2( 0., .5 ) ) - b0 ) * 2. );
+				vec2 g = floor( qn / GRAIN ), c1 = vec2( 0. ), c2 = vec2( 0. ), k1 = vec2( 0. ), k2 = vec2( 0. );
+				float d1 = 1e9, d2 = 1e9;
+				for ( int j = - 1; j <= 1; j ++ ) for ( int i = - 1; i <= 1; i ++ ) {
+					vec2 k = g + vec2( i, j ), c = ( k + .15 + .7 * hash32( k + 41.7 ).xy ) * GRAIN;
+					float d = dot( qn - c, qn - c );
+					if ( d < d1 ) { d2 = d1; c2 = c1; k2 = k1; d1 = d; c1 = c; k1 = k; } else if ( d < d2 ) { d2 = d; c2 = c; k2 = k; }
 				}
-				nearMask *= mix( 1., step( MAZE_GAP, abs( f ) / max( length( gf ), 1e-3 ) ), uMaze );
+				for ( int s = 0; s < 2; s ++ ) {
+					vec2 c = s == 0 ? c1 : c2, o = s == 0 ? c2 : c1, k = s == 0 ? k1 : k2;
+					vec3 h = hash32( k + 7.9 );
+					float a = h.x * 1.0472, ca = cos( a ), sa = sin( a ); // any turn of a honeycomb is within 60 degrees
+					mat2 rot = mat2( ca, sa, - sa, ca );
+					vec4 hk = hexCell( rot * ( qn - c ) + h.yz * 9. );
+					vec2 jit = ( hash32( hk.zw + k * 131.7 + 3.7 ).xy - .5 ) * 2. * max( .5 - uDotR, 0. );
+					vec2 o2 = transpose( rot ) * ( hk.xy - jit ), cw = qn - o2; // offset from the dot, and its centre
+					if ( dot( cw - c, cw - c ) <= dot( cw - o, cw - o ) && dot( o2, o2 ) < dot( off, off ) ) { off = o2; did = hk.zw + k * 131.7; }
+				}
+			} else {
+				vec4 hc = hexCell( qc );
+				// Nudge each flake off the lattice centre (it still fits its own cell): a perfect grid
+				// beats against the pixel grid and shows moire at mid distance.
+				off = hc.xy - ( hash32( hc.zw + 3.7 ).xy - .5 ) * 2. * max( .5 - uDotR, 0. );
+				did = hc.zw;
 			}
-			nearTilt = hash32( hc.zw + 17.3 ) * 2. - 1.;
+			vec3 rn = hash32( did );
+			nearMask = ( 1. - smoothstep( uDotR - r * .7, uDotR + r * .7, length( unbend * off ) ) ) * step( rn.z, uPresence );
+			nearTilt = hash32( did + 17.3 ) * 2. - 1.;
 			rvNear = rn.x;
 		}
 
@@ -396,7 +417,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 			rvFar = ta.z;
 			farDots = s0 * s0 * mix( 1., 4., lf ) * 1.155 * uPresence; // flakes in a cell (1.155 per unit² on the hex lattice)
 		}
-		float coverage = min( 3.6276 * uDotR * uDotR, 1. ) * uPresence * mix( 1., MAZE_KEEP, uMaze );
+		float coverage = min( 3.6276 * uDotR * uDotR, 1. ) * uPresence;
 		// sparse flakes stay sparse far away: only a coverage share of the pixel-sized cells carry one
 		// (denser foils, coverage over 0.3, keep every cell sparkling as in the POC)
 		float farOn = coverage > .3 ? coverage : step( fract( rvFar * 7.31 ), coverage );
@@ -412,7 +433,9 @@ const FABRIC_FRAGMENT = /* glsl */`
 		vec3 tilt = mix( nearTilt, farTilt * keep, w );
 		float rv = mix( rvNear, rvFar, w );
 
-		vec3 nF = normalize( normal + ( tilt - normal * dot( tilt, normal ) ) * uTilt );
+		// Flat foil dots (uBlend) bridge the knit's loops: a smooth disc each, not ridged by the knit
+		vec3 nBase = uBlend > 0. ? nCloth : normal;
+		vec3 nF = normalize( nBase + ( tilt - nBase * dot( tilt, nBase ) ) * uTilt );
 		// a sparse flake turned away from the camera would shade black: keep it facing us a little
 		if ( coverage <= .3 ) { float fv = dot( nF, viewDir ); if ( fv < .2 ) nF = normalize( nF + viewDir * ( .2 - fv ) ); }
 		// On an ombre the foil is printed with the same gradient as the cloth under it.
@@ -593,7 +616,7 @@ export function createFabricMaterial(zone) {
 		uTrimInset: { value: 0 }, uTrimWidth: { value: 0 }, uRows: { value: new THREE.Vector2() }, uThread: { value: new THREE.Color() },
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
-		uFoilRough: { value: 0.2 }, uBlend: { value: 0 }, uMaze: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uFoilRough: { value: 0.2 }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
@@ -633,8 +656,8 @@ export function createFabricMaterial(zone) {
 // Sheen is left off the foil and glitter fabrics on purpose: it roughly doubles the cost of every
 // light and is invisible next to the foil.
 // Flake fields: pitch (m), dotR (cells), presence, tilt, rough, colorVar, holo, holoFreq, holoJit, blend
-// (1: flat foil dots whose sparkle averages into a shimmer far away), maze (1: dots in winding chains);
-// blend and maze are mystique's, from its 2026-10-27 audit.
+// (1: flat foil dots whose sparkle averages into a shimmer far away), bend (cells: the dot lattice's
+// rows curve from patch to patch); blend and bend are mystique's, from its 2026-10-27 audit.
 export const FABRICS = {
 	// Matte lycra's sheen is low and close to its own colour: at 0.4 and a third white (the tint is
 	// mixed in linear light, so a third white is nearly white on a dark colour) a dark green's
@@ -656,13 +679,13 @@ export const FABRICS = {
 	wet: { label: 'Wet look (cire)', roughness: 0.32, sheen: 0.15, sheenRoughness: 0.5, clearcoat: 0.55, clearcoatRoughness: 0.2, anisotropy: 0.5, knit: 1 },
 	// Mystique's dots at 133%: about 1 mm apart, as in the owner's swatch video and shop close-ups
 	// (2026-10-27); at 75% (the owner's 2026-10-24 pick) they blurred into a satin sheen at swatch distance.
-	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.42, presence: 0.97, tilt: 0.15, rough: 0.12, colorVar: 0.1, blend: 1, maze: 1 }, texScale: 1.33 },
+	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.4, presence: 1, tilt: 0.1, rough: 0.14, colorVar: 0.1, blend: 1, bend: 1 }, texScale: 1.33 },
 	// Opal mystique: the foil dots carry a soft rainbow that turns with the surface (an iridescent foil;
 	// a dyed knit cannot change colour with the angle). Its rate is a thin film's: about half to one
 	// and a half spectra from face on to 60 degrees, holoFreq ~0.6-1.8; 1 in the middle. (3.2, a
 	// diffraction foil's rate, ringed the body with rainbows; owner, 2026-10-27.) Panels can scale it
 	// (rainbow, render/garment.js).
-	opalmystique: { label: 'Opal mystique', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.42, presence: 0.97, tilt: 0.15, rough: 0.12, colorVar: 0.1, blend: 1, maze: 1, holo: 0.35, holoFreq: 1, holoJit: 0.15 }, texScale: 1.33 },
+	opalmystique: { label: 'Opal mystique', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.4, presence: 1, tilt: 0.1, rough: 0.14, colorVar: 0.1, blend: 1, bend: 1, holo: 0.35, holoFreq: 1, holoJit: 0.15 }, texScale: 1.33 },
 	hologram: { label: 'Hologram foil dots', roughness: 0.62, knit: 1, flake: { pitch: 0.0009, dotR: 0.37, presence: 1, tilt: 0.22, rough: 0.22, colorVar: 0.3, holo: 0.6, holoFreq: 0.9, holoJit: 0.5 } },
 	// The foils, film and velvets used to carry a value-noise "crinkle" bump (amp 0.1-0.7) from the
 	// POC: crumpled foil, not foil on a knit pulled tight over a body. On skin-tight fabric tension
@@ -677,7 +700,7 @@ export const FABRICS = {
 	mesh: { label: 'Stretch mesh (sheer)', roughness: 0.75, sheen: 0.3, sheenRoughness: 0.6, mesh: { pitch: 0.0007, holeR: 0.35 } },
 	glittermesh: { label: 'Glitter mesh', roughness: 0.75, mesh: { pitch: 0.0007, holeR: 0.35 }, flake: { pitch: 0.0005, dotR: 0.5, presence: 0.1, tilt: 0.5, rough: 0.1, colorVar: 0.5 } },
 	ombre: { label: 'Sublimated ombré', roughness: 0.74, sheen: 0.35, sheenRoughness: 0.6, knit: 1, ombre: true },
-	ombremystique: { label: 'Ombré mystique', roughness: 0.62, knit: 1, ombre: true, flake: { pitch: 0.00075, dotR: 0.42, presence: 0.97, tilt: 0.15, rough: 0.12, colorVar: 0.1, blend: 1, maze: 1 } },
+	ombremystique: { label: 'Ombré mystique', roughness: 0.62, knit: 1, ombre: true, flake: { pitch: 0.00075, dotR: 0.4, presence: 1, tilt: 0.1, rough: 0.14, colorVar: 0.1, blend: 1, bend: 1 } },
 	// Moodboard looks added in P3 (realism upgrade R7b). film: thin-film swirls { scale m, range nm, warp,
 	// tint: share of the film's colour in the cloth, hue: [per swirl, per angle] };
 	// duo: { pow } shift towards the second colour at grazing angles.
@@ -743,7 +766,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	u.uFlake.value = fl ? 1 : 0;
 	if (fl) {
 		u.uPitch.value = fl.pitch * scale; u.uDotR.value = fl.dotR; u.uPresence.value = fl.presence; u.uTilt.value = fl.tilt;
-		u.uFoilRough.value = fl.rough; u.uBlend.value = fl.blend ?? 0; u.uMaze.value = fl.maze ?? 0; u.uColorVar.value = fl.colorVar ?? 0; u.uHolo.value = fl.holo ?? 0; u.uHoloFreq.value = fl.holoFreq ?? 3; u.uHoloJit.value = fl.holoJit ?? 0.2;
+		u.uFoilRough.value = fl.rough; u.uBlend.value = fl.blend ?? 0; u.uBend.value = fl.bend ?? 0; u.uColorVar.value = fl.colorVar ?? 0; u.uHolo.value = fl.holo ?? 0; u.uHoloFreq.value = fl.holoFreq ?? 3; u.uHoloJit.value = fl.holoJit ?? 0.2;
 		two(false, u.uFoilColor.value);
 	}
 	u.uDuo.value = f.duo ? 1 : 0;

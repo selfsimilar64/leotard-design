@@ -25,12 +25,12 @@ function height(x, z) {
 	return swirl + folds + peak + lean;
 }
 
-function drape() {
+function drape(relief = 1) {
 	const n = 360, pos = [], nrm = [], uv = [], idx = [], e = 1e-4;
 	for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
 		const x = (i / n - 0.5) * 2 * R, z = (j / n - 0.5) * 2 * R;
-		const dx = (height(x + e, z) - height(x - e, z)) / (2 * e), dz = (height(x, z + e) - height(x, z - e)) / (2 * e), L = Math.hypot(dx, 1, dz);
-		pos.push(x, height(x, z), z); nrm.push(-dx / L, 1 / L, -dz / L); uv.push(x, z);
+		const dx = relief * (height(x + e, z) - height(x - e, z)) / (2 * e), dz = relief * (height(x, z + e) - height(x, z - e)) / (2 * e), L = Math.hypot(dx, 1, dz);
+		pos.push(x, relief * height(x, z), z); nrm.push(-dx / L, 1 / L, -dz / L); uv.push(x, z);
 	}
 	for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const a = j * (n + 1) + i; idx.push(a, a + n + 1, a + 1, a + 1, a + n + 1, a + n + 2); }
 	const g = new THREE.BufferGeometry(), N = (n + 1) * (n + 1);
@@ -62,6 +62,9 @@ const AT = [0, 1.1, 0];
 const VIEWS = {
 	swatch: { position: [0.02, 0.2, 0.47], fov: 26, size: [1000, 1000] },
 	close: { position: [0.03, 0.06, 0.15], at: [0.03, 0, 0], fov: 26, size: [1000, 1000] },
+	// face on, beside the gathered centre, at the scale of the shop close-up (about 12 px between dots);
+	// use with a low relief so the folds do not stretch the cloth's flat-mapped pattern
+	macro: { position: [-0.09, -0.07, 0.18], at: [-0.09, -0.07, 0], fov: 26, size: [1000, 1000] },
 };
 // a view's offsets from the cloth (x across, y up the cloth, z out of its face) placed in the room
 function place(v, face) {
@@ -71,7 +74,9 @@ function place(v, face) {
 }
 
 // colour: a hex colour or { colour, colour2, second }; tweak: fabric fields for this shot only
-export async function shoot(fabric, colour, tag, views = ['swatch', 'close'], tweak = null, face = 'front') {
+// relief: the folds' height (1 = the swirl; low for macro views: the pattern is mapped flat, so steep
+// folds stretch it)
+export async function shoot(fabric, colour, tag, views = ['swatch', 'close'], tweak = null, face = 'front', relief = 1) {
 	const fm = await fabricModule(), F = fm.FABRICS, saved = { ...F[fabric] };
 	if (tweak) Object.assign(F[fabric], tweak);
 	const look = typeof colour === 'string' ? { colour } : colour;
@@ -84,7 +89,7 @@ export async function shoot(fabric, colour, tag, views = ['swatch', 'close'], tw
 	m.userData.u.uOffset.value = 0; m.userData.u.uGarment.value = 0;
 	fm.applyFabric(m, fabric, look.colour, look.second ?? 'Tone-on-tone', look.colour2 ?? null, fm.texScaleOf({ fabric }));
 	m.userData.u.uUV.value = 1;
-	const mesh = new THREE.Mesh(drape(), m);
+	const mesh = new THREE.Mesh(drape(relief), m);
 	if (face === 'up') mesh.position.set(0, AT[1] - 0.3, 0); // flat, at table height
 	else { mesh.rotation.x = Math.PI / 2; mesh.position.fromArray(AT); } // its up (+y) to the front (+z)
 	vp.scene.traverse((o) => { if ((o.isMesh || o.isPoints || o.isLine) && o.visible) { hidden.push(o); o.visible = false; } });

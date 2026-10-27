@@ -168,6 +168,35 @@ reads darker and more foil-coloured overall, flat it reads foil-coloured and bri
 light (one strong key over the camera, dark surroundings) is not one of the loft's orientations.
 Close up, dots, chains and the knit between them match well.
 
+# Round 4: the dot screen from the shop close-up (2026-10-27)
+
+Owner: the dot pattern still needed work; match the nktextile purple close-up. Enlarged crops of it
+show: round dots of one size, about 0.8 of their spacing across, **packed evenly everywhere** (no
+lanes or bare lines, unlike the maze), in **small patches of honeycomb rows** that run their own
+way and curve a little, like pressed marbles; that is what reads as "wavy chains". Inside a
+highlight neighbouring dots are about equally bright; off it the dots go dark and the knit shows
+as a lighter mesh.[^owner-2026-10-27]
+
+Changes (`app/src/materials/fabric.js`, near branch of the flake code):
+- **Grains** replace the maze (`maze`/`uMaze`, `MAZE_*` removed): a jittered grid of grains
+  `GRAIN` = 9 cells across, each with its own lattice turn (0-60 degrees) and shift; a point takes
+  the dot under it from its two nearest grains, kept only if that dot's centre lies in the grain
+  (no dots cut by a seam). `bend` (cells, `uBend`, `bendOf`) gently bends the lattice too (1);
+  the offset to the dot centre goes back through the bend's Jacobian so dots stay round. GRAIN 6
+  looked too fine; a displacement bend alone (2-4.5) made long straight rows or, stronger, bare
+  stretched gaps.
+- `presence` 0.97 -> 1 (no missing dots), `dotR` 0.42 -> 0.4.
+- **Dots ignore the knit relief** (`nCloth`, the normal before the knit, for `uBlend` fabrics):
+  the knit's ridges made vertical streaks across each dot.
+- **Flatter, softer dots**: `tilt` 0.15 -> 0.1, `rough` 0.12 -> 0.14. At 0.15 neighbouring dots
+  varied salt-and-pepper; at 0.07 the close-up matched best but the leotard lost the grain in its
+  highlights that the owner's leotard photos show; 0.1 keeps both.
+- `dev/drape-eval.js`: `macro` view (face on, about 12 px between dots, the close-up's scale) and
+  a `relief` argument (the test cloth's pattern is mapped flat, so steep folds stretch it; use
+  0.25 for dot checks).
+
+Mystique, opal and ombre mystique picker tiles re-rendered.
+
 # Rainbow speed (2026-10-27)
 
 Owner: Opal mystique's colours changed too fast on the leotard (holoFreq 3.2 ringed the bust and
