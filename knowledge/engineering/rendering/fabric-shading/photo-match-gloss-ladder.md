@@ -13,6 +13,26 @@ sources:
     resource: /domain/fabrics/stretch-tricot-family-names.md
     title: "Lycra, spandex, tricot: owner's reference photos and the proposed gloss ladder"
     author: claude-code/claude-opus-5-5
+  - id: clo-shine
+    resource: https://support.clo3d.com/hc/es/community/posts/900002159966-Shine-in-rendering
+    title: "CLO3D support: Shine in rendering (Silk/Satin type, reflection intensity)"
+    author: org:clo-virtual-fashion
+  - id: vray
+    resource: https://novedge.com/blogs/design-news/v-ray-tip-layered-reflections-for-realistic-v-ray-fabrics
+    title: "V-Ray tip: layered reflections for realistic fabrics"
+    author: org:novedge
+  - id: hdrp
+    resource: https://plastichub.unity.cn/unity-tech-cn/ScriptableRenderPipeline/src/commit/654f18cb-413f-4e79-92bf-227477626df1...com.unity.render-pipelines.high-definition/HDRP/Material/Fabric/Fabric.cs
+    title: Unity HDRP Fabric shader source (Silk enables anisotropy)
+    author: org:unity
+  - id: sadeghi
+    resource: https://history.siggraph.org/?p=109073
+    title: "Sadeghi, Bisker, De Deken, Jensen 2013: A Practical Microcylinder Appearance Model for Cloth Rendering"
+    author: org:acm-siggraph
+  - id: dw
+    resource: https://research.dreamworks.com/wp-content/uploads/2018/07/clothIS.pdf
+    title: "DreamWorks: importance sampling the microcylinder cloth model (via search summary)"
+    author: org:dreamworks
 ---
 
 # Takeaway
@@ -83,6 +103,44 @@ gain 6 / sat 1.3 / white 0.15 overshot (pale periwinkle over most of the panel, 
 streaks). 3 / 1.8 / 0.05 gives royal-blue bands over deep navy. 2 / 2.4 was deeper still and also
 plausible. Captures: `app/captures/satin-compare/`.
 
+## Why try F failed (owner, 2026-10-27)
+
+The owner: both try F versions look far glossier and plastic, and on most lighter colours they show
+no shading variation at all. Cause: `dyeSheen` normalised the dye to *full brightness* and multiplied
+the plain mirror lobe's reflectance by 3, at the same narrow roughness. On a light dye that made the
+mirror reflection as bright and as coloured as the diffuse, so lit and unlit sides converged.
+It also left the full diffuse in place.
+
+## How professional tools and research model satin
+
+- **CLO3D** has a `Fabric_Silk/Satin` material type with reflection "adjusted optimal to express
+  silk or satin". It automatically mixes white into the base colour for the shine, and its
+  Reflection Intensity "acts as a white filter for the base color". So the reflection is the base
+  colour lifted toward white, not pure white and not a saturated hue.[^clo-shine]
+- **V-Ray fabric practice**: base roughness 0.25-0.4, sheen 0.25-0.45, an optional light coat,
+  noticeable anisotropy.[^vray]
+- **Unity HDRP Fabric**: "Silk" is anisotropic GGX; "Cotton/Wool" uses the Charlie sheen.[^hdrp]
+- **Research (Sadeghi et al. 2013, microcylinder model)**, built from measured threads including
+  polyester satin charmeuse. Each thread scatters in two lobes: a *surface reflection* (Fresnel,
+  uncoloured) and a *volume scattering* term coloured by the thread's albedo. The volume term mixes
+  a diffuse part with a Gaussian lobe near the mirror direction.[^sadeghi][^dw] **[UNVERIFIED]** The
+  colour and lobe details are from a secondary source and recall; the full paper could not be read
+  this session (certificate error).
+
+**[INFERRED]** What this means for us. Satin needs three parts, not one:
+
+1. A **white surface lobe**: narrow, anisotropic, weak (a few percent).
+2. A **coloured volume lobe**: broader, near the mirror direction, carrying the dye's *actual*
+   colour and lightness (bright on light dyes, dim on dark ones). Most of satin's shine is here.
+3. A **reduced diffuse**: satin sends most light into the directional lobes, so faces turned away go
+   dark on every colour. That is where the shading on light satin comes from.
+
+Stock three.js gives two specular lobes: the base specular (anisotropic, coloured through
+`specularColor`) and the clear coat (white, isotropic). Proposed mapping: base specular as the
+coloured volume lobe (broader roughness, `specularColor` from the dye's real colour), clear coat as
+the white surface lobe (narrower), diffuse scaled down. A white surface lobe that is also
+anisotropic needs custom shader work.
+
 # Test cloth fix
 
 `app/src/dev/drape-eval.js`'s cloth had no `tangent` attribute, so every anisotropic fabric
@@ -97,3 +155,8 @@ Captures in `app/captures/drape-eval/*-ladder*`, `app/captures/material-eval/*-r
 
 [^owner]: Owner's go-ahead, 2026-10-27
 [^refs]: Owner's reference photos and the gloss ladder proposal
+[^clo-shine]: CLO3D support thread on shine in rendering
+[^vray]: V-Ray layered reflections tip
+[^hdrp]: Unity HDRP Fabric.cs
+[^sadeghi]: Sadeghi et al. 2013
+[^dw]: DreamWorks microcylinder importance sampling paper
