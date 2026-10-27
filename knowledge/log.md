@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Creation**: [Lycra, spandex, tricot, shiny tricot: what the names mean](/domain/fabrics/stretch-tricot-family-names.md): the plain-colour family is one nylon/spandex tricot varied by yarn lustre, knit face, finish and fibre; EBI's 17-fabric leotard collection sorted; photo readings of matte, shiny, satin-look and liquid-look; proposed gloss ladder and representative set (awaiting owner).
 * **Update**: [Photo match: mystique](/engineering/rendering/fabric-shading/photo-match-mystique.md#round-4-the-dot-screen-from-the-shop-close-up-2026-10-27) round 4: the dot screen rebuilt from the shop close-up as evenly packed dots in small turned honeycomb grains (maze removed), no missing dots, dots smooth over the knit, flatter dots (tilt 0.1).
 * **Update**: [Photo match: mystique](/engineering/rendering/fabric-shading/photo-match-mystique.md#rainbow-speed-2026-10-27): rainbow rate from physics (no published data): diffraction foils about 3.3 in shader units, thin-film opal 0.6-1.8; Opal mystique 3.2 -> 1; new per-panel Rainbow speed.
 * **Update**: [Photo match: mystique](/engineering/rendering/fabric-shading/photo-match-mystique.md) round 3 on a crumpled test cloth (`app/src/dev/drape-eval.js`): denser maze of short chains (sum of six waves), dots at 133% (reverses the owner's 75% of [2026-10-24](/decisions/2026-10-24-owner-fabric-review.md), flagged), new Opal mystique (rainbow in the foil dots), Liquid hologram (opal) retuned to an electric-foil close-up; picker tiles re-rendered in the White loft.
