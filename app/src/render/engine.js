@@ -159,6 +159,8 @@ export class Engine {
 			// mid-drag: only the dragged lines move; the garment is re-cut when the gesture ends
 			if (touched.has('curves')) this.drawOverlay(doc, evaluateAll(doc, this.surf, null, this.evaluated));
 			if (touched.has('panels')) for (const v of this.views) v.applyMaterials(doc);
+			// the mannequin's colour picker: a finish change only (same body key: no re-fit)
+			if (touched.has('body')) this.applyBody(doc.body, false);
 		} else {
 			if (t('curves') || t('panels') || t('layers') || t('trims') || this.geoSig === null) this.syncGarment(doc);
 			else if (t('straps')) this.syncStraps(doc);
