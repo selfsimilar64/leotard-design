@@ -104,8 +104,8 @@ export async function hairs() {
 	}
 }
 
-export async function environments() {
-	for (const k of Object.keys(RIGS)) {
+export async function environments(only = null) { // only: rig names to render, else all
+	for (const k of only ?? Object.keys(RIGS)) {
 		await prepare({ ...REAL, size: 'young', pose: 'arms-down' }, { rig: k, envRotation: 0, exposure: 1 });
 		await wait(800);
 		await put('environments', k, { view: fullLength(0.35) });
@@ -138,7 +138,7 @@ export async function blocks(only = null) { // only: tile names to render ('stra
 // The colour each app fabric's tile shows it in (a fabric takes any colour; these show it well):
 // [colour, second, colour2 (lace: the motifs')].
 export const MATERIAL_COLOURS = {
-	matte: ['#1b3fb5'], shiny: ['#b3122e'], wet: ['#0c0c10'], satin: ['#1a2350'], mystique: ['#5b2a86'], opalmystique: ['#f2f0f4', 'White'], hologram: ['#16205c', 'Silver'],
+	matte: ['#1b3fb5'], shiny: ['#b3122e'], wet: ['#0c0c10'], satin: ['#1a2350'], satinmicro: ['#1a2350'], mystique: ['#5b2a86'], opalmystique: ['#f2f0f4', 'White'], hologram: ['#16205c', 'Silver'],
 	shattered: ['#c8ccd8'], foil: ['#e6bf58'], glitter: ['#ff4f8b'], hologlitter: ['#c8ccd8'], velvet: ['#6b0f22'],
 	crushed: ['#0b7d55'], pearl: ['#f4f4f2'], mesh: ['#0c0c10'], glittermesh: ['#f6b6c8'], ombre: ['#ff4f8b'],
 	ombremystique: ['#5b2a86'], liquidholo: ['#e8e6f0'], oilslick: ['#16205c'], duochrome: ['#0b7d7a'], chrome: ['#c8ccd8'],

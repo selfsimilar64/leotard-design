@@ -65,8 +65,9 @@ export const MANNEQUIN_FINISHES = {
 };
 
 // Photographed studios (render/viewport.js hdri): the HDRI lights the figure and is the room around
-// it, its floor projected onto the ground the figure stands on. Only these since 2026-10-27 (owner:
-// the light-only and softbox rigs were removed; designs naming one open in DEFAULT_RIG).
+// it, its floor projected onto the ground the figure stands on. The earlier light-only and softbox
+// rigs were removed on 2026-10-27 (designs naming one open in DEFAULT_RIG); the Softbox studio below
+// was added back the same day for testing satin.
 export const DEFAULT_RIG = 'White loft studio';
 export const RIGS = {
 	'White loft studio': hdriRig('brown_photostudio_02_4k.hdr'),
@@ -74,6 +75,31 @@ export const RIGS = {
 	'Parquet studio, sunlit': hdriRig('brown_photostudio_06_4k.hdr'),
 	'Green loft hall': hdriRig('photo_studio_loft_hall_4k.hdr'),
 	'Neon studio': hdriRig('ferndale_studio_12_4k.hdr'),
+	// A softbox studio lit by analytic area lights (render/studio.js), for testing fabric models that
+	// need exact light shapes (satin; owner, 2026-10-27). High-key catalogue lighting: a big key, a
+	// broad fill, two strip lights for the rims, an overhead scrim and a low front bounce, all large
+	// and soft, over white seamless paper.
+	'Softbox studio': {
+		env: 1, bg: 1, bloomK: 0.4, backdrop: 0xf2f2f0, glow: 0.3, glint: 4,
+		// the reflection room is dim walls round very bright softboxes, as in a real studio: in its
+		// reflections a softbox is about ten times its surroundings (at walls near paper white, glossy
+		// fabric showed no highlights at all)
+		room: { back: 0.3, sides: 0.18, top: 0.1, floor: 0.25, front: 0.08 },
+		// area: { p, s: [w, h] m, at, L: luminance, c }
+		areas: [
+			{ p: [-1.6, 2.1, 2.1], s: [1.5, 1.5], at: [0, 1.1, 0], L: 2.6, c: 0xfffaf2 },     // key: octabox front left, above
+			{ p: [2.0, 1.4, 2.2], s: [1.2, 1.8], at: [0, 1.0, 0], L: 1.2, c: 0xf6f8ff },      // fill: tall softbox front right
+			{ p: [-1.6, 1.4, -1.1], s: [0.4, 1.8], at: [0, 1.1, 0], L: 3.5 },               // rim: strip box behind left
+			{ p: [1.6, 1.4, -1.1], s: [0.4, 1.8], at: [0, 1.1, 0], L: 3.5 },                // rim: strip box behind right
+			{ p: [0, 3.0, 0.5], s: [1.8, 1.2], at: [0, 1.0, 0.3], L: 1.6 },                   // overhead scrim
+			{ p: [0, 0.45, 2.2], s: [1.6, 0.8], at: [0, 0.9, 0], L: 0.8 },                  // low front bounce
+		],
+		// a large white bounce card beside the camera: only in the reflections (what glossy fabric and
+		// foil mirror when they face the lens, as in catalogue photos)
+		envLights: [{ p: [0.4, 1.3, 3.4], s: [3.0, 2.2], at: [0, 1.1, 0], L: 2 }],
+		// part of the key's light from a directional light, which can cast a soft shadow (area lights cannot)
+		shadow: { from: [-1.6, 2.1, 2.1], E: 0.35 },
+	},
 };
 
 // An HDRI studio (assets/hdri, served at /hdri). height: the camera height it was shot from

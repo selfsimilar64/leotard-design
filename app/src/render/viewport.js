@@ -8,10 +8,12 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { GroundedSkybox } from 'three/addons/objects/GroundedSkybox.js';
 import { SCENE, RIGS, DEFAULT_RIG } from './presets.js';
 import { GlarePass, GLARE_SIZE, GLARE_STRENGTH } from './glare.js';
 import { ScenePass, SkinPass, AOPass } from './postfx.js';
+import { studioEnvironment, cyclorama } from './studio.js';
 
 const _size = new THREE.Vector2(), _Y = new THREE.Vector3(0, 1, 0);
 
@@ -119,6 +121,14 @@ export class Viewport {
 		const catcher = this.catcher = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.32 }));
 		catcher.rotation.x = -Math.PI / 2; catcher.position.y = -0.0085; catcher.receiveShadow = true; catcher.visible = false;
 		this.world.add(catcher);
+		// The softbox studio (rig.areas): area lights in the turning rig, created on first use (the LTC
+		// tables are 130 kB), its reflection room and seamless paper
+		this.areas = [];
+		this.envs = new Map(); // rig name -> PMREM texture of its reflection room
+		this.studioOn = null;
+		this.cyc = cyclorama();
+		this.cyc.visible = false;
+		this.world.add(this.cyc);
 
 		this.settings = { rig: DEFAULT_RIG, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1, dynamicRes: true };
 		this.onFrame = new Set();
@@ -172,6 +182,8 @@ export class Viewport {
 		this.glare.setPreset(this.settings.glare ?? 'plain', { size: this.settings.glareSize ?? GLARE_SIZE, strength: this.settings.glareStrength ?? GLARE_STRENGTH });
 		this.bloomK = r.bloomK ?? 1;
 		this.showHdri(null);
+		this.showStudio(null);
+		if (r.areas) { this.showStudio(r); return; }
 		// until the studio has loaded, the last environment stays on show
 		const want = this.settings.rig;
 		this.hdri(r.hdri).then((h) => { if (this.settings.rig === want) this.showHdri(r, h); }, (e) => console.error('hdri', e));
@@ -222,6 +234,47 @@ export class Viewport {
 		this.placeHdriLights();
 	}
 
+	// Shows the softbox studio (rig r with areas), or takes it away (null). Its lights, reflection
+	// room and the key's shadow turn together with "Turn the room" (placeStudioLights); the paper stays.
+	showStudio(r) {
+		this.cyc.visible = !!r;
+		this.areas.forEach((l) => { l.visible = false; });
+		if (!r) { if (this.studioOn) { this.sun.visible = false; this.rig.rotation.y = 0; } this.studioOn = null; return; }
+		if (!this.areas.length) {
+			RectAreaLightUniformsLib.init();
+			for (let i = 0; i < 6; i++) { const l = new THREE.RectAreaLight(0xffffff, 0, 1, 1); l.visible = false; this.rig.add(l); this.areas.push(l); }
+		}
+		r.areas.slice(0, this.areas.length).forEach((a, i) => {
+			const l = this.areas[i];
+			l.visible = true;
+			l.position.fromArray(a.p); l.width = a.s[0]; l.height = a.s[1]; l.intensity = a.L; l.color.set(a.c ?? 0xffffff);
+			l.lookAt(new THREE.Vector3().fromArray(a.at ?? [0, 1, 0]));
+		});
+		let env = this.envs.get(this.settings.rig);
+		if (!env) { env = this.pmrem.fromScene(studioEnvironment(r), 0.01).texture; this.envs.set(this.settings.rig, env); }
+		this.scene.environment = env;
+		this.cyc.material.color.set(r.backdrop);
+		this.cyc.material.emissive.set(r.backdrop).multiplyScalar(r.glow ?? 0);
+		this.scene.background = this.cyc.material.color.clone();
+		this.catcher.visible = true; // the key's shadow on the paper
+		this.sun.visible = !!r.shadow; this.sun.intensity = r.shadow?.E ?? 0; this.sun.color.set(0xffffff);
+		this.lights.forEach((l, i) => { l.visible = i < 2; l.intensity = i === 0 ? r.glint : r.glint * 0.4; l.color.set(0xffffff); });
+		this.studioOn = { r };
+		this.placeStudioLights();
+	}
+
+	placeStudioLights() {
+		const o = this.studioOn;
+		if (!o) return;
+		const a = this.settings.envRotation, key = new THREE.Vector3().fromArray(o.r.shadow?.from ?? o.r.areas[0].p);
+		this.rig.rotation.y = a;
+		this.scene.environmentRotation.y = a;
+		const t = this.sun.target.position.set(0, 1.0, 0);
+		this.sun.position.copy(key).sub(t).normalize().applyAxisAngle(_Y, a).multiplyScalar(4).add(t);
+		this.lights[0].position.copy(key); // in the rig: turns with it
+		this.lights[1].position.set(0.4, 1.4, 3.2).applyAxisAngle(_Y, -a); // beside the camera, whatever the turn
+	}
+
 	// The key's shadow and glints follow the room as it turns (envRotation).
 	placeHdriLights() {
 		const o = this.hdriOn;
@@ -257,6 +310,7 @@ export class Viewport {
 		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
 		if (!this.container.clientWidth) return; // pane not laid out yet
 		if (this.hdriOn) this.placeHdriLights();
+		if (this.studioOn) this.placeStudioLights();
 		this.renderer.toneMappingExposure = s.exposure;
 		this.bloom.strength = s.bloom * (this.bloomK ?? 1);
 		this.lights[0].getWorldPosition(this.keyDir).sub(this.controls.target).normalize();

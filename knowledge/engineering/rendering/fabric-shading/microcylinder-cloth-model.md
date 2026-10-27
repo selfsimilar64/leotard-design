@@ -78,6 +78,32 @@ charmeuse back, silk shot, velvet (matching Fig. 24). γ in degrees.
 The charmeuse's albedo (1, 0.37, 0.3) is its pink dye. **[INFERRED]** The app would substitute the
 user's colour (scaled) for it.
 
+# In the app (first version, 2026-10-27)
+
+`satinmicro` ("Satin (thread model)") in `app/src/materials/fabric.js`, shader `MICRO_FRAGMENT`:
+
+- **Environment cone tracing, not per-light.** The floats' lobes are taken as deltas in θ (2.5°
+  and 5° against softboxes tens of degrees wide). Each reflection cone's front half is sampled at
+  K = 12 directions, each a prefiltered environment lookup (roughness 0.2). The surface term
+  becomes 2·Fr·cos(φd/2) and the volume term (1 − kd)·Ft²·A / cos θ. Lights come from the
+  environment, so the code runs unchanged in the HDRI studios; in the
+  [Softbox studio](/decisions/2026-10-27-softbox-studio-for-satin.md) the reflection room holds
+  the softboxes.
+- Floats run across the body (T1 = n × the round-the-body tangent). Their tangent curve is the
+  charmeuse front, at four samples per segment (28). At two per segment each sample's reflection
+  showed as its own thin band: wood-grain stripes.
+- Masking with Ashikhmin correlation (σ 20°), reweighting P, and normalisation Q with the cross
+  threads at offset 0. Three's own specular is off (`specularIntensity` 0); a token anisotropy
+  keeps the tangent frame compiled.
+- The diffuse (cross threads, kd, gaps) is the dye x `diffuse`, applied in the shader after a
+  scan's recolour. Scaling `m.color` did nothing under a scan.
+- Fitted by eye in the Softbox studio, navy and pink: A = 2 (the paper's scale gave white-grey
+  shine on navy; 2 turns the bands blue), diffuse 0.2, gain 1.5.
+
+**Status:** on navy it shows soft blue bands across the chest, like GK's video. Light colours
+(pink) still read flat, partly because the studio lights from every side. Not yet judged by the
+owner. Cost not yet profiled (28 × 12 environment lookups per pixel).
+
 # What the paper does not cover (for this app)
 
 - **Real-time lighting from photographed studios.** The paper integrates over lights (ray tracer;

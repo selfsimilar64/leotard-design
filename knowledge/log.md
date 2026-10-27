@@ -1,6 +1,8 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Decision**: [Softbox studio for satin](/decisions/2026-10-27-softbox-studio-for-satin.md): one analytic studio added back (six large softboxes, round infinity cove, dark reflection room with bright boxes).
+* **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md#in-the-app-first-version-2026-10-27): first in-app version (Satin (thread model)) by environment cone tracing; navy shows GK-like blue bands; light colours still flat.
 * **Creation**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): Sadeghi et al. 2013 read in full (owner supplied the PDF): thread terms, weave tangent curves, masking and reweighting, the measured polyester satin charmeuse parameters, and what it leaves out for real-time HDRI lighting.
 * **Update**: [Gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md#satin-tries-in-the-picker-for-the-owner): owner chose satin try 2; it is now Stretch satin and the other tries (and `dyeSheen`, per-fabric `ior`) are removed. DreamWorks' microcylinder talk read: per-thread surface (white) and volume (albedo-coloured) terms recorded; the weave-level model and satin parameters are only in Sadeghi 2013.
 * **Update**: [Gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md#coloured-shine-try-f): real satin's shine is mostly the dye's colour, not white; new `dyeSheen` setting and two try-F satins (C and E shapes) tuned in the owner's setup.

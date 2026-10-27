@@ -96,6 +96,15 @@ uniform float uBlend;      // 1 = flat foil dots whose sparkle averages into a s
 uniform float uBend;       // cells the dot lattice is bent by (mystique: rows curving from patch to patch)
 uniform float uColorVar;   // per-flake brightness variation
 uniform float uGlint;      // > 0: the flakes are glossy yarn facets, not foil: dielectric, the dye's colour, glint strength
+// Microcylinder satin (Sadeghi et al. 2013; knowledge/engineering/rendering/fabric-shading/
+// microcylinder-cloth-model.md): the floats' reflection, traced into the environment (MICRO_FRAGMENT)
+uniform float uMicro;      // 1 = on
+uniform vec3 uMicroA;      // the floats' albedo (linear: the dye x the paper's scale)
+uniform vec4 uMicroP;      // x refractive index, y kd (isotropic share), z a1 (the floats' coverage), w roughness of the environment lookups
+uniform float uMicroGain;
+uniform float uMicroDiffuse; // the diffuse's share of the dye (applied after a scan's recolour, which sets the colour itself)
+uniform float uMicroOff[ 8 ]; // the floats' tangent curve: offsets at its control points (radians)
+uniform float uMicroLen[ 7 ]; // and the lengths of the segments between them
 uniform vec3 uFoilColor;
 uniform float uHolo;       // 0..1 share of rainbow in the foil colour
 uniform float uHoloFreq;
@@ -290,6 +299,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 			normal = normalize( cotangentFrame( normal, - vViewPosition, tuv ) * tn );
 		}
 	}
+	if ( uMicro > 0. ) diffuseColor.rgb *= uMicroDiffuse;
 	if ( uPrint > .5 ) {
 		vec4 pc = texture2D( tPrint, ( q - uPrintOffset ) / uPrintSize );
 		diffuseColor.rgb = mix( diffuseColor.rgb, pc.rgb, pc.a );
@@ -608,6 +618,66 @@ const FILM_FRAGMENT = /* glsl */`
 #endif
 `;
 
+// Microcylinder satin (uMicro; Sadeghi et al. 2013, sections 4.3 and 5): the floats are thin glossy
+// cylinders whose tangent turns along each float (the tangent curve), so each part of a float
+// reflects light from a different cone of directions; their sum is satin's broad, banded shine. A
+// float's lobes (2.5 and 5 degrees) are far narrower than a softbox, so each is taken as a delta in
+// the longitudinal angle and integrated along its reflection cone instead: K directions across the
+// cone's front half, each a prefiltered environment lookup (the studio's reflection room holds its
+// softboxes; an HDRI studio its own lights), so the same code serves both. Per direction: surface
+// term 2 Fr cos(phi_d / 2) (white), volume term (1 - kd) Ft^2 A / cos(theta) (the dye's colour);
+// masking M and reweighting P (eqs 7-13, Ashikhmin's correlation at 20 degrees), normalised by Q
+// (eq 15) with the cross threads at offset 0. Their own broad scattering, the kd share and the gaps
+// are in the diffuse (applyFabric: micro.diffuse). Three's own specular is off (specularIntensity 0).
+const MICRO_FRAGMENT = /* glsl */`
+#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV ) && defined( USE_ANISOTROPY )
+	if ( uMicro > 0. ) {
+		vec3 n = normal, wr = normalize( vViewPosition );
+		vec3 T2 = normalize( tbn[ 0 ] - n * dot( tbn[ 0 ], n ) ), T1 = cross( n, T2 ); // T2 round the body; the floats T1 run across it
+		vec3 bx = cross( n, T1 );                                                     // normal to the floats' (T1, n) plane
+		float F0 = pow2( ( uMicroP.x - 1. ) / ( uMicroP.x + 1. ) ), kd = uMicroP.y, a1 = uMicroP.z;
+		const int K = 12;
+		vec3 acc = vec3( 0. ); float sumP = 0., sumL = 0.;
+		// four samples per segment of the tangent curve: at two, each sample's reflection showed as its
+		// own thin band (wood-grain stripes across the panel) instead of one continuous highlight
+		for ( int s = 0; s < 28; s ++ ) {
+			int seg = s / 4; float w = uMicroLen[ seg ];
+			if ( w <= 0. ) continue;
+			float off = mix( uMicroOff[ seg ], uMicroOff[ seg + 1 ], ( float( s - seg * 4 ) + .5 ) / 4. );
+			float ca = cos( off ), sa = sin( off );
+			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n, bl = cross( t, nl );
+			float sr = clamp( dot( wr, t ), - 1., 1. ), cr = sqrt( max( 1. - sr * sr, 0. ) );
+			vec3 wp = wr - bx * dot( wr, bx );
+			float Pr = max( dot( normalize( wp ), n ), 0. );
+			sumP += Pr * w; sumL += w;
+			if ( Pr <= 0. ) continue;
+			vec3 pv = wr - t * sr;
+			float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
+			vec3 seg3 = vec3( 0. );
+			for ( int k = 0; k < K; k ++ ) {
+				float phi = ( ( float( k ) + .5 ) / float( K ) - .5 ) * PI;
+				vec3 wi = - sr * t + cr * ( cos( phi ) * nl + sin( phi ) * bl );
+				float phd = phi - phr, c2 = cos( .5 * phd ), u = exp( - phd * phd / ( 2. * .349 * .349 ) );
+				float Mi = cos( phi ), M = mix( Mi * Mr, min( Mi, Mr ), u );
+				vec3 wip = wi - bx * dot( wi, bx );
+				float Pi = max( dot( normalize( wip ), n ), 0. ), P = mix( Pi * Pr, min( Pi, Pr ), u );
+				if ( M * P <= 0. ) continue;
+				float Fr = F0 + ( 1. - F0 ) * pow( 1. - clamp( cr * c2, 0., 1. ), 5. ), Ft = 1. - Fr;
+				vec3 L = textureCubeUV( envMap, envMapRotation * inverseTransformDirection( wi, viewMatrix ), uMicroP.w ).rgb;
+				seg3 += L * ( vec3( 2. * Fr * c2 ) + ( 1. - kd ) * Ft * Ft * uMicroA / max( cr, .2 ) ) * M * P;
+			}
+			acc += seg3 * w;
+		}
+		// the cross threads (offset 0) only enter the normalisation
+		vec3 wp2 = wr - T1 * dot( wr, T1 );
+		float Pr2 = max( dot( normalize( wp2 ), n ), 0. );
+		float Q = a1 * sumP / max( sumL, 1e-4 ) + ( 1. - a1 ) * Pr2;
+		vec3 Lr = a1 * acc / max( sumL, 1e-4 ) * ( PI / float( K ) ) / max( Q, .05 );
+		reflectedLight.indirectSpecular += Lr * envMapIntensity * uMicroGain;
+	}
+#endif
+`;
+
 // Foil dots beside dyed knit (uBlend: mystique): where a pixel is part dots, part knit, the knit's
 // diffuse comes from the dye alone and the mirror part from the foil alone. One mixed colour (three's
 // metalness blend) tinted the knit with the foil, so a burgundy knit with teal dots read teal all
@@ -637,7 +707,8 @@ export function createFabricMaterial(zone) {
 		uTrimInset: { value: 0 }, uTrimWidth: { value: 0 }, uRows: { value: new THREE.Vector2() }, uThread: { value: new THREE.Color() },
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
-		uFoilRough: { value: 0.2 }, uGlint: { value: 0 }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uFoilRough: { value: 0.2 }, uGlint: { value: 0 },
+		uMicro: { value: 0 }, uMicroA: { value: new THREE.Color() }, uMicroP: { value: new THREE.Vector4(1.539, 0.1, 0.9, 0.12) }, uMicroGain: { value: 1 }, uMicroDiffuse: { value: 1 }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
@@ -668,7 +739,8 @@ export function createFabricMaterial(zone) {
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + FABRIC_FRAGMENT)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + AO_FRAGMENT)
 			.replace('#include <lights_physical_pars_fragment>', LIGHTS_PARS)
-			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n' + FILM_FRAGMENT + FOIL_FRAGMENT);
+			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n' + FILM_FRAGMENT + FOIL_FRAGMENT)
+			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + MICRO_FRAGMENT);
 	};
 	m.customProgramCacheKey = () => 'leotard-fabric';
 	return m;
@@ -708,6 +780,17 @@ export const FABRICS = {
 	// coloured-shine model is next (knowledge/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md).
 	satin: { label: 'Stretch satin', roughness: 0.22, sheen: 0.15, sheenRoughness: 0.5, anisotropy: 0.9, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
 		glint: { pitch: 0.00016, dotR: 0.4, presence: 0.06, tilt: 0.2, rough: 0.08, colorVar: 0.4, strength: 1 } },
+	// Satin by the microcylinder model (MICRO_FRAGMENT), on trial against Stretch satin (owner,
+	// 2026-10-27). Starts from the measured front of polyester satin charmeuse (Sadeghi et al. 2013,
+	// Table II row c): refractive index 1.539, floats kd 0.1 covering 90%, their tangent curve; its
+	// albedo (1, 0.37, 0.3) x 0.035 is the pink dye (luminance about 0.5), so the paper's A would be the
+	// dye x 0.07; at that the shine was white-grey on navy, and A = 2 (fitted by eye, Softbox studio,
+	// 2026-10-27) turns GK-like bands blue. diffuse: the cross threads' broad scattering, the floats' kd
+	// share and the gaps, as a share of the dye; rough: the environment lookups' blur; gain: overall.
+	// Still open: light colours (pink) read flat in the Softbox studio.
+	satinmicro: { label: 'Satin (thread model)', roughness: 0.6, sheen: 0, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
+		micro: { eta: 1.539, kd: 0.1, a1: 0.9, A: 2, diffuse: 0.2, rough: 0.2, gain: 1.5,
+			offsets: [-32, -32, -18, 0, 0, 18, 32, 32], lengths: [1.33, 0.66, 2, 2, 2, 0.66, 1.33] } },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
 	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
 	// full mirror clear coat (1 at 0.1) read as latex, the step above it on the gloss ladder
@@ -797,6 +880,20 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	m.clearcoat = f.clearcoat ?? 0;
 	m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
 	m.anisotropy = f.anisotropy ?? 0;
+	// micro: the microcylinder satin (MICRO_FRAGMENT) replaces three's specular; its tangent frame needs
+	// the anisotropy path on, so a token anisotropy keeps it compiled
+	const mc = f.micro;
+	m.specularIntensity = mc ? 0 : 1;
+	u.uMicro.value = mc ? 1 : 0;
+	if (mc) {
+		m.anisotropy = 0.001;
+		u.uMicroDiffuse.value = mc.diffuse;
+		u.uMicroA.value.copy(base).multiplyScalar(mc.A);
+		u.uMicroP.value.set(mc.eta, mc.kd, mc.a1, mc.rough);
+		u.uMicroGain.value = mc.gain;
+		u.uMicroOff.value = mc.offsets.map((d) => d * Math.PI / 180);
+		u.uMicroLen.value = mc.lengths;
+	}
 	m.iridescence = f.iridescence ?? 0;
 	m.iridescenceIOR = 1.8;
 	m.iridescenceThicknessRange = [200, 520];
