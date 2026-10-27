@@ -116,7 +116,33 @@ unknown, and the look must be settled at full quality first. The full sampling (
 roughness 0.2, about 35 ms) is back, stripes included. The 7 × 6 numbers stay here for the later
 optimisation phase. Next steps: [HDRI plan](/engineering/rendering/fabric-shading/microcylinder-satin-hdri-plan.md).
 
-**Status:** on navy it shows soft blue bands across the chest, like GK's video. Light colours
+**Paper-exact version (owner, 2026-10-27, later): "use the mathematical model as presented",
+no by-eye tuning; the owner will prompt any.** What had been fitted by eye and is now gone: A = 2
+(paper 0.035), gain 1.5 (none in the paper), a separate three.js diffuse at 0.2 of the dye (the
+model has none), and a lookup blur of 0.2 (the model's lobe widths now set it). Now:
+
+- Both thread sets with Table II row c exactly: floats A = colour x 0.035, kd 0.1, γs 2.5°,
+  γv 5°, a 0.9, the published tangent curve; cross threads A = colour x 0.2, kd 0.7, γs 30°,
+  γv 60°, a 0.1, offset 0; η 1.539; exact dielectric Fresnel.
+- The floats' Gaussian lobes are deltas in θ, read through lookups blurred to the lobe's own
+  width. A GGX prefilter at α = r² matches a Gaussian of width γ by half-width at α = 1.84γ, so
+  r = 0.28 and 0.40. The broad terms (cross threads, both kd shares) are integrated by quadrature
+  over θ (8) and φ (12) with lookups at r = 0.5 to prefilter the integrand; the floats' kd share
+  at each segment's centre.
+- No other light: three's diffuse is zeroed and its specular off.
+
+**Choices the paper does not make (stated, not tuned):** (1) the albedo for a user's colour: the
+paper measured one pink, (1, 0.37, 0.3) x 0.035 / x 0.2, so the piece's linear colour replaces
+(1, 0.37, 0.3). (2) Which way the floats run on the body (across the round-the-body tangent). (3)
+Direct lights and occlusion are not in the model and are left out. (4) Ft(η, ωi)·Ft(η′, ωr) is
+taken as Ft², at one angle.
+
+**Result:** consistent in the Softbox studio and the White loft (no wash-out in the HDRI). Very
+dark: navy near black with a grey-white sheen, pink a dark dusky rose, because the published
+albedos are low. No stripes are visible: the model's own lobe widths blur the lookups more than
+0.2 did. 76 ms a frame at 1280 × 1000 (GTX 1650), from about 35.
+
+**Earlier status (by-eye version):** on navy it showed soft blue bands across the chest, like GK's video. Light colours
 (pink) still read flat, partly because the studio lights from every side. Not yet judged by the
 owner. Cost not yet profiled (28 × 12 environment lookups per pixel).
 

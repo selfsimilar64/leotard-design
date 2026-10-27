@@ -99,10 +99,12 @@ uniform float uGlint;      // > 0: the flakes are glossy yarn facets, not foil: 
 // Microcylinder satin (Sadeghi et al. 2013; knowledge/engineering/rendering/fabric-shading/
 // microcylinder-cloth-model.md): the floats' reflection, traced into the environment (MICRO_FRAGMENT)
 uniform float uMicro;      // 1 = on
-uniform vec3 uMicroA;      // the floats' albedo (linear: the dye x the paper's scale)
-uniform vec4 uMicroP;      // x refractive index, y kd (isotropic share), z a1 (the floats' coverage), w roughness of the environment lookups
-uniform float uMicroGain;
-uniform float uMicroDiffuse; // the diffuse's share of the dye (applied after a scan's recolour, which sets the colour itself)
+uniform float uMicroEta;   // the threads' refractive index
+uniform vec3 uMicroA1;     // the floats' (flat threads') albedo A, linear
+uniform vec4 uMicroT1;     // the floats: x gamma_s, y gamma_v (radians), z kd, w coverage a
+uniform vec3 uMicroA2;     // the cross (twisted) threads' albedo
+uniform vec4 uMicroT2;     // the cross threads, as uMicroT1 (tangent curve: offset 0)
+uniform vec2 uMicroR1;     // environment lookup roughness matching the floats' gamma_s, gamma_v
 uniform float uMicroOff[ 8 ]; // the floats' tangent curve: offsets at its control points (radians)
 uniform float uMicroLen[ 7 ]; // and the lengths of the segments between them
 uniform vec3 uFoilColor;
@@ -299,7 +301,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 			normal = normalize( cotangentFrame( normal, - vViewPosition, tuv ) * tn );
 		}
 	}
-	if ( uMicro > 0. ) diffuseColor.rgb *= uMicroDiffuse;
+	if ( uMicro > 0. ) diffuseColor.rgb = vec3( 0. ); // the thread model has no separate diffuse: all of its light is in MICRO_FRAGMENT
 	if ( uPrint > .5 ) {
 		vec4 pc = texture2D( tPrint, ( q - uPrintOffset ) / uPrintSize );
 		diffuseColor.rgb = mix( diffuseColor.rgb, pc.rgb, pc.a );
@@ -618,62 +620,121 @@ const FILM_FRAGMENT = /* glsl */`
 #endif
 `;
 
-// Microcylinder satin (uMicro; Sadeghi et al. 2013, sections 4.3 and 5): the floats are thin glossy
-// cylinders whose tangent turns along each float (the tangent curve), so each part of a float
-// reflects light from a different cone of directions; their sum is satin's broad, banded shine. A
-// float's lobes (2.5 and 5 degrees) are far narrower than a softbox, so each is taken as a delta in
-// the longitudinal angle and integrated along its reflection cone instead: K directions across the
-// cone's front half, each a prefiltered environment lookup (the studio's reflection room holds its
-// softboxes; an HDRI studio its own lights), so the same code serves both. Per direction: surface
-// term 2 Fr cos(phi_d / 2) (white), volume term (1 - kd) Ft^2 A / cos(theta) (the dye's colour);
-// masking M and reweighting P (eqs 7-13, Ashikhmin's correlation at 20 degrees), normalised by Q
-// (eq 15) with the cross threads at offset 0. Their own broad scattering, the kd share and the gaps
-// are in the diffuse (applyFabric: micro.diffuse). Three's own specular is off (specularIntensity 0).
+// Microcylinder satin (uMicro; Sadeghi et al. 2013, eqs 2-4 and 10-15, Table II): the paper's model
+// with its own parameters and no settings fitted by eye. Two thread sets: the floats (flat threads,
+// tangent curve uMicroOff/uMicroLen) and the cross threads (twisted, offset 0), each with a surface
+// lobe (Fresnel, uncoloured), a volume lobe (coloured by A) and an isotropic share kd; masking M and
+// reweighting P (Ashikhmin's correlation, 20 degrees), coverage a1, a2, normalised by Q (eq 15). It
+// is the material's only light: three's diffuse is zeroed (FABRIC_FRAGMENT) and its specular off.
+// All light comes from the scene environment (the softbox studios' reflection room or an HDRI), the
+// incoming integral evaluated numerically along each thread's reflection cone:
+// - the floats' Gaussian lobes (2.5 and 5 degrees) as deltas in the longitudinal angle (their
+//   integral, 2), each read through a prefiltered lookup blurred to that lobe's own width (uMicroR1);
+// - every broad term (the cross threads' lobes, 30 and 60 degrees, and both sets' kd share) by
+//   quadrature over the longitudinal angle and azimuth (MICRO_NT x MICRO_NP), the floats' kd share at
+//   each tangent segment's centre (it has no peak along the curve).
+// Not in the model: direct lights (studio area lights, an HDRI rig's key and glint lights) and
+// occlusion; the paper's Ft(eta, wi) Ft(eta', wr) is taken as Ft at one angle, squared.
+const MICRO_PARS = /* glsl */`
+#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV )
+float microFresnel( float c, float eta ) { // exact unpolarised dielectric reflectance
+	float g2 = eta * eta - 1. + c * c;
+	if ( g2 < 0. ) return 1.;
+	float g = sqrt( g2 ), a = ( g - c ) / ( g + c ), b = ( c * ( g + c ) - 1. ) / ( c * ( g - c ) + 1. );
+	return .5 * a * a * ( 1. + b * b );
+}
+float microGauss( float s, float x ) { return exp( - x * x / ( 2. * s * s ) ) / ( 2.5066283 * s ); }
+vec3 microEnv( vec3 w, float r ) { return textureCubeUV( envMap, envMapRotation * inverseTransformDirection( w, viewMatrix ), r ).rgb; }
+// masking x reweighting for one incoming direction (eqs 7-13)
+float microMP( vec3 wi, vec3 n, vec3 bx, float phi, float phr, float Mr, float Pr ) {
+	float phd = phi - phr, u = exp( - phd * phd / ( 2. * .349 * .349 ) );
+	float Mi = max( cos( phi ), 0. ), M = mix( Mi * Mr, min( Mi, Mr ), u );
+	vec3 wip = wi - bx * dot( wi, bx );
+	float Pi = max( dot( normalize( wip ), n ), 0. );
+	return M * mix( Pi * Pr, min( Pi, Pr ), u );
+}
+// P(t, wr): the tangent's projected length toward the viewer (eq 11)
+float microPr( vec3 wr, vec3 n, vec3 bx ) { vec3 wp = wr - bx * dot( wr, bx ); return max( dot( normalize( wp ), n ), 0. ); }
+// A narrow-lobed tangent (the floats): surface and volume Gaussians as deltas in theta
+vec3 microNarrow( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A, vec2 R, float eta ) {
+	const int K = 12;
+	float sr = clamp( dot( wr, t ), - 1., 1. ), cr = sqrt( max( 1. - sr * sr, 0. ) ), Pr = microPr( wr, n, bx );
+	vec3 pv = wr - t * sr;
+	float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
+	vec3 acc = vec3( 0. );
+	if ( Pr <= 0. || Mr <= 0. ) return acc;
+	for ( int k = 0; k < K; k ++ ) {
+		float phi = ( ( float( k ) + .5 ) / float( K ) - .5 ) * PI;
+		vec3 wi = - sr * t + cr * ( cos( phi ) * nl + sin( phi ) * bl );
+		float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
+		if ( mp <= 0. ) continue;
+		float c2 = cos( .5 * ( phi - phr ) ), Fr = microFresnel( cr * c2, eta ), Ft = 1. - Fr;
+		acc += ( microEnv( wi, R.x ) * ( 2. * Fr * c2 ) + microEnv( wi, R.y ) * ( ( 1. - T.z ) * Ft * Ft / max( cr, 1e-2 ) ) * A ) * mp;
+	}
+	return acc * ( PI / float( K ) );
+}
+// A broad term by quadrature: the whole thread function (iso = 0), or only its kd share (iso = 1).
+// Lookups are blurred to about the quadrature's spacing (MICRO_QR), which prefilters the integrand.
+#define MICRO_NT 8
+#define MICRO_NP 12
+#define MICRO_QR .5
+vec3 microBroad( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A, float eta, float iso ) {
+	float sr = clamp( dot( wr, t ), - 1., 1. ), tr = asin( sr ), cr = cos( tr ), Pr = microPr( wr, n, bx );
+	vec3 pv = wr - t * sr;
+	float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
+	vec3 acc = vec3( 0. );
+	if ( Pr <= 0. || Mr <= 0. ) return acc;
+	float g = 1. - iso;
+	for ( int j = 0; j < MICRO_NT; j ++ ) {
+		float ti = ( ( float( j ) + .5 ) / float( MICRO_NT ) - .5 ) * PI, cti = cos( ti ), sti = sin( ti );
+		float th = .5 * ( ti + tr ), ctd = cos( .5 * ( ti - tr ) );
+		float gs = g * microGauss( T.x, th ), gv = g * ( 1. - T.z ) * microGauss( T.y, th );
+		for ( int k = 0; k < MICRO_NP; k ++ ) {
+			float phi = ( ( float( k ) + .5 ) / float( MICRO_NP ) - .5 ) * PI;
+			vec3 wi = sti * t + cti * ( cos( phi ) * nl + sin( phi ) * bl );
+			float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
+			if ( mp <= 0. ) continue;
+			float c2 = cos( .5 * ( phi - phr ) ), Fr = microFresnel( ctd * c2, eta ), Ft = 1. - Fr;
+			vec3 f = ( vec3( gs * Fr * c2 ) + Ft * Ft * ( gv + T.z ) / max( cti + cr, 1e-2 ) * A ) / max( ctd * ctd, 1e-3 );
+			acc += microEnv( wi, MICRO_QR ) * f * ( mp * cti * cti );
+		}
+	}
+	return acc * ( PI / float( MICRO_NT ) ) * ( PI / float( MICRO_NP ) );
+}
+#endif
+`;
 const MICRO_FRAGMENT = /* glsl */`
 #if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV ) && defined( USE_ANISOTROPY )
 	if ( uMicro > 0. ) {
 		vec3 n = normal, wr = normalize( vViewPosition );
 		vec3 T2 = normalize( tbn[ 0 ] - n * dot( tbn[ 0 ], n ) ), T1 = cross( n, T2 ); // T2 round the body; the floats T1 run across it
-		vec3 bx = cross( n, T1 );                                                     // normal to the floats' (T1, n) plane
-		float F0 = pow2( ( uMicroP.x - 1. ) / ( uMicroP.x + 1. ) ), kd = uMicroP.y, a1 = uMicroP.z;
-		const int K = 12;
-		vec3 acc = vec3( 0. ); float sumP = 0., sumL = 0.;
-		// four samples per segment of the tangent curve: at two, each sample's reflection showed as its
-		// own thin band (wood-grain stripes across the panel) instead of one continuous highlight
+		vec3 bx1 = cross( n, T1 ), bx2 = cross( n, T2 );                             // normals to each set's (t, n) plane
+		float eta = uMicroEta, a1 = uMicroT1.w, a2 = uMicroT2.w;
+		vec3 acc1 = vec3( 0. ); float sumP1 = 0., sumL1 = 0.;
+		// the floats: four tangent samples per segment of their curve
 		for ( int s = 0; s < 28; s ++ ) {
 			int seg = s / 4; float w = uMicroLen[ seg ];
 			if ( w <= 0. ) continue;
 			float off = mix( uMicroOff[ seg ], uMicroOff[ seg + 1 ], ( float( s - seg * 4 ) + .5 ) / 4. );
 			float ca = cos( off ), sa = sin( off );
-			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n, bl = cross( t, nl );
-			float sr = clamp( dot( wr, t ), - 1., 1. ), cr = sqrt( max( 1. - sr * sr, 0. ) );
-			vec3 wp = wr - bx * dot( wr, bx );
-			float Pr = max( dot( normalize( wp ), n ), 0. );
-			sumP += Pr * w; sumL += w;
-			if ( Pr <= 0. ) continue;
-			vec3 pv = wr - t * sr;
-			float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
-			vec3 seg3 = vec3( 0. );
-			for ( int k = 0; k < K; k ++ ) {
-				float phi = ( ( float( k ) + .5 ) / float( K ) - .5 ) * PI;
-				vec3 wi = - sr * t + cr * ( cos( phi ) * nl + sin( phi ) * bl );
-				float phd = phi - phr, c2 = cos( .5 * phd ), u = exp( - phd * phd / ( 2. * .349 * .349 ) );
-				float Mi = cos( phi ), M = mix( Mi * Mr, min( Mi, Mr ), u );
-				vec3 wip = wi - bx * dot( wi, bx );
-				float Pi = max( dot( normalize( wip ), n ), 0. ), P = mix( Pi * Pr, min( Pi, Pr ), u );
-				if ( M * P <= 0. ) continue;
-				float Fr = F0 + ( 1. - F0 ) * pow( 1. - clamp( cr * c2, 0., 1. ), 5. ), Ft = 1. - Fr;
-				vec3 L = textureCubeUV( envMap, envMapRotation * inverseTransformDirection( wi, viewMatrix ), uMicroP.w ).rgb;
-				seg3 += L * ( vec3( 2. * Fr * c2 ) + ( 1. - kd ) * Ft * Ft * uMicroA / max( cr, .2 ) ) * M * P;
-			}
-			acc += seg3 * w;
+			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
+			sumP1 += microPr( wr, n, bx1 ) * w; sumL1 += w;
+			acc1 += microNarrow( t, nl, cross( t, nl ), n, bx1, wr, uMicroT1, uMicroA1, uMicroR1, eta ) * w;
 		}
-		// the cross threads (offset 0) only enter the normalisation
-		vec3 wp2 = wr - T1 * dot( wr, T1 );
-		float Pr2 = max( dot( normalize( wp2 ), n ), 0. );
-		float Q = a1 * sumP / max( sumL, 1e-4 ) + ( 1. - a1 ) * Pr2;
-		vec3 Lr = a1 * acc / max( sumL, 1e-4 ) * ( PI / float( K ) ) / max( Q, .05 );
-		reflectedLight.indirectSpecular += Lr * envMapIntensity * uMicroGain;
+		// their kd share, at each segment's centre
+		for ( int seg = 0; seg < 7; seg ++ ) {
+			float w = uMicroLen[ seg ];
+			if ( w <= 0. || uMicroT1.z <= 0. ) continue;
+			float off = .5 * ( uMicroOff[ seg ] + uMicroOff[ seg + 1 ] ), ca = cos( off ), sa = sin( off );
+			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
+			acc1 += microBroad( t, nl, cross( t, nl ), n, bx1, wr, uMicroT1, uMicroA1, eta, 1. ) * w;
+		}
+		// the cross threads: one tangent, in the surface
+		vec3 acc2 = microBroad( T2, n, cross( T2, n ), n, bx2, wr, uMicroT2, uMicroA2, eta, 0. );
+		float Pr2 = microPr( wr, n, bx2 );
+		float Q = a1 * sumP1 / max( sumL1, 1e-4 ) + a2 * Pr2 + ( 1. - a1 - a2 ) * max( dot( wr, n ), 0. );
+		vec3 Lr = ( a1 * acc1 / max( sumL1, 1e-4 ) + a2 * acc2 ) / max( Q, 1e-3 );
+		reflectedLight.indirectSpecular += Lr * envMapIntensity;
 	}
 #endif
 `;
@@ -708,7 +769,7 @@ export function createFabricMaterial(zone) {
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
 		uFoilRough: { value: 0.2 }, uGlint: { value: 0 },
-		uMicro: { value: 0 }, uMicroA: { value: new THREE.Color() }, uMicroP: { value: new THREE.Vector4(1.539, 0.1, 0.9, 0.12) }, uMicroGain: { value: 1 }, uMicroDiffuse: { value: 1 }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uMicro: { value: 0 }, uMicroEta: { value: 1.5 }, uMicroA1: { value: new THREE.Color() }, uMicroT1: { value: new THREE.Vector4() }, uMicroA2: { value: new THREE.Color() }, uMicroT2: { value: new THREE.Vector4() }, uMicroR1: { value: new THREE.Vector2(0.3, 0.4) }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
@@ -738,7 +799,7 @@ export function createFabricMaterial(zone) {
 			.replace('#include <common>', '#include <common>\n' + PARS_FRAGMENT)
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + FABRIC_FRAGMENT)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + AO_FRAGMENT)
-			.replace('#include <lights_physical_pars_fragment>', LIGHTS_PARS)
+			.replace('#include <lights_physical_pars_fragment>', LIGHTS_PARS + MICRO_PARS)
 			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n' + FILM_FRAGMENT + FOIL_FRAGMENT)
 			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + MICRO_FRAGMENT);
 	};
@@ -781,16 +842,15 @@ export const FABRICS = {
 	satin: { label: 'Stretch satin', roughness: 0.22, sheen: 0.15, sheenRoughness: 0.5, anisotropy: 0.9, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
 		glint: { pitch: 0.00016, dotR: 0.4, presence: 0.06, tilt: 0.2, rough: 0.08, colorVar: 0.4, strength: 1 } },
 	// Satin by the microcylinder model (MICRO_FRAGMENT), on trial against Stretch satin (owner,
-	// 2026-10-27). Starts from the measured front of polyester satin charmeuse (Sadeghi et al. 2013,
-	// Table II row c): refractive index 1.539, floats kd 0.1 covering 90%, their tangent curve; its
-	// albedo (1, 0.37, 0.3) x 0.035 is the pink dye (luminance about 0.5), so the paper's A would be the
-	// dye x 0.07; at that the shine was white-grey on navy, and A = 2 (fitted by eye, Softbox studio,
-	// 2026-10-27) turns GK-like bands blue. diffuse: the cross threads' broad scattering, the floats' kd
-	// share and the gaps, as a share of the dye; rough: the environment lookups' blur; gain: overall.
-	// Still open: light colours (pink) read flat in the Softbox studio.
+	// 2026-10-27): the measured front of polyester satin charmeuse exactly as published (Sadeghi et al.
+	// 2013, Table II row c), nothing fitted by eye (owner: use the model as presented). Its albedos are
+	// the dye colour x the table's factor: the table gives (1, 0.37, 0.3) x 0.035 for the floats and
+	// x 0.2 for the cross threads, (1, 0.37, 0.3) being the sample's pink; here the piece's colour
+	// (linear) takes its place. gamma in degrees.
 	satinmicro: { label: 'Satin (thread model)', roughness: 0.6, sheen: 0, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
-		micro: { eta: 1.539, kd: 0.1, a1: 0.9, A: 2, diffuse: 0.2, rough: 0.2, gain: 1.5,
-			offsets: [-32, -32, -18, 0, 0, 18, 32, 32], lengths: [1.33, 0.66, 2, 2, 2, 0.66, 1.33] } },
+		micro: { eta: 1.539,
+			flat: { A: 0.035, kd: 0.1, gs: 2.5, gv: 5, a: 0.9, offsets: [-32, -32, -18, 0, 0, 18, 32, 32], lengths: [1.33, 0.66, 2, 2, 2, 0.66, 1.33] },
+			twisted: { A: 0.2, kd: 0.7, gs: 30, gv: 60, a: 0.1 } } },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
 	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
 	// full mirror clear coat (1 at 0.1) read as latex, the step above it on the gloss ladder
@@ -880,19 +940,23 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	m.clearcoat = f.clearcoat ?? 0;
 	m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
 	m.anisotropy = f.anisotropy ?? 0;
-	// micro: the microcylinder satin (MICRO_FRAGMENT) replaces three's specular; its tangent frame needs
-	// the anisotropy path on, so a token anisotropy keeps it compiled
+	// micro: the microcylinder satin (MICRO_FRAGMENT) replaces three's diffuse and specular; its tangent
+	// frame needs the anisotropy path on, so a token anisotropy keeps it compiled
 	const mc = f.micro;
 	m.specularIntensity = mc ? 0 : 1;
 	u.uMicro.value = mc ? 1 : 0;
 	if (mc) {
 		m.anisotropy = 0.001;
-		u.uMicroDiffuse.value = mc.diffuse;
-		u.uMicroA.value.copy(base).multiplyScalar(mc.A);
-		u.uMicroP.value.set(mc.eta, mc.kd, mc.a1, mc.rough);
-		u.uMicroGain.value = mc.gain;
-		u.uMicroOff.value = mc.offsets.map((d) => d * Math.PI / 180);
-		u.uMicroLen.value = mc.lengths;
+		const d2r = Math.PI / 180, F = mc.flat, W = mc.twisted;
+		u.uMicroEta.value = mc.eta;
+		u.uMicroA1.value.copy(base).multiplyScalar(F.A); u.uMicroT1.value.set(F.gs * d2r, F.gv * d2r, F.kd, F.a);
+		u.uMicroA2.value.copy(base).multiplyScalar(W.A); u.uMicroT2.value.set(W.gs * d2r, W.gv * d2r, W.kd, W.a);
+		// a prefiltered lookup's roughness r blurs like GGX at alpha = r^2, whose half-width at half maximum
+		// (tan theta = 0.64 alpha) matches a Gaussian lobe of width gamma (1.177 gamma) at alpha = 1.84 gamma
+		const r = (g) => Math.sqrt(Math.min(1.84 * g * d2r, 1));
+		u.uMicroR1.value.set(r(F.gs), r(F.gv));
+		u.uMicroOff.value = F.offsets.map((o) => o * d2r);
+		u.uMicroLen.value = F.lengths;
 	}
 	m.iridescence = f.iridescence ?? 0;
 	m.iridescenceIOR = 1.8;

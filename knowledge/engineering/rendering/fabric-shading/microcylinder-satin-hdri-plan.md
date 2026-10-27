@@ -29,6 +29,11 @@ studio, whose reflection room is dark except for the boxes. They let the fabric 
 than reaches it. That stays hidden in a dark room, but in a photographed room that is bright in
 most directions the surplus spreads over the whole panel.
 
+**Update (owner, same day):** there is to be no tuning by eye or toward reference photos; the
+model is used as published, and the owner prompts any changes. Steps 1-2 below are superseded by
+the [paper-exact version](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md),
+which runs consistently in the HDRI studios. Steps 3-6 remain open questions for the owner.
+
 # Steps
 
 1. **Energy check (white furnace).** Render the satin inside a uniform white environment
