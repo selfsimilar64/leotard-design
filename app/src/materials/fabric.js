@@ -679,9 +679,6 @@ export function createFabricMaterial(zone) {
 // Flake fields: pitch (m), dotR (cells), presence, tilt, rough, colorVar, holo, holoFreq, holoJit, blend
 // (1: flat foil dots whose sparkle averages into a shimmer far away), bend (cells: the dot lattice's
 // rows curve from patch to patch); blend and bend are mystique's, from its 2026-10-27 audit.
-// Shared by the satin tries in FABRICS (satin1 ... satinD): what they had in common with satin.
-const SATIN_TRY = { sheen: 0.1, sheenRoughness: 0.5, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
-	glint: { pitch: 0.00016, dotR: 0.4, presence: 0.06, tilt: 0.2, rough: 0.08, colorVar: 0.4, strength: 1 } };
 export const FABRICS = {
 	// Matte lycra's sheen is low and close to its own colour: at 0.4 and a third white (the tint is
 	// mixed in linear light, so a third white is nearly white on a dark colour) a dark green's
@@ -706,30 +703,11 @@ export const FABRICS = {
 	shiny: { label: 'Shiny tricot', roughness: 0.4, sheen: 0.2, sheenRoughness: 0.5, anisotropy: 0.6, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.6 }, texScale: 1.85,
 		glint: { pitch: 0.00022, dotR: 0.4, presence: 0.25, tilt: 0.3, rough: 0.1, colorVar: 0.5, strength: 1 } },
 	// Stretch satin (GK, 76/24 nylon): broad silky highlights stretched round the body (horizontal bands
-	// on the chest in GK's turntable video), smooth at body distance; fine glints only up close. Glossier
-	// and more reflective than shiny tricot (ior 1.6), but anisotropy 0.85-0.9 or ior 2+ smeared the
-	// loft's bright ceiling over the whole chest as a grey haze; 0.5 keeps bands over deep colour
-	// (material-eval, navy, 2026-10-27).
-	satin: { label: 'Stretch satin (try E, chosen)', roughness: 0.2, sheen: 0.1, sheenRoughness: 0.5, anisotropy: 0.5, ior: 1.6, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
+	// on the chest in GK's turntable video), smooth at body distance; fine glints only up close. The
+	// owner's pick of seven tries (2026-10-27): its white-only shine still reads slightly plastic; a
+	// coloured-shine model is next (knowledge/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md).
+	satin: { label: 'Stretch satin', roughness: 0.22, sheen: 0.15, sheenRoughness: 0.5, anisotropy: 0.9, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
 		glint: { pitch: 0.00016, dotR: 0.4, presence: 0.06, tilt: 0.2, rough: 0.08, colorVar: 0.4, strength: 1 } },
-	// The satin tries before the one above, kept in the picker for the owner to judge by eye (owner,
-	// 2026-10-27; knowledge/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md). Remove the
-	// losers once the owner has chosen.
-	satin1: { ...SATIN_TRY, label: 'Satin try 1 (first)', roughness: 0.3, sheen: 0.15, anisotropy: 0.85, ior: 1.5, glint: { ...SATIN_TRY.glint, presence: 0.12 } },
-	satin2: { ...SATIN_TRY, label: 'Satin try 2 (glossier)', roughness: 0.22, sheen: 0.15, anisotropy: 0.9, ior: 1.5 },
-	satinA: { ...SATIN_TRY, label: 'Satin try A (reflective, glow)', roughness: 0.22, sheen: 0.4, sheenTint: 0.5, anisotropy: 0.9, ior: 2.2 },
-	satinB: { ...SATIN_TRY, label: 'Satin try B (most reflective)', roughness: 0.3, sheen: 0.15, anisotropy: 0.9, ior: 2.6 },
-	satinC: { ...SATIN_TRY, label: 'Satin try C', roughness: 0.18, anisotropy: 0.7, ior: 1.8 },
-	satinD: { ...SATIN_TRY, label: 'Satin try D', roughness: 0.14, anisotropy: 0.6, ior: 2.0 },
-	// Try F: the shine in the dye's colour (dyeSheen). Satin's broad sheen is mostly light that went into
-	// the smooth, slightly clear filaments and came back out dye-filtered; only a few percent bounces
-	// white off the surface. GK's navy satin in a warm gym shows vivid royal-blue bands and no white;
-	// under a big white softbox the peaks go pale lavender, never white. The earlier tries reflected
-	// white only, which read as plastic (try 2) or as grey haze where the sheen spreads (C).
-	// gain 6 / sat 1.3 / white 0.15 overshot: pale periwinkle over most of the panel and wet-looking white
-	// streaks; 3 / 1.8 / 0.05 gives royal-blue bands over deep navy (owner's setup, Green loft hall, 2026-10-27).
-	satinFC: { ...SATIN_TRY, label: 'Satin try F (C shape, coloured shine)', roughness: 0.18, anisotropy: 0.7, dyeSheen: { gain: 3, sat: 1.8, white: 0.05 } },
-	satinFE: { ...SATIN_TRY, label: 'Satin try F (E shape, coloured shine)', roughness: 0.2, anisotropy: 0.5, dyeSheen: { gain: 3, sat: 1.8, white: 0.05 } },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
 	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
 	// full mirror clear coat (1 at 0.1) read as latex, the step above it on the gloss ladder
@@ -783,8 +761,9 @@ export const texScaleOf = (look) => look.texScale ?? (look.texture ? SCAN_SCALE[
 // Fabrics the owner took out of the app (review, 2026-10-24) and what a design that used one shows
 // instead (doc/schema.js migrate): lace and shattered glass hologram. Retired scans are hidden from
 // the picker and dropped from a design, which then shows its base fabric (textures.js baseFabricFor);
-// TX-00001482 stays loadable, as matte lycra's own scan.
-export const RETIRED_FABRICS = { lace: 'mesh', shattered: 'hologram' };
+// TX-00001482 stays loadable, as matte lycra's own scan. The satin tries the owner compared (2026-10-27)
+// fall back to Stretch satin, which is try 2.
+export const RETIRED_FABRICS = { lace: 'mesh', shattered: 'hologram', satin1: 'satin', satin2: 'satin', satinA: 'satin', satinB: 'satin', satinC: 'satin', satinD: 'satin', satinFC: 'satin', satinFE: 'satin' };
 export const RETIRED_SCANS = new Set(['TX-00006026', 'TX-00005344', 'TX-00004683', 'TX-00001482', 'TX-00003863']); // opal metallic double knit, black mesh tulle, green tricot with holofoil dots, royal blue scuba, pink glitter double knit
 
 export const SECOND = ['Tone-on-tone', 'Silver', 'Gold', 'White', 'Black'];
@@ -818,17 +797,6 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	m.clearcoat = f.clearcoat ?? 0;
 	m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
 	m.anisotropy = f.anisotropy ?? 0;
-	m.ior = f.ior ?? 1.5; // satin: its long floats reflect more than a plain knit face (a stronger specular)
-	// dyeSheen { gain, sat, white }: the specular in the dye's hue (brightened to full value, saturation
-	// pushed by sat), gain x the plain 4%; the white surface reflection left as a faint clear coat.
-	m.specularIntensity = 1;
-	if (f.dyeSheen) {
-		const d = f.dyeSheen, c = [base.r, base.g, base.b], mx = Math.max(...c, 1e-4);
-		const n = c.map((v) => v / mx), l = 0.2126 * n[0] + 0.7152 * n[1] + 0.0722 * n[2];
-		const t = n.map((v) => Math.max(l + (v - l) * d.sat, 0)), tm = Math.max(...t, 1e-4);
-		m.specularColor.setRGB(...t.map((v) => (v / tm) * d.gain));
-		m.clearcoat = d.white; m.clearcoatRoughness = f.roughness;
-	} else m.specularColor.setRGB(1, 1, 1);
 	m.iridescence = f.iridescence ?? 0;
 	m.iridescenceIOR = 1.8;
 	m.iridescenceThicknessRange = [200, 520];

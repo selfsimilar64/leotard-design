@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Update**: [Gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md#satin-tries-in-the-picker-for-the-owner): owner chose satin try 2; it is now Stretch satin and the other tries (and `dyeSheen`, per-fabric `ior`) are removed. DreamWorks' microcylinder talk read: per-thread surface (white) and volume (albedo-coloured) terms recorded; the weave-level model and satin parameters are only in Sadeghi 2013.
 * **Update**: [Gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md#coloured-shine-try-f): real satin's shine is mostly the dye's colour, not white; new `dyeSheen` setting and two try-F satins (C and E shapes) tuned in the owner's setup.
 * **Update**: [Gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md#satin-tries-in-the-picker-for-the-owner): the six earlier satin tries added to the picker for the owner to compare by eye.
 * **Update**: [Photo match: the tricot gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md): matte, shiny, new stretch satin and wet look share the scuba scan (roughness map relative to each fabric's own, weaker relief on glossier rungs) and a new yarn-glint layer that fades at body distance; drape-eval cloth gained a tangent (anisotropic fabrics were black on it).

@@ -30,8 +30,8 @@ sources:
     title: "Sadeghi, Bisker, De Deken, Jensen 2013: A Practical Microcylinder Appearance Model for Cloth Rendering"
     author: org:acm-siggraph
   - id: dw
-    resource: https://research.dreamworks.com/wp-content/uploads/2018/07/clothIS.pdf
-    title: "DreamWorks: importance sampling the microcylinder cloth model (via search summary)"
+    resource: https://web.archive.org/web/20240222035656/https://research.dreamworks.com/wp-content/uploads/2018/07/clothIS.pdf
+    title: "Wang, Xie, Krishnamachari (DreamWorks), SIGGRAPH 2014 talk: Importance Sampling for a Microcylinder Based Cloth BSDF"
     author: org:dreamworks
 ---
 
@@ -45,7 +45,7 @@ surface.[^owner][^refs] All values live in `FABRICS` in `app/src/materials/fabri
 |---|---|---|---|---|---|
 | `matte` Matte lycra | 0.8 | 0 | sheen 0.1 | 1 | none |
 | `shiny` Shiny tricot | 0.4 | 0.6 | sheen 0.2 | 0.6 | 0.25 |
-| `satin` Stretch satin (new) | 0.2 | 0.5 | ior 1.6, sheen 0.1 | 0.45 | 0.06 |
+| `satin` Stretch satin (new; owner's pick, try 2) | 0.22 | 0.9 | sheen 0.15 | 0.45 | 0.06 |
 | `wet` Wet look (cire) | 0.32 | 0.5 | clear coat 0.55 at 0.2 | 0.15 | 0.5 |
 
 # What changed in the shader
@@ -64,7 +64,8 @@ surface.[^owner][^refs] All values live in `FABRICS` in `app/src/materials/fabri
      razor-thin dotted line across the cloth.
   2. Glints fade to 10% once smaller than a pixel (`gw`). At full strength a shiny red leotard
      read as glitter fabric at body distance; the Nike and GK photos show no sparkle there.
-- **`ior` per fabric** (`m.ior`, default 1.5): satin's long floats reflect more.
+- A per-fabric `ior` (satin tries C-E) and `dyeSheen` (try F) were added, then removed with
+  those tries; no fabric sets either now.
 
 # Satin tuning
 
@@ -80,8 +81,13 @@ The owner asked to judge the earlier tries by eye, so all six are fabrics in the
 Stretch satin (try E): `satin1` first try (roughness 0.3, anisotropy 0.85, glint 0.12, sheen
 0.15), `satin2` (0.22, 0.9), `satinA` (0.22, 0.9, ior 2.2, sheen 0.4 at half white), `satinB`
 (0.3, 0.9, ior 2.6), `satinC` (0.18, 0.7, ior 1.8), `satinD` (0.14, 0.6, ior 2.0); shared fields in
-`SATIN_TRY`. Remove the losers (and their tiles in `public/thumbs/materials/`) once the owner
-picks one.[^owner]
+`SATIN_TRY`.
+
+**Outcome (owner, 2026-10-27):** tries 1 and 2 were "not bad, slightly plasticky"; A and B looked
+metallic and changed the colour; C and D good and brighter than E; C and E liked most. After the
+side-by-side in the owner's setup and the failed try F, the owner chose **try 2** as best so far.
+It is now `satin` (Stretch satin). Every other try, `SATIN_TRY` and their tiles are removed, and
+designs naming a removed try open on `satin` (`RETIRED_FABRICS`).[^owner]
 
 # Coloured shine (try F)
 
@@ -123,9 +129,18 @@ It also left the full diffuse in place.
 - **Research (Sadeghi et al. 2013, microcylinder model)**, built from measured threads including
   polyester satin charmeuse. Each thread scatters in two lobes: a *surface reflection* (Fresnel,
   uncoloured) and a *volume scattering* term coloured by the thread's albedo. The volume term mixes
-  a diffuse part with a Gaussian lobe near the mirror direction.[^sadeghi][^dw] **[UNVERIFIED]** The
-  colour and lobe details are from a secondary source and recall; the full paper could not be read
-  this session (certificate error).
+  a diffuse part with a Gaussian lobe near the mirror direction.[^sadeghi][^dw] The DreamWorks
+  talk (read in full, 2026-10-27; owner supplied an archive link) gives the per-thread terms. Angles
+  θ are measured from the plane normal to the thread, as for hair:
+  - surface: fs = Fr · cos(φd/2) · g(γs, θh) / cos²θd. Fresnel only, so uncoloured; g is a
+    Gaussian of width γs about the half angle θh.
+  - volume: fv = Ft · ((1 − kd) · g(γv, θh) + kd) / (cosθi + cosθr) · A / cos²θd. Coloured by the
+    thread albedo A; kd is the isotropic share, and the rest a broader Gaussian lobe of width γv.
+    The 1/(cosθi + cosθr) factor brightens it toward grazing angles.
+  The talk adds importance sampling only. It does **not** give the fabric-level part of the model
+  (each thread's tangent curve along a float, warp/weft coverage, shadowing and masking) or the
+  measured parameters for polyester satin charmeuse. Both are in Sadeghi 2013 itself, not yet
+  read.
 
 **[INFERRED]** What this means for us. Satin needs three parts, not one:
 
