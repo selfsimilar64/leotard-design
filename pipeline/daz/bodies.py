@@ -16,7 +16,7 @@
 # pose) is baked once with the OBJ export: topology, UVs, and where the brows, lashes, tear film
 # and hair roots sit on an unshaped skin (Daz moves them with the bones but not with the head's
 # shape morphs, so the app re-attaches them to each body's skin).
-# Stage 2 per body: the arm poses (ARMS), one side at a time, the other arm in the a-pose: the app
+# Stage 2 (the reference body only since 2026-10-26): the arm poses (ARMS), one side at a time, the other arm in the a-pose: the app
 # adds the two sides' changes to the a-pose, so every left/right combination works.
 #
 # Everything written is derived from the owner's licensed Daz content: pipeline/daz/out/ and
@@ -43,7 +43,8 @@ EXPR = lambda n: next(_ED + f for f in os.listdir(LIB + _ED) if f.startswith('SR
 NEUTRAL = P9 + 'Expressions/3D Sugar/0 Expression.duf'
 # The person is Stacy (CaramelDream3D) on every body since 2026-10-21 (owner's choice): her face
 # (the CD Stacy Head morph, on top of each body's age and character shape; not her body morph, so
-# ages and builds stay), her skin, eyes and lashes. Her skin is the only one the app shows.
+# ages and builds stay; the adults' characters shape only the body, so their face is hers alone),
+# her skin, eyes and lashes. Her skin is the only one the app shows.
 _ST = P9 + 'Characters/CaramelDream3D/Stacy/MATERIAL/'
 STACY = [_ST + 'Stacy Skin.duf', [_ST + 'Eyes/Stacy Eyes 00.duf', 'Genesis9Eyes'], [_ST + 'Stacy Eyelashes 01.duf', 'Genesis9Eyelashes']]
 STACY_MORPHS = {'CD Stacy Head': 1}
@@ -99,10 +100,12 @@ BODIES = [
 	dict(key='teen', label='Young teen, about 13', years=13, stature=1.55, skin=2, presets=[AGE_P('young-teen')],
 		morphs={'Kat_figure_ctrl_Character': 1, **BUST}),
 	dict(key='older-teen', label='Older teen, about 16', years=16, stature=1.6, skin=3, presets=[AGE_P('older-teen')], morphs={**BUST}),
+	# the adults take only their character's body half (a *_figure_ctrl_Character dials *_head_bs_Head
+	# and *_body_bs_body at 1 and nothing else), so the face is Stacy's alone (owner, 2026-10-26)
 	dict(key='young', label='Young adult, athletic', years=18, stature=1.61, skin=2, presets=[],
-		morphs={'Kat_figure_ctrl_Character': 1, **ATHLETIC, **BUST}),
+		morphs={'Kat_body_bs_body': 1, **ATHLETIC, **BUST}),
 	dict(key='adult', label='Adult, about 30', years=30, stature=1.64, skin=4, presets=[],
-		morphs={'BaseFeminine_figure_ctrl_Character': 1, **{k: v * 0.8 for k, v in ATHLETIC.items()}, **BUST}),
+		morphs={'BaseFeminine_body_bs_Body': 1, **{k: v * 0.8 for k, v in ATHLETIC.items()}, **BUST}),
 ]
 REF = 'young'
 
@@ -130,12 +133,14 @@ POSES = [
 	dict(key='one-knee', label='On one knee', n=30),
 ]
 # Arm poses (the app's 'arms-down', 'hands-on-hips', ...: body/pose.js): each arm separately.
-ARMS = ['down', 'front', 'thigh', 'hip', 'up']
+# Since 2026-10-26 only 'up' on the reference body is baked: the curves' open surface needs it
+# (app body/reference.js openSurface); the arm-only poses left the picker on 2026-10-21 and the owner
+# asked that no more work go into them ('down', 'front', 'thigh', 'hip' were baked before).
+ARMS = ['up']
 EXPRESSIONS = [
 	dict(key='neutral', label='Neutral', preset=NEUTRAL),
-	dict(key='smile', label='Smile', n=13),
-	dict(key='soft-smile', label='Closed-mouth smile', n=26),
-	dict(key='focused', label='Focused', n=16),
+	# smile (SR 13), closed-mouth smile (SR 26) and focused (SR 16) removed on the owner's request
+	# (2026-10-26); a design saved with one shows the neutral face (render/figure.js filesFor)
 ]
 
 # Spine fractions of the chest and waist landmarks (pelvis -> neck base), as on the MakeHuman young
@@ -215,6 +220,7 @@ def arm_aim(preset, m, sx):
 def stage2_jobs(bodies):
 	jobs = []
 	for b in bodies:
+		if b['key'] != REF: continue  # only the reference body's raised arms are used (ARMS)
 		m = rest_measures(b)
 		poses = []
 		for side, sx, other in (('l', 1, 'r'), ('r', -1, 'l')):

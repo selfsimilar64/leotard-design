@@ -172,8 +172,8 @@ function Character({ b }) {
 			<Line label="Pose"><Strip value={poseKey} onPick={(v) => run({ op: 'body.set', pose: v })} items={poses} /></Line>
 			{real && catalogue.expressions.length ? (
 				<More>
-					<Line label="Expression"><Strip size="s" value={b.expression ?? 'neutral'} onPick={(v) => run({ op: 'body.set', expression: v })}
-						items={catalogue.expressions.map((e) => ({ key: e.key, label: e.label, img: thumb('expressions', e.key) }))} /></Line>
+					{catalogue.expressions.length > 1 ? <Line label="Expression"><Strip size="s" value={b.expression ?? 'neutral'} onPick={(v) => run({ op: 'body.set', expression: v })}
+						items={catalogue.expressions.map((e) => ({ key: e.key, label: e.label, img: thumb('expressions', e.key) }))} /></Line> : null}
 					{catalogue.hairs.length > 1 ? <Line label="Hair"><Strip size="s" value={b.hair ?? catalogue.hairs[0].key} onPick={(v) => run({ op: 'body.set', hair: v })}
 						items={catalogue.hairs.map((h) => ({ key: h.key, label: h.label, img: thumb('hairs', h.key) }))} /></Line> : null}
 				</More>

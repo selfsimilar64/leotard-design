@@ -1,7 +1,7 @@
 ---
 type: Component
 title: Genesis 9 bodies, poses, expressions and heads (pipeline/daz/bodies.py)
-description: "The app's canonical mesh is Daz Genesis 9's cage subdivided once (100,676 vertices); Daz Studio bakes 8 body types, each with Stacy's face and skin, in the A-pose, all 30 Skillful Routine poses and 5 one-arm presets per side, plus 4 expressions; the app combines body, pose, expression and head (none, mannequin, person) at run time. Replaces the MakeHuman mannequin and the wrapped Daz bodies."
+description: "The app's canonical mesh is Daz Genesis 9's cage subdivided once (100,676 vertices); Daz Studio bakes 6 body types, each with Stacy's face and skin, in the A-pose and 13 Skillful Routine poses with a neutral face (the reference body also with each arm raised); the app combines body, pose, expression and head (none, mannequin, person) at run time. Replaces the MakeHuman mannequin and the wrapped Daz bodies."
 tags: [pipeline, component, daz, genesis-9, canonical-mesh, pose, expression, head, migration]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-21T18:00:00Z }
@@ -39,9 +39,9 @@ on load. All output is derived from the owner's licensed Daz content and stays l
 | Field | Values | Notes |
 |---|---|---|
 | `size` (body type) | `child-6`, `child`, `teen`, `older-teen`, `young` (reference), `adult` (`petite` and `broad` removed 2026-10-26 on the owner's request; their designs load on `young` and `adult`) | Growing Up ages and character controllers; scaled to a stature |
-| `pose` | arm poses (`a-pose`, `arms-down`, `hands-on-hips`, … or `{ left, right }` of `rest/down/front/thigh/hip/up`), Daz poses: 13 of the 30 in Skillful Routine since 2026-10-26 (`standing`, `arms-outstretched`, `passe`, `stag-jump`, `kneeling`, `lunge-arms-up`, `handstand`, `cartwheel-low`, `back-arched`, `lunge-arm-up`, `kneeling-arm-up`, `arms-open`, `one-knee`: `bodies.py POSES`; the other 17 were dropped on the owner's request, so a design saved in one of them no longer loads its pose) | arm poses keep the old names, so photo-matched designs keep their pose; the panel lists only the A-pose and the Daz poses |
+| `pose` | arm poses (`a-pose`, `arms-down`, `hands-on-hips`, … or `{ left, right }` of `rest/down/front/thigh/hip/up`), Daz poses: 13 of the 30 in Skillful Routine since 2026-10-26 (`standing`, `arms-outstretched`, `passe`, `stag-jump`, `kneeling`, `lunge-arms-up`, `handstand`, `cartwheel-low`, `back-arched`, `lunge-arm-up`, `kneeling-arm-up`, `arms-open`, `one-knee`: `bodies.py POSES`; the other 17 were dropped on the owner's request, so a design saved in one of them no longer loads its pose) | the panel lists only the A-pose and the Daz poses; since 2026-10-26 the arm-only poses are no longer baked (owner: no more work on poses the app does not show), so a design saved in one opens in the A-pose (`app.js withKnownPose`) |
 | `head` | `none` (cut flat under the chin), `mannequin` (bald head, smoothed), `person` (face, eyes, mouth, lashes, brows, Eirgrid hair) | replaces `form: 'headless'` and the `fig-*` scene bodies |
-| `expression` | `neutral`, `smile` (SR 13, teeth), `soft-smile` (SR 26), `focused` (SR 16) | person only |
+| `expression` | `neutral` (smile, closed-mouth smile and focused removed on the owner's request 2026-10-26; a design saved with one shows the neutral face, and the panel hides the row) | person only |
 | `form` | `full`, `torso` (dress form) | |
 | `finish` | a mannequin finish (render/presets.js) or `Realistic skin (Daz)` | the body below the head only |
 | `headFinish` | a mannequin finish | the mannequin head (old designs: the body's finish) |
@@ -95,6 +95,16 @@ Two pitfalls found on the first Stacy bake:
 
 # Pipeline (pipeline/daz/)
 
+**Cost (measured 2026-10-26, young and adult re-baked, 12-core CPU).** Daz stage 1 about 3 min (bare
+25 s, each body 75-80 s), stage 2 (reference body's raised arms) 30 s, convert 27 min. The convert's
+time is almost all `shapes.py seat`: one grid-cloth drape (`seat_proto.drape_grid`, 1500 iterations)
+per body and pose, about 40 s each (28 for two bodies), 98% of it the drape loop (about 8 s of each
+in `np.add.at`); carrying the bust into a pose takes 0.2 s, and bodies whose bake did not change
+read their cached shapes. Fewer iterations against 1500, on vertices the seat moves by up to
+36-43 mm: 750 differ by at most 0.9-1.25 mm (about 19 s), 500 by 1.6-1.7 mm (13-15 s), 250 by 3.5 mm
+(8-10 s). One unexplained outlier: the young adult's first Daz pose (standing) took 290 s in the run.
+Not yet changed: running the poses in parallel, `np.bincount` in place of `np.add.at`, fewer iterations.
+
 1. **Stage 1** (`bodies.py --stage1`, `bake_bodies.dsa`, one Daz Studio launch, ~2.5 min a body
    with 31 poses; `--missing-poses` bakes only the Daz poses with no `.pts` yet, no A-pose,
    expressions or materials):
@@ -112,7 +122,7 @@ Two pitfalls found on the first Stacy bake:
    keeps twist small), so the upper arm points along a direction and the forearm along a direction
    or at a point. The **A-pose** is the old mannequin stance (upper arm 13 degrees from vertical,
    slightly forward; elbow bent 14 degrees forward). Residual about 0.01 (direction units).
-3. **Stage 2** (`--stage2`): the arm presets of the old `pose.js` (down, front, thigh, hip, up),
+3. **Stage 2** (`--stage2`; since 2026-10-26 only 'up' on the reference body, which the curves' open surface needs, `body/reference.js openSurface`): the arm presets of the old `pose.js` (down, front, thigh, hip, up),
    aimed at each body's own landmarks measured on its stage-1 A-pose (crotch, waist, belly front,
    head top); one arm at a time, the other in the A-pose. 'up' lifts the collarbone 25 degrees
    first. Residuals 0.02-0.07 (a few degrees; 'down' is the loosest).

@@ -461,7 +461,7 @@ def run(keys=None):
 				entry['neck'] = neck_plane(S2, T2, entry['landmarks'], b['stature'])
 				if key == B.REF: ref_cage = C
 		for side in 'lr':
-			for a in B.ARMS:
+			for a in (B.ARMS if key == B.REF else []):  # older bakes left other arm poses on disk (bodies.py ARMS)
 				f = d + 'arm-%s-%s.pts' % (side, a)
 				if not os.path.exists(f): print('   missing', f); continue
 				ak = '%s-%s' % (side, a)

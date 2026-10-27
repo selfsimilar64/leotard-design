@@ -488,10 +488,12 @@ export class App {
 	stoneStats() { return { ...this.engine.stoneView.stats(), dropped: this.engine.stoneRun.dropped, errors: this.engine.stoneRun.errors }; }
 }
 
-// A design saved with a pose that no longer exists (poses were culled on 2026-10-26) falls back to
-// the mannequin stance instead of leaving the viewport blank. Needs the bodies loaded (DAZ_POSES).
+// A design saved with a pose that no longer exists (poses were culled on 2026-10-26; the arm-only
+// poses are no longer baked, pipeline/daz/bodies.py ARMS) falls back to the mannequin stance instead
+// of leaving the viewport blank. Needs the bodies loaded (DAZ_POSES).
 export function withKnownPose(doc) {
-	try { poseSpec(doc?.body?.pose); return doc; } catch { return { ...doc, body: { ...doc.body, pose: 'a-pose' } }; }
+	try { const p = poseSpec(doc?.body?.pose); if (p.daz || (p.left === 'rest' && p.right === 'rest')) return doc; } catch { /* unknown pose */ }
+	return { ...doc, body: { ...doc.body, pose: 'a-pose' } };
 }
 function loadAutosave() {
 	try { const s = localStorage.getItem(AUTOSAVE); return s ? JSON.parse(s) : null; } catch { return null; }
