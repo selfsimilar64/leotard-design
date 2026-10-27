@@ -95,6 +95,7 @@ uniform float uFoilRough;
 uniform float uBlend;      // 1 = flat foil dots whose sparkle averages into a shimmer far away
 uniform float uBend;       // cells the dot lattice is bent by (mystique: rows curving from patch to patch)
 uniform float uColorVar;   // per-flake brightness variation
+uniform float uGlint;      // > 0: the flakes are glossy yarn facets, not foil: dielectric, the dye's colour, glint strength
 uniform vec3 uFoilColor;
 uniform float uHolo;       // 0..1 share of rainbow in the foil colour
 uniform float uHoloFreq;
@@ -116,6 +117,8 @@ uniform sampler2D tBase; uniform sampler2D tNormal; uniform sampler2D tRough; un
 uniform vec2 uTile;        // metres covered by one repeat of the maps
 uniform float uTexRecolour; uniform vec3 uTexTint; uniform float uTexLum; // recolour: luminance x tint
 uniform float uTexNormal;  // normal map strength (0 = off)
+uniform float uTexRoughRel; // > 0: the roughness map only varies the fabric's own roughness (divided by its mean, uTexRoughMean)
+uniform float uTexRoughMean;
 uniform vec4 uTexFlags;    // x roughness map, y alpha map, z metal mask, w colour masks
 uniform vec4 uMaskOn; uniform vec3 uMaskCol0; uniform vec3 uMaskCol1; uniform vec3 uMaskCol2; uniform vec3 uMaskCol3;
 // Tangent frame from screen-space derivatives of position and pattern coordinates (no tangent attribute needed).
@@ -268,7 +271,10 @@ const FABRIC_FRAGMENT = /* glsl */`
 			col = mix( col, uMaskCol2 * sh, mk.z ); col = mix( col, uMaskCol3 * sh, mk.w );
 		}
 		diffuseColor.rgb = col;
-		if ( uTexFlags.x > .5 ) roughnessFactor = clamp( texture2D( tRough, tuv, TB ).r, .04, 1. );
+		if ( uTexFlags.x > .5 ) {
+			float tr = texture2D( tRough, tuv, TB ).r;
+			roughnessFactor = clamp( uTexRoughRel > .5 ? roughnessFactor * tr / max( uTexRoughMean, .05 ) : tr, .04, 1. );
+		}
 		if ( uTexFlags.z > .5 ) metalnessFactor = max( metalnessFactor, texture2D( tMtl, tuv ).r );
 		if ( uTexFlags.y > .5 ) diffuseColor.a *= texture2D( tAlpha, tuv ).r;
 		if ( uTexNormal > 0. ) {
@@ -422,7 +428,10 @@ const FABRIC_FRAGMENT = /* glsl */`
 		// (denser foils, coverage over 0.3, keep every cell sparkling as in the POC)
 		float farOn = coverage > .3 ? coverage : step( fract( rvFar * 7.31 ), coverage );
 
-		flakeMask = mix( nearMask, farOn, w );
+		// Yarn glints (uGlint) fade once they are smaller than a pixel: a shiny leotard shows no sparkle at
+		// arm's length or more (Nike, GK cire product photos), only up close (swatch photos).
+		float gw = uGlint > 0. ? 1. - .9 * w : 1.;
+		flakeMask = mix( nearMask, farOn, w ) * gw;
 		// Flat foil dots (uBlend: mystique): a cell holds several dots whose tilts average out (spread /
 		// sqrt(n)), and the spread that is lost widens the foil's highlight instead (Toksvig: alpha² += 2
 		// slope variance), so the sparkle blends into a smooth shimmer with distance, as in product photos.
@@ -437,7 +446,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 		vec3 nBase = uBlend > 0. ? nCloth : normal;
 		vec3 nF = normalize( nBase + ( tilt - nBase * dot( tilt, nBase ) ) * uTilt );
 		// a sparse flake turned away from the camera would shade black: keep it facing us a little
-		if ( coverage <= .3 ) { float fv = dot( nF, viewDir ); if ( fv < .2 ) nF = normalize( nF + viewDir * ( .2 - fv ) ); }
+		if ( coverage <= .3 && uGlint <= 0. ) { float fv = dot( nF, viewDir ); if ( fv < .2 ) nF = normalize( nF + viewDir * ( .2 - fv ) ); }
 		// On an ombre the foil is printed with the same gradient as the cloth under it.
 		vec3 fc = mix( uOmbreColor * 1.8 + .05, uFoilColor, ombre ) * ( 1. + uColorVar * ( rv - .5 ) );
 		if ( uHolo > 0. ) {
@@ -448,10 +457,13 @@ const FABRIC_FRAGMENT = /* glsl */`
 			fc = mix( fc, spectrum( ph ) * ( .75 + .5 * rv ), uHolo );
 		}
 		gDye = diffuseColor.rgb; gFoil = fc; gFlake = flakeMask;
-		diffuseColor.rgb = mix( diffuseColor.rgb, fc, flakeMask );
-		metalnessFactor = mix( metalnessFactor, 1., flakeMask );
+		if ( uGlint > 0. ) gFoil = mix( diffuseColor.rgb, vec3( 1. ), .5 ) * ( 1. + uColorVar * ( rv - .5 ) ); // a yarn facet keeps the dye; its glint is part white (FOIL_FRAGMENT)
+		else {
+			diffuseColor.rgb = mix( diffuseColor.rgb, fc, flakeMask );
+			metalnessFactor = mix( metalnessFactor, 1., flakeMask );
+		}
 		roughnessFactor = mix( roughnessFactor, foilRough, flakeMask );
-		normal = normalize( mix( normal, nF, mix( nearMask, coverage > .3 ? 1. : farOn, w ) ) );
+		normal = normalize( mix( normal, nF, mix( nearMask, coverage > .3 ? 1. : farOn, w ) * gw ) );
 	}
 
 	if ( uMesh > .5 ) {
@@ -601,6 +613,15 @@ const FILM_FRAGMENT = /* glsl */`
 // metalness blend) tinted the knit with the foil, so a burgundy knit with teal dots read teal all
 // over, not burgundy where the dots face away from the light (two-tone mystique, 2026-10-27).
 const FOIL_FRAGMENT = /* glsl */`
+	if ( uGlint > 0. && gFlake > 0. ) {
+		material.specularColorBlended = mix( material.specularColorBlended, gFoil, gFlake * uGlint ); // yarn glints: part-white specular, the diffuse stays the dye
+		// A glint is one fibre facet, not the knit's grain: unstretched. Stretched at its low roughness it
+		// drew every small light as a razor-thin line across the cloth (shiny swatch, 2026-10-27).
+		#ifdef USE_ANISOTROPY
+			material.anisotropy *= 1. - gFlake;
+			material.alphaT = mix( pow2( material.roughness ), 1., pow2( material.anisotropy ) );
+		#endif
+	}
 	if ( uBlend > 0. && gFlake > 0. ) {
 		material.diffuseColor = gFoil;
 		material.diffuseContribution = gDye * ( 1. - metalnessFactor );
@@ -616,13 +637,13 @@ export function createFabricMaterial(zone) {
 		uTrimInset: { value: 0 }, uTrimWidth: { value: 0 }, uRows: { value: new THREE.Vector2() }, uThread: { value: new THREE.Color() },
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
-		uFoilRough: { value: 0.2 }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uFoilRough: { value: 0.2 }, uGlint: { value: 0 }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
 		uChecker: { value: 0 },
 		uTex: { value: 0 }, tBase: { value: null }, tNormal: { value: null }, tRough: { value: null }, tAlpha: { value: null }, tMtl: { value: null }, tMask: { value: null },
-		uTile: { value: new THREE.Vector2(0.1, 0.1) }, uTexRecolour: { value: 0 }, uTexTint: { value: new THREE.Color(1, 1, 1) }, uTexLum: { value: 1 }, uTexNormal: { value: 1 },
+		uTile: { value: new THREE.Vector2(0.1, 0.1) }, uTexRecolour: { value: 0 }, uTexTint: { value: new THREE.Color(1, 1, 1) }, uTexLum: { value: 1 }, uTexNormal: { value: 1 }, uTexRoughRel: { value: 0 }, uTexRoughMean: { value: 1 },
 		uTexFlags: { value: new THREE.Vector4() }, uMaskOn: { value: new THREE.Vector4() },
 		uMaskCol0: { value: new THREE.Color() }, uMaskCol1: { value: new THREE.Color() }, uMaskCol2: { value: new THREE.Color() }, uMaskCol3: { value: new THREE.Color() },
 		uOmbre: { value: 0 }, uOmbreColor: { value: new THREE.Color(0, 0, 0) }, uOmbreY: { value: new THREE.Vector2(0.82, 1.32) },
@@ -664,19 +685,36 @@ export const FABRICS = {
 	// highlights lost a third of their saturation against a GK product photo; at 0.1 / 0.1 the
 	// render matches it (dev/material-eval.js, 2026-10-24).
 	// scan: the scanned texture the fabric shows by default (recoloured; scale: its tile size as a
-	// multiple of the scan's own). TX-00001482 is a scuba knit whose face stands in for matte tricot,
-	// scaled to tricot's 0.38 mm wale (owner's choice, 2026-10-24); without the scan (the textures are
-	// never bundled) the procedural knit shows.
+	// multiple of the scan's own; normal: its relief's strength). TX-00001482 is a scuba knit whose face
+	// stands in for matte tricot, scaled to tricot's 0.38 mm wale (owner's choice, 2026-10-24); without
+	// the scan (the textures are never bundled) the procedural knit shows. A default scan's roughness map
+	// only varies the fabric's own roughness (applyTexture, relative), so the same knit lies under every
+	// rung of the gloss ladder: matte, shiny, satin, wet look (owner, 2026-10-27; knowledge/domain/
+	// fabrics/stretch-tricot-family-names.md). Glossier rungs take less relief: glazing flattens the
+	// knit, and on a gloss every small tilt breaks up the highlight.
+	// glint: glossy yarn facets catching the light (flake fields, plus strength: share of the glint's
+	// part-white colour in the specular). None on matte (dull yarn); a fine speckle over shiny tricot;
+	// dense inside cire's highlights; sparse on satin, whose shine is smooth at body distance (owner's
+	// reference photos, 2026-10-27). Its pitch is scaled by the texture size like the scan (1.85: about 0.4 mm).
 	// texScale: the texture size a piece of this fabric starts at (the panel's texScale; owner's
 	// review, 2026-10-24). A scanned fabric's is in SCAN_SCALE.
 	matte: { label: 'Matte lycra', roughness: 0.8, sheen: 0.1, sheenRoughness: 0.6, sheenTint: 0.1, knit: 1, scan: { id: 'TX-00001482', scale: 0.81 }, texScale: 1.85 },
 	checker: { label: 'UV checker (debug)', roughness: 0.8, checker: 0.02 },
-	shiny: { label: 'Shiny tricot', roughness: 0.4, sheen: 0.2, sheenRoughness: 0.5, anisotropy: 0.6, knit: 1 },
+	shiny: { label: 'Shiny tricot', roughness: 0.4, sheen: 0.2, sheenRoughness: 0.5, anisotropy: 0.6, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.6 }, texScale: 1.85,
+		glint: { pitch: 0.00022, dotR: 0.4, presence: 0.25, tilt: 0.3, rough: 0.1, colorVar: 0.5, strength: 1 } },
+	// Stretch satin (GK, 76/24 nylon): broad silky highlights stretched round the body (horizontal bands
+	// on the chest in GK's turntable video), smooth at body distance; fine glints only up close. Glossier
+	// and more reflective than shiny tricot (ior 1.6), but anisotropy 0.85-0.9 or ior 2+ smeared the
+	// loft's bright ceiling over the whole chest as a grey haze; 0.5 keeps bands over deep colour
+	// (material-eval, navy, 2026-10-27).
+	satin: { label: 'Stretch satin', roughness: 0.2, sheen: 0.1, sheenRoughness: 0.5, anisotropy: 0.5, ior: 1.6, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
+		glint: { pitch: 0.00016, dotR: 0.4, presence: 0.06, tilt: 0.2, rough: 0.08, colorVar: 0.4, strength: 1 } },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
 	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
 	// full mirror clear coat (1 at 0.1) read as latex, the step above it on the gloss ladder
 	// (knowledge/domain/fabrics/shiny-tricot-and-wet-look.md; owner's review, 2026-10-24).
-	wet: { label: 'Wet look (cire)', roughness: 0.32, sheen: 0.15, sheenRoughness: 0.5, clearcoat: 0.55, clearcoatRoughness: 0.2, anisotropy: 0.5, knit: 1 },
+	wet: { label: 'Wet look (cire)', roughness: 0.32, sheen: 0.15, sheenRoughness: 0.5, clearcoat: 0.55, clearcoatRoughness: 0.2, anisotropy: 0.5, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.15 }, texScale: 1.85,
+		glint: { pitch: 0.0002, dotR: 0.42, presence: 0.5, tilt: 0.25, rough: 0.08, colorVar: 0.5, strength: 1 } },
 	// Mystique's dots at 133%: about 1 mm apart, as in the owner's swatch video and shop close-ups
 	// (2026-10-27); at 75% (the owner's 2026-10-24 pick) they blurred into a satin sheen at swatch distance.
 	mystique: { label: 'Mystique (foil dots)', roughness: 0.62, knit: 1, flake: { pitch: 0.00075, dotR: 0.4, presence: 1, tilt: 0.1, rough: 0.14, colorVar: 0.1, blend: 1, bend: 1 }, texScale: 1.33 },
@@ -748,7 +786,7 @@ const _c = new THREE.Color();
 // dots, mesh holes, film swirls, crushed-velvet bump) as a multiple of its own, the panel's
 // texScale (texScaleOf); a scanned texture takes the same multiple (applyTexture).
 export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
-	const f = FABRICS[key] ?? FABRICS.matte, u = m.userData.u, fl = f.flake, base = _c.set(colour).clone();
+	const f = FABRICS[key] ?? FABRICS.matte, u = m.userData.u, fl = f.flake ?? f.glint, base = _c.set(colour).clone();
 	const two = (forOmbre, out) => (colour2 ? out.set(colour2) : secondColour(base, second, forOmbre, out));
 	m.color.copy(base).multiplyScalar(f.velvet ? 0.42 : 1);
 	m.roughness = f.roughness ?? 0.7;
@@ -759,6 +797,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	m.clearcoat = f.clearcoat ?? 0;
 	m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
 	m.anisotropy = f.anisotropy ?? 0;
+	m.ior = f.ior ?? 1.5; // satin: its long floats reflect more than a plain knit face (a stronger specular)
 	m.iridescence = f.iridescence ?? 0;
 	m.iridescenceIOR = 1.8;
 	m.iridescenceThicknessRange = [200, 520];
@@ -766,7 +805,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	u.uFlake.value = fl ? 1 : 0;
 	if (fl) {
 		u.uPitch.value = fl.pitch * scale; u.uDotR.value = fl.dotR; u.uPresence.value = fl.presence; u.uTilt.value = fl.tilt;
-		u.uFoilRough.value = fl.rough; u.uBlend.value = fl.blend ?? 0; u.uBend.value = fl.bend ?? 0; u.uColorVar.value = fl.colorVar ?? 0; u.uHolo.value = fl.holo ?? 0; u.uHoloFreq.value = fl.holoFreq ?? 3; u.uHoloJit.value = fl.holoJit ?? 0.2;
+		u.uFoilRough.value = fl.rough; u.uGlint.value = f.glint ? fl.strength : 0; u.uBlend.value = fl.blend ?? 0; u.uBend.value = fl.bend ?? 0; u.uColorVar.value = fl.colorVar ?? 0; u.uHolo.value = fl.holo ?? 0; u.uHoloFreq.value = fl.holoFreq ?? 3; u.uHoloJit.value = fl.holoJit ?? 0.2;
 		two(false, u.uFoilColor.value);
 	}
 	u.uDuo.value = f.duo ? 1 : 0;
@@ -799,7 +838,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 function scanOf(look) {
 	if (look.texture) return { id: look.texture, opts: { scale: texScaleOf(look), recolour: look.texMode === 'recolour', colour: look.colour, masks: look.masks, normal: look.texNormal } };
 	const d = FABRICS[look.fabric]?.scan;
-	return d ? { id: d.id, opts: { scale: d.scale * texScaleOf(look), recolour: true, colour: look.colour, normal: look.texNormal } } : null;
+	return d ? { id: d.id, opts: { scale: d.scale * texScaleOf(look), recolour: true, colour: look.colour, normal: look.texNormal ?? d.normal, relative: true } } : null;
 }
 
 // Bind a look's scan (scanOf) to a material once it has loaded, after applyFabric. Shared by panels,
@@ -815,7 +854,7 @@ export function bindScan(m, look, textures) {
 
 // Bind a scanned texture set (materials/textures.js) to a fabric material, or unbind it (set = null).
 // opts: { scale (tile multiplier), recolour (tint the luminance with `colour`), colour, masks: [colours],
-//         normal (strength) }
+//         normal (strength), relative (the roughness map varies the fabric's roughness, not replaces it) }
 export function applyTexture(m, set, opts = {}) {
 	const u = m.userData.u;
 	if (!set) { u.uTex.value = 0; return; }
@@ -827,6 +866,7 @@ export function applyTexture(m, set, opts = {}) {
 	u.uTexTint.value.set(opts.colour ?? '#ffffff');
 	u.uTexLum.value = set.lum || 1;
 	u.uTexNormal.value = set.normal ? (opts.normal ?? 1) : 0;
+	u.uTexRoughRel.value = opts.relative ? 1 : 0; u.uTexRoughMean.value = set.roughMean ?? 1;
 	const masks = (opts.masks ?? []).slice(0, set.maskCount);
 	u.uTexFlags.value.set(set.rough ? 1 : 0, set.hasAlpha ? 1 : 0, set.hasMetal ? 1 : 0, masks.length && set.mask ? 1 : 0);
 	u.uMaskOn.value.set(...[0, 1, 2, 3].map((i) => (masks[i] ? 1 : 0)));

@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Update**: [Photo match: the tricot gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md): matte, shiny, new stretch satin and wet look share the scuba scan (roughness map relative to each fabric's own, weaker relief on glossier rungs) and a new yarn-glint layer that fades at body distance; drape-eval cloth gained a tangent (anisotropic fabrics were black on it).
 * **Update**: [Lycra, spandex, tricot](/domain/fabrics/stretch-tricot-family-names.md#owners-reference-photos-2026-10-27): second batch read: GK Primatex has a faint wide sheen; GK navy stretch satin video shows horizontal highlight bands across the chest that slide as she turns; woven satin close-ups show glints along diagonal lines.
 * **Update**: [Lycra, spandex, tricot](/domain/fabrics/stretch-tricot-family-names.md#owners-reference-photos-2026-10-27): owner's ten reference images read (shiny tricot, chintz/cire, GK cire and stretch satin tanks, Nike nylon); glint grain separates the rungs (satin has none, cire the most).
 * **Creation**: [Lycra, spandex, tricot, shiny tricot: what the names mean](/domain/fabrics/stretch-tricot-family-names.md): the plain-colour family is one nylon/spandex tricot varied by yarn lustre, knit face, finish and fibre; EBI's 17-fabric leotard collection sorted; photo readings of matte, shiny, satin-look and liquid-look; proposed gloss ladder and representative set (awaiting owner).

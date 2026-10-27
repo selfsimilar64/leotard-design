@@ -32,7 +32,7 @@ export class TextureLibrary {
 
 	async info(id) { return (await this.list()).find((f) => f.id === id) ?? null; }
 
-	// -> { id, tile: [w, h] metres, base, normal, rough, alpha, mtl, mask, maskCount, lum, hasAlpha, hasMetal }
+	// -> { id, tile: [w, h] metres, base, normal, rough, alpha, mtl, mask, maskCount, lum, roughMean, hasAlpha, hasMetal }
 	get(id) {
 		let p = this.sets.get(id);
 		if (!p) { p = this.load(id); this.sets.set(id, p); p.catch(() => this.sets.delete(id)); }
@@ -63,10 +63,11 @@ export class TextureLibrary {
 		const masks = Object.keys(f.maps).filter((k) => k.startsWith('colormaskmap_')).sort((a, b) => +a.split('_')[1] - +b.split('_')[1]).slice(0, 4);
 		const mask = masks.length ? await packMasks(masks.map(url)) : null;
 		const set = { id, name: f.name, look: f.look, tile: f.tileMetres, base, normal, rough, alpha, mtl, mask, maskCount: masks.length };
-		const a = stats(alpha), m = stats(mtl), b = stats(base);
+		const a = stats(alpha), m = stats(mtl), b = stats(base), r = stats(rough);
 		set.hasAlpha = !!a && a.mean < 0.97; // sheer (tulle, organza, lace); opaque knits have stray dark texels only
 		set.hasMetal = !!m && m.max > 0.1;
 		set.lum = b ? b.lum : 1;
+		set.roughMean = r ? r.mean : 1; // for a scan under a fabric's own gloss (fabric.js applyTexture, relative)
 		return set;
 	}
 }

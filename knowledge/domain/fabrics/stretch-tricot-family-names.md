@@ -133,7 +133,7 @@ What these change in the ladder below:
 - **Matte reference**: the GK SoftLux panels (polyester) sit beside cire and satin in the same
   photos, which is the cleanest matte-vs-shiny comparison available.
 
-# Proposed representative set (for the owner to confirm)
+# Representative set (owner approved the ladder, 2026-10-27; built: [gloss ladder](/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md))
 
 **[INFERRED]** Proposal, not an owner decision. The owner asked for a selection that represents
 gymnastics leotards rather than every variant.[^owner] Treat matte, shiny, satin and wet look as

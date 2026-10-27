@@ -26,11 +26,12 @@ function height(x, z) {
 }
 
 function drape(relief = 1) {
-	const n = 360, pos = [], nrm = [], uv = [], idx = [], e = 1e-4;
+	const n = 360, pos = [], nrm = [], uv = [], tan = [], idx = [], e = 1e-4;
 	for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
 		const x = (i / n - 0.5) * 2 * R, z = (j / n - 0.5) * 2 * R;
 		const dx = relief * (height(x + e, z) - height(x - e, z)) / (2 * e), dz = relief * (height(x, z + e) - height(x, z - e)) / (2 * e), L = Math.hypot(dx, 1, dz);
 		pos.push(x, relief * height(x, z), z); nrm.push(-dx / L, 1 / L, -dz / L); uv.push(x, z);
+		const T = Math.hypot(1, dx); tan.push(1 / T, dx / T, 0, 1); // along x: anisotropic fabrics need a tangent (they shaded black without one)
 	}
 	for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const a = j * (n + 1) + i; idx.push(a, a + n + 1, a + 1, a + 1, a + n + 1, a + n + 2); }
 	const g = new THREE.BufferGeometry(), N = (n + 1) * (n + 1);
@@ -38,6 +39,7 @@ function drape(relief = 1) {
 	g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
 	g.setAttribute('aGNormal', new THREE.Float32BufferAttribute(nrm, 3));
 	g.setAttribute('aUV', new THREE.Float32BufferAttribute(uv, 2));
+	g.setAttribute('tangent', new THREE.Float32BufferAttribute(tan, 4));
 	g.setAttribute('aRef', new THREE.Float32BufferAttribute(pos, 3));
 	g.setAttribute('aAO', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
 	g.setAttribute('aCover', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
