@@ -100,6 +100,17 @@ export const RIGS = {
 		// part of the key's light from a directional light, which can cast a soft shadow (area lights cannot)
 		shadow: { from: [-1.6, 2.1, 2.1], E: 0.35 },
 	},
+	// The same studio with only two soft lights (owner, 2026-10-27): the key octabox and a weaker fill
+	// on the other side, so shapes and fabrics show more light-to-dark modelling than under six boxes.
+	'Softbox studio, key and fill': {
+		env: 1, bg: 1, bloomK: 0.4, backdrop: 0xf2f2f0, glow: 0.18, glint: 4,
+		room: { back: 0.22, sides: 0.12, top: 0.08, floor: 0.18, front: 0.06 },
+		areas: [
+			{ p: [-1.6, 2.1, 2.1], s: [1.5, 1.5], at: [0, 1.1, 0], L: 3.4, c: 0xfffaf2 },   // key: octabox front left, above
+			{ p: [2.2, 1.4, 1.6], s: [1.0, 1.4], at: [0, 1.0, 0], L: 0.9, c: 0xf6f8ff },     // fill: softbox front right, weaker
+		],
+		shadow: { from: [-1.6, 2.1, 2.1], E: 0.5 },
+	},
 };
 
 // An HDRI studio (assets/hdri, served at /hdri). height: the camera height it was shot from

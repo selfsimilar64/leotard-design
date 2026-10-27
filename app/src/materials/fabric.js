@@ -102,6 +102,7 @@ uniform float uMicro;      // 1 = on
 uniform vec3 uMicroA;      // the floats' albedo (linear: the dye x the paper's scale)
 uniform vec4 uMicroP;      // x refractive index, y kd (isotropic share), z a1 (the floats' coverage), w roughness of the environment lookups
 uniform float uMicroGain;
+uniform vec2 uMicroBlur;   // lookup blur: x per radian of a tangent segment's turn, y the least (the cone's sample spacing)
 uniform float uMicroDiffuse; // the diffuse's share of the dye (applied after a scan's recolour, which sets the colour itself)
 uniform float uMicroOff[ 8 ]; // the floats' tangent curve: offsets at its control points (radians)
 uniform float uMicroLen[ 7 ]; // and the lengths of the segments between them
@@ -636,14 +637,17 @@ const MICRO_FRAGMENT = /* glsl */`
 		vec3 T2 = normalize( tbn[ 0 ] - n * dot( tbn[ 0 ], n ) ), T1 = cross( n, T2 ); // T2 round the body; the floats T1 run across it
 		vec3 bx = cross( n, T1 );                                                     // normal to the floats' (T1, n) plane
 		float F0 = pow2( ( uMicroP.x - 1. ) / ( uMicroP.x + 1. ) ), kd = uMicroP.y, a1 = uMicroP.z;
-		const int K = 12;
+		// One lookup per segment of the tangent curve and K per reflection cone, each blurred to cover the
+		// gap to its neighbours (a segment's reflections span twice its turn; the cone's samples are PI / K
+		// apart), so they merge into one highlight. Sharp lookups at 4 x 7 samples x 12 directions drew each
+		// sample's copy of a softbox's edge as its own line (stripes) and cost about 20 ms a frame.
+		const int K = 6;
 		vec3 acc = vec3( 0. ); float sumP = 0., sumL = 0.;
-		// four samples per segment of the tangent curve: at two, each sample's reflection showed as its
-		// own thin band (wood-grain stripes across the panel) instead of one continuous highlight
-		for ( int s = 0; s < 28; s ++ ) {
-			int seg = s / 4; float w = uMicroLen[ seg ];
+		for ( int seg = 0; seg < 7; seg ++ ) {
+			float w = uMicroLen[ seg ];
 			if ( w <= 0. ) continue;
-			float off = mix( uMicroOff[ seg ], uMicroOff[ seg + 1 ], ( float( s - seg * 4 ) + .5 ) / 4. );
+			float off = .5 * ( uMicroOff[ seg ] + uMicroOff[ seg + 1 ] ), span = abs( uMicroOff[ seg + 1 ] - uMicroOff[ seg ] );
+			float rough = max( max( uMicroP.w, uMicroBlur.x * span ), uMicroBlur.y );
 			float ca = cos( off ), sa = sin( off );
 			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n, bl = cross( t, nl );
 			float sr = clamp( dot( wr, t ), - 1., 1. ), cr = sqrt( max( 1. - sr * sr, 0. ) );
@@ -663,7 +667,7 @@ const MICRO_FRAGMENT = /* glsl */`
 				float Pi = max( dot( normalize( wip ), n ), 0. ), P = mix( Pi * Pr, min( Pi, Pr ), u );
 				if ( M * P <= 0. ) continue;
 				float Fr = F0 + ( 1. - F0 ) * pow( 1. - clamp( cr * c2, 0., 1. ), 5. ), Ft = 1. - Fr;
-				vec3 L = textureCubeUV( envMap, envMapRotation * inverseTransformDirection( wi, viewMatrix ), uMicroP.w ).rgb;
+				vec3 L = textureCubeUV( envMap, envMapRotation * inverseTransformDirection( wi, viewMatrix ), rough ).rgb;
 				seg3 += L * ( vec3( 2. * Fr * c2 ) + ( 1. - kd ) * Ft * Ft * uMicroA / max( cr, .2 ) ) * M * P;
 			}
 			acc += seg3 * w;
@@ -708,7 +712,7 @@ export function createFabricMaterial(zone) {
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
 		uFoilRough: { value: 0.2 }, uGlint: { value: 0 },
-		uMicro: { value: 0 }, uMicroA: { value: new THREE.Color() }, uMicroP: { value: new THREE.Vector4(1.539, 0.1, 0.9, 0.12) }, uMicroGain: { value: 1 }, uMicroDiffuse: { value: 1 }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uMicro: { value: 0 }, uMicroA: { value: new THREE.Color() }, uMicroP: { value: new THREE.Vector4(1.539, 0.1, 0.9, 0.12) }, uMicroGain: { value: 1 }, uMicroDiffuse: { value: 1 }, uMicroBlur: { value: new THREE.Vector2(0.9, 0.25) }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
@@ -789,7 +793,7 @@ export const FABRICS = {
 	// share and the gaps, as a share of the dye; rough: the environment lookups' blur; gain: overall.
 	// Still open: light colours (pink) read flat in the Softbox studio.
 	satinmicro: { label: 'Satin (thread model)', roughness: 0.6, sheen: 0, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
-		micro: { eta: 1.539, kd: 0.1, a1: 0.9, A: 2, diffuse: 0.2, rough: 0.2, gain: 1.5,
+		micro: { eta: 1.539, kd: 0.1, a1: 0.9, A: 2, diffuse: 0.2, rough: 0.1, blurSeg: 0.9, blurCone: 0.25, gain: 1.5,
 			offsets: [-32, -32, -18, 0, 0, 18, 32, 32], lengths: [1.33, 0.66, 2, 2, 2, 0.66, 1.33] } },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
 	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
@@ -888,6 +892,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	if (mc) {
 		m.anisotropy = 0.001;
 		u.uMicroDiffuse.value = mc.diffuse;
+		u.uMicroBlur.value.set(mc.blurSeg, mc.blurCone);
 		u.uMicroA.value.copy(base).multiplyScalar(mc.A);
 		u.uMicroP.value.set(mc.eta, mc.kd, mc.a1, mc.rough);
 		u.uMicroGain.value = mc.gain;

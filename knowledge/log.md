@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-27
+* **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md#in-the-app-first-version-2026-10-27): stripes were sharp per-sample lookups; now 7 x 6 blurred lookups, 33.7 to 16.2 ms a frame, no stripes. New two-light [Softbox studio, key and fill](/decisions/2026-10-27-softbox-studio-for-satin.md).
 * **Decision**: [Softbox studio for satin](/decisions/2026-10-27-softbox-studio-for-satin.md): one analytic studio added back (six large softboxes, round infinity cove, dark reflection room with bright boxes).
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md#in-the-app-first-version-2026-10-27): first in-app version (Satin (thread model)) by environment cone tracing; navy shows GK-like blue bands; light colours still flat.
 * **Creation**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): Sadeghi et al. 2013 read in full (owner supplied the PDF): thread terms, weave tangent curves, masking and reweighting, the measured polyester satin charmeuse parameters, and what it leaves out for real-time HDRI lighting.

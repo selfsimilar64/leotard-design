@@ -35,6 +35,11 @@ White loft default are unchanged.
 - `viewport.js showStudio / placeStudioLights`: "Turn the room" turns the lights, the reflection
   room and the key's shadow together; the paper stays.
 
+**Softbox studio, key and fill** (same day, owner): the same cove and darker reflection room
+with only the key octabox (luminance 3.4) and a weaker fill (0.9) front right. It gives more
+light-to-dark modelling than six boxes. It showed that the satin's stripes were a sampling
+artifact, not the studio's.
+
 # Consequences
 
 - The studio is lit from every side, high-key. **[INFERRED]** That leaves little shading on light

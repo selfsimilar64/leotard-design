@@ -18,6 +18,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--prefix", "app", "vite", "app", "--port", "5175", "--strictPort"],
       "port": 5175
+    },
+    {
+      "name": "leotard-designer-test",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "app", "vite", "app", "--port", "5176", "--strictPort"],
+      "port": 5176
     }
   ]
 }

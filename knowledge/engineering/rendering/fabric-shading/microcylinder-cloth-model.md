@@ -100,6 +100,17 @@ user's colour (scaled) for it.
 - Fitted by eye in the Softbox studio, navy and pink: A = 2 (the paper's scale gave white-grey
   shine on navy; 2 turns the bands blue), diffuse 0.2, gain 1.5.
 
+**Stripes and cost (owner, 2026-10-27).** The owner liked the look but saw many stripes and a
+slow app. The stripes came from the sampling, not the lighting. Each of the 28 tangent samples ×
+12 cone directions was a sharp lookup (roughness 0.1-0.2), so every sample drew its own copy of
+each softbox's edge as a line. That was 336 lookups per pixel: 33.7 ms a frame against 14.4 ms
+with Stretch satin (1280 × 1000, Softbox studio, GTX 1650). Now: one lookup at each tangent
+segment's centre (7), and K = 6 cone directions. Each lookup is blurred to cover the gap to its
+neighbours: roughness = max(0.1, 0.9 × the segment's turn in radians, 0.25), since in three's
+prefiltered environment roughness is roughly the blur's angle in radians. The cost is 16.2 ms (about
+2 ms over Stretch satin) with no stripes. A least blur of 0.15 showed the softboxes as blotches;
+0.35 lost definition.
+
 **Status:** on navy it shows soft blue bands across the chest, like GK's video. Light colours
 (pink) still read flat, partly because the studio lights from every side. Not yet judged by the
 owner. Cost not yet profiled (28 × 12 environment lookups per pixel).
