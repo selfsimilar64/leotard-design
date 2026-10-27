@@ -35,6 +35,10 @@ sources:
     resource: conversation with the product owner, 2026-10-27 (Claude Code session)
     title: "Owner's ten reference images: Charisma shiny nylon tricot swatch, Polished Nylon Spandex chintz swatch, GK teal cire tank (3), GK navy stretch satin tank (2), Nike red nylon leotard (body and close-ups)"
     author: human:mattj
+  - id: owner-refs2
+    resource: conversation with the product owner, 2026-10-27 (Claude Code session); video at moodboard/3ab73633c8fc4d92ab6ee4cf2e662201.mp4
+    title: "Owner's second batch: GK Primatex fabric-guide image (purple), GK navy stretch satin turntable video, three Ice Fabrics stretch satin images"
+    author: human:mattj
 ---
 
 # Takeaway
@@ -110,11 +114,20 @@ Ten images from the owner, with the makers' compositions as the owner relayed th
 | GK navy tank, two shots | Stretch Satin 76/24 nylon (bodice); SoftLux 83/17 polyester (lower panel); mesh 80/20 (sides) | Satin: the smoothest highlights of the set, broad and silky, grading from deep navy to bright lavender-blue, **no visible grain**. The SoftLux panel beside it has only a faint, wide sheen: a matte-rung reference in the same photo. |
 | Nike red leotard, body shot and two close-ups | 80/20 nylon | Moderate, wide, low-contrast sheen. Close up, the face is a heathered speckle of bright points along clear vertical wale columns: the glints of plain shiny tricot. |
 
+Second batch, same day:[^owner-refs2]
+
+| Reference | What the light does |
+|---|---|
+| GK Primatex (purple tank, GK's own fabric-guide image) | Not dead flat: a wide, faint sheen lightens the bust and stomach a little; no glints, no visible knit; colour stays saturated into the shadows. The matte rung has a small, very broad highlight, not none. |
+| GK navy stretch satin, 16 s turntable video (`moodboard/3ab73633c8fc4d92ab6ee4cf2e662201.mp4`, 1120x1480) | Broad, silky, soft-edged highlights that grade from deep navy to pale lavender. On the upper chest they are **horizontal bands**, stretched across the body: the anisotropy is visible at body distance. As she turns the highlights slide slowly over the curves and keep their soft shape; no grain shows at video resolution. The SoftLux lower panel and the mesh centre strip beside it show only a faint wide sheen. |
+| Ice Fabrics stretch satin swatches (champagne, pink; and a rose close-up) | Brighter and more mirror-like than GK's knit satin, with sharp light-to-dark transitions on folds. In the rose close-up fine **diagonal twill lines** carry tiny glints along them, invisible once the fabric is a few feet away. **[INFERRED]** These are probably woven stretch satin (polyester), a step glossier than knit satin tricot; use them for the close-up line texture, GK's video for the overall look. |
+
 What these change in the ladder below:
 
 - **Glint grain** separates the rungs: none on matte; a fine speckle across the whole lit surface
-  on shiny tricot; dense grain inside the highlights on cire; *none* on stretch satin, whose
-  shine is smooth. Satin and cire differ more by grain than by gloss.
+  on shiny tricot; dense grain inside the highlights on cire; on stretch satin only fine
+  glints along diagonal lines at close range, smooth at body distance. Satin and cire differ
+  more by grain than by gloss.
 - **At body distance** shiny tricot, satin and cire separate by highlight brightness and
   contrast: shiny is wide and soft, satin broad and silky, cire bright and patchy.
 - **Matte reference**: the GK SoftLux panels (polyester) sit beside cire and satin in the same
@@ -129,9 +142,9 @@ materials:
 
 | Rung | App fabric today | Look to hit |
 |---|---|---|
-| Matte | `matte` | Broad diffuse, faint grazing sheen, no glints |
+| Matte | `matte` | Very wide, faint sheen on the curves (GK Primatex), no glints |
 | Shiny | `shiny` | Wide soft sheen plus a fine speckle of glints over the lit surface |
-| Satin-look | none | Broad, silky, smooth highlights with no grain; deep-to-bright flip as the surface turns |
+| Satin-look | none | Broad, silky highlights stretched across the knit (horizontal bands on the chest in GK's video); deep-to-bright flip as the surface turns; fine diagonal lines only up close |
 | Wet look (cire) | `wet` | Bright soft-edged highlight patches with dense grain inside them, high lit/unlit contrast, no room reflection |
 | Liquid (coated) | none; `foil`/`chrome` are metals | Latex-like glossy coat; optional, rare in gymnastics |
 
@@ -151,3 +164,4 @@ asks for.
 [^wiki-spandex]: Wikipedia, "Spandex": Lycra trademark, spandex and elastane as one fibre
 [^owner]: Owner's request, 2026-10-27
 [^owner-refs]: Owner's reference images, 2026-10-27, with compositions as relayed by the owner
+[^owner-refs2]: Owner's second batch of references, 2026-10-27
