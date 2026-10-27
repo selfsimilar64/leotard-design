@@ -55,7 +55,7 @@ mirror? } }` (attached ends follow their line).
 
 - Design: `meta.set`, `body.set { size: child-6|child|teen|older-teen|petite|young|adult|broad, pose, head: none|mannequin|person, expression: neutral|smile|soft-smile|focused, form: full|torso, finish }` (bodies, poses and expressions are [built locally](/engineering/pipeline/g9-bodies.md); `form: 'headless'` is still accepted and means `head: 'none'`)
   (finishes include athlete skin tones; poses in [poses and shading](/engineering/app/poses-and-shading.md)), `scene.set { rig, exposure, bloom, envRotation,
-  rotateLights, glare: plain|star|star6|arena }` (rigs include white and grey seamless photo studios and a gym).
+  glare: plain|star|star6|arena, glareSize, glareStrength, backdrop: room|plain, backdropColour, roomHeight, roomSize }` (rigs: the five photographed HDRI studios, default White loft studio; [HDRI only since 2026-10-27](/decisions/2026-10-27-hdri-lighting-only.md)).
 - Garment: `block.apply { neck, back, sleeves, leg: standard|high|competition, armhole: set-in|raglan, yoke: none|sweetheart|v|straight|round, waist: none|straight|v|peak, fabric, colour, second }`; `block.set { <one or more elements> }` changes those elements only and returns what it took away (`exec(cmd, { dryRun: true })` to ask first); `start.apply { key }` applies a starting point (garment/starts.js), see [building blocks](/engineering/app/building-blocks-and-starting-points.md) (leg-line peak at the side, above the crotch on the reference body: standard 12.8 cm, high 16 cm, competition 20 cm = about 2 cm under the hip bone);
   `curve.add { points, role: seam|edge|print|guide|strap-path|trim-path, closed, mirror, shape, layer }`;
   `curve.set`, `curve.points`, `curve.movePoint { id, i, to }`, `curve.insertPoint`,

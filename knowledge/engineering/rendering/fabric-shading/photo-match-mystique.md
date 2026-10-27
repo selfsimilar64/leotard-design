@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: "Photo match: mystique"
-description: "Mystique audit of 2026-10-27 against product photos and a swatch sheet: the dots were a coarse mosaic of 2-3 px squares at every distance and never blended into a shimmer; fixed with sharper, flatter foil dots and a per-fabric blend that averages dot tilts by count far away (Toksvig), so a mystique leotard shows distinct, grainy-edged highlight patches over a deep base. Twinkle under a moving light stays small; the remaining gap is the lighting, not the material."
+description: "Mystique audit of 2026-10-27 against product photos and a swatch sheet: the dots were a coarse mosaic of 2-3 px squares at every distance and never blended into a shimmer; fixed with sharper, flatter foil dots and a per-fabric blend that averages dot tilts by count far away (Toksvig), so a mystique leotard shows distinct, grainy-edged highlight patches over a deep base. Round 2 (close-ups, a swatch video): dots printed in winding maze-like chains, and two-tone (foil of one colour on knit of another) kept apart in the lighting so the knit colour shows where the foil faces away."
 tags: [rendering, fabric, calibration, mystique, foil, sparkle]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-27T15:30:00Z }
 sources:
@@ -85,15 +85,53 @@ gave one broad sheen instead of patches.
 Final captures `mystique-final-S-*` (Studio (soft), green `#0b7a3c`, closest to the owner's green
 tank) and `mystique-final-W-*` (White loft, aqua `#0f8fa8`).[^session-2026-10-27]
 
+# Round 2: close-ups, a swatch video, two-tone (2026-10-27)
+
+Sources from the owner: five close-ups and product shots from nktextile.com/mystique (purple,
+burgundy/teal "two tone", rose, green/violet, a blue/violet sports set) and an 18 s video of a
+lavender swatch tilted under a light, then stretched.[^owner-2026-10-27] All tests now in the White
+loft studio, the only kind of lighting left ([decision](/decisions/2026-10-27-hdri-lighting-only.md)).
+
+What they show:
+- **The dots are not on a lattice.** They run in winding chains about two dots apart, like a
+  fingerprint or a maze, densest and clearest when the fabric is stretched (video, 14 s).
+- **Two-tone is foil of one colour printed on knit dyed another**, not a hue shift of the foil:
+  where the dots catch the light the garment is the foil's colour (teal), elsewhere the knit's
+  (burgundy) with darker specks. The app's `duochrome` (one continuous foil whose colour turns
+  with angle) is a different mechanism and looks different (tested: a burgundy-to-teal duochrome
+  reads as glossy burgundy with pink highlights). Two-tone mystique is mystique with a custom foil
+  colour ("Foil / second: Custom colour" in the panel), which the app already had.
+- Off the highlight the dots read as dark specks over the knit; the 6 cm render showing darker
+  dots was right.
+- Stretching opens gaps between the chains and more knit shows; not modelled (needs strain,
+  [stretch-dependent appearance](/engineering/rendering/fabric-shading/stretch-dependent-appearance.md)).
+
+Changes (`app/src/materials/fabric.js`):
+- **`maze` flake field / `uMaze`** (mystique, ombre mystique): in the near branch a lattice dot is
+  kept only on evenly spaced lines two cells apart, warped by two octaves of value noise
+  (`ph = (c.x + 14 vnoise(c .05) + 6 vnoise(c.yx .11 + 5.3)) / 2`), `MAZE_KEEP` = 0.6 of them; far
+  coverage scaled by the same share. Rejected: contours of a noise field (blotchy, large bare
+  islands); faster warp (.08 / .19: the hex lattice showed through as blocky clumps). Dot radius
+  0.4 -> 0.46 to keep foil coverage (0.43) after the maze takes 40% of the dots.
+- **`FOIL_FRAGMENT`** (after `lights_physical_fragment`, `uBlend` fabrics): where a pixel is part
+  dots and part knit, the diffuse is the dye's alone (`diffuseContribution = gDye (1 - m)`) and
+  the mirror the foil's alone (`diffuseColor = gFoil`, `specularColorBlended`). three's single
+  mixed colour had tinted the knit with the foil, so the burgundy/teal test read teal all over.
+  `gDye`, `gFoil`, `gFlake` are globals next to `gFilm` (the flake code runs in a nested scope).
+  The same mixing bug exists for glitter and the other flake fabrics; left as is to keep them
+  unchanged.
+
+Result: in the White loft at 170 or 270 degrees, burgundy/teal reads as burgundy-mauve with teal
+highlight patches, like the reference; at 0 and 90 degrees the loft's bright walls fill the
+reflections and it reads teal everywhere.[^session-2026-10-27]
+
 # Open
 
-- **Lighting decides the look.** Under Studio (soft) the patches appear; in the White loft HDRI,
-  bright on every side, the foil reflects light everywhere and reads paler. Product-photo softbox
-  rigs bright enough to push highlights to mint/white are realism item R1 in
-  [realism upgrades](/engineering/rendering/realism-upgrades-at-60fps.md).
-- **Close up (6 cm) the dots read slightly darker than the knit** in the loft: head-on they mirror
-  the dim room behind the camera. Real swatch close-ups (nktextile.com) were not viewable in this
-  session; check against them before changing anything.
+- **Lighting decides the look.** Under the (since removed) Studio (soft) rig the patches appeared;
+  in the White loft HDRI the look depends on the room's turn (round 2). Highlights bright enough
+  to reach mint/white as in the photos need a brighter key in the reflection.
+- Close up (6 cm) the dots read darker than the knit in the loft (head-on they mirror the dim
+  room behind the camera); the owner's close-ups show the same off the highlight, so unchanged.
 - Twinkle under a moving light is still small in these rigs (see finding 3); a count-based glint
   lobe for point lights is the next step if the owner wants more.
 - Opal-effect mystique (owner's third photo): a soft thin-film over the dots, not built.

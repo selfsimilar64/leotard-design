@@ -29,6 +29,10 @@ the open part of the gate.[^roadmap]
 
 # Studio rigs (`render/studio.js`, `RIGS` in `render/presets.js`)
 
+**Removed 2026-10-27** ([decision](/decisions/2026-10-27-hdri-lighting-only.md)): the app now
+offers only the photographed HDRI studios; `render/studio.js` and every rig below are gone. Kept
+as history.
+
 - A studio rig is data: softboxes as `RectAreaLight`s (`areas`: position, size, aim, luminance),
   a seamless paper backdrop (`cyclorama()`, a floor sweeping up into the wall) in the backdrop
   colour with a little `glow`, a reflection room for the PMREM environment (`room`: brightness of
