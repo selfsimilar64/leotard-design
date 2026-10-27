@@ -47,7 +47,8 @@ export class FigureView {
 	// Show the person for opts = { man, body (manifest entry), cage, poseKey: the Daz pose whose
 	// eyes, mouth and hair to use ('a-pose' for arm poses), shape: what the cage is (body and pose),
 	// expression, hair (a key of manifest figure.hairs; the first when unknown), part: 'all' | 'head' (the person's head on a mannequin body) |
-	// 'body' (realistic skin under a mannequin head or none), keep: the mannequin's cut field (canonical mesh), cut: a
+	// 'body' (realistic skin under a mannequin head or none) | 'hair' (the hair alone, on the mannequin
+	// head, in the mannequin's finish: setLook), keep: the mannequin's cut field (canonical mesh), cut: a
 	// key for it }, or nothing (null). Resolves when the meshes are on show. The skin's parts are cut
 	// per pixel at the head bone's skin weight one half, as the mannequin's (render/engine.js).
 	show(opts) {
@@ -130,7 +131,7 @@ export class FigureView {
 		// per skin vertex: the head bone's weight (where head and body part) and the mannequin's cut
 		this.headW ??= applyStencil(S2, man.wHead, new Float32Array(S2.n), 1);
 		const cutW = applyStencil(S2, part === 'head' || !keep ? new Float32Array(man.vertices).fill(1) : keep, new Float32Array(S2.n), 1);
-		this.uPart.value = { all: 0, body: 1, head: 2 }[part];
+		this.uPart.value = { all: 0, body: 1, head: 2, hair: 0 }[part];
 
 		const mats = this.materials(body);
 		const hairs = F.hairs ?? [], hairNode = (hairs.find((h) => h.key === hair) ?? hairs[0])?.node;
@@ -152,7 +153,9 @@ export class FigureView {
 		});
 		meshes.forEach((m, i) => {
 			const mesh = this.meshes[i], P = mesh.geometry.attributes.position.array, Nn = mesh.geometry.attributes.normal.array;
-			mesh.visible = m.name === 'skin' || (part !== 'body' && (m.name !== 'dazhair' || !hairNode || m.node === hairNode)); // eyes, mouth, lashes, brows, hair: with the head
+			const chosen = m.name !== 'dazhair' || !hairNode || m.node === hairNode;
+			mesh.visible = part === 'hair' ? m.name === 'dazhair' && chosen
+				: m.name === 'skin' || (part !== 'body' && chosen); // eyes, mouth, lashes, brows, hair: with the head
 			// a part not on show is not posed (the hairs not chosen: ~0.3 s); any change of hair or part runs this again
 			if (!mesh.visible) return;
 			let W, WN; // welded positions and normals of this part
@@ -177,7 +180,7 @@ export class FigureView {
 			}
 			mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.attributes.normal.needsUpdate = true;
 			mesh.geometry.computeBoundingBox(); mesh.geometry.computeBoundingSphere();
-			mesh.material = m.groups.map((gr) => mats[gr.material] ?? mats.fallback);
+			mesh.material = m.groups.map((gr) => mats[gr.material] ?? mats.fallback).map((x) => (part === 'hair' ? this.sculpted(x) : x));
 		});
 		if (fresh) for (const m of this.meshes) this.group.add(m);
 		// a new expression on the same body and pose only changes the face
@@ -195,6 +198,25 @@ export class FigureView {
 		const P = m.geometry.attributes.position.array, l = new THREE.Box3(), r = new THREE.Box3(), v = new THREE.Vector3();
 		for (let i = 0; i < P.length; i += 3) { v.fromArray(P, i); (v.x > 0 ? l : r).expandByPoint(v); }
 		return { l: l.getCenter(new THREE.Vector3()), r: r.getCenter(new THREE.Vector3()) };
+	}
+
+	// The hair on the mannequin head: each hair material's cut-out and relief in the mannequin
+	// head's finish (setLook, from Engine.applyFinish), as a sculpted wig on a display mannequin.
+	sculpted(mat) {
+		this.sculpts ??= new Map();
+		if (!this.sculpts.has(mat)) {
+			const s = new THREE.MeshPhysicalMaterial({
+				alphaMap: mat.alphaMap, alphaTest: mat.alphaTest, alphaToCoverage: mat.alphaToCoverage, side: mat.side,
+				normalMap: mat.normalMap, bumpMap: mat.bumpMap, bumpScale: mat.bumpScale,
+			});
+			if (this.look) finishSurface(s, this.look);
+			this.sculpts.set(mat, withOcclusion(s, 0.5));
+		}
+		return this.sculpts.get(mat);
+	}
+	setLook(f) {
+		this.look = f;
+		for (const s of this.sculpts?.values() ?? []) finishSurface(s, f);
 	}
 
 	// The body's materials (built once per body): every body is baked wearing Stacy's skin, eyes and
@@ -293,6 +315,17 @@ export class FigureView {
 		}
 		return mat;
 	}
+}
+
+// A mannequin finish's surface (render/presets.js MANNEQUIN_FINISHES) on a material: the mannequin's
+// skin pieces and cut caps (render/engine.js) and its sculpted hair (FigureView.sculpted).
+export function finishSurface(m, f) {
+	m.color.set(f.colour); m.roughness = f.roughness; m.metalness = f.metalness ?? 0;
+	m.clearcoat = f.clearcoat ?? 0; m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
+	m.sheen = f.sheen ?? 0; m.sheenRoughness = f.sheenRoughness ?? 0.7;
+	// velvet's sheen is its own colour, lightened; the others' white
+	if (f.sheenSelf) m.sheenColor.set(f.colour).lerp(new THREE.Color(0xffffff), 0.35); else m.sheenColor.set(0xffffff);
+	m.needsUpdate = true;
 }
 
 // Followers bound to the skin: barycentric point of their skin triangle plus the offset along the

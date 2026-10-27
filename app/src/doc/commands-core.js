@@ -47,7 +47,7 @@ defineCommand('meta.set', {
 defineCommand('body.set', {
 	label: 'Change body',
 	get args() {
-		return `{ appearance?: ${Object.keys(APPEARANCES).join('|')} (sets form, head and finish), size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, head?: ${HEADS.join('|')}, finish? (body: a mannequin finish or '${REALISTIC_SKIN}'), headFinish? (the mannequin head's), colour?: '#rrggbb' | null (the mannequin finishes' colour; null: each finish's own), expression?: ${(catalogue.expressions.map((e) => e.key).join('|')) || 'neutral|...'}, hair?: ${(catalogue.hairs.map((h) => h.key).join('|')) || 'eirgrid|...'}, `
+		return `{ appearance?: ${Object.keys(APPEARANCES).join('|')} (sets form, head and finish), size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, head?: ${HEADS.join('|')}, finish? (body: a mannequin finish or '${REALISTIC_SKIN}'), headFinish? (the mannequin head's), colour?: '#rrggbb' | null (the mannequin finishes' colour; null: each finish's own), mannequinHair?: true|false (the mannequin head wears the hair in its finish), expression?: ${(catalogue.expressions.map((e) => e.key).join('|')) || 'neutral|...'}, hair?: ${(catalogue.hairs.map((h) => h.key).join('|')) || 'eirgrid|...'}, `
 			+ `pose?: ${[...Object.keys(POSES), ...DAZ_POSES].join('|')} | { left, right } (arms: ${ARMS.join('|')}) }`;
 	},
 	run(tx, a) {
@@ -62,6 +62,7 @@ defineCommand('body.set', {
 			hair: (v) => { if (catalogue.hairs.length) oneOf('hair', v, catalogue.hairs.map((h) => h.key)); },
 			finish: (v) => oneOf('finish', v, [...Object.keys(MANNEQUIN_FINISHES), REALISTIC_SKIN]),
 			headFinish: (v) => oneOf('headFinish', v, Object.keys(MANNEQUIN_FINISHES)),
+			mannequinHair: (v) => { if (typeof v !== 'boolean') throw new Error('mannequinHair must be true or false'); },
 			colour: (v) => { if (v !== null && !/^#[0-9a-f]{6}$/i.test(v)) throw new Error('colour must be a colour like #e9e7e2, or null'); },
 			pose: (v) => { poseSpec(v); },
 		});

@@ -88,6 +88,16 @@ changes; the first swatch is the material's own colour and clears it. `appearanc
 `sheenRoughness` and `sheenSelf` (sheen in the lightened base colour, for velvet). Tile pictures:
 `public/thumbs/mannequin/`, rendered by `dev/thumbnails.js mannequin()`.
 
+**Mannequin head and hair** (owner, 2026-10-27): the Mannequin look also has a Head switch (`head`
+'none' / 'mannequin', the sculpted head) and, with the head on, a Hair switch (`body.mannequinHair`)
+and a Hairstyle row (`body.hair`). A material pick sets `finish` and `headFinish` together, so the
+head takes the body's material. The hair is the person's hair mesh alone (`FigureView` part
+`'hair'`: skin, eyes, mouth, lashes and brows hidden), drawn with `FigureView.sculpted` materials:
+its cut-out, normal and bump maps in the head's finish (`setLook`, called from `applyFinish`), no
+hair colour. `finishSurface` (`render/figure.js`) is the one place a finish becomes PBR values, for
+the skin pieces, cut caps and sculpted hair. `appearanceOf` counts head 'none' or 'mannequin' as the
+mannequin look; picking the Mannequin tile still resets to no head.
+
 The realistic person is **Stacy** (CaramelDream3D) on every body since 2026-10-21: every body is
 baked with her face morph, skin, eyes and lashes (`pipeline/daz/bodies.py STACY`, see
 [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md)), and `FigureView.materials(body)` uses the

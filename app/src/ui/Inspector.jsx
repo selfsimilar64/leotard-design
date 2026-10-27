@@ -182,21 +182,28 @@ function Character({ b }) {
 	);
 }
 
-// The mannequin's material and colour. The first swatch is the material's own colour (body.colour
-// unset); any other colour stays when the material changes.
+// The mannequin's material and colour, its head and the head's hair. The first swatch is the
+// material's own colour (body.colour unset); any other colour stays when the material changes. The
+// head (and the hair on it) take the body's material: a material pick sets both finishes.
 const MANNEQUIN_COLOURS = ['#f2f1ee', '#c9a48f', '#8a6a55', '#9a9b9f', '#1e1e22', '#d9b46a', '#c99a86', '#9fb3c8'];
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 function MannequinLook({ b }) {
-	const own = hex(MANNEQUIN_FINISHES[b.finish].colour), colour = b.colour ?? own;
+	const own = hex(MANNEQUIN_FINISHES[b.finish].colour), colour = b.colour ?? own, head = b.head === 'mannequin';
 	const set = (patch, g) => run({ op: 'body.set', ...patch, gesture: g });
 	return (
 		<>
-			<Line label="Material"><Strip size="s" value={b.finish} onPick={(v) => set({ finish: v })}
+			<Line label="Material"><Strip size="s" value={b.finish} onPick={(v) => set({ finish: v, headFinish: v })}
 				items={MANNEQUIN_MATERIALS.map(([k, label]) => ({ key: k, label, img: thumb('mannequin', k) }))} /></Line>
 			<Line label="Colour">
 				<Swatches value={colour} colours={[own, ...MANNEQUIN_COLOURS.filter((c) => c !== own)]} onPick={(c) => set({ colour: c === own ? null : c })}
 					custom={<Colour value={colour} onChange={(v, g) => set({ colour: v }, g)} />} />
 			</Line>
+			<Line label="Head"><Toggle value={head} onChange={(v) => set(v ? { head: 'mannequin', headFinish: b.finish } : { head: 'none' })} /></Line>
+			{head ? <Line label="Hair"><Toggle value={!!b.mannequinHair} onChange={(v) => set({ mannequinHair: v })} /></Line> : null}
+			{head && b.mannequinHair && catalogue.hairs.length > 1 ? (
+				<Line label="Hairstyle"><Strip size="s" value={b.hair ?? catalogue.hairs[0].key} onPick={(v) => set({ hair: v })}
+					items={catalogue.hairs.map((h) => ({ key: h.key, label: h.label, img: thumb('hairs', h.key) }))} /></Line>
+			) : null}
 		</>
 	);
 }

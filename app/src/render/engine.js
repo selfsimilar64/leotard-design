@@ -20,7 +20,7 @@ import { StoneView } from '../stones/view.js';
 import { runStones } from '../stones/generators.js';
 import { locate } from '../garment/arrangement.js';
 import { TRIMS } from '../garment/trim.js';
-import { FigureView } from './figure.js';
+import { FigureView, finishSurface } from './figure.js';
 import { markSkin } from './postfx.js';
 
 export class Engine {
@@ -276,9 +276,11 @@ export class Engine {
 		const real = name === REALISTIC_SKIN;
 		const tint = (f) => (colour && !real ? { ...f, colour } : f);
 		const f = tint(MANNEQUIN_FINISHES[real ? 'Skin tone' : name] ?? MANNEQUIN_FINISHES['Matte white fibreglass']);
-		setFinish(this.skin, f); setFinish(this.headSkin, MANNEQUIN_FINISHES[headName] ? tint(MANNEQUIN_FINISHES[headName]) : f);
+		const hf = MANNEQUIN_FINISHES[headName] ? tint(MANNEQUIN_FINISHES[headName]) : f;
+		setFinish(this.skin, f); setFinish(this.headSkin, hf);
+		this.figure.setLook(hf); // the mannequin head's hair (head part 'hair')
 		const cm = this.capMaterial;
-		cm.color.set(f.colour); cm.roughness = f.roughness; cm.metalness = f.metalness ?? 0; cm.clearcoat = f.clearcoat ?? 0; cm.sheen = f.sheen ?? 0;
+		finishSurface(cm, f);
 		cm.needsUpdate = true;
 	}
 
@@ -301,7 +303,9 @@ export class Engine {
 		const key = JSON.stringify([b.size, b.form, head, pose, b.finish === REALISTIC_SKIN]);
 		// what the figure draws: its head (a person's), its skin below the head (realistic skin), or both
 		const torso = b.form === 'torso', person = head === 'person' && !torso, real = b.finish === REALISTIC_SKIN && !torso;
-		const part = person && real ? 'all' : person ? 'head' : real ? 'body' : null;
+		// (or only the hair, in the mannequin head's finish, on the mannequin head)
+		const hair = !torso && !real && head === 'mannequin' && !!b.mannequinHair;
+		const part = person && real ? 'all' : person ? 'head' : real ? 'body' : hair ? 'hair' : null;
 		// A new body or pose with the person on show first waits for the person's files: then the
 		// body, the garment and the person change in the same frame. (The garment used to move at
 		// once while the person stood in the old pose for a second or two, bare where the leotard was.)
@@ -383,11 +387,7 @@ export class Engine {
 // A mannequin finish (render/presets.js) on a skin piece's material.
 function setFinish(m, f) {
 	const u = m.userData.u;
-	m.color.set(f.colour); m.roughness = f.roughness; m.metalness = f.metalness ?? 0;
-	m.clearcoat = f.clearcoat ?? 0; m.clearcoatRoughness = f.clearcoatRoughness ?? 0;
-	m.sheen = f.sheen ?? 0; m.sheenRoughness = f.sheenRoughness ?? 0.7;
-	// velvet's sheen is its own colour, lightened; the others' white
-	if (f.sheenSelf) m.sheenColor.set(f.colour).lerp(new THREE.Color(0xffffff), 0.35); else m.sheenColor.set(0xffffff);
+	finishSurface(m, f);
 	u.uKnit.value = f.knit ?? 0;
 	u.uTape.value = f.tape ? 1 : 0;
 	u.uSkin.value = f.skin ?? 0;

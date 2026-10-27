@@ -19,15 +19,20 @@ export const APPEARANCES = {
 	mannequin: { form: 'full', head: 'none', finish: 'Matte white fibreglass' },
 	realistic: { form: 'full', head: 'person', finish: REALISTIC_SKIN },
 };
-// The mannequin look takes any mannequin finish (the panel's Material choice), not only its default.
+// The mannequin look takes any mannequin finish (the panel's Material choice), not only its default,
+// with or without its mannequin head (the panel's Head switch).
 export function appearanceOf(b) {
-	return Object.keys(APPEARANCES).find((k) => Object.entries(APPEARANCES[k]).every(([f, v]) =>
-		k === 'mannequin' && f === 'finish' ? b.finish in MANNEQUIN_FINISHES : (b[f] ?? (f === 'head' ? 'mannequin' : undefined)) === v)) ?? null;
+	return Object.keys(APPEARANCES).find((k) => Object.entries(APPEARANCES[k]).every(([f, v]) => {
+		const x = b[f] ?? (f === 'head' ? 'mannequin' : undefined);
+		if (k === 'mannequin' && f === 'finish') return x in MANNEQUIN_FINISHES;
+		if (k === 'mannequin' && f === 'head') return x === 'none' || x === 'mannequin';
+		return x === v;
+	})) ?? null;
 }
 
 // The Material choice of the mannequin look (ui/Inspector.jsx Character): a finish each, in the
 // finish's own colour until the body's colour (body.colour, '#rrggbb') is set; that colour then
-// stays across materials.
+// stays across materials. The mannequin head and its hair (body.mannequinHair) take it too.
 export const MANNEQUIN_MATERIALS = [
 	['Matte white fibreglass', 'Matte plastic'],
 	['Gloss white', 'Gloss plastic'],

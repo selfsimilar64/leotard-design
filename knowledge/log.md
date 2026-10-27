@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-10-27
+* **Update**: [Side panel and presets](/engineering/app/side-panel-and-presets.md#appearances-and-skin-renderpresetsjs-renderfigurejs): owner asked for a head and hair on the mannequin in its own material. The Mannequin look gains Head and Hair switches and a Hairstyle row; the hair is the person's hair mesh in the mannequin's finish and colour (a sculpted wig: polished gold, matte white...).
+
 ## 2026-10-26
 * **Update**: [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md): owner removed the smile, closed-mouth smile and focused expressions (neutral only; the panel hides the Expression row), and asked that no more work go into poses the app does not show: stage 2 now bakes only the reference body's raised arms (used by the curves' open surface); designs saved in an arm-only pose open in the A-pose.
 * **Update**: [Side panel and presets](/engineering/app/side-panel-and-presets.md#appearances-and-skin-renderpresetsjs-renderfigurejs): new designs start on the mannequin look instead of the realistic person (owner). Owner is questioning further investment in the realistic person (including buying per-age characters to replace the Growing Up bodies), since the mannequin and fabric are product-ready.
