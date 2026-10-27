@@ -142,6 +142,34 @@ dark: navy near black with a grey-white sheen, pink a dark dusky rose, because t
 albedos are low. No stripes are visible: the model's own lobe widths blur the lookups more than
 0.2 did. 76 ms a frame at 1280 × 1000 (GTX 1650), from about 35.
 
+**Colour and direct lights (owner, 2026-10-27).** Full red came out dark and muted. There were
+three causes: the table's albedos are tiny in our light units; the colour leaves near the mirror
+direction alongside the white surface shine; and the satin ignored the studios' direct lights.
+The owner chose "both together":
+
+- **Energy scale** (`micro.scale` 14.6). The table's albedos are relative to the authors' lights
+  and exposure, so their magnitude is set by energy. In a uniformly white room (radiance 1, no
+  lights; float render target, no tone mapping) a white dye must return all the light. Measured at
+  the table's values: 0.121 white plus 0.060 coloured at a normal view; 0.115 + 0.059 at 30°;
+  0.130 + 0.058 at 60°; 0.178 + 0.051 at 75°; 0.081 + 0.048 at 60° across. Scale =
+  (1 − 0.121) / 0.060 = 14.6, the least over the measured angles. Check after: white 0.997 at
+  normal, 0.971 at 60°, 0.785 at 60° across; full red (0.997, 0.121, 0.121), i.e. full red
+  under a white shine. The floats-to-cross-threads ratio is kept, so the cross threads' albedo
+  is 2.9 (above 1 per thread; the fabric as a whole stays at or below 1).
+- **Direct lights.** `RE_Direct_Physical` is hooked (`LIGHTS_MICRO`) so point, spot and
+  directional lights (an HDRI rig's key with its shadow, the glint lights) light the satin
+  through the full thread functions at every tangent sample (`microPoint`): cheap.
+- **Softbox area lights are not hooked.** `microRect` integrates a box the way the environment
+  is integrated (cone and quadrature, ray-rectangle tests). At about 1,400 thread evaluations per
+  box per pixel, six boxes froze the app for seconds a frame; the owner's open tab disappeared
+  from the browser during it. The hook is empty pending the owner's choice; the boxes still reach
+  the satin through the reflection room, which holds them. **[INFERRED]** Every other material
+  sees each box twice (area light and reflection room); the satin now sees it once.
+
+Result: red reads as bright, saturated red satin with flowing bands in the Softbox studio, the
+two-light studio and the White loft, at about the same brightness as matte red in the same light.
+70 ms a frame at 1280 × 1000.
+
 **Earlier status (by-eye version):** on navy it showed soft blue bands across the chest, like GK's video. Light colours
 (pink) still read flat, partly because the studio lights from every side. Not yet judged by the
 owner. Cost not yet profiled (28 × 12 environment lookups per pixel).
