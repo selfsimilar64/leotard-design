@@ -328,6 +328,24 @@ Not tested:
 - Dedicated prefiltered maps at the exact lobe widths (one fetch per lookup, which single-mip
   approximates).
 
+Per-option sheets (render plus ×16 difference, three looks, and a 2× close-up):
+`app/captures/satin-micro/opt2/all-options-*.jpg`. Every capture carries a speckle at the armholes
+and crotch even where the shader is identical by construction (light cull); those pixels are left
+out of the sheets' numbers.
+
+**In the app for the owner to try (2026-10-28).** Two more picker materials beside Satin (thread
+model), same parameters and energy scale, only the sampling differs. `micro.speed` selects
+`MICRO_SPEED` (material defines; fabric.js lists each switch with its measured cost):
+- `satinfast`, "Satin fast": the fidelity-safe set above.
+- `satinfastest`, "Satin fastest": the safe set plus cone K 6 and cross threads 2 × 3, the
+  fastest setting of each look-changing option. Expect contour stripes and a tone shift in the
+  White loft (see the per-option sheets).
+- microFurnace stays at `MICRO_Q` for all three, so the scale matches the full model (the fidelity
+  tests above used the same scale).
+- Checked in the test server: both compile with no console errors and render the
+  satin. Frame times were not re-measured (the owner was using the test tab); the paired numbers
+  above stand. The combined fastest set was never timed: expected about 27 − 8 − 6 ≈ 13-15 ms.
+
 **Testing pitfalls:**
 - The browser caches compiled shaders by source, so repeat compiles take about 0.5 s; use a nonce.
 - A hidden pane throttles the page's timers, so captures stall.

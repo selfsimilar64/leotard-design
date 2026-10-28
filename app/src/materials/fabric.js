@@ -162,6 +162,7 @@ uniform float uFilmTint;   // share of the film's colour shown in the cloth's ow
 uniform vec2 uFilmHue;     // that colour's hue: x per unit of swirl, y per unit of the reflection's turn (the angle)
 float gFilm = .5;
 vec3 gMicroN = vec3( 0., 0., 1. ), gMicroT1 = vec3( 1., 0., 0. ), gMicroT2 = vec3( 0., 1., 0. ); // the thread model's frame (end of FABRIC_FRAGMENT)
+vec3 gMicroLD[ 8 ], gMicroLC[ 8 ]; int gMicroLN = 0; // the direct lights, noted for one pass after the light loop (MICRO_LLOOP)
 float gFlake = 0.;              // the flake mask, for FOIL_FRAGMENT
 vec3 gDye = vec3( 0. ), gFoil = vec3( 0. ); // the knit's and the foil's own colours, for FOIL_FRAGMENT
 uniform float uPrint;      // 1 = sublimation print (tPrint, rgba) tiled in pattern space
@@ -636,7 +637,9 @@ ${call}
 // Waiting on the owner's choice of how to evaluate them; the satin takes no light from area lights
 // meanwhile (the softboxes still reach it through the reflection room).
 const LIGHTS_MICRO = [
-	MICRO_DIRECT('RE_Direct_Physical', '\t\treflectedLight.directSpecular += microPoint( directLight.direction, geometryViewDir ) * directLight.color;'),
+	// MICRO_LLOOP: each light is only noted here and lit once after the light loop (MICRO_FRAGMENT), so
+	// microPoint is compiled once instead of once per light
+	MICRO_DIRECT('RE_Direct_Physical', '#ifdef MICRO_LLOOP\n\t\tif ( gMicroLN < 8 ) { gMicroLD[ gMicroLN ] = directLight.direction; gMicroLC[ gMicroLN ] = directLight.color; gMicroLN ++; }\n#else\n\t\treflectedLight.directSpecular += microPoint( directLight.direction, geometryViewDir ) * directLight.color;\n#endif'),
 	MICRO_DIRECT('RE_Direct_RectArea_Physical', ''),
 ].reduce((src, f) => f(src), LIGHTS_PARS);
 
@@ -669,6 +672,21 @@ const FILM_FRAGMENT = /* glsl */`
 // sqrt(phi spacing / 15 degrees)) stayed within 1/255 of this and cut 13-26 ms a frame (knowledge
 // note, 2026-10-28); kept at full until the owner picks a level.
 const MICRO_Q = { K: 12, CROSS: { NT: 8, NP: 12, QR: 0.5 }, KD: { NT: 8, NP: 12, QR: 0.5 } };
+// MICRO_SPEED: shader switches (material defines) a fabric's micro.speed turns on, measured against
+// the full model (knowledge note, 2026-10-28; frame times at 1071 x 1274 on the GTX 1650):
+// - MICRO_LCULL: lights behind the surface skipped (exactly zero by masking), -2.7 ms;
+// - MICRO_LLOOP: direct lights lit in one loop after three's, compile 9.4 -> 7.1 s, -0.6 ms;
+// - MICRO_DYN: loops not unrolled (bounds read a zero uniform), compile -1.2 s, +1.1 ms;
+// - MICRO_MIP: environment lookups from the nearest prefiltered level, not a blend of two, -6.1 ms, 2-4/255;
+// - MICRO_SLOPE3: three tangent samples per sloped segment (four), -3.4 ms, 1-2/255;
+// - MICRO_KD: the floats' kd share at 2 x 3 nodes (QR 1), -31 ms, 1/255;
+// - MICRO_K 6: six cone directions (12), -8.1 ms, contour stripes up to 28/255 (look-changing);
+// - MICRO_CROSS: the cross threads at 2 x 3 nodes (8 x 12), -6.0 ms, up to 30/255 (look-changing).
+// microFurnace keeps MICRO_Q (the full model's scale) for every speed.
+const MICRO_SPEED = {
+	safe: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '' },
+	all: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '', MICRO_K: 6, MICRO_CROSS: '' },
+};
 // A broad term by quadrature: the whole thread function (iso = 0), or only its kd share (iso = 1).
 // Lookups are blurred to about the quadrature's spacing (QR), which prefilters the integrand.
 const MICRO_BROAD = (name, { NT, NP, QR }) => /* glsl */`
@@ -679,11 +697,11 @@ vec3 ${name}( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A
 	vec3 acc = vec3( 0. );
 	if ( Pr <= 0. || Mr <= 0. ) return acc;
 	float g = 1. - iso;
-	for ( int j = 0; j < ${NT}; j ++ ) {
+	for ( int j = 0; j < MICRO_N( ${NT} ); j ++ ) {
 		float ti = ( ( float( j ) + .5 ) / ${NT}. - .5 ) * PI, cti = cos( ti ), sti = sin( ti );
 		float th = .5 * ( ti + tr ), ctd = cos( .5 * ( ti - tr ) );
 		float gs = g * microGauss( T.x, th ), gv = g * ( 1. - T.z ) * microGauss( T.y, th );
-		for ( int k = 0; k < ${NP}; k ++ ) {
+		for ( int k = 0; k < MICRO_N( ${NP} ); k ++ ) {
 			float phi = ( ( float( k ) + .5 ) / ${NP}. - .5 ) * PI;
 			vec3 wi = sti * t + cti * ( cos( phi ) * nl + sin( phi ) * bl );
 			float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
@@ -699,6 +717,16 @@ vec3 ${name}( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A
 const MICRO_PARS = /* glsl */`
 #define MICRO_NT 8
 #define MICRO_NP 12
+// Speed-up switches (MICRO_SPEED, set per fabric as material defines)
+#ifndef MICRO_K
+#define MICRO_K ${MICRO_Q.K}
+#endif
+uniform float uMicroZero;
+#ifdef MICRO_DYN
+#define MICRO_N( x ) ( ( x ) + int( uMicroZero ) )
+#else
+#define MICRO_N( x ) ( x )
+#endif
 float microFresnel( float c, float eta ) { // exact unpolarised dielectric reflectance
 	float g2 = eta * eta - 1. + c * c;
 	if ( g2 < 0. ) return 1.;
@@ -717,16 +745,20 @@ float microMP( vec3 wi, vec3 n, vec3 bx, float phi, float phr, float Mr, float P
 // P(t, wr): the tangent's projected length toward the viewer (eq 11)
 float microPr( vec3 wr, vec3 n, vec3 bx ) { vec3 wp = wr - bx * dot( wr, bx ); return max( dot( normalize( wp ), n ), 0. ); }
 #if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV )
+#ifdef MICRO_MIP
+vec3 microEnv( vec3 w, float r ) { float mip = clamp( roughnessToMip( r ), cubeUV_m0, CUBEUV_MAX_MIP ); return bilinearCubeUV( envMap, envMapRotation * inverseTransformDirection( w, viewMatrix ), floor( mip + .5 ) ); }
+#else
 vec3 microEnv( vec3 w, float r ) { return textureCubeUV( envMap, envMapRotation * inverseTransformDirection( w, viewMatrix ), r ).rgb; }
+#endif
 // A narrow-lobed tangent (the floats): surface and volume Gaussians as deltas in theta
 vec3 microNarrow( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A, vec2 R, float eta ) {
-	const int K = ${MICRO_Q.K};
+	const int K = MICRO_K;
 	float sr = clamp( dot( wr, t ), - 1., 1. ), cr = sqrt( max( 1. - sr * sr, 0. ) ), Pr = microPr( wr, n, bx );
 	vec3 pv = wr - t * sr;
 	float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
 	vec3 acc = vec3( 0. );
 	if ( Pr <= 0. || Mr <= 0. ) return acc;
-	for ( int k = 0; k < K; k ++ ) {
+	for ( int k = 0; k < MICRO_N( K ); k ++ ) {
 		float phi = ( ( float( k ) + .5 ) / float( K ) - .5 ) * PI;
 		vec3 wi = - sr * t + cr * ( cos( phi ) * nl + sin( phi ) * bl );
 		float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
@@ -762,8 +794,11 @@ float microQ( vec3 wr ) {
 // A point or directional light from wi: the full thread functions at every tangent sample
 vec3 microPoint( vec3 wi, vec3 wr ) {
 	vec3 n = gMicroN, T1 = gMicroT1, T2 = gMicroT2, bx1 = cross( n, T1 ), bx2 = cross( n, T2 );
+#ifdef MICRO_LCULL
+	if ( dot( wi, n ) <= 0. ) return vec3( 0. ); // a light behind the surface: masking makes every term zero
+#endif
 	vec3 acc1 = vec3( 0. ); float sumL = 0.;
-	for ( int s = 0; s < 28; s ++ ) { // a constant-offset segment once, at four times the weight (as MICRO_FRAGMENT)
+	for ( int s = 0; s < MICRO_N( 28 ); s ++ ) { // a constant-offset segment once, at four times the weight (as MICRO_FRAGMENT)
 		int seg = s / 4, j = s - seg * 4; float w = uMicroLen[ seg ], o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
 		if ( w <= 0. || ( o0 == o1 && j > 0 ) ) continue;
 		w *= o0 == o1 ? 4. : 1.;
@@ -854,8 +889,16 @@ vec3 microRect( RectAreaLight L, vec3 p, vec3 wr ) {
 }
 #endif
 #if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV )
+#if !defined( MICRO_CROSS )
 ${MICRO_BROAD('microBroadCross', MICRO_Q.CROSS)}
+#else
+${MICRO_BROAD('microBroadCross', { NT: 2, NP: 3, QR: 1 })}
+#endif
+#if !defined( MICRO_KD )
 ${MICRO_BROAD('microBroadKd', MICRO_Q.KD)}
+#else
+${MICRO_BROAD('microBroadKd', { NT: 2, NP: 3, QR: 1 })}
+#endif
 #endif
 `;
 const MICRO_FRAGMENT = /* glsl */`
@@ -868,11 +911,17 @@ const MICRO_FRAGMENT = /* glsl */`
 		vec3 acc1 = vec3( 0. ); float sumP1 = 0., sumL1 = 0.;
 		// the floats: four tangent samples per segment of their curve; a segment of constant offset has
 		// one tangent, taken once at four times the weight
-		for ( int s = 0; s < 28; s ++ ) {
+		for ( int s = 0; s < MICRO_N( 28 ); s ++ ) {
 			int seg = s / 4, j = s - seg * 4; float w = uMicroLen[ seg ], o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
 			if ( w <= 0. || ( o0 == o1 && j > 0 ) ) continue;
+#ifdef MICRO_SLOPE3
+			if ( o0 != o1 && j == 3 ) continue; // three samples on a sloped segment
+			w *= o0 == o1 ? 4. : 4. / 3.;
+			float off = mix( o0, o1, ( float( j ) + .5 ) / 3. );
+#else
 			w *= o0 == o1 ? 4. : 1.;
 			float off = mix( o0, o1, ( float( j ) + .5 ) / 4. );
+#endif
 			float ca = cos( off ), sa = sin( off );
 			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
 			sumP1 += microPr( wr, n, bx1 ) * w; sumL1 += w;
@@ -893,6 +942,9 @@ const MICRO_FRAGMENT = /* glsl */`
 		vec3 Lr = ( a1 * acc1 / max( sumL1, 1e-4 ) + a2 * acc2 ) / max( Q, 1e-3 );
 		reflectedLight.indirectSpecular += Lr * envMapIntensity;
 	}
+#endif
+#ifdef MICRO_LLOOP
+	if ( uMicro > 0. ) for ( int i = 0; i < 8; i ++ ) { if ( i >= gMicroLN ) break; reflectedLight.directSpecular += microPoint( gMicroLD[ i ], normalize( vViewPosition ) ) * gMicroLC[ i ]; }
 #endif
 `;
 
@@ -926,7 +978,7 @@ export function createFabricMaterial(zone) {
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
 		uFoilRough: { value: 0.2 }, uGlint: { value: 0 },
-		uMicro: { value: 0 }, uMicroEta: { value: 1.5 }, uMicroA1: { value: new THREE.Color() }, uMicroT1: { value: new THREE.Vector4() }, uMicroA2: { value: new THREE.Color() }, uMicroT2: { value: new THREE.Vector4() }, uMicroR1: { value: new THREE.Vector2(0.3, 0.4) }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uMicro: { value: 0 }, uMicroZero: { value: 0 }, uMicroEta: { value: 1.5 }, uMicroA1: { value: new THREE.Color() }, uMicroT1: { value: new THREE.Vector4() }, uMicroA2: { value: new THREE.Color() }, uMicroT2: { value: new THREE.Vector4() }, uMicroR1: { value: new THREE.Vector2(0.3, 0.4) }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
@@ -1060,6 +1112,12 @@ export const FABRICS = {
 	glitterfoil: { label: 'Glitter-grain foil', metalness: 1, roughness: 0.3, flake: { pitch: 0.00035, dotR: 0.58, presence: 1, tilt: 0.35, rough: 0.18, colorVar: 0.25 } },
 	illusion: { label: 'Illusion mesh (very sheer)', roughness: 0.8, sheen: 0.2, sheenRoughness: 0.6, mesh: { pitch: 0.0006, holeR: 0.46 } },
 };
+// The thread-model satin with the measured speed-ups (MICRO_SPEED; knowledge note
+// microcylinder-cloth-model.md, 2026-10-28), side by side with it for the owner to try in the app:
+// 'safe' (every option within 4/255 of satinmicro) and 'all' (those plus the two that change the look).
+// Same parameters and energy scale (microScale at the full sample counts): only the sampling differs.
+FABRICS.satinfast = { ...FABRICS.satinmicro, label: 'Satin fast (thread model, safe speed-ups)', micro: { ...FABRICS.satinmicro.micro, speed: 'safe' } };
+FABRICS.satinfastest = { ...FABRICS.satinmicro, label: 'Satin fastest (thread model, every speed-up)', micro: { ...FABRICS.satinmicro.micro, speed: 'all' } };
 
 // The texture size a scanned fabric starts at (as FABRICS' texScale; owner's review, 2026-10-24):
 // pink organza with glitter, pink oil-slick vegan leather.
@@ -1199,6 +1257,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1, s
 	const mc = f.micro;
 	m.specularIntensity = mc ? 0 : 1;
 	u.uMicro.value = mc ? 1 : 0;
+	m.defines = { STANDARD: '', PHYSICAL: '', ...MICRO_SPEED[mc?.speed] }; // three's own, plus the satin's speed-ups
 	if (mc) {
 		m.anisotropy = 0.001;
 		const d2r = Math.PI / 180, W = mc.twisted, o = satin ?? {};
