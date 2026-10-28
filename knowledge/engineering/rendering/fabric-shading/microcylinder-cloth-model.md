@@ -387,6 +387,39 @@ SH9 for the blurriest lookups; given LOD's null result, low expected gain. Sheet
 `app/captures/satin-micro/opt3/round-two.jpg` (torso renders and ×16 differences),
 `fastest-vs-all2.jpg` (full resolution side by side).
 
+**Round two scrapped (owner, 2026-10-28):** none reached 1 ms, so the six switches and their seven
+picker materials were removed (code back to 8092edd plus the new defaults). The finding stands: the
+shader is bound by how many (tangent × direction) evaluations it makes, not by how lean each is.
+
+**Round three: model simplifications (owner: bolder cuts are fine while the look holds; ideas
+from a second Fable review, 2026-10-28).** Switches on top of `all` (`MICRO_ROUND3`, fabric.js),
+picker materials "Satin 3 …" (`satin3<key>`). Paired at 1373 × 1764 against fastest (25.2-25.7 ms;
+no satin 8.5-8.8). Difference from fastest over the satin, 1080 × 1440 torso:
+
+| Switch | What | Δ frame | Mean / worst (/255) |
+|---|---|---|---|
+| MICRO_LANA | direct lights: sloped segments' narrow lobes integrated analytically at the specular offset o* (`microPointA`); constant segments exact, carrying the sloped segments' kd share (`uMicroKdW`) | −4.0 ms | 0.6 / 4 |
+| MICRO_KDENV | floats' kd share: one roughness-1 lookup about n × the 2 × 3 kernel at T1, no lookups inside | −4.7 | 1.5 / 15 |
+| MICRO_SEG 2 | 2 tangents per sloped segment, lookups blurred to half their spacing | −2.4 | 1.1 / 4 |
+| MICRO_SEG 1 | 1 tangent per sloped segment, same blur | −4.1 | 1.8 / 6 |
+| MICRO_NOCORR | masking and reweighting uncorrelated | −2.4 | 9.2 / 41 (darker at the sides) |
+| all3 (LANA, KDENV, SEG 1, NOCORR) | | −9.8 (15.4 ms) | 8.2 / 41 |
+| all3m (all3 without NOCORR) | | −9.3 (16.4 vs 25.7) | 2.3 / 16 |
+
+- NOCORR is the only visible change (the correlation brightens the sides) and adds only 0.3 ms
+  once the others are on: all3m is the recommended candidate. The satin then costs about 7.6 ms
+  instead of 17.
+- Whole app at 0.75 pixel ratio (1030 × 1323): fastest 25.7 → 18.1 ms, all3 16.3 → 11.4 ms. This
+  bounds what a half-resolution satin pass could give.
+- Not built: half-resolution satin pass (new render pass, −10 ms at best before round three), a
+  ring-prefiltered environment LUT (per-environment precompute), lower sampling while the camera
+  moves (uniform loop bounds; no change at rest).
+- **Found in passing:** the floats' kd share is weighted a quarter of the paper's. `MICRO_FRAGMENT`
+  adds it per segment at weight len, but divides by sumL1, which counts four samples per segment
+  (4 × the total length); `microFurnace` has the same structure, so the energy scale matches it.
+  The owner's kd 0.5 was set by eye with this. Not changed.
+- Sheet: `app/captures/satin-micro/opt4/round-three.jpg`, full-size pair `fastest-vs-all3m.jpg`.
+
 **Testing pitfalls:**
 - Temporary defines added to a material on top of its own accumulate across runs unless reset
   (the first round-two breakdown was wrong for this reason).

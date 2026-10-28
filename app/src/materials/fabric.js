@@ -107,6 +107,7 @@ uniform vec4 uMicroT2;     // the cross threads, as uMicroT1 (tangent curve: off
 uniform vec2 uMicroR1;     // environment lookup roughness matching the floats' gamma_s, gamma_v
 uniform float uMicroOff[ 8 ]; // the floats' tangent curve: offsets at its control points (radians)
 uniform float uMicroLen[ 7 ]; // and the lengths of the segments between them
+uniform float uMicroKdW[ 7 ]; // MICRO_LANA: a constant segment's weight for the kd share (its length plus its nearest sloped segments')
 uniform vec3 uFoilColor;
 uniform float uHolo;       // 0..1 share of rainbow in the foil colour
 uniform float uHoloFreq;
@@ -639,7 +640,7 @@ ${call}
 const LIGHTS_MICRO = [
 	// MICRO_LLOOP: each light is only noted here and lit once after the light loop (MICRO_FRAGMENT), so
 	// microPoint is compiled once instead of once per light
-	MICRO_DIRECT('RE_Direct_Physical', '#ifdef MICRO_LLOOP\n\t\tif ( gMicroLN < 8 MICRO_LZERO_TEST ) { gMicroLD[ gMicroLN ] = directLight.direction; gMicroLC[ gMicroLN ] = directLight.color; gMicroLN ++; }\n#else\n\t\treflectedLight.directSpecular += microPoint( directLight.direction, geometryViewDir ) * directLight.color;\n#endif'),
+	MICRO_DIRECT('RE_Direct_Physical', '#ifdef MICRO_LLOOP\n\t\tif ( gMicroLN < 8 ) { gMicroLD[ gMicroLN ] = directLight.direction; gMicroLC[ gMicroLN ] = directLight.color; gMicroLN ++; }\n#else\n\t\treflectedLight.directSpecular += microPoint( directLight.direction, geometryViewDir ) * directLight.color;\n#endif'),
 	MICRO_DIRECT('RE_Direct_RectArea_Physical', ''),
 ].reduce((src, f) => f(src), LIGHTS_PARS);
 
@@ -687,27 +688,28 @@ const MICRO_SPEED = {
 	safe: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '' },
 	all: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '', MICRO_K: 6, MICRO_CROSS: '' },
 };
-// Second round on top of 'all' (2026-10-28, with a Fable review of this shader); each needs 'all':
-// - MICRO_LOD: environment fetches by textureLod, not three's zero-gradient textureGrad (same texel);
-// - MICRO_ADDR: one view-to-environment matrix per pixel, and the floats' two lookups per direction
-//   share their tile address (needs MICRO_MIP);
-// - MICRO_LZERO: lights whose colour is zero here (shadowed, out of range) not noted (needs MICRO_LLOOP);
-// - MICRO_LFUSE: the noted lights lit tangent by tangent, the view's terms once (microLights);
-// - MICRO_KD1: the floats' kd share reads the environment once per segment (MICRO_BROAD ONE);
-// - MICRO_TRIG: the cone loop's cos and sin stepped by rotation (microNarrow).
-const MICRO_ROUND2 = { lod: { MICRO_LOD: '' }, addr: { MICRO_ADDR: '' }, lzero: { MICRO_LZERO: '' }, lfuse: { MICRO_LFUSE: '' }, kd1: { MICRO_KD1: '' }, trig: { MICRO_TRIG: '' } };
-for (const [k, d] of Object.entries(MICRO_ROUND2)) MICRO_SPEED[k] = { ...MICRO_SPEED.all, ...d };
-MICRO_SPEED.all2 = Object.assign({}, MICRO_SPEED.all, ...Object.values(MICRO_ROUND2));
+// Round three: model simplifications on top of 'all' (owner: bolder cuts are fine while the look holds;
+// ideas from a Fable review, 2026-10-28):
+// - MICRO_LANA: direct lights' narrow lobes on the sloped segments integrated analytically at the one
+//   offset that meets the specular condition (microPointA); the constant segments stay exact, and the
+//   sloped segments' kd share is folded into them (uMicroKdW);
+// - MICRO_KDENV: the floats' kd share as one roughness-1 lookup about the normal times its kernel at
+//   the mean tangent, no lookups inside the quadrature;
+// - MICRO_SEG n: n tangent samples per sloped segment (1 or 2), each lookup blurred to the spacing;
+// - MICRO_NOCORR: masking and reweighting uncorrelated (Ashikhmin's correlation dropped).
+const MICRO_ROUND3 = { lana: { MICRO_LANA: '' }, kdenv: { MICRO_KDENV: '' }, seg2: { MICRO_SEG: 2 }, seg1: { MICRO_SEG: 1 }, nocorr: { MICRO_NOCORR: '' } };
+for (const [k, d] of Object.entries(MICRO_ROUND3)) MICRO_SPEED[k] = { ...MICRO_SPEED.all, ...d };
+MICRO_SPEED.all3 = { ...MICRO_SPEED.all, MICRO_LANA: '', MICRO_KDENV: '', MICRO_SEG: 1, MICRO_NOCORR: '' };
+MICRO_SPEED.all3m = { ...MICRO_SPEED.all, MICRO_LANA: '', MICRO_KDENV: '', MICRO_SEG: 1 }; // all but the masking change (the one that shows)
 // A broad term by quadrature: the whole thread function (iso = 0), or only its kd share (iso = 1).
 // Lookups are blurred to about the quadrature's spacing (QR), which prefilters the integrand.
-// ONE (MICRO_KD1): the environment taken out of the sum, read once at the weighted mean direction of
-// the nodes (the QR lookups are the environment's blurriest level, nearly constant across them).
-const MICRO_BROAD = (name, { NT, NP, QR, ONE = false }) => /* glsl */`
+// ENV false: the kernel alone, every lookup taken as 1 (MICRO_KDENV).
+const MICRO_BROAD = (name, { NT, NP, QR, ENV = true }) => /* glsl */`
 vec3 ${name}( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A, float eta, float iso ) {
 	float sr = clamp( dot( wr, t ), - 1., 1. ), tr = asin( sr ), cr = cos( tr ), Pr = microPr( wr, n, bx );
 	vec3 pv = wr - t * sr;
 	float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
-	vec3 acc = vec3( 0. );${ONE ? ' vec3 dir = vec3( 0. );' : ''}
+	vec3 acc = vec3( 0. );
 	if ( Pr <= 0. || Mr <= 0. ) return acc;
 	float g = 1. - iso;
 	for ( int j = 0; j < MICRO_N( ${NT} ); j ++ ) {
@@ -721,13 +723,10 @@ vec3 ${name}( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A
 			if ( mp <= 0. ) continue;
 			float c2 = cos( .5 * ( phi - phr ) ), Fr = microFresnel( ctd * c2, eta ), Ft = 1. - Fr;
 			vec3 f = ( vec3( gs * Fr * c2 ) + Ft * Ft * ( gv + T.z ) / max( cti + cr, 1e-2 ) * A ) / max( ctd * ctd, 1e-3 );
-${ONE ? `			vec3 fw = f * ( mp * cti * cti );
-			acc += fw; dir += wi * ( fw.r + fw.g + fw.b );` : `			acc += microEnv( wi, ${QR.toFixed(3)} ) * f * ( mp * cti * cti );`}
+			acc += ${ENV ? `microEnv( wi, ${QR.toFixed(3)} ) * ` : ''}f * ( mp * cti * cti );
 		}
 	}
-${ONE ? `	if ( dot( dir, dir ) <= 0. ) return vec3( 0. );
-	acc *= microEnv( normalize( dir ), ${QR.toFixed(3)} );
-` : ''}	return acc * ( PI / ${NT}. ) * ( PI / ${NP}. );
+	return acc * ( PI / ${NT}. ) * ( PI / ${NP}. );
 }
 `;
 const MICRO_PARS = /* glsl */`
@@ -738,11 +737,6 @@ const MICRO_PARS = /* glsl */`
 #define MICRO_K ${MICRO_Q.K}
 #endif
 uniform float uMicroZero;
-#ifdef MICRO_LZERO
-#define MICRO_LZERO_TEST && any( greaterThan( directLight.color, vec3( 0. ) ) ) // shadowed or out of range: no light
-#else
-#define MICRO_LZERO_TEST
-#endif
 #ifdef MICRO_DYN
 #define MICRO_N( x ) ( ( x ) + int( uMicroZero ) )
 #else
@@ -757,56 +751,22 @@ float microFresnel( float c, float eta ) { // exact unpolarised dielectric refle
 float microGauss( float s, float x ) { return exp( - x * x / ( 2. * s * s ) ) / ( 2.5066283 * s ); }
 // masking x reweighting for one incoming direction (eqs 7-13)
 float microMP( vec3 wi, vec3 n, vec3 bx, float phi, float phr, float Mr, float Pr ) {
+	float Mi = max( cos( phi ), 0. );
+	vec3 wip = wi - bx * dot( wi, bx );
+	float Pi = max( dot( normalize( wip ), n ), 0. );
+#ifdef MICRO_NOCORR
+	return Mi * Mr * Pi * Pr;
+#else
 	float phd = phi - phr, u = exp( - phd * phd / ( 2. * .349 * .349 ) );
-	float Mi = max( cos( phi ), 0. ), M = mix( Mi * Mr, min( Mi, Mr ), u );
-	vec3 wip = wi - bx * dot( wi, bx );
-	float Pi = max( dot( normalize( wip ), n ), 0. );
+	float M = mix( Mi * Mr, min( Mi, Mr ), u );
 	return M * mix( Pi * Pr, min( Pi, Pr ), u );
-}
-// the same with cos phi and phi - phr given (MICRO_TRIG)
-float microMPc( vec3 wi, vec3 n, vec3 bx, float cphi, float phd, float Mr, float Pr ) {
-	float u = exp( - phd * phd / ( 2. * .349 * .349 ) );
-	float Mi = max( cphi, 0. ), M = mix( Mi * Mr, min( Mi, Mr ), u );
-	vec3 wip = wi - bx * dot( wi, bx );
-	float Pi = max( dot( normalize( wip ), n ), 0. );
-	return M * mix( Pi * Pr, min( Pi, Pr ), u );
+#endif
 }
 // P(t, wr): the tangent's projected length toward the viewer (eq 11)
 float microPr( vec3 wr, vec3 n, vec3 bx ) { vec3 wp = wr - bx * dot( wr, bx ); return max( dot( normalize( wp ), n ), 0. ); }
 #if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV )
 #ifdef MICRO_MIP
-// three's bilinearCubeUV split in two: the tile address of a direction already in the environment's
-// frame, then the fetch (MICRO_LOD: textureLod at level 0, the same texel as three's zero-gradient
-// textureGrad, which the PMREM texture's single level makes equivalent)
-highp vec2 microTile( vec3 d, float mipInt ) {
-	float face = getFace( d ), fs = exp2( max( mipInt, cubeUV_minMipLevel ) );
-	highp vec2 uv = getUV( d, face ) * ( fs - 2. ) + 1.;
-	if ( face > 2. ) { uv.y += fs; face -= 3.; }
-	uv.x += face * fs;
-	uv.y += 4. * ( exp2( CUBEUV_MAX_MIP ) - fs );
-	return uv;
-}
-float microFilter( float mipInt ) { return max( cubeUV_minMipLevel - mipInt, 0. ) * 3. * cubeUV_minTileSize; }
-vec3 microFetch( highp vec2 uv ) {
-	uv *= vec2( CUBEUV_TEXEL_WIDTH, CUBEUV_TEXEL_HEIGHT );
-#ifdef MICRO_LOD
-	return textureLod( envMap, uv, 0. ).rgb;
-#else
-	return texture2DGradEXT( envMap, uv, vec2( 0. ), vec2( 0. ) ).rgb;
-#endif
-}
-float microMip( float r ) { return floor( clamp( roughnessToMip( r ), cubeUV_m0, CUBEUV_MAX_MIP ) + .5 ); }
-// MICRO_ADDR: view to environment frame as one matrix per pixel (the view matrix is rigid, so
-// inverseTransformDirection's normalize changes nothing), and the narrow lobes' two levels per pixel
-mat3 gMicroEnvM; vec4 gMicroMips; // surface mip, volume mip, their filter offsets
-vec3 microEnvDir( vec3 w ) {
-#ifdef MICRO_ADDR
-	return gMicroEnvM * w;
-#else
-	return envMapRotation * inverseTransformDirection( w, viewMatrix );
-#endif
-}
-vec3 microEnv( vec3 w, float r ) { float m = microMip( r ); return microFetch( microTile( microEnvDir( w ), m ) + vec2( microFilter( m ), 0. ) ); }
+vec3 microEnv( vec3 w, float r ) { float mip = clamp( roughnessToMip( r ), cubeUV_m0, CUBEUV_MAX_MIP ); return bilinearCubeUV( envMap, envMapRotation * inverseTransformDirection( w, viewMatrix ), floor( mip + .5 ) ); }
 #else
 vec3 microEnv( vec3 w, float r ) { return textureCubeUV( envMap, envMapRotation * inverseTransformDirection( w, viewMatrix ), r ).rgb; }
 #endif
@@ -818,38 +778,13 @@ vec3 microNarrow( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, ve
 	float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
 	vec3 acc = vec3( 0. );
 	if ( Pr <= 0. || Mr <= 0. ) return acc;
-#ifdef MICRO_TRIG
-	// cos and sin of phi and of (phi - phr) / 2 stepped by rotation instead of evaluated per direction
-	float dp = PI / float( K ), p0 = ( .5 / float( K ) - .5 ) * PI;
-	vec2 cs = vec2( cos( p0 ), sin( p0 ) ), rot = vec2( cos( dp ), sin( dp ) );
-	vec2 hc = vec2( cos( .5 * ( p0 - phr ) ), sin( .5 * ( p0 - phr ) ) ), hrot = vec2( cos( .5 * dp ), sin( .5 * dp ) );
-#endif
 	for ( int k = 0; k < MICRO_N( K ); k ++ ) {
-#ifdef MICRO_TRIG
-		float phi = p0 + float( k ) * dp, cp = cs.x, sp = cs.y, c2 = hc.x;
-		cs = vec2( cs.x * rot.x - cs.y * rot.y, cs.y * rot.x + cs.x * rot.y );
-		hc = vec2( hc.x * hrot.x - hc.y * hrot.y, hc.y * hrot.x + hc.x * hrot.y );
-		vec3 wi = - sr * t + cr * ( cp * nl + sp * bl );
-		float mp = microMPc( wi, n, bx, cp, phi - phr, Mr, Pr );
-#else
 		float phi = ( ( float( k ) + .5 ) / float( K ) - .5 ) * PI;
 		vec3 wi = - sr * t + cr * ( cos( phi ) * nl + sin( phi ) * bl );
 		float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
-#endif
 		if ( mp <= 0. ) continue;
-#ifndef MICRO_TRIG
-		float c2 = cos( .5 * ( phi - phr ) );
-#endif
-		float Fr = microFresnel( cr * c2, eta ), Ft = 1. - Fr;
-#ifdef MICRO_ADDR
-		// both lookups share one tile address when their levels share a tile size
-		vec3 d = gMicroEnvM * wi; highp vec2 uv = microTile( d, gMicroMips.x );
-		highp vec2 uvV = max( gMicroMips.x, cubeUV_minMipLevel ) == max( gMicroMips.y, cubeUV_minMipLevel ) ? uv : microTile( d, gMicroMips.y );
-		vec3 eS = microFetch( uv + vec2( gMicroMips.z, 0. ) ), eV = microFetch( uvV + vec2( gMicroMips.w, 0. ) );
-#else
-		vec3 eS = microEnv( wi, R.x ), eV = microEnv( wi, R.y );
-#endif
-		acc += ( eS * ( 2. * Fr * c2 ) + eV * ( ( 1. - T.z ) * Ft * Ft / max( cr, 1e-2 ) ) * A ) * mp;
+		float c2 = cos( .5 * ( phi - phr ) ), Fr = microFresnel( cr * c2, eta ), Ft = 1. - Fr;
+		acc += ( microEnv( wi, R.x ) * ( 2. * Fr * c2 ) + microEnv( wi, R.y ) * ( ( 1. - T.z ) * Ft * Ft / max( cr, 1e-2 ) ) * A ) * mp;
 	}
 	return acc * ( PI / float( K ) );
 }
@@ -869,57 +804,6 @@ vec3 microFull( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wi, vec3 wr, vec
 	vec3 f = ( vec3( Fr * c2 * microGauss( T.x, th ) ) + Ft * Ft * ( ( 1. - T.z ) * microGauss( T.y, th ) + T.z ) / max( cti + cr, 1e-2 ) * A ) / max( ctd * ctd, 1e-3 );
 	return f * ( mp * cti );
 }
-#ifdef MICRO_LFUSE
-// microFull with the view's terms given (sr, tr, cr, phr, Mr: per tangent, shared by every light)
-vec3 microFullV( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wi, vec4 T, vec3 A, float eta, float Pr, float sr, float tr, float cr, float phr, float Mr ) {
-	float si = clamp( dot( wi, t ), - 1., 1. ), ti = asin( si ), cti = cos( ti );
-	vec3 pi = wi - t * si;
-	float phi = atan( dot( pi, bl ), dot( pi, nl ) );
-	float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
-	if ( mp <= 0. ) return vec3( 0. );
-	float th = .5 * ( ti + tr ), ctd = cos( .5 * ( ti - tr ) ), c2 = cos( .5 * ( phi - phr ) );
-	float Fr = microFresnel( ctd * c2, eta ), Ft = 1. - Fr;
-	vec3 f = ( vec3( Fr * c2 * microGauss( T.x, th ) ) + Ft * Ft * ( ( 1. - T.z ) * microGauss( T.y, th ) + T.z ) / max( cti + cr, 1e-2 ) * A ) / max( ctd * ctd, 1e-3 );
-	return f * ( mp * cti );
-}
-// Every noted light (gMicroLD, gMicroLC) through microPoint's sum, tangents outside and lights inside, so
-// each tangent's view terms, the projections Pr and Q are computed once, not once per light
-vec3 microLights( vec3 wr ) {
-	vec3 n = gMicroN, T1 = gMicroT1, T2 = gMicroT2, bx1 = cross( n, T1 ), bx2 = cross( n, T2 );
-	float Pr1 = microPr( wr, n, bx1 ), Pr2 = microPr( wr, n, bx2 );
-	vec3 acc1 = vec3( 0. ), acc2 = vec3( 0. ); float sumL = 0., lenL = 0.;
-	for ( int s = 0; s < MICRO_N( 28 ); s ++ ) {
-		int seg = s / 4, j = s - seg * 4; float w = uMicroLen[ seg ], o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
-		if ( w <= 0. || ( o0 == o1 && j > 0 ) ) continue;
-		w *= o0 == o1 ? 4. : 1.;
-		float off = mix( o0, o1, ( float( j ) + .5 ) / 4. ), ca = cos( off ), sa = sin( off );
-		vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n, bl = cross( t, nl );
-		float sr = clamp( dot( wr, t ), - 1., 1. ), tr = asin( sr ), cr = cos( tr );
-		vec3 pv = wr - t * sr;
-		float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
-		sumL += w;
-		if ( Pr1 <= 0. || Mr <= 0. ) continue;
-		for ( int i = 0; i < 8; i ++ ) {
-			if ( i >= gMicroLN ) break;
-			vec3 wi = gMicroLD[ i ];
-#ifdef MICRO_LCULL
-			if ( dot( wi, n ) <= 0. ) continue;
-#endif
-			acc1 += microFullV( t, nl, bl, n, bx1, wi, uMicroT1, uMicroA1, uMicroEta, Pr1, sr, tr, cr, phr, Mr ) * gMicroLC[ i ] * w;
-		}
-	}
-	for ( int i = 0; i < 8; i ++ ) {
-		if ( i >= gMicroLN ) break;
-#ifdef MICRO_LCULL
-		if ( dot( gMicroLD[ i ], n ) <= 0. ) continue;
-#endif
-		acc2 += microFull( T2, n, cross( T2, n ), n, bx2, gMicroLD[ i ], wr, uMicroT2, uMicroA2, uMicroEta, Pr2 ) * gMicroLC[ i ];
-	}
-	for ( int seg = 0; seg < 7; seg ++ ) lenL += uMicroLen[ seg ];
-	float a1 = uMicroT1.w, a2 = uMicroT2.w, Q = max( a1 * Pr1 * lenL / max( lenL, 1e-4 ) + a2 * Pr2 + ( 1. - a1 - a2 ) * max( dot( wr, n ), 0. ), 1e-3 );
-	return ( a1 * acc1 / max( sumL, 1e-4 ) + a2 * acc2 ) / Q;
-}
-#endif
 // eq 15 for the view wr
 float microQ( vec3 wr ) {
 	vec3 n = gMicroN, bx1 = cross( n, gMicroT1 );
@@ -927,8 +811,71 @@ float microQ( vec3 wr ) {
 	for ( int seg = 0; seg < 7; seg ++ ) { float w = uMicroLen[ seg ]; sumP += microPr( wr, n, bx1 ) * w; sumL += w; }
 	return max( uMicroT1.w * sumP / max( sumL, 1e-4 ) + uMicroT2.w * microPr( wr, n, cross( n, gMicroT2 ) ) + ( 1. - uMicroT1.w - uMicroT2.w ) * max( dot( wr, n ), 0. ), 1e-3 );
 }
+#ifdef MICRO_LANA
+// microFull in parts, each Gaussian lobe left out: S and V are the surface and volume terms per unit of
+// their Gaussian, K the kd term, th the half angle
+void microParts( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wi, vec3 wr, vec4 T, vec3 A, float eta, float Pr, out float th, out vec3 S, out vec3 V, out vec3 K ) {
+	S = vec3( 0. ); V = vec3( 0. ); K = vec3( 0. ); th = 0.;
+	float si = clamp( dot( wi, t ), - 1., 1. ), sr = clamp( dot( wr, t ), - 1., 1. );
+	float ti = asin( si ), tr = asin( sr ), cti = cos( ti ), cr = cos( tr );
+	vec3 pi = wi - t * si, pv = wr - t * sr;
+	float phi = atan( dot( pi, bl ), dot( pi, nl ) ), phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
+	if ( Pr <= 0. || Mr <= 0. ) return;
+	float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
+	if ( mp <= 0. ) return;
+	th = .5 * ( ti + tr );
+	float ctd = cos( .5 * ( ti - tr ) ), c2 = cos( .5 * ( phi - phr ) );
+	float Fr = microFresnel( ctd * c2, eta ), Ft = 1. - Fr, k = mp * cti / max( ctd * ctd, 1e-3 );
+	S = vec3( Fr * c2 * k );
+	vec3 vol = Ft * Ft / max( cti + cr, 1e-2 ) * A * k;
+	V = ( 1. - T.z ) * vol; K = T.z * vol;
+}
+// microPoint with the floats' sloped segments integrated analytically (MICRO_LANA): their narrow lobes
+// are non-zero only near the offset o* where the tangent meets the specular condition (wi + wr) . t = 0;
+// along the curve a unit Gaussian in th then integrates to rho(o*) / |dth/do| (rho: curve length per
+// radian of offset there), faded where o* runs off the curve's ends. The constant segments stay exact,
+// carrying the sloped segments' kd share too (uMicroKdW: each one's length plus its nearest sloped ones').
+vec3 microPointA( vec3 wi, vec3 wr ) {
+	vec3 n = gMicroN, T1 = gMicroT1, T2 = gMicroT2, bx1 = cross( n, T1 ), bx2 = cross( n, T2 );
+#ifdef MICRO_LCULL
+	if ( dot( wi, n ) <= 0. ) return vec3( 0. );
+#endif
+	float Pr1 = microPr( wr, n, bx1 ), lenT = 0., oMin = 1e9, oMax = - 1e9, th;
+	vec3 acc1 = vec3( 0. ), S, V, K;
+	for ( int seg = 0; seg < 7; seg ++ ) {
+		float w = uMicroLen[ seg ], o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
+		if ( w <= 0. ) continue;
+		lenT += w; oMin = min( oMin, min( o0, o1 ) ); oMax = max( oMax, max( o0, o1 ) );
+		if ( o0 != o1 ) continue;
+		float ca = cos( o0 ), sa = sin( o0 );
+		vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
+		microParts( t, nl, cross( t, nl ), n, bx1, wi, wr, uMicroT1, uMicroA1, uMicroEta, Pr1, th, S, V, K );
+		acc1 += ( S * microGauss( uMicroT1.x, th ) + V * microGauss( uMicroT1.y, th ) ) * w + K * uMicroKdW[ seg ];
+	}
+	vec3 h = wi + wr;
+	float os = atan( - dot( h, T1 ), dot( h, n ) );
+	os += os > .5 * PI ? - PI : os < - .5 * PI ? PI : 0.;
+	float oc = clamp( os, oMin, oMax ), rho = 0.;
+	for ( int seg = 0; seg < 7; seg ++ ) {
+		float o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
+		if ( o0 != o1 && uMicroLen[ seg ] > 0. && oc >= min( o0, o1 ) && oc <= max( o0, o1 ) ) { rho = uMicroLen[ seg ] / abs( o1 - o0 ); break; }
+	}
+	float ca = cos( oc ), sa = sin( oc );
+	vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
+	microParts( t, nl, cross( t, nl ), n, bx1, wi, wr, uMicroT1, uMicroA1, uMicroEta, Pr1, th, S, V, K );
+	float si = dot( wi, t ), sr = dot( wr, t );
+	float dth = max( .5 * abs( dot( wi, nl ) / max( sqrt( 1. - si * si ), 1e-3 ) + dot( wr, nl ) / max( sqrt( 1. - sr * sr ), 1e-3 ) ), 1e-3 );
+	float out_ = max( oMin - os, os - oMax ), gS = 2. * uMicroT1.x / dth, gV = 2. * uMicroT1.y / dth; // past the ends: share of each lobe still on the curve
+	acc1 += ( S * ( 1. - smoothstep( - gS, gS, out_ ) ) + V * ( 1. - smoothstep( - gV, gV, out_ ) ) ) * rho / dth;
+	vec3 acc2 = microFull( T2, n, cross( T2, n ), n, bx2, wi, wr, uMicroT2, uMicroA2, uMicroEta, microPr( wr, n, bx2 ) );
+	return ( uMicroT1.w * acc1 / max( lenT, 1e-4 ) + uMicroT2.w * acc2 ) / microQ( wr );
+}
+#endif
 // A point or directional light from wi: the full thread functions at every tangent sample
 vec3 microPoint( vec3 wi, vec3 wr ) {
+#ifdef MICRO_LANA
+	return microPointA( wi, wr );
+#endif
 	vec3 n = gMicroN, T1 = gMicroT1, T2 = gMicroT2, bx1 = cross( n, T1 ), bx2 = cross( n, T2 );
 #ifdef MICRO_LCULL
 	if ( dot( wi, n ) <= 0. ) return vec3( 0. ); // a light behind the surface: masking makes every term zero
@@ -1032,10 +979,11 @@ ${MICRO_BROAD('microBroadCross', { NT: 2, NP: 3, QR: 1 })}
 #endif
 #if !defined( MICRO_KD )
 ${MICRO_BROAD('microBroadKd', MICRO_Q.KD)}
-#elif defined( MICRO_KD1 )
-${MICRO_BROAD('microBroadKd', { NT: 2, NP: 3, QR: 1, ONE: true })}
 #else
 ${MICRO_BROAD('microBroadKd', { NT: 2, NP: 3, QR: 1 })}
+#endif
+#ifdef MICRO_KDENV
+${MICRO_BROAD('microBroadKdK', { NT: 2, NP: 3, QR: 1, ENV: false })}
 #endif
 #endif
 `;
@@ -1046,18 +994,20 @@ const MICRO_FRAGMENT = /* glsl */`
 		vec3 T2 = normalize( tbn[ 0 ] - n * dot( tbn[ 0 ], n ) ), T1 = cross( n, T2 ); // T2 round the body; the floats T1 run across it
 		vec3 bx1 = cross( n, T1 ), bx2 = cross( n, T2 );                             // normals to each set's (t, n) plane
 		float eta = uMicroEta, a1 = uMicroT1.w, a2 = uMicroT2.w;
-#ifdef MICRO_ADDR
-		gMicroEnvM = envMapRotation * transpose( mat3( viewMatrix ) );
-		gMicroMips.xy = vec2( microMip( uMicroR1.x ), microMip( uMicroR1.y ) );
-		gMicroMips.zw = vec2( microFilter( gMicroMips.x ), microFilter( gMicroMips.y ) );
-#endif
 		vec3 acc1 = vec3( 0. ); float sumP1 = 0., sumL1 = 0.;
 		// the floats: four tangent samples per segment of their curve; a segment of constant offset has
 		// one tangent, taken once at four times the weight
 		for ( int s = 0; s < MICRO_N( 28 ); s ++ ) {
 			int seg = s / 4, j = s - seg * 4; float w = uMicroLen[ seg ], o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
 			if ( w <= 0. || ( o0 == o1 && j > 0 ) ) continue;
-#ifdef MICRO_SLOPE3
+			vec2 Rt = uMicroR1;
+#if defined( MICRO_SEG )
+			// MICRO_SEG samples on a sloped segment, each lookup blurred to at least half their spacing
+			if ( o0 != o1 && j >= MICRO_SEG ) continue;
+			w *= o0 == o1 ? 4. : 4. / float( MICRO_SEG );
+			float off = mix( o0, o1, ( float( j ) + .5 ) / float( MICRO_SEG ) );
+			Rt = sqrt( min( 1.84 * max( uMicroT1.xy, vec2( .5 * abs( o1 - o0 ) / float( MICRO_SEG ) ) ), vec2( 1. ) ) );
+#elif defined( MICRO_SLOPE3 )
 			if ( o0 != o1 && j == 3 ) continue; // three samples on a sloped segment
 			w *= o0 == o1 ? 4. : 4. / 3.;
 			float off = mix( o0, o1, ( float( j ) + .5 ) / 3. );
@@ -1068,9 +1018,15 @@ const MICRO_FRAGMENT = /* glsl */`
 			float ca = cos( off ), sa = sin( off );
 			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
 			sumP1 += microPr( wr, n, bx1 ) * w; sumL1 += w;
-			acc1 += microNarrow( t, nl, cross( t, nl ), n, bx1, wr, uMicroT1, uMicroA1, uMicroR1, eta ) * w;
+			acc1 += microNarrow( t, nl, cross( t, nl ), n, bx1, wr, uMicroT1, uMicroA1, Rt, eta ) * w;
 		}
 		// their kd share, at each segment's centre
+#ifdef MICRO_KDENV
+		// (MICRO_KDENV: one lookup about the normal times the kernel at the mean tangent, for every segment)
+		float lenK = 0.;
+		for ( int seg = 0; seg < 7; seg ++ ) lenK += uMicroLen[ seg ];
+		if ( uMicroT1.z > 0. ) acc1 += microEnv( n, 1. ) * microBroadKdK( T1, n, cross( T1, n ), n, bx1, wr, uMicroT1, uMicroA1, eta, 1. ) * lenK;
+#else
 		for ( int seg = 0; seg < 7; seg ++ ) {
 			float w = uMicroLen[ seg ];
 			if ( w <= 0. || uMicroT1.z <= 0. ) continue;
@@ -1078,6 +1034,7 @@ const MICRO_FRAGMENT = /* glsl */`
 			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
 			acc1 += microBroadKd( t, nl, cross( t, nl ), n, bx1, wr, uMicroT1, uMicroA1, eta, 1. ) * w;
 		}
+#endif
 		// the cross threads: one tangent, in the surface
 		vec3 acc2 = microBroadCross( T2, n, cross( T2, n ), n, bx2, wr, uMicroT2, uMicroA2, eta, 0. );
 		float Pr2 = microPr( wr, n, bx2 );
@@ -1086,9 +1043,7 @@ const MICRO_FRAGMENT = /* glsl */`
 		reflectedLight.indirectSpecular += Lr * envMapIntensity;
 	}
 #endif
-#if defined( MICRO_LFUSE )
-	if ( uMicro > 0. && gMicroLN > 0 ) reflectedLight.directSpecular += microLights( normalize( vViewPosition ) );
-#elif defined( MICRO_LLOOP )
+#ifdef MICRO_LLOOP
 	if ( uMicro > 0. ) for ( int i = 0; i < 8; i ++ ) { if ( i >= gMicroLN ) break; reflectedLight.directSpecular += microPoint( gMicroLD[ i ], normalize( vViewPosition ) ) * gMicroLC[ i ]; }
 #endif
 `;
@@ -1123,7 +1078,7 @@ export function createFabricMaterial(zone) {
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
 		uFoilRough: { value: 0.2 }, uGlint: { value: 0 },
-		uMicro: { value: 0 }, uMicroZero: { value: 0 }, uMicroEta: { value: 1.5 }, uMicroA1: { value: new THREE.Color() }, uMicroT1: { value: new THREE.Vector4() }, uMicroA2: { value: new THREE.Color() }, uMicroT2: { value: new THREE.Vector4() }, uMicroR1: { value: new THREE.Vector2(0.3, 0.4) }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uMicro: { value: 0 }, uMicroZero: { value: 0 }, uMicroEta: { value: 1.5 }, uMicroA1: { value: new THREE.Color() }, uMicroT1: { value: new THREE.Vector4() }, uMicroA2: { value: new THREE.Color() }, uMicroT2: { value: new THREE.Vector4() }, uMicroR1: { value: new THREE.Vector2(0.3, 0.4) }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uMicroKdW: { value: new Array(7).fill(0) }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
@@ -1265,9 +1220,9 @@ export const FABRICS = {
 // Same parameters and energy scale (microScale at the full sample counts): only the sampling differs.
 FABRICS.satinfast = { ...FABRICS.satinmicro, label: 'Satin fast (thread model, safe speed-ups)', micro: { ...FABRICS.satinmicro.micro, speed: 'safe' } };
 FABRICS.satinfastest = { ...FABRICS.satinmicro, label: 'Satin fastest (thread model, every speed-up)', micro: { ...FABRICS.satinmicro.micro, speed: 'all' } };
-// Second round, each on top of Satin fastest (MICRO_SPEED, 2026-10-28), then all of them together.
-for (const [k, label] of [['lod', 'texture reads'], ['addr', 'shared lookups'], ['lzero', 'skip unlit lights'], ['lfuse', 'lights together'], ['kd1', 'one milky read'], ['trig', 'stepped angles'], ['all2', 'all round two']])
-	FABRICS['satinf' + k] = { ...FABRICS.satinmicro, label: `Satin F ${label} (thread model, fastest + ${label})`, micro: { ...FABRICS.satinmicro.micro, speed: k } };
+// Round three, each on top of Satin fastest (MICRO_ROUND3, 2026-10-28), then all of them together.
+for (const [k, label] of [['lana', 'lights direct'], ['kdenv', 'one milky read'], ['seg2', 'two per stretch'], ['seg1', 'one per stretch'], ['nocorr', 'simple masking'], ['all3', 'all round three'], ['all3m', 'round three, masking kept']])
+	FABRICS['satin3' + k] = { ...FABRICS.satinmicro, label: `Satin 3 ${label} (thread model, fastest + ${label})`, micro: { ...FABRICS.satinmicro.micro, speed: k } };
 
 // The texture size a scanned fabric starts at (as FABRICS' texScale; owner's review, 2026-10-24):
 // pink organza with glitter, pink oil-slick vegan leather.
@@ -1423,6 +1378,16 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1, s
 		u.uMicroR1.value.set(r(F.gs), r(F.gv));
 		u.uMicroOff.value = F.offsets.map((o) => o * d2r);
 		u.uMicroLen.value = F.lengths;
+		// MICRO_LANA: each sloped segment's kd share goes to the constant segment nearest its middle
+		const off = F.offsets, flat = F.lengths.map((l, i) => off[i] === off[i + 1]), kdW = F.lengths.map((l, i) => (flat[i] ? l : 0));
+		F.lengths.forEach((l, i) => {
+			if (flat[i]) return;
+			const mid = (off[i] + off[i + 1]) / 2;
+			let best = -1;
+			flat.forEach((f, q) => { if (f && (best < 0 || Math.abs(off[q] - mid) < Math.abs(off[best] - mid))) best = q; });
+			if (best >= 0) kdW[best] += l;
+		});
+		u.uMicroKdW.value = kdW;
 	}
 	m.iridescence = f.iridescence ?? 0;
 	m.iridescenceIOR = 1.8;
