@@ -84,8 +84,10 @@ function PanelInspector({ sel, doc }) {
 				<Row label="Texture size"><Slider value={texScaleOf(s)} min={0.25} max={4} step={0.05} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ texScale: v }, g)} /></Row>
 				<Row label="Name"><input type="text" value={p.name ?? ''} onChange={(e) => run({ op: 'panel.set', id: p.id, name: e.currentTarget.value })} /></Row>
 				<Row label="Colour from photo"><button class="btn" title="Pick the colour from a reference photo (look through it, then click the piece)" onClick={() => { toolOptions.value = { ...toolOptions.value, eyedrop: { panel: p.id, layer: 0 } }; tool.value = 'eyedrop'; }}>Pick</button></Row>
-				<Row label="Foil / second"><Select value={s.colour2 ? 'custom' : s.second ?? 'Tone-on-tone'} options={[...SECOND, ['custom', 'Custom colour']]} onChange={(v) => run(v === 'custom' ? { op: 'panel.set', id: p.id, colour2: s.colour2 ?? '#c0c0c8' } : { op: 'panel.set', id: p.id, second: v, colour2: null })} /></Row>
-				{s.colour2 ? <Row label="Second colour"><Colour value={s.colour2} onChange={(v, g) => run({ op: 'panel.set', id: p.id, colour2: v, gesture: g })} /></Row> : null}
+				{f?.twoTone ? null : <>{/* a twoTone fabric's second colour sits under its colour (MaterialPicker) */}
+					<Row label="Foil / second"><Select value={s.colour2 ? 'custom' : s.second ?? 'Tone-on-tone'} options={[...SECOND, ['custom', 'Custom colour']]} onChange={(v) => run(v === 'custom' ? { op: 'panel.set', id: p.id, colour2: s.colour2 ?? '#c0c0c8' } : { op: 'panel.set', id: p.id, second: v, colour2: null })} /></Row>
+					{s.colour2 ? <Row label="Second colour"><Colour value={s.colour2} onChange={(v, g) => run({ op: 'panel.set', id: p.id, colour2: v, gesture: g })} /></Row> : null}
+				</>}
 				{f?.film || f?.duo || f?.flake?.holo || f?.iridescence ? <Row label="Effect"><Slider value={s.effect ?? 1} min={0} max={2} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, g) => set({ effect: v }, g)} /></Row> : null}
 				{f?.flake?.holo || f?.film?.tint ? <Row label="Rainbow speed"><Slider value={s.rainbow ?? 1} min={0.2} max={3} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, g) => set({ rainbow: v }, g)} /></Row> : null}
 				<GradientRows p={p} s={s} doc={doc} />
@@ -101,7 +103,8 @@ function PanelInspector({ sel, doc }) {
 // The thread-model satin's controls (materials/fabric.js SATIN_DEFAULTS: the owner's settings since
 // 2026-10-28; unset fields take them), the widths shown against the paper's measured value (P): sharpness as 2.5 degrees over the highlight's width, glow width as a
 // multiple of 5 degrees, milkiness as a share, sheen as the face-on surface reflection the
-// refractive index gives. The second colour (dyed cross threads) is Foil / second, under More.
+// refractive index gives. The second colour (dyed cross threads) sits under the colour on Duotone
+// satin (twoTone, MaterialPicker) and is Foil / second, under More, on Satin.
 function SatinControls({ s, set }) {
 	const v = { ...SATIN_DEFAULTS, ...s.satin }, put = (k, x, g) => set({ satin: { ...s.satin, [k]: x } }, g);
 	const P = { gs: 2.5, gv: 5 }, refl = (eta) => ((eta - 1) / (eta + 1)) ** 2;

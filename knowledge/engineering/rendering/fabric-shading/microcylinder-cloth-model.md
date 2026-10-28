@@ -527,6 +527,9 @@ black (`app/captures/satin-micro/duo/duo-diagnosis.jpg`).
   speed-ups removes the effect, and the material ships on `duo`.
 - Close-up 1373 × 1764: Duotone 17.2 ms against Satin 16.3 (about +0.9 ms). The full-model build
   runs at 112-133 ms.
+- **UI (owner):** the second colour defines the material, so it is not under More. FABRICS
+  `twoTone: true` makes `MaterialPicker` show a "Second colour" row of swatches (sets `colour2`)
+  right under "Colour". The inspector hides "Foil / second" under More for such fabrics.
 - A dark cross colour under a bright float colour (red floats, teal cross) shows only faintly: the
   band carries the cross dye at its own brightness. One colour (Tone-on-tone) looks like Satin with
   a second, softer band.

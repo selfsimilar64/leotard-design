@@ -32,7 +32,7 @@ function useScans() {
 const scanLabel = (f) => { const s = (f.look ?? f.name).split(/[,(]/)[0].trim(); return s.charAt(0).toUpperCase() + s.slice(1); };
 
 // look: { fabric, colour, second, colour2, texture, texMode }; set(patch, gesture?) applies a
-// change of the piece ({ fabric }, { texture, fabric }, { colour }, { texMode }).
+// change of the piece ({ fabric }, { texture, fabric }, { colour }, { colour2 }, { texMode }).
 export function MaterialPicker({ look, set }) {
 	const scans = useScans(), scanned = !!look.texture;
 	const recolour = !scanned || look.texMode === 'recolour';
@@ -54,6 +54,11 @@ export function MaterialPicker({ look, set }) {
 						{scanned ? <button class={`chip ${!recolour ? 'on' : ''}`} title="The fabric's own colours, as scanned" onClick={() => set({ texMode: 'original' })}>As scanned</button> : null}
 					</>} />
 			</Line>
+			{/* a fabric whose look is two colours (twoTone) shows its second beside the first, not under More (owner, 2026-10-28) */}
+			{!scanned && FABRICS[look.fabric]?.twoTone ? <Line label="Second colour">
+				<Swatches value={look.colour2} colours={PALETTE} onPick={(c) => set({ colour2: c })}
+					custom={<Colour value={look.colour2 ?? look.colour ?? '#888888'} onChange={(v, g) => set({ colour2: v }, g)} />} />
+			</Line> : null}
 		</>
 	);
 }

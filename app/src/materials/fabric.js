@@ -1281,7 +1281,8 @@ export const FABRICS = {
 // that blends with the floats' colour into one hue everywhere (owner, 2026-10-28). Here they are the
 // paper's shot silk (Table II row e) second direction: flat, gamma 5 and 10 degrees, kd 0.1, coverage
 // 0.14 against the floats' 0.86, albedo 3 times the floats' factor (row e's 0.6 against 0.2).
-FABRICS.satinduo = { ...FABRICS.satin, label: 'Duotone satin', micro: { ...FABRICS.satin.micro, speed: 'duo',
+// twoTone: the second colour is the fabric's point, so the picker shows it beside the first.
+FABRICS.satinduo = { ...FABRICS.satin, label: 'Duotone satin', twoTone: true, micro: { ...FABRICS.satin.micro, speed: 'duo',
 	flat: { ...FABRICS.satin.micro.flat, a: 0.86 }, twisted: { A: 0.105, kd: 0.1, gs: 5, gv: 10, a: 0.14 } } };
 
 // The texture size a scanned fabric starts at (as FABRICS' texScale; owner's review, 2026-10-24):
