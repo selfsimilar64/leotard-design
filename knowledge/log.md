@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-28
+* **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): Satin fastest's darkening traced to the cross threads' 2 x 3 samples (5.6/255 darker, less saturated); the 6 cone directions change brightness by 0.1.
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): owner's review: hard highlight line from the analytic direct lights traced to a curve-density jump at segment joins and fixed (Gaussian-weighted density); uncorrelated masking removed; one new Satin 3 (one milky read, one per stretch) with round four rebased on it: 20.7 → 15.1 ms in close-up, the kernel table removing Satin 3's slight darkening.
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): round four in a torso close-up: one evaluation per direct light and a kernel table for the cross threads and kd share, together 17.4 → 14.8 ms (under 60 fps' 16.7); fewer sloped-segment cone directions scrapped (under 1 ms).
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): round two scrapped (each under 1 ms); round three model simplifications as picker materials: analytic direct lights, one-lookup kd share, one tangent per sloped segment and uncorrelated masking; all but the masking change together 25.7 → 16.4 ms, mean 2/255 from fastest. Kd share found weighted a quarter of the paper's (not changed).
