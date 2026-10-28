@@ -1,7 +1,7 @@
 ---
 type: Component
 title: Genesis 9 bodies, poses, expressions and heads (pipeline/daz/bodies.py)
-description: "The app's canonical mesh is Daz Genesis 9's cage subdivided once (100,676 vertices); Daz Studio bakes 6 body types, each with Stacy's face and skin, in the A-pose and 13 Skillful Routine poses with a neutral face (the reference body also with each arm raised); the app combines body, pose, expression and head (none, mannequin, person) at run time. Replaces the MakeHuman mannequin and the wrapped Daz bodies."
+description: "The app's canonical mesh is Daz Genesis 9's cage subdivided once (100,676 vertices); Daz Studio bakes 6 body types, each with Stacy's face and skin, in the A-pose and 10 Skillful Routine poses with a neutral face (the reference body also with each arm raised); the app combines body, pose, expression and head (none, mannequin, person) at run time. Replaces the MakeHuman mannequin and the wrapped Daz bodies."
 tags: [pipeline, component, daz, genesis-9, canonical-mesh, pose, expression, head, migration]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-21T18:00:00Z }
@@ -39,7 +39,7 @@ on load. All output is derived from the owner's licensed Daz content and stays l
 | Field | Values | Notes |
 |---|---|---|
 | `size` (body type) | `child-6`, `child`, `teen`, `older-teen`, `young` (reference), `adult` (`petite` and `broad` removed 2026-10-26 on the owner's request; their designs load on `young` and `adult`) | Growing Up ages and character controllers; scaled to a stature |
-| `pose` | arm poses (`a-pose`, `arms-down`, `hands-on-hips`, … or `{ left, right }` of `rest/down/front/thigh/hip/up`), Daz poses: 13 of the 30 in Skillful Routine since 2026-10-26 (`standing`, `arms-outstretched`, `passe`, `stag-jump`, `kneeling`, `lunge-arms-up`, `handstand`, `cartwheel-low`, `back-arched`, `lunge-arm-up`, `kneeling-arm-up`, `arms-open`, `one-knee`: `bodies.py POSES`; the other 17 were dropped on the owner's request, so a design saved in one of them no longer loads its pose) | the panel lists only the A-pose and the Daz poses; since 2026-10-26 the arm-only poses are no longer baked (owner: no more work on poses the app does not show), so a design saved in one opens in the A-pose (`app.js withKnownPose`) |
+| `pose` | arm poses (`a-pose`, `arms-down`, `hands-on-hips`, … or `{ left, right }` of `rest/down/front/thigh/hip/up`), Daz poses: 10 of the 30 in Skillful Routine since 2026-10-28 (`standing`, `arms-outstretched`, `passe`, `stag-jump`, `kneeling`, `lunge-arms-up`, `back-arched`, `kneeling-arm-up`, `arms-open`, `one-knee`: `bodies.py POSES`; 17 others were dropped on the owner's request on 2026-10-26 and `handstand`, `cartwheel-low`, `lunge-arm-up` on 2026-10-28 (fewer poses to shape), so a design saved in one of them opens in the A-pose) | the panel lists only the A-pose and the Daz poses; since 2026-10-26 the arm-only poses are no longer baked (owner: no more work on poses the app does not show), so a design saved in one opens in the A-pose (`app.js withKnownPose`) |
 | `head` | `none` (cut flat under the chin), `mannequin` (bald head, smoothed), `person` (face, eyes, mouth, lashes, brows, Eirgrid hair) | replaces `form: 'headless'` and the `fig-*` scene bodies |
 | `expression` | `neutral` (smile, closed-mouth smile and focused removed on the owner's request 2026-10-26; a design saved with one shows the neutral face, and the panel hides the row) | person only |
 | `form` | `full`, `torso` (dress form) | |
@@ -151,10 +151,12 @@ baked with `body_ctrl_BreastsFlatten` 0.25 and `body_ctrl_BreastsIn-Out` 1.0 (`b
 starting shape), then `shapes.py` reshapes the skin cage at convert time
 ([taut-cloth bust](/decisions/2026-10-25-sports-bra-cloth-bust.md),
 [smoothed cleft](/decisions/2026-10-26-seat-cleft-cloth.md)): the bust is lifted 2 cm and our taut
-cloth drawn over it once on the A-pose, then carried into every pose and arm pose (each offset
+cloth drawn over it once on the A-pose, then a second grid cloth with its rows pulled straight across the front (since 2026-10-28), then carried into every pose and arm pose (each offset
 turned with its neighbourhood, as Daz skins a morph); the gluteal cleft (all eight bodies) is spanned
 by a grid cloth drawn on each Daz pose's own body. Results are cached in
-`out/bodies/<key>/shaped/` (keyed on the settings and the `.pts` time); a first convert of all
+`out/bodies/<key>/shaped/` (keyed on the settings and the `.pts` time; since 2026-10-28 the bust
+(`bust-a-pose.<bust settings>`) and each pose's seat offset (`seat-<pose>.<seat settings>`) separately,
+as neither moves the other's skin, so a bust change re-draws only four A-pose busts, a few minutes); a first convert of all
 bodies takes about 2 hours, `--no-shapes` skips the step. **Pitfall:** every Skillful Routine pose
 preset writes 0 to all the breast controls (flatten included) and the pectoral rotations;
 `bake_bodies.dsa reshape()` sets the job's morphs again after each pose preset. Flatten is clamped

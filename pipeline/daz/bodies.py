@@ -110,10 +110,10 @@ BODIES = [
 REF = 'young'
 
 # Poses. 'a-pose': the mannequin stance (upper arm 13 degrees from vertical, a little forward;
-# elbow bent 14 degrees forward), the rest pose every design is drawn in. Daz poses: 13 of the 30 in
+# elbow bent 14 degrees forward), the rest pose every design is drawn in. Daz poses: 10 of the 30 in
 # Skillful Routine (3D Sugar), the first five chosen in 2026-10 as the ones that show a leotard
 # best, the rest added on the owner's request (2026-10-21); 17 others were removed on the owner's
-# request (2026-10-26). The app's pose picker lists them in this order. n: the pose's number in the pack (SR G9 Feminine NN ...); the props some of its
+# request (2026-10-26), and handstand, cartwheel low and lunge arm up on 2026-10-28 (fewer to shape). The app's pose picker lists them in this order. n: the pose's number in the pack (SR G9 Feminine NN ...); the props some of its
 # previews show (ball, hoop) are not part of the figure.
 UPPER_DIR = [math.sin(math.radians(13)), -math.cos(math.radians(13)), 0.06]
 ELBOW_BEND = math.radians(14)
@@ -124,10 +124,7 @@ POSES = [
 	dict(key='stag-jump', label='Stag jump', n=25),
 	dict(key='kneeling', label='Kneeling', n=13),
 	dict(key='lunge-arms-up', label='Low lunge, arms up', n=2),
-	dict(key='handstand', label='Handstand', n=4),
-	dict(key='cartwheel-low', label='Cartwheel, low', n=9),
 	dict(key='back-arched', label='Bridge, back arched', n=17),
-	dict(key='lunge-arm-up', label='Lunge, arm up', n=19),
 	dict(key='kneeling-arm-up', label='Kneeling, arm up', n=22),
 	dict(key='arms-open', label='Arms open', n=29),
 	dict(key='one-knee', label='On one knee', n=30),

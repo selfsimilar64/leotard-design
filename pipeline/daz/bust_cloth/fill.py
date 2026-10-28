@@ -37,27 +37,7 @@ for name, kw in runs:
 		gk = dict(dvec=(0, 0, -1), tilt=10.0, shrink=dk['shrink'], iters=dk['iters'], stiff=dk['stiff'], off=dk['off'], verbose=False)
 		gk.update(kw['grid'])
 		X, CF = SP.drape_grid(Pin, free, **gk)
-		if kw.get('hull'):
-			# rows pulled perfectly taut (the limit of tension across only): each grid row becomes the upper
-			# hull of its points seen from the view, i.e. straight across every hollow; blended in by the
-			# free weight and the result's offset smoothed (forward only) so neighbouring rows agree
-			g = SP.drape_grid.last; d, e1, e2 = g['basis']
-			u, z = X @ e1, -(X @ d)
-			dz = np.zeros(len(X))
-			for j in np.unique(g['jj']):
-				k = np.where(g['jj'] == j)[0]; k = k[np.argsort(u[k])]
-				hull = []
-				for i in k:
-					while len(hull) >= 2:
-						a, b = hull[-2], hull[-1]
-						if (u[b] - u[a]) * (z[i] - z[a]) - (z[b] - z[a]) * (u[i] - u[a]) >= 0: hull.pop()
-						else: break
-					hull.append(i)
-				dz[k] = np.interp(u[k], u[hull], z[hull]) - z[k]
-			dz *= np.clip(g['w'], 0, 1) ** kw.get('hull_w', 1.0) * kw['hull']
-			A = D.adjacency(len(X), CF); deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1)
-			for _ in range(kw.get('hull_smooth', 10)): dz = 0.5 * dz + 0.5 * np.maximum((A @ dz) / deg, 0)
-			X = X - np.outer(dz, d)
+		if kw.get('hull'): X = D.taut_rows(X, CF, SP.drape_grid.last, kw['hull'], kw.get('hull_smooth', 10))
 	else:
 		X, CF, _ = D.drape(P1, free, verbose=False, **dk)
 	Q, _ = D.transfer(Pin, free, X, CF, **tk)

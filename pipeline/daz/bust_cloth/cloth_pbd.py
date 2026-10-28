@@ -83,6 +83,30 @@ def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stif
 	return X, CF, used
 
 
+def taut_rows(X, CF, grid, amount=1.0, smooth=10):
+	"""Rows of a grid cloth (seat_proto.drape_grid.last) pulled perfectly taut, the limit of tension
+	across only: each row becomes the upper hull of its points seen from the grid's view, i.e.
+	straight across every hollow; blended in by `amount` times the free weight, the offset smoothed
+	(forward only) so neighbouring rows agree."""
+	d, e1, e2 = grid['basis']
+	u, z = X @ e1, -(X @ d)
+	dz = np.zeros(len(X))
+	for j in np.unique(grid['jj']):
+		k = np.where(grid['jj'] == j)[0]; k = k[np.argsort(u[k])]
+		hull = []
+		for i in k:
+			while len(hull) >= 2:
+				a, b = hull[-2], hull[-1]
+				if (u[b] - u[a]) * (z[i] - z[a]) - (z[b] - z[a]) * (u[i] - u[a]) >= 0: hull.pop()
+				else: break
+			hull.append(i)
+		dz[k] = np.interp(u[k], u[hull], z[hull]) - z[k]
+	dz *= np.clip(grid['w'], 0, 1) * amount
+	A = adjacency(len(X), CF); deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1)
+	for _ in range(smooth): dz = 0.5 * dz + 0.5 * np.maximum((A @ dz) / deg, 0)
+	return X - np.outer(dz, d)
+
+
 def transfer(P, free, X, CF, thick=0.1, relax=30, step=0.5, fade=0.7):
 	"""The band's skin settles onto the cloth: every band vertex goes to the nearest point of the
 	cloth (less a hair's thickness), then relaxes along it so the crushed fold spreads out; faded

@@ -81,6 +81,11 @@ were the bought alternative). What was tried (young adult, A-pose):[^owner]
   forward-facing band across the bust in normal shading, no seam. `hull=0.5` is half-way (0.30 /
   0.08). The underside crease stays (rows only bridge across). A slight notch at the lower front in
   side view on the second-cloth variants is to check.
+- Built in (2026-10-28, owner: "put the Rows Pulled Straight version into the app"; shaping from the
+  13-year-old up, i.e. every body with the sports-bra starting shape): `shapes.py BRIDGE` runs after
+  today's drape: the grid cloth (`band(theta=90, soft_t=40, above=8, soft_hi=12)`, `drape_grid` seen
+  from the front 10 degrees below, `along=0`) and `cloth_pbd.taut_rows(amount=1)`, then the skin
+  settled onto it; identical to the adult test (`fill.py hull100`). Carried into poses as before.
 
 # Revisit if
 
