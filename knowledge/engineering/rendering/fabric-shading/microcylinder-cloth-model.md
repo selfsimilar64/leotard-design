@@ -74,6 +74,11 @@ charmeuse back, silk shot, velvet (matching Fig. 24). γ in degrees.
 | | | Twisted | (1, 0.37, 0.3) × 0.2 | 0.7 | 30 | 60 | 0.33 | 0, 0 | 3 |
 | Silk crepe de chine | 1.345 | Flat | (1, 0.95, 0.05) × 0.12 | 0.2 | 5 | 10 | 0.75 | −35, −35, 35, 35 | 1, 1, 1 |
 | | | Twisted | (1, 0.95, 0.05) × 0.16 | 0.3 | 18 | 32 | 0.25 | 0, 0 | 1 |
+| Silk shot (row e) | 1.345 | Dir 1 | (0.1, 1, 0.4) × 0.2 | 0.1 | 4 | 8 | 0.86 | −25, −25, 25, 25 | 1.33, 2.67, 1.33 |
+| | | Dir 2 | (1, 0, 0.1) × 0.6 | 0.1 | 5 | 10 | 0.14 | 0, 0 | 1 |
+
+Row e (read from the PDF's text layer, whose columns are slightly misaligned) is a two-colour fabric
+in Pont and Koenderink's sense: green one way, red the other.
 
 The charmeuse's albedo (1, 0.37, 0.3) is its pink dye. **[INFERRED]** The app would substitute the
 user's colour (scaled) for it.
@@ -177,6 +182,69 @@ the standard deviation of luminance over the satin's pixels (royal blue #2a4fd0,
 across 0-330° in 30° steps, refined near the peak. That gave std 32.4 at **248°** (32.2 at 240°,
 31.0 at 30°, minimum 8.8 at 150°). Captures `app/captures/satin-micro/show-*.png`. Every colour,
 pastels and white included, keeps visible banding.
+
+**Controls and two-colour satin (owner, 2026-10-27).** The owner asked for four of the paper's
+parameters as controls, plus a shot (two-colour) satin. A panel's `satin: { gs, gv, kd, eta }`
+(`panel.set`) overrides the floats' values; unset keys keep the table's. The cross threads keep
+row c, except that η is shared.
+- **UI** (`SatinControls`, `inspect-garment.jsx`), shown for any fabric with `micro`:
+  - Highlight sharpness = 2.5° / γs (0.25-4×).
+  - Colour glow width = γv / 5° (0.25-6×).
+  - Milkiness = kd (0-100%).
+  - Sheen strength = η (1.2-2.2), shown as face-on reflectance ((η−1)/(η+1))², 4.5% at 1.539.
+  - A Reset button sets `satin: null`.
+- **Energy scale per setting.** `microScale` (`fabric.js`) recomputes the white-room scale for each
+  setting. It runs `microFurnace`, a JS transliteration of `MICRO_FRAGMENT` with every lookup set
+  to 1 and the shader's sample counts. It is cached and takes about 9 ms the first time.
+  - At the table's values it gives **14.63**, reproducing the GPU-measured 14.6, so the default is
+    unchanged.
+  - γs and γv do not change it, because the narrow lobes are deltas.
+  - kd 0 gives 13.9, kd 1 gives 28.7, η 1.2 gives 15.1, η 2.2 gives 12.9.
+  - **Keep `microFurnace` in step with the shader.**
+- **Two colours:** the floats take the piece's colour and the cross threads take `colour2`, or the
+  `second` choice unless it is Tone-on-tone. This is the paper's shot structure on the charmeuse
+  weave. The cross threads carry most of the light seen face-on (a2·kd·A2 is about 0.2 against
+  the floats' 0.05), so **the second colour fills the body and the first shows in the highlight
+  bands and at the edges**.
+- **Renders** (royal blue, White loft 248°): `app/captures/satin-micro/satin-controls.jpg`.
+  - Sharpness 4× (γs 0.6°) brings back contour stripes: the lookups get sharper than the 28 × 12
+    cone sampling can resolve.
+  - Glow width and milkiness are subtle in this soft room.
+  - Sheen 14% turns the satin pale and silvery; 0.8% makes it deep and saturated.
+
+**Cost breakdown (2026-10-27).** GTX 1650, 1071 × 1274 canvas, plain tank in satin, White loft,
+3 direct lights. Measured by toggling uniforms (`uMicro`, kd = 0, all lengths 0) and timing
+render + readPixels:
+
+| Configuration | Frame time |
+|---|---|
+| Whole frame | about 70-77 ms |
+| Satin off | 6 ms |
+| Floats' kd share off | 43 ms |
+| Floats off (cross threads and lights only) | 11 ms |
+
+So of the roughly 65 ms the satin costs:
+- Floats' kd share (7 segments × 96 quadrature lookups): **about 30 ms**.
+- Floats' narrow cones (28 tangents × 12 directions × 2 lookups), with their direct-light terms:
+  **about 30 ms**.
+- Cross threads (96 lookups): about 5 ms.
+
+Optimisation candidates. None is done yet: the owner chooses (no simplifying the
+look while it is being dialled in).
+
+- **Lossless:**
+  1. **Constant segments.** The charmeuse curve has three flat segments (−32→−32, 0→0, 32→32),
+     whose 4 tangent samples are identical. Evaluate each once with weight 4: 12 fewer of the 28
+     narrow evaluations (−43% of that term), in `MICRO_FRAGMENT` and `microPoint`. Not
+     `microFurnace`, which must stay a transliteration, though the result is equal.
+  2. **Env-space hoisting.** `microEnv` transforms every direction by `viewMatrix` and
+     `envMapRotation`. Transform t, nl and bl once per tangent and combine in env space. Also
+     tabulate the constant cos/sin of φ_k and θ_j.
+- **Approximations** (measure each against the current output as reference):
+  3. Floats' kd share by fewer quadrature nodes, or one wide lookup per segment (it is a smooth,
+     diffuse-like term).
+  4. Fewer cone directions on the narrow cones.
+  5. Still-camera refinement: cheap while moving, full quality when still.
 
 **Earlier status (by-eye version):** on navy it showed soft blue bands across the chest, like GK's video. Light colours
 (pink) still read flat, partly because the studio lights from every side. Not yet judged by the

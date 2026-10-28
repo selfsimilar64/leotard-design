@@ -991,15 +991,17 @@ export const FABRICS = {
 	// the dye colour x the table's factor: the table gives (1, 0.37, 0.3) x 0.035 for the floats and
 	// x 0.2 for the cross threads, (1, 0.37, 0.3) being the sample's pink; here the piece's colour
 	// (linear) takes its place. gamma in degrees.
-	// scale: the table's albedos are relative to the authors' own lights and exposure, so their
-	// magnitude is set here by energy (owner, 2026-10-27): in a uniformly white room (radiance 1, no
+	// The albedos' scale: the table's albedos are relative to the authors' own lights and exposure, so
+	// their magnitude is set by energy (owner, 2026-10-27): in a uniformly white room (radiance 1, no
 	// lights) the fabric in a white dye returns all the light reaching it. Measured there (float render
 	// target, no tone mapping) at the table's values: 0.121 white surface shine plus 0.060 coloured
 	// light at a normal view (0.115 + 0.059 at 30 degrees, 0.130 + 0.058 at 60, 0.178 + 0.051 at 75, 0.081 +
 	// 0.048 at 60 across), so the coloured part scales by (1 - 0.121) / 0.060 = 14.6, the least of
 	// the angles measured (none returns more than 1). The table's ratio between floats and cross threads stays.
+	// It is computed per setting (microScale: the same white room at a normal view), so a panel's
+	// satin controls (applyFabric's satin) keep a white dye at full brightness.
 	satinmicro: { label: 'Satin (thread model)', roughness: 0.6, sheen: 0, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
-		micro: { eta: 1.539, scale: 14.6,
+		micro: { eta: 1.539,
 			flat: { A: 0.035, kd: 0.1, gs: 2.5, gv: 5, a: 0.9, offsets: [-32, -32, -18, 0, 0, 18, 32, 32], lengths: [1.33, 0.66, 2, 2, 2, 0.66, 1.33] },
 			twisted: { A: 0.2, kd: 0.7, gs: 30, gv: 60, a: 0.1 } } },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
@@ -1074,12 +1076,100 @@ function secondColour(base, mode, forOmbre, out) {
 		: out.setHSL(_hsl.h, _hsl.s, Math.min(_hsl.l * 1.1 + 0.1, 0.72));
 }
 
+// The thread model in a uniformly white room (radiance 1) at a normal view, for a white dye, as
+// [white surface shine, coloured light per unit of the table's albedo factors]: a transliteration of
+// MICRO_FRAGMENT (microNarrow, microBroad, Q) with every environment lookup 1, at the shader's own
+// sample counts (K 12, MICRO_NT 8, MICRO_NP 12). Keep the two in step. Its scale is the
+// satinmicro scale (FABRICS comment): about 14.6 at the table's values.
+const _dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const _cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const _comb = (...p) => [0, 1, 2].map((i) => p.reduce((s, [k, v]) => s + k * v[i], 0)); // sum of k * v
+function microFurnace(eta, F, W) {
+	const PI = Math.PI, d2r = PI / 180, n = [0, 0, 1], wr = n, T1 = [1, 0, 0], T2 = [0, 1, 0];
+	const fres = (c) => { const g2 = eta * eta - 1 + c * c; if (g2 < 0) return 1; const g = Math.sqrt(g2), a = (g - c) / (g + c), b = (c * (g + c) - 1) / (c * (g - c) + 1); return 0.5 * a * a * (1 + b * b); };
+	const gauss = (s, x) => Math.exp(-x * x / (2 * s * s)) / (2.5066283 * s);
+	const proj = (w, bx) => { const p = _comb([1, w], [-_dot(w, bx), bx]), l = Math.hypot(...p); return l > 0 ? Math.max(_dot(p, n) / l, 0) : 0; };
+	const mp = (wi, bx, phi, phr, Mr, Pr) => {
+		const phd = phi - phr, u = Math.exp(-phd * phd / (2 * 0.349 * 0.349)), Mi = Math.max(Math.cos(phi), 0), Pi = proj(wi, bx);
+		const mix = (a, b) => a + (b - a) * u;
+		return mix(Mi * Mr, Math.min(Mi, Mr)) * mix(Pi * Pr, Math.min(Pi, Pr));
+	};
+	const frame = (t, nl, bx) => {
+		const bl = _cross(t, nl), sr = Math.max(-1, Math.min(1, _dot(wr, t))), pv = _comb([1, wr], [-sr, t]);
+		const phr = Math.atan2(_dot(pv, bl), _dot(pv, nl));
+		return { bl, sr, phr, Mr: Math.max(Math.cos(phr), 0), Pr: proj(wr, bx) };
+	};
+	const narrow = (t, nl, bx, T) => { // T: { kd }; returns [white, coloured]
+		const { bl, sr, phr, Mr, Pr } = frame(t, nl, bx), cr = Math.sqrt(Math.max(1 - sr * sr, 0)), K = 12;
+		let w = 0, c = 0;
+		if (Pr <= 0 || Mr <= 0) return [0, 0];
+		for (let k = 0; k < K; k++) {
+			const phi = ((k + 0.5) / K - 0.5) * PI, wi = _comb([-sr, t], [cr * Math.cos(phi), nl], [cr * Math.sin(phi), bl]);
+			const m = mp(wi, bx, phi, phr, Mr, Pr);
+			if (m <= 0) continue;
+			const c2 = Math.cos(0.5 * (phi - phr)), Fr = fres(cr * c2), Ft = 1 - Fr;
+			w += 2 * Fr * c2 * m; c += (1 - T.kd) * Ft * Ft / Math.max(cr, 1e-2) * m;
+		}
+		return [w * PI / K, c * PI / K];
+	};
+	const broad = (t, nl, bx, T, iso) => {
+		const { bl, sr, phr, Mr, Pr } = frame(t, nl, bx), tr = Math.asin(sr), cr = Math.cos(tr), NT = 8, NP = 12, g = 1 - iso;
+		let w = 0, c = 0;
+		if (Pr <= 0 || Mr <= 0) return [0, 0];
+		for (let j = 0; j < NT; j++) {
+			const ti = ((j + 0.5) / NT - 0.5) * PI, cti = Math.cos(ti), sti = Math.sin(ti), th = 0.5 * (ti + tr), ctd = Math.cos(0.5 * (ti - tr));
+			const gs = g * gauss(T.gs * d2r, th), gv = g * (1 - T.kd) * gauss(T.gv * d2r, th), d2 = Math.max(ctd * ctd, 1e-3);
+			for (let k = 0; k < NP; k++) {
+				const phi = ((k + 0.5) / NP - 0.5) * PI, wi = _comb([sti, t], [cti * Math.cos(phi), nl], [cti * Math.sin(phi), bl]);
+				const m = mp(wi, bx, phi, phr, Mr, Pr);
+				if (m <= 0) continue;
+				const c2 = Math.cos(0.5 * (phi - phr)), Fr = fres(ctd * c2), Ft = 1 - Fr;
+				w += gs * Fr * c2 / d2 * m * cti * cti; c += Ft * Ft * (gv + T.kd) / Math.max(cti + cr, 1e-2) / d2 * m * cti * cti;
+			}
+		}
+		const q = (PI / NT) * (PI / NP);
+		return [w * q, c * q];
+	};
+	const bx1 = _cross(n, T1), bx2 = _cross(n, T2), off = F.offsets.map((o) => o * d2r), len = F.lengths;
+	let w1 = 0, c1 = 0, sumP = 0, sumL = 0;
+	for (let s = 0; s < 28; s++) {
+		const seg = s >> 2, l = len[seg];
+		if (l <= 0) continue;
+		const o = off[seg] + (off[seg + 1] - off[seg]) * ((s - seg * 4 + 0.5) / 4), ca = Math.cos(o), sa = Math.sin(o);
+		const [w, c] = narrow(_comb([ca, T1], [sa, n]), _comb([-sa, T1], [ca, n]), bx1, F);
+		sumP += proj(wr, bx1) * l; sumL += l; w1 += w * l; c1 += c * l;
+	}
+	for (let seg = 0; seg < 7; seg++) {
+		const l = len[seg];
+		if (l <= 0 || F.kd <= 0) continue;
+		const o = 0.5 * (off[seg] + off[seg + 1]), ca = Math.cos(o), sa = Math.sin(o);
+		const [w, c] = broad(_comb([ca, T1], [sa, n]), _comb([-sa, T1], [ca, n]), bx1, F, 1);
+		w1 += w * l; c1 += c * l;
+	}
+	const [w2, c2] = broad(T2, n, bx2, W, 0);
+	const Q = Math.max(F.a * sumP / Math.max(sumL, 1e-4) + W.a * proj(wr, bx2) + (1 - F.a - W.a) * 1, 1e-3);
+	return [(F.a * w1 / Math.max(sumL, 1e-4) + W.a * w2) / Q, (F.a * c1 / Math.max(sumL, 1e-4) * F.A + W.a * c2 * W.A) / Q];
+}
+const _microScales = new Map();
+export function microScale(eta, F, W) {
+	const key = JSON.stringify([eta, F, W]);
+	if (!_microScales.has(key)) { const [w, c] = microFurnace(eta, F, W); _microScales.set(key, (1 - w) / c); }
+	return _microScales.get(key);
+}
+// A panel's satin controls (inspect-garment.jsx), each the floats' own measured value until set:
+// gs (highlight sharpness: the surface lobe's width, degrees), gv (colour glow width: the volume
+// lobe's, degrees), kd (milkiness: the isotropic share of the coloured light), eta (sheen strength:
+// the threads' refractive index, shared by both sets). The cross threads keep the table's values.
+export const SATIN_DEFAULTS = (() => { const mc = FABRICS.satinmicro.micro; return { gs: mc.flat.gs, gv: mc.flat.gv, kd: mc.flat.kd, eta: mc.eta }; })();
+
 const _c = new THREE.Color();
 // colour2: an explicit second colour (hex) for the foil, the ombre's far end or the duochrome
-// shift, instead of the `second` choice. scale: the size of the fabric's texture (glitter and foil
-// dots, mesh holes, film swirls, crushed-velvet bump) as a multiple of its own, the panel's
-// texScale (texScaleOf); a scanned texture takes the same multiple (applyTexture).
-export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
+// shift, instead of the `second` choice; on the thread-model satin, the cross threads' colour (a shot
+// satin: Sadeghi et al. 2013's silk shot fabric dyes its two thread directions apart). scale: the
+// size of the fabric's texture (glitter and foil dots, mesh holes, film swirls, crushed-velvet bump)
+// as a multiple of its own, the panel's texScale (texScaleOf); a scanned texture takes the same
+// multiple (applyTexture). satin: the thread-model satin's controls (SATIN_DEFAULTS), or null.
+export function applyFabric(m, key, colour, second, colour2 = null, scale = 1, satin = null) {
 	const f = FABRICS[key] ?? FABRICS.matte, u = m.userData.u, fl = f.flake ?? f.glint, base = _c.set(colour).clone();
 	const two = (forOmbre, out) => (colour2 ? out.set(colour2) : secondColour(base, second, forOmbre, out));
 	m.color.copy(base).multiplyScalar(f.velvet ? 0.42 : 1);
@@ -1098,10 +1188,13 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1) {
 	u.uMicro.value = mc ? 1 : 0;
 	if (mc) {
 		m.anisotropy = 0.001;
-		const d2r = Math.PI / 180, F = mc.flat, W = mc.twisted;
-		u.uMicroEta.value = mc.eta;
-		u.uMicroA1.value.copy(base).multiplyScalar(F.A * mc.scale); u.uMicroT1.value.set(F.gs * d2r, F.gv * d2r, F.kd, F.a);
-		u.uMicroA2.value.copy(base).multiplyScalar(W.A * mc.scale); u.uMicroT2.value.set(W.gs * d2r, W.gv * d2r, W.kd, W.a);
+		const d2r = Math.PI / 180, W = mc.twisted, o = satin ?? {};
+		const F = { ...mc.flat, gs: o.gs ?? mc.flat.gs, gv: o.gv ?? mc.flat.gv, kd: o.kd ?? mc.flat.kd }, eta = o.eta ?? mc.eta, k = microScale(eta, F, W);
+		// one colour unless the panel picks a second (Tone-on-tone: the same dye both ways)
+		const cross = colour2 || second !== 'Tone-on-tone' ? two(false, new THREE.Color()) : base;
+		u.uMicroEta.value = eta;
+		u.uMicroA1.value.copy(base).multiplyScalar(F.A * k); u.uMicroT1.value.set(F.gs * d2r, F.gv * d2r, F.kd, F.a);
+		u.uMicroA2.value.copy(cross).multiplyScalar(W.A * k); u.uMicroT2.value.set(W.gs * d2r, W.gv * d2r, W.kd, W.a);
 		// a prefiltered lookup's roughness r blurs like GGX at alpha = r^2, whose half-width at half maximum
 		// (tan theta = 0.64 alpha) matches a Gaussian lobe of width gamma (1.177 gamma) at alpha = 1.84 gamma
 		const r = (g) => Math.sqrt(Math.min(1.84 * g * d2r, 1));

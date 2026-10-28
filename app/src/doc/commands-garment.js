@@ -329,11 +329,11 @@ function setStackFields(tx, p, a, layer = 0) {
 	// a new fabric or scan starts at its own default texture size (materials/fabric.js texScaleOf)
 	const cur = p.stack[layer];
 	if (cur && a.texScale === undefined && ((a.fabric !== undefined && a.fabric !== cur.fabric) || (a.texture !== undefined && (a.texture ?? undefined) !== cur.texture))) tx.set([...base, 'texScale'], undefined);
-	for (const k of ['fabric', 'colour', 'second', 'colour2', 'effect', 'rainbow', 'sheer', 'grain', 'print', 'ombre', 'texture', 'texMode', 'texScale', 'texNormal', 'masks']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
+	for (const k of ['fabric', 'colour', 'second', 'colour2', 'effect', 'rainbow', 'satin', 'sheer', 'grain', 'print', 'ombre', 'texture', 'texMode', 'texScale', 'texNormal', 'masks']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
 }
 
 defineCommand('panel.set', {
-	label: 'Change panel', args: '{ id | at: spec, fabric?, colour?, second?, colour2? (hex: foil, ombre end, duochrome shift), effect? (0..2: hologram / film / duochrome strength), rainbow? (0.2..3: how fast hologram or opal colours change with the angle, 1 = the fabric default),sheer? (0..0.95: share seen through a mesh or lace net), grain?, ombre?: { colour, curve | axis, start, end } | null, print?: { src, size: [w, h] m, offset } | null, texture? (scan id or null), texMode?: original|recolour, texScale?, texNormal?, masks?: [colours], name?, layer? (0 = outer) }',
+	label: 'Change panel', args: '{ id | at: spec, fabric?, colour?, second?, colour2? (hex: foil, ombre end, duochrome shift), effect? (0..2: hologram / film / duochrome strength), rainbow? (0.2..3: how fast hologram or opal colours change with the angle, 1 = the fabric default), satin?: { gs?, gv?, kd?, eta? } | null (Satin (thread model): highlight width and colour glow width in degrees, milkiness 0..1, refractive index; unset = the paper value; colour2 or second dyes the cross threads),sheer? (0..0.95: share seen through a mesh or lace net), grain?, ombre?: { colour, curve | axis, start, end } | null, print?: { src, size: [w, h] m, offset } | null, texture? (scan id or null), texMode?: original|recolour, texScale?, texNormal?, masks?: [colours], name?, layer? (0 = outer) }',
 	run(tx, a) {
 		const p = findPanel(tx, a);
 		setStackFields(tx, p, a, a.layer ?? 0);

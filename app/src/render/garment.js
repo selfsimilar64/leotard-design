@@ -131,7 +131,7 @@ export class GarmentView {
 		for (const p of doc.panels) {
 			if (p.removed || !p.stack?.length) continue;
 			const s = p.stack[0], m = this.material(p.id), u = m.userData.u;
-			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone', s.colour2 ?? null, texScaleOf(s));
+			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone', s.colour2 ?? null, texScaleOf(s), s.satin);
 			// effect strength: how strongly a hologram, film or duochrome shows (1 = the fabric's own)
 			if (s.effect !== undefined && s.effect !== 1) { const e = s.effect; u.uFilmTint.value *= e; u.uHolo.value = Math.min(u.uHolo.value * e, 1); u.uDuo.value *= e; m.iridescence = Math.min(m.iridescence * e, 1); }
 			// rainbow speed: how fast a hologram's or opal's colours run through the spectrum as the

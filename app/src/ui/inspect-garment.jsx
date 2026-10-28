@@ -5,7 +5,7 @@ import { Section, Row, Select, Colour, Slider, Toggle, run } from './controls.js
 import { selection, tool } from './state.js';
 import { toolOptions } from './tools.js';
 import { StoneToolOptions } from './inspect-stones.jsx';
-import { FABRICS, SECOND, texScaleOf } from '../materials/fabric.js';
+import { FABRICS, SECOND, SATIN_DEFAULTS, texScaleOf } from '../materials/fabric.js';
 import { MaterialPicker } from './FabricPicker.jsx';
 import { Pane, More, Line, Chips } from './Gallery.jsx';
 import { DecalToolOptions } from './inspect-decals.jsx';
@@ -75,6 +75,7 @@ function PanelInspector({ sel, doc }) {
 			</> : <>
 				<MaterialPicker look={{ fabric: s.fabric, colour: s.colour ?? '#888888', second: s.second ?? 'Tone-on-tone', colour2: s.colour2 ?? null, texture: s.texture ?? null, texMode: s.texMode }} set={set} />
 				<Gradient p={p} s={s} doc={doc} />
+				{f?.micro ? <SatinControls s={s} set={set} /> : null}
 				{f?.mesh ? <Line label="Sheerness"><Slider value={s.sheer ?? (3.6276 * f.mesh.holeR ** 2) ** 2} min={0} max={0.95} step={0.01} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ sheer: v }, g)} /></Line> : null}
 				<div class="actions"><button class="btn" title="Make this piece an opening (a keyhole, a cut-out)" onClick={() => run({ op: 'panel.cut', id: p.id })}>Cut out</button></div>
 			</>}
@@ -95,6 +96,22 @@ function PanelInspector({ sel, doc }) {
 			</More>
 		</Pane>
 	);
+}
+
+// The thread-model satin's controls (materials/fabric.js SATIN_DEFAULTS), each shown against the
+// paper's measured value: sharpness as 2.5 degrees over the highlight's width, glow width as a
+// multiple of 5 degrees, milkiness as a share, sheen as the face-on surface reflection the
+// refractive index gives. The second colour (dyed cross threads) is Foil / second, under More.
+function SatinControls({ s, set }) {
+	const v = { ...SATIN_DEFAULTS, ...s.satin }, put = (k, x, g) => set({ satin: { ...s.satin, [k]: x } }, g);
+	const D = SATIN_DEFAULTS, refl = (eta) => ((eta - 1) / (eta + 1)) ** 2;
+	return <>
+		<Line label="Highlight sharpness"><Slider value={D.gs / v.gs} min={0.25} max={4} step={0.05} format={(x) => x.toFixed(2) + '×'} onChange={(x, g) => put('gs', D.gs / x, g)} /></Line>
+		<Line label="Colour glow width"><Slider value={v.gv / D.gv} min={0.25} max={6} step={0.05} format={(x) => x.toFixed(2) + '×'} onChange={(x, g) => put('gv', D.gv * x, g)} /></Line>
+		<Line label="Milkiness"><Slider value={v.kd} min={0} max={1} step={0.01} format={(x) => Math.round(x * 100) + '%'} onChange={(x, g) => put('kd', x, g)} /></Line>
+		<Line label="Sheen strength"><Slider value={v.eta} min={1.2} max={2.2} step={0.005} format={(x) => (refl(x) * 100).toFixed(1) + '%'} onChange={(x, g) => put('eta', x, g)} /></Line>
+		{s.satin ? <div class="actions"><button class="btn" title="Back to the measured satin (Sadeghi et al. 2013)" onClick={() => set({ satin: null })}>Reset satin</button></div> : null}
+	</>;
 }
 
 // The piece's colour gradient as a designer picks it: a second colour and a direction. The
