@@ -108,7 +108,7 @@ def view_basis(tilt, dvec=None):
 	return d, e1, e2
 
 
-def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff=1.0, along=1.0, thick=0.15, relax=0.01, verbose=True, node_all=False, fill=0, cling=0.0, dvec=None, jump=None, cling_mode='skin', cut_mode='leg', cut_core=0.5):
+def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff=1.0, along=1.0, thick=0.15, relax=0.01, verbose=True, node_all=False, fill=0, cling=0.0, dvec=None, jump=None, cling_mode='skin', cut_mode='leg', cut_core=0.5, ke_pow=1.0):
 	"""A fresh cloth: a regular grid over the seat as seen from behind and a little below, laid on the
 	skin's envelope from that view (so no extra material sits in the cleft), held where the band's
 	free weight is ~0, then pulled taut (tension-only springs, stronger across than along when
@@ -154,19 +154,21 @@ def drape_grid(P, free, tilt=30.0, h=0.3, off=1.0, shrink=0.3, iters=1500, stiff
 	CF = np.array(q)
 	TCtri = g9.triangles(CF)
 	jj, ii = np.nonzero(node)
+	drape_grid.last = dict(ii=ii, jj=jj, w=None, basis=(d, e1, e2))  # the grid's rows, for a caller that post-processes them
 	V = np.stack([x0 + ii * h, y0 + jj * h, s[node]], 1)
 	w = np.clip(wgrid[node] / 0.25, 0, 1)
 	X0 = from_v(V)
 	X = from_v(V + np.outer(off * w, [0, 0, 1]))
 	n = len(X)
 	inv = np.where(w > 0.02, 1.0, 0.0)
+	drape_grid.last['w'] = w
 	if cut: inv[list(cut)] = 0.0  # the cloth's cut edge is held on the skin
 	E = np.concatenate([CF[:, [0, 1]], CF[:, [1, 2]], CF[:, [2, 3]], CF[:, [3, 0]], CF[:, [0, 2]], CF[:, [1, 3]]])
 	E = np.unique(np.sort(E, 1), axis=0)
 	ed = X0[E[:, 1]] - X0[E[:, 0]]
 	L0 = np.sqrt(((V[E[:, 1], 0] - V[E[:, 0], 0]) ** 2) + ((V[E[:, 1], 1] - V[E[:, 0], 1]) ** 2)) * (1 - shrink)  # grid lengths (flat)
 	c2 = ed[:, 0] ** 2 / np.maximum((ed ** 2).sum(1), 1e-12)
-	ke = c2 + along * (1 - c2)
+	ke = c2 ** ke_pow + along * (1 - c2)  # ke_pow > 1: diagonals slacken too, only the rows pull (bust bridge)
 	import scipy.sparse as sps
 	A = D.adjacency(n, CF); deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1)
 	BP, BN = g9.surface_samples(PS, TS[sel], NS, 0.2)

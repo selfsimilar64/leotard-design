@@ -84,7 +84,9 @@ overshoots; neither changes the shipped settings. Findings in the
 [decision](../../../knowledge/decisions/2026-10-25-sports-bra-cloth-bust.md): bending, tightness,
 thickness and the band top barely move a cloth cut from the skin's mesh; a fresh grid cloth over
 today's result fills most. Best so far (adult): `"best: dict(two=True, theta=90.0, soft_t=40.0,
-above=8.0, soft_hi=12.0, grid=dict(along=0.25))"`.
+above=8.0, soft_hi=12.0, grid=dict(along=0.25))"`. Straight bridge: `grid=dict(along=0.0)` with
+`hull=1.0` (rows pulled taut; `seat_proto.drape_grid.last` holds the grid's rows for it); `stats.json`
+`dip_*` measures it. `drape_grid(ke_pow=...)` (diagonals slacken) was tried and is not used.
 
 ## Bust in poses (2026-10-26)
 

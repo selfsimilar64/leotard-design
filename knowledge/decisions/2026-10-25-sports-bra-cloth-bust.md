@@ -70,6 +70,17 @@ were the bought alternative). What was tried (young adult, A-pose):[^owner]
   soft_hi=12, grid=dict(along=0.25)`: 1.80, one forward-facing sweep across the bust in normal
   shading, no seam (a held top edge at 4 cm left a line). The grid alone on a 70-degree band sharpened
   the outer underside crease. Not baked; awaiting the owner.
+- Towards a straight bridge (2026-10-28, owner: "until the cloth bridges the bust in a straight
+  line"; `app/captures/bust-cloth/fill8`-`fill10/`). `dip` = how far the midline sits behind a
+  straight line between the breasts' front-most points, per 1 cm row (max / mean, cm): today 1.29 /
+  0.79; grid cloth along 0.25: 0.62 / 0.23; along 0: 0.45 / 0.13 (the cloth itself dips ~0.4 at
+  nipple height: its diagonals still pull up and down). `fill` (forward-only smoothing) does nothing
+  (the midline is a saddle). Slackening the diagonals (`drape_grid(ke_pow=4/16)`) lets the cloth
+  wander: dip 0.55-0.83. Limit taken directly: `hull=1` pulls every grid row taut (upper hull in the
+  view, blended by the free weight): 0.42 / 0.06 (worst row at the band's edge), one even
+  forward-facing band across the bust in normal shading, no seam. `hull=0.5` is half-way (0.30 /
+  0.08). The underside crease stays (rows only bridge across). A slight notch at the lower front in
+  side view on the second-cloth variants is to check.
 
 # Revisit if
 
