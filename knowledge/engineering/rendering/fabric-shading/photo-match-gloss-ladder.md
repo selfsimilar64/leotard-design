@@ -89,6 +89,9 @@ side-by-side in the owner's setup and the failed try F, the owner chose **try 2*
 It is now `satin` (Stretch satin). Every other try, `SATIN_TRY` and their tiles are removed, and
 designs naming a removed try open on `satin` (`RETIRED_FABRICS`).[^owner]
 
+**Superseded (owner, 2026-10-28):** Stretch satin is removed. The key `satin` is now the
+thread-model Satin ([microcylinder cloth model](microcylinder-cloth-model.md)), the app's only satin.
+
 # Coloured shine (try F)
 
 The owner saw tries 2, C and E as slightly plastic or greyed. A second GK photo of the navy

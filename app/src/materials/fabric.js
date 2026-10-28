@@ -685,20 +685,13 @@ const MICRO_Q = { K: 12, CROSS: { NT: 8, NP: 12, QR: 0.5 }, KD: { NT: 8, NP: 12,
 // - MICRO_K 6: six cone directions (12), -8.1 ms, contour stripes up to 28/255 (look-changing);
 // - MICRO_CROSS: the cross threads at 2 x 3 nodes (8 x 12), -6.0 ms, up to 30/255 (look-changing).
 // microFurnace keeps MICRO_Q (the full model's scale) for every speed.
-const MICRO_SPEED = {
-	safe: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '' },
-	all: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '', MICRO_K: 6, MICRO_CROSS: '' },
-};
-// Round three: model simplifications on top of 'all' (owner: bolder cuts are fine while the look holds;
-// ideas from a Fable review, 2026-10-28). The owner's pick, 'r3', keeps two (2026-10-28):
+// Round three: model simplifications (owner: bolder cuts are fine while the look holds; ideas from a
+// Fable review, 2026-10-28). Kept:
 // - MICRO_KDENV: the floats' kd share as one roughness-1 lookup about the normal times its kernel at
 //   the mean tangent, no lookups inside the quadrature;
 // - MICRO_SEG n: n tangent samples per sloped segment, each lookup blurred to the spacing.
-// Left out of r3: MICRO_LANA (below, now in round four), which drew a hard line in the highlight, and
-// uncorrelated masking, which darkened the sides (removed).
-MICRO_SPEED.r3 = { ...MICRO_SPEED.all, MICRO_KDENV: '', MICRO_SEG: 1 };
-// Round four on top of r3 (owner: close-ups must hold 60 fps; no resolution drop; third Fable review,
-// 2026-10-28):
+// Uncorrelated masking, which darkened the sides, was removed.
+// Round four (owner: close-ups must hold 60 fps; no resolution drop; third Fable review, 2026-10-28):
 // - MICRO_LANA: direct lights' narrow lobes on the sloped segments integrated analytically about the
 //   offset o* that meets the specular condition (microPointA); the constant segments stay exact, and the
 //   sloped segments' kd share is folded into them (uMicroKdW);
@@ -708,10 +701,12 @@ MICRO_SPEED.r3 = { ...MICRO_SPEED.all, MICRO_KDENV: '', MICRO_SEG: 1 };
 //   table by view angle (microLut; needs MICRO_KDENV).
 // Tried and scrapped (under 1 ms each): 3 or 4 cone directions on the sloped segments with blurred
 // lookups (-0.6, -0.2 ms).
-MICRO_SPEED.lana = { ...MICRO_SPEED.r3, MICRO_LANA: '' };
-MICRO_SPEED.lone = { ...MICRO_SPEED.lana, MICRO_LONE: '' };
-MICRO_SPEED.lut = { ...MICRO_SPEED.r3, MICRO_LUT: '' };
-MICRO_SPEED.all4 = { ...MICRO_SPEED.lone, MICRO_LUT: '' };
+// The owner chose all of them, 'all4' (Satin; 2026-10-28). The full model (no switches) and each
+// step's measurements are in the knowledge note.
+const MICRO_SPEED = {
+	all4: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '', MICRO_K: 6, MICRO_CROSS: '',
+		MICRO_KDENV: '', MICRO_SEG: 1, MICRO_LANA: '', MICRO_LONE: '', MICRO_LUT: '' },
+};
 // A broad term by quadrature: the whole thread function (iso = 0), or only its kd share (iso = 1).
 // Lookups are blurred to about the quadrature's spacing (QR), which prefilters the integrand.
 // ENV false: the kernel alone, every lookup taken as 1 (MICRO_KDENV).
@@ -1186,14 +1181,9 @@ export const FABRICS = {
 	checker: { label: 'UV checker (debug)', roughness: 0.8, checker: 0.02 },
 	shiny: { label: 'Shiny tricot', roughness: 0.4, sheen: 0.2, sheenRoughness: 0.5, anisotropy: 0.6, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.6 }, texScale: 1.85,
 		glint: { pitch: 0.00022, dotR: 0.4, presence: 0.25, tilt: 0.3, rough: 0.1, colorVar: 0.5, strength: 1 } },
-	// Stretch satin (GK, 76/24 nylon): broad silky highlights stretched round the body (horizontal bands
-	// on the chest in GK's turntable video), smooth at body distance; fine glints only up close. The
-	// owner's pick of seven tries (2026-10-27): its white-only shine still reads slightly plastic; a
-	// coloured-shine model is next (knowledge/engineering/rendering/fabric-shading/photo-match-gloss-ladder.md).
-	satin: { label: 'Stretch satin', roughness: 0.22, sheen: 0.15, sheenRoughness: 0.5, anisotropy: 0.9, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
-		glint: { pitch: 0.00016, dotR: 0.4, presence: 0.06, tilt: 0.2, rough: 0.08, colorVar: 0.4, strength: 1 } },
-	// Satin by the microcylinder model (MICRO_FRAGMENT), on trial against Stretch satin (owner,
-	// 2026-10-27): the measured front of polyester satin charmeuse exactly as published (Sadeghi et al.
+	// Satin: the microcylinder model (MICRO_FRAGMENT), the app's only satin since 2026-10-28 (owner: it
+	// replaced Stretch satin and the speed trials, as the trial "Satin 4 all round four", MICRO_SPEED.all4).
+	// The measured front of polyester satin charmeuse as published (Sadeghi et al.
 	// 2013, Table II row c), nothing fitted by eye (owner: use the model as presented). Its albedos are
 	// the dye colour x the table's factor: the table gives (1, 0.37, 0.3) x 0.035 for the floats and
 	// x 0.2 for the cross threads, (1, 0.37, 0.3) being the sample's pink; here the piece's colour
@@ -1207,11 +1197,12 @@ export const FABRICS = {
 	// the angles measured (none returns more than 1). The table's ratio between floats and cross threads stays.
 	// It is computed per setting (microScale: the same white room at a normal view), so a panel's
 	// satin controls (applyFabric's satin) keep a white dye at full brightness.
-	// Defaults since 2026-10-28 are the owner's own satin settings (their plum design), not the table's
-	// floats (eta 1.539, kd 0.1, gs 2.5, gv 5): eta 1.505, kd 0.5, gs 10/3, gv 9.75.
-	satinmicro: { label: 'Satin (thread model)', roughness: 0.6, sheen: 0, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
-		micro: { eta: 1.505,
-			flat: { A: 0.035, kd: 0.5, gs: 10 / 3, gv: 9.75, a: 0.9, offsets: [-32, -32, -18, 0, 0, 18, 32, 32], lengths: [1.33, 0.66, 2, 2, 2, 0.66, 1.33] },
+	// Defaults are the owner's dialled-in satin (2026-10-28, on Satin 4 all round four), not the table's
+	// floats (kd 0.1, gs 2.5, gv 5): sharpness 0.75x (gs 10/3), glow 1.25x (gv 6.25), milkiness 25%, the
+	// table's eta.
+	satin: { label: 'Satin', roughness: 0.6, sheen: 0, knit: 1, scan: { id: 'TX-00001482', scale: 0.81, normal: 0.45 }, texScale: 1.85,
+		micro: { eta: 1.539, speed: 'all4',
+			flat: { A: 0.035, kd: 0.25, gs: 10 / 3, gv: 6.25, a: 0.9, offsets: [-32, -32, -18, 0, 0, 18, 32, 32], lengths: [1.33, 0.66, 2, 2, 2, 0.66, 1.33] },
 			twisted: { A: 0.2, kd: 0.7, gs: 30, gv: 60, a: 0.1 } } },
 	// Wet look is a cire tricot: the knit's own fibres glazed flat by hot rollers, not a rubber skin
 	// over it, so its gloss is a softened, grain-streaked shine with the knit faintly under it. A
@@ -1256,16 +1247,6 @@ export const FABRICS = {
 	glitterfoil: { label: 'Glitter-grain foil', metalness: 1, roughness: 0.3, flake: { pitch: 0.00035, dotR: 0.58, presence: 1, tilt: 0.35, rough: 0.18, colorVar: 0.25 } },
 	illusion: { label: 'Illusion mesh (very sheer)', roughness: 0.8, sheen: 0.2, sheenRoughness: 0.6, mesh: { pitch: 0.0006, holeR: 0.46 } },
 };
-// The thread-model satin with the measured speed-ups (MICRO_SPEED; knowledge note
-// microcylinder-cloth-model.md, 2026-10-28), side by side with it for the owner to try in the app:
-// 'safe' (every option within 4/255 of satinmicro) and 'all' (those plus the two that change the look).
-// Same parameters and energy scale (microScale at the full sample counts): only the sampling differs.
-FABRICS.satinfast = { ...FABRICS.satinmicro, label: 'Satin fast (thread model, safe speed-ups)', micro: { ...FABRICS.satinmicro.micro, speed: 'safe' } };
-FABRICS.satinfastest = { ...FABRICS.satinmicro, label: 'Satin fastest (thread model, every speed-up)', micro: { ...FABRICS.satinmicro.micro, speed: 'all' } };
-// Round three as the owner picked it (MICRO_SPEED.r3), then round four on top of it.
-FABRICS.satin3 = { ...FABRICS.satinmicro, label: 'Satin 3 (thread model, fastest + one milky read + one per stretch)', micro: { ...FABRICS.satinmicro.micro, speed: 'r3' } };
-for (const [k, label] of [['lana', 'lights direct'], ['lone', 'one light read'], ['lut', 'table for cross threads'], ['all4', 'all round four']])
-	FABRICS['satin4' + k] = { ...FABRICS.satinmicro, label: `Satin 4 ${label} (thread model, round three + ${label})`, micro: { ...FABRICS.satinmicro.micro, speed: k } };
 
 // The texture size a scanned fabric starts at (as FABRICS' texScale; owner's review, 2026-10-24):
 // pink organza with glitter, pink oil-slick vegan leather.
@@ -1276,11 +1257,11 @@ export const texScaleOf = (look) => look.texScale ?? (look.texture ? SCAN_SCALE[
 // Fabrics the owner took out of the app (review, 2026-10-24) and what a design that used one shows
 // instead (doc/schema.js migrate): lace and shattered glass hologram. Retired scans are hidden from
 // the picker and dropped from a design, which then shows its base fabric (textures.js baseFabricFor);
-// TX-00001482 stays loadable, as matte lycra's own scan. The satin tries the owner compared (2026-10-27)
-// fall back to Stretch satin, which is try 2.
+// TX-00001482 stays loadable, as matte lycra's own scan. Every satin try (2026-10-27) and the
+// thread-model trials (2026-10-28) fall back to Satin, the one satin (owner, 2026-10-28; Stretch satin,
+// the three.js satin that used the key before, went with them).
 export const RETIRED_FABRICS = { lace: 'mesh', shattered: 'hologram', satin1: 'satin', satin2: 'satin', satinA: 'satin', satinB: 'satin', satinC: 'satin', satinD: 'satin', satinFC: 'satin', satinFE: 'satin',
-	// the round-three thread-model satins, replaced by one Satin 3 (owner, 2026-10-28)
-	satin3all3: 'satin3', satin3all3m: 'satin3', satin3lana: 'satin3', satin3kdenv: 'satin3', satin3seg2: 'satin3', satin3seg1: 'satin3', satin3nocorr: 'satin3' };
+	...Object.fromEntries(['satinmicro', 'satinfast', 'satinfastest', 'satin3', 'satin3all3', 'satin3all3m', 'satin3lana', 'satin3kdenv', 'satin3seg2', 'satin3seg1', 'satin3nocorr', 'satin4lana', 'satin4lone', 'satin4lut', 'satin4all4'].map((k) => [k, 'satin'])) };
 export const RETIRED_SCANS = new Set(['TX-00006026', 'TX-00005344', 'TX-00004683', 'TX-00001482', 'TX-00003863']); // opal metallic double knit, black mesh tulle, green tricot with holofoil dots, royal blue scuba, pink glitter double knit
 
 export const SECOND = ['Tone-on-tone', 'Silver', 'Gold', 'White', 'Black'];
@@ -1301,7 +1282,7 @@ function secondColour(base, mode, forOmbre, out) {
 // [white surface shine, coloured light per unit of the table's albedo factors]: a transliteration of
 // MICRO_FRAGMENT (microNarrow, microBroad, Q) with every environment lookup 1, at the shader's own
 // sample counts (MICRO_Q). Keep the two in step. Its scale is the
-// satinmicro scale (FABRICS comment): about 14.6 at the table's values.
+// satin scale (FABRICS comment): about 14.6 at the table's values.
 const _dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const _cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const _comb = (...p) => [0, 1, 2].map((i) => p.reduce((s, [k, v]) => s + k * v[i], 0)); // sum of k * v
@@ -1408,7 +1389,7 @@ export function microScale(eta, F, W) {
 // gs (highlight sharpness: the surface lobe's width, degrees), gv (colour glow width: the volume
 // lobe's, degrees), kd (milkiness: the isotropic share of the coloured light), eta (sheen strength:
 // the threads' refractive index, shared by both sets). The cross threads keep the table's values.
-export const SATIN_DEFAULTS = (() => { const mc = FABRICS.satinmicro.micro; return { gs: mc.flat.gs, gv: mc.flat.gv, kd: mc.flat.kd, eta: mc.eta }; })();
+export const SATIN_DEFAULTS = (() => { const mc = FABRICS.satin.micro; return { gs: mc.flat.gs, gv: mc.flat.gv, kd: mc.flat.kd, eta: mc.eta }; })();
 
 const _c = new THREE.Color();
 // colour2: an explicit second colour (hex) for the foil, the ombre's far end or the duochrome

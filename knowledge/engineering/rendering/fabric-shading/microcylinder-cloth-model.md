@@ -480,6 +480,37 @@ light, which the 8 × 12 quadrature catches. MICRO_LUT (one lookup about n times
 integrated with every lookup 1) does not lose that light, which is why the kernel table brings Satin 3's
 brightness back. Map: `app/captures/satin-micro/opt7/darkening.jpg`.
 
+**One Satin (owner, 2026-10-28).** The owner chose "Satin 4 all round four" and dialled it in:
+sharpness 0.75× (γs 10/3°), glow 1.25× (γv 6.25°), milkiness 25%, sheen at the paper's 4.5%
+(η 1.539). It is now the app's only satin: key `satin`, label "Satin", `micro.speed: 'all4'`, those
+values as defaults. Removed from the picker: Stretch satin (the three.js satin that held the key),
+Satin (thread model), fast, fastest, Satin 3 and the Satin 4 variants. All of them map to `satin` in
+`RETIRED_FABRICS`, so old designs open as the new Satin. `MICRO_SPEED` keeps only `all4`. The shader
+switches stay, so the full model is still the shader with no defines (for future comparisons).
+
+**Why the two-tone (shot) satin shows one blended colour (owner, 2026-10-28).** Test: owner
+design, teal `#2e616b` floats and red `#c0182a` cross threads, then each set alone with the other
+black (`app/captures/satin-micro/duo/duo-diagnosis.jpg`).
+- Each set alone covers the whole torso fairly evenly. Together they add up in every pixel to one
+  mixed hue (pink, and red-salmon when swapped). There is no place where one colour shows and the
+  other does not.
+- Causes, from the model as set up:
+  1. The cross threads are the charmeuse's *twisted* threads: very broad lobes (γs 30°, γv 60°)
+     and kd 0.7. Their colour is a soft, even glow that hardly depends on angle. Their albedo
+     factor is 0.2 against the floats' 0.035, which offsets their 0.1 coverage.
+  2. The floats' colour is also broad at these settings (γv 6.25° glow plus kd 0.25).
+  3. Both sets' surface highlights are white (Fresnel), so no highlight carries a dye colour.
+  4. In Satin (MICRO_LUT) the cross threads are a view-dependent term times one blurred lookup
+     about the normal. They cannot form a highlight band of their own, whatever their parameters.
+- A shot fabric reads as two colours because each thread set's coloured reflection peaks at
+  different angles. In the paper's shot silk (row e) both sets are flat with narrow lobes (γ 4-5°
+  / 8-10°, kd 0.1), so each colour appears where its own threads catch the light.
+- Option (not built; owner to choose): when a second colour is set, light the cross threads like
+  the floats. One constant tangent (their direction, round the body) with narrow lobes (row e's
+  dir 2: γs 5°, γv 10°, kd 0.1) through the cone path and the direct lights, and more coverage.
+  Each colour would then show in its own bands: floats' across the body, cross threads' round it.
+  Estimated cost: one more constant-segment tangent, under 1 ms.
+
 **Testing pitfalls:**
 - A shader that fails to compile draws nothing, so its timing is faster than the scene without
   satin. Check `LINK_STATUS` before trusting a number (one edit joined a line onto `#elif`).
