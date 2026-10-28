@@ -439,6 +439,31 @@ narrow cones 4.8 ms, direct lights 2.9, cross threads 1.0, kd share 0.2.
 - Sheet: `app/captures/satin-micro/opt5/round-four.jpg`; full model, round three and round four
   side by side: `full-r3-r4.jpg`.
 
+**Owner's review of the picker materials (2026-10-28) and the rebase.**
+- By eye: Satin fast is the closest to the full model. Satin fastest is a little darker and less
+  saturated, with less colour glow ("something's missing"). Measured over the satin (torso
+  1080 × 1440): fast mean 1.4/255 from the full model (0.7 darker); fastest 9.2 (5.3 darker);
+  Satin 3 7.9 (4.4 darker).
+- Satin 3 all, Satin 3 masking kept and Satin 3 lights direct drew a **hard line in the highlight**.
+  Cause: `microPointA` took the curve density rho of the one sloped segment holding o*, and rho
+  jumps at the segments' joins (2.70 vs 6.37 per radian), so the light's band changed brightness
+  abruptly where o* crossed ±18°. Fix: each lobe is a Gaussian in offset of width γ / dth about
+  o*; it is weighted by every sloped segment's rho times the Gaussian's share inside that segment
+  (`microCdf`, a tanh fit of the normal CDF, argument clamped against tanh overflow). This also
+  replaces the old end-fade. Checked by a signed difference map: the jagged edge across the upper
+  chest is gone. Lights direct now differs from its base by mean 0.1, worst 5/255.
+- Uncorrelated masking (darker sides) removed from the code.
+- The individual Satin 3 materials are replaced by one, **Satin 3** (`satin3`, speed `r3` =
+  fastest + MICRO_KDENV + MICRO_SEG 1). Round four is rebased on it (`satin4lana` = r3 + LANA,
+  `satin4lone` = + LONE, `satin4lut` = r3 + LUT, `satin4all4` = all of them).
+- Torso close-up, 1373 × 1764, paired (9 rounds): Satin 3 20.7 ms, table 19.0, one light read 17.6,
+  all round four 15.1; lights direct about −2.5 (5 rounds); fastest 27.8, fast 42.5, no satin 8.6.
+- Against the full model, the kernel table removes the darkening: Satin 3 is 4.4 darker on average,
+  table 0.3 lighter, all round four 1.0 lighter (mean |diff| 4.2). Its worst pixels (up to 74/255)
+  are six edge pixels.
+- Sheets: `app/captures/satin-micro/opt6/satin3-and-round-four.jpg`, `full-fast-satin3-all4.jpg`,
+  `lana-line-check.jpg`.
+
 **Testing pitfalls:**
 - A shader that fails to compile draws nothing, so its timing is faster than the scene without
   satin. Check `LINK_STATUS` before trusting a number (one edit joined a line onto `#elif`).

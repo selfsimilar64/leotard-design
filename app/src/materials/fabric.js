@@ -690,29 +690,28 @@ const MICRO_SPEED = {
 	all: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '', MICRO_K: 6, MICRO_CROSS: '' },
 };
 // Round three: model simplifications on top of 'all' (owner: bolder cuts are fine while the look holds;
-// ideas from a Fable review, 2026-10-28):
-// - MICRO_LANA: direct lights' narrow lobes on the sloped segments integrated analytically at the one
-//   offset that meets the specular condition (microPointA); the constant segments stay exact, and the
-//   sloped segments' kd share is folded into them (uMicroKdW);
+// ideas from a Fable review, 2026-10-28). The owner's pick, 'r3', keeps two (2026-10-28):
 // - MICRO_KDENV: the floats' kd share as one roughness-1 lookup about the normal times its kernel at
 //   the mean tangent, no lookups inside the quadrature;
-// - MICRO_SEG n: n tangent samples per sloped segment (1 or 2), each lookup blurred to the spacing;
-// - MICRO_NOCORR: masking and reweighting uncorrelated (Ashikhmin's correlation dropped).
-const MICRO_ROUND3 = { lana: { MICRO_LANA: '' }, kdenv: { MICRO_KDENV: '' }, seg2: { MICRO_SEG: 2 }, seg1: { MICRO_SEG: 1 }, nocorr: { MICRO_NOCORR: '' } };
-for (const [k, d] of Object.entries(MICRO_ROUND3)) MICRO_SPEED[k] = { ...MICRO_SPEED.all, ...d };
-MICRO_SPEED.all3 = { ...MICRO_SPEED.all, MICRO_LANA: '', MICRO_KDENV: '', MICRO_SEG: 1, MICRO_NOCORR: '' };
-MICRO_SPEED.all3m = { ...MICRO_SPEED.all, MICRO_LANA: '', MICRO_KDENV: '', MICRO_SEG: 1 }; // all but the masking change (the one that shows)
-// Round four on top of all3m (owner: close-ups must hold 60 fps; no resolution drop; third Fable review,
+// - MICRO_SEG n: n tangent samples per sloped segment, each lookup blurred to the spacing.
+// Left out of r3: MICRO_LANA (below, now in round four), which drew a hard line in the highlight, and
+// uncorrelated masking, which darkened the sides (removed).
+MICRO_SPEED.r3 = { ...MICRO_SPEED.all, MICRO_KDENV: '', MICRO_SEG: 1 };
+// Round four on top of r3 (owner: close-ups must hold 60 fps; no resolution drop; third Fable review,
 // 2026-10-28):
+// - MICRO_LANA: direct lights' narrow lobes on the sloped segments integrated analytically about the
+//   offset o* that meets the specular condition (microPointA); the constant segments stay exact, and the
+//   sloped segments' kd share is folded into them (uMicroKdW);
 // - MICRO_LONE: direct lights from one evaluation at o* per light, the constant segments' lobes by
 //   their offset from it (needs MICRO_LANA);
 // - MICRO_LUT: the cross threads and the kd share as one roughness-1 lookup about n times a kernel
 //   table by view angle (microLut; needs MICRO_KDENV).
 // Tried and scrapped (under 1 ms each): 3 or 4 cone directions on the sloped segments with blurred
 // lookups (-0.6, -0.2 ms).
-const MICRO_ROUND4 = { lone: { MICRO_LONE: '' }, lut: { MICRO_LUT: '' } };
-for (const [k, d] of Object.entries(MICRO_ROUND4)) MICRO_SPEED[k] = { ...MICRO_SPEED.all3m, ...d };
-MICRO_SPEED.all4 = { ...MICRO_SPEED.all3m, MICRO_LONE: '', MICRO_LUT: '' };
+MICRO_SPEED.lana = { ...MICRO_SPEED.r3, MICRO_LANA: '' };
+MICRO_SPEED.lone = { ...MICRO_SPEED.lana, MICRO_LONE: '' };
+MICRO_SPEED.lut = { ...MICRO_SPEED.r3, MICRO_LUT: '' };
+MICRO_SPEED.all4 = { ...MICRO_SPEED.lone, MICRO_LUT: '' };
 // A broad term by quadrature: the whole thread function (iso = 0), or only its kd share (iso = 1).
 // Lookups are blurred to about the quadrature's spacing (QR), which prefilters the integrand.
 // ENV false: the kernel alone, every lookup taken as 1 (MICRO_KDENV).
@@ -763,16 +762,11 @@ float microFresnel( float c, float eta ) { // exact unpolarised dielectric refle
 float microGauss( float s, float x ) { return exp( - x * x / ( 2. * s * s ) ) / ( 2.5066283 * s ); }
 // masking x reweighting for one incoming direction (eqs 7-13)
 float microMP( vec3 wi, vec3 n, vec3 bx, float phi, float phr, float Mr, float Pr ) {
-	float Mi = max( cos( phi ), 0. );
+	float phd = phi - phr, u = exp( - phd * phd / ( 2. * .349 * .349 ) );
+	float Mi = max( cos( phi ), 0. ), M = mix( Mi * Mr, min( Mi, Mr ), u );
 	vec3 wip = wi - bx * dot( wi, bx );
 	float Pi = max( dot( normalize( wip ), n ), 0. );
-#ifdef MICRO_NOCORR
-	return Mi * Mr * Pi * Pr;
-#else
-	float phd = phi - phr, u = exp( - phd * phd / ( 2. * .349 * .349 ) );
-	float M = mix( Mi * Mr, min( Mi, Mr ), u );
 	return M * mix( Pi * Pr, min( Pi, Pr ), u );
-#endif
 }
 // P(t, wr): the tangent's projected length toward the viewer (eq 11)
 float microPr( vec3 wr, vec3 n, vec3 bx ) { vec3 wp = wr - bx * dot( wr, bx ); return max( dot( normalize( wp ), n ), 0. ); }
@@ -830,6 +824,8 @@ float microQ( vec3 wr ) {
 	return max( uMicroT1.w * sumP / max( sumL, 1e-4 ) + uMicroT2.w * microPr( wr, n, cross( n, gMicroT2 ) ) + ( 1. - uMicroT1.w - uMicroT2.w ) * max( dot( wr, n ), 0. ), 1e-3 );
 }
 #ifdef MICRO_LANA
+// the unit Gaussian's cumulative distribution (a tanh fit, within 2e-4)
+vec2 microCdf( vec2 x ) { x = clamp( x, - 5., 5. ); return .5 + .5 * tanh( .7978846 * ( x + .044715 * x * x * x ) ); } // clamped: tanh of a large value can overflow on some drivers
 // microFull in parts, each Gaussian lobe left out: S and V are the surface and volume terms per unit of
 // their Gaussian, K the kd term, th the half angle
 void microParts( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wi, vec3 wr, vec4 T, vec3 A, float eta, float Pr, out float th, out vec3 S, out vec3 V, out vec3 K ) {
@@ -876,18 +872,22 @@ vec3 microPointA( vec3 wi, vec3 wr ) {
 	vec3 h = wi + wr;
 	float os = atan( - dot( h, T1 ), dot( h, n ) );
 	os += os > .5 * PI ? - PI : os < - .5 * PI ? PI : 0.;
-	float oc = clamp( os, oMin, oMax ), rho = 0.;
-	for ( int seg = 0; seg < 7; seg ++ ) {
-		float o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
-		if ( o0 != o1 && uMicroLen[ seg ] > 0. && oc >= min( o0, o1 ) && oc <= max( o0, o1 ) ) { rho = uMicroLen[ seg ] / abs( o1 - o0 ); break; }
-	}
-	float ca = cos( oc ), sa = sin( oc );
+	float oc = clamp( os, oMin, oMax ), ca = cos( oc ), sa = sin( oc );
 	vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
 	microParts( t, nl, cross( t, nl ), n, bx1, wi, wr, uMicroT1, uMicroA1, uMicroEta, Pr1, th, S, V, K );
 	float si = dot( wi, t ), sr = dot( wr, t );
 	float dth = max( .5 * abs( dot( wi, nl ) / max( sqrt( 1. - si * si ), 1e-3 ) + dot( wr, nl ) / max( sqrt( 1. - sr * sr ), 1e-3 ) ), 1e-3 );
-	float out_ = max( oMin - os, os - oMax ), gS = 2. * uMicroT1.x / dth, gV = 2. * uMicroT1.y / dth; // past the ends: share of each lobe still on the curve
-	acc1 += ( S * ( 1. - smoothstep( - gS, gS, out_ ) ) + V * ( 1. - smoothstep( - gV, gV, out_ ) ) ) * rho / dth;
+	// each lobe, a Gaussian of width gamma / dth in offset about o*, weighted by the curve's length per
+	// radian of offset: summed over the sloped segments with the Gaussian's share inside each. (Taking the
+	// density of the one segment holding o* drew a hard line in the highlight where the density jumps,
+	// at the segments' joins: owner, 2026-10-28.) This also fades the lobes off the curve's ends.
+	vec2 sg = uMicroT1.xy / dth, rhoSV = vec2( 0. );
+	for ( int seg = 0; seg < 7; seg ++ ) {
+		float o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ], w = uMicroLen[ seg ];
+		if ( o0 == o1 || w <= 0. ) continue;
+		rhoSV += w / abs( o1 - o0 ) * ( microCdf( ( vec2( max( o0, o1 ) ) - os ) / sg ) - microCdf( ( vec2( min( o0, o1 ) ) - os ) / sg ) );
+	}
+	acc1 += ( S * rhoSV.x + V * rhoSV.y ) / dth;
 #ifdef MICRO_LONE
 	// MICRO_LONE: each constant segment's lobes from the same evaluation, its half angle linearised about
 	// o* (th = dth (o - o*)), and the whole curve's kd share at o*
@@ -1262,11 +1262,9 @@ export const FABRICS = {
 // Same parameters and energy scale (microScale at the full sample counts): only the sampling differs.
 FABRICS.satinfast = { ...FABRICS.satinmicro, label: 'Satin fast (thread model, safe speed-ups)', micro: { ...FABRICS.satinmicro.micro, speed: 'safe' } };
 FABRICS.satinfastest = { ...FABRICS.satinmicro, label: 'Satin fastest (thread model, every speed-up)', micro: { ...FABRICS.satinmicro.micro, speed: 'all' } };
-// Round three, each on top of Satin fastest (MICRO_ROUND3, 2026-10-28), then all of them together.
-for (const [k, label] of [['lana', 'lights direct'], ['kdenv', 'one milky read'], ['seg2', 'two per stretch'], ['seg1', 'one per stretch'], ['nocorr', 'simple masking'], ['all3', 'all round three'], ['all3m', 'round three, masking kept']])
-	FABRICS['satin3' + k] = { ...FABRICS.satinmicro, label: `Satin 3 ${label} (thread model, fastest + ${label})`, micro: { ...FABRICS.satinmicro.micro, speed: k } };
-// Round four, each on top of Satin 3 round three, masking kept (MICRO_ROUND4), then all together.
-for (const [k, label] of [['lone', 'one light read'], ['lut', 'table for cross threads'], ['all4', 'all round four']])
+// Round three as the owner picked it (MICRO_SPEED.r3), then round four on top of it.
+FABRICS.satin3 = { ...FABRICS.satinmicro, label: 'Satin 3 (thread model, fastest + one milky read + one per stretch)', micro: { ...FABRICS.satinmicro.micro, speed: 'r3' } };
+for (const [k, label] of [['lana', 'lights direct'], ['lone', 'one light read'], ['lut', 'table for cross threads'], ['all4', 'all round four']])
 	FABRICS['satin4' + k] = { ...FABRICS.satinmicro, label: `Satin 4 ${label} (thread model, round three + ${label})`, micro: { ...FABRICS.satinmicro.micro, speed: k } };
 
 // The texture size a scanned fabric starts at (as FABRICS' texScale; owner's review, 2026-10-24):
@@ -1280,7 +1278,9 @@ export const texScaleOf = (look) => look.texScale ?? (look.texture ? SCAN_SCALE[
 // the picker and dropped from a design, which then shows its base fabric (textures.js baseFabricFor);
 // TX-00001482 stays loadable, as matte lycra's own scan. The satin tries the owner compared (2026-10-27)
 // fall back to Stretch satin, which is try 2.
-export const RETIRED_FABRICS = { lace: 'mesh', shattered: 'hologram', satin1: 'satin', satin2: 'satin', satinA: 'satin', satinB: 'satin', satinC: 'satin', satinD: 'satin', satinFC: 'satin', satinFE: 'satin' };
+export const RETIRED_FABRICS = { lace: 'mesh', shattered: 'hologram', satin1: 'satin', satin2: 'satin', satinA: 'satin', satinB: 'satin', satinC: 'satin', satinD: 'satin', satinFC: 'satin', satinFE: 'satin',
+	// the round-three thread-model satins, replaced by one Satin 3 (owner, 2026-10-28)
+	satin3all3: 'satin3', satin3all3m: 'satin3', satin3lana: 'satin3', satin3kdenv: 'satin3', satin3seg2: 'satin3', satin3seg1: 'satin3', satin3nocorr: 'satin3' };
 export const RETIRED_SCANS = new Set(['TX-00006026', 'TX-00005344', 'TX-00004683', 'TX-00001482', 'TX-00003863']); // opal metallic double knit, black mesh tulle, green tricot with holofoil dots, royal blue scuba, pink glitter double knit
 
 export const SECOND = ['Tone-on-tone', 'Silver', 'Gold', 'White', 'Black'];
