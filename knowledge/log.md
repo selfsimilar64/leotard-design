@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-28
+* **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): eleven further speed options tested and reverted (paired timing, pixel diffs in three looks). Fidelity-safe set together: about 62 → 27 ms a frame and 9.4 → 6.0 s compile, worst 4/255; cutting cone directions or cross-thread samples degrades. Owner to choose.
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): optimisation results. Constant-segment skip kept (70 → 61.4 ms, lossless); env-space hoisting rejected (slower); kd share at five sample levels, all within 1/255 of full, 62 → 36 ms (owner to pick). Preview-pane reload pitfall recorded.
 
 ## 2026-10-27

@@ -286,6 +286,54 @@ code for 11 minutes. Check `performance.timeOrigin` or the compiled shader sourc
    - **Kept at level 0 until the owner picks.** `MICRO_Q` is shared with `microFurnace`, so picking
      a level is one edit.
 
+**Further options, tested and reverted; none applied (owner: test, measure, report; 2026-10-28).**
+
+How it was tested:
+- Temporary `#define` switches on the satin materials (`m.defines`), all compiled in one fresh page.
+- Timing **paired**: base and variant back to back, alternating order, 5 rounds, median of the
+  differences. Single readings drifted ±5 ms between rounds (the base read 61-74 ms with GPU
+  warmth); paired differences repeated within about 1 ms.
+- Fidelity: 720 × 1000 captures against base, max channel difference over the satin's pixels.
+  Looks: White loft royal blue and pale pink, two-light softbox royal blue.
+
+Remaining cost (removing each part): kd share about 31 ms, narrow cones (highlight bands) about
+18 ms, cross threads about 6 ms, direct lights about 5 ms.
+
+| Option | Paired Δ frame | Worst diff (/255) | Verdict |
+|---|---|---|---|
+| Cull lights below the surface (`dot(wi, n) <= 0` in `microPoint`; exactly zero by masking) | −2.7 ms | 0 | lossless |
+| Early `dot(wi, n)` skip in the cone loops | +0.8 ms | 0 | no gain |
+| Non-unrolled loops (bounds + int(uniform 0)) | +1.1 ms | 0 | compile −1.2 s |
+| Lights collected, then one `microPoint` loop after the light loop (one copy instead of one per light) | −0.6 ms | 0 | **compile 9.4 → 7.1 s** |
+| Single-mip lookups (nearest mip, not the blend of two) | −6.1 ms | 2-4 | fidelity-safe |
+| 3 samples per sloped segment (4 now) | −3.4 ms | 1-2 | fidelity-safe |
+| kd share 2 × 3 (level 4 above) | −31 ms | 1 | fidelity-safe |
+| Narrow cone K 8 (12 now) | −5.2 ms | 9-11 | small visible risk |
+| Narrow cone K 6 | −8.1 ms | 26-28 (stripes, 22% of pixels > 2) | degrades |
+| Cross threads 4 × 6 | −4.7 ms | 6-8 (24-28% > 2) | degrades slightly |
+| Cross threads 2 × 3 | −6.0 ms | 25-30 | degrades |
+
+**All fidelity-safe options together** (light cull, single mip, 3 per sloped segment, kd 2 × 3,
+light loop, non-unrolled loops):
+- −34.9 ms paired, about 27 ms a frame against 62.
+- Compile 6.0 s against 9.4 s (uncached; a random `#define` nonce defeats the browser's shader
+  cache).
+- Worst 2 (loft) and 4 (softbox) of 255; 0.003% of pixels over 2.
+- Uncached compile alone: light loop 7.1 s, non-unrolled 8.2 s, both 6.6 s.
+- Sheet: `app/captures/satin-micro/opt2/satin-speed-options.jpg`.
+
+Not tested:
+- Still-camera refinement.
+- Half-resolution satin shading.
+- Dedicated prefiltered maps at the exact lobe widths (one fetch per lookup, which single-mip
+  approximates).
+
+**Testing pitfalls:**
+- The browser caches compiled shaders by source, so repeat compiles take about 0.5 s; use a nonce.
+- A hidden pane throttles the page's timers, so captures stall.
+- One page hot-reloaded store modules mid-test ("Command doc.set defined twice") and drew nothing
+  (1.4 ms frames): restart the server.
+
 **Earlier status (by-eye version):** on navy it showed soft blue bands across the chest, like GK's video. Light colours
 (pink) still read flat, partly because the studio lights from every side. Not yet judged by the
 owner. Cost not yet profiled (28 × 12 environment lookups per pixel).
