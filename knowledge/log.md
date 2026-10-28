@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-28
+* **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): new Duotone satin: cross threads as the paper's shot-silk second direction with narrow lobes traced like the floats (MICRO_XNARROW); two colours now show in separate bands, kept with all of Satin's speed-ups, about +0.9 ms over Satin.
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): one Satin (the round-four thread model, owner's dialled-in defaults) replaces Stretch satin and every trial; two-tone satin diagnosed: the twisted cross threads give a broad even colour that blends with the floats' in every pixel, so no second tone shows (option recorded, not built).
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): Satin fastest's darkening traced to the cross threads' 2 x 3 samples (5.6/255 darker, less saturated); the 6 cone directions change brightness by 0.1.
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): owner's review: hard highlight line from the analytic direct lights traced to a curve-density jump at segment joins and fixed (Gaussian-weighted density); uncorrelated masking removed; one new Satin 3 (one milky read, one per stretch) with round four rebased on it: 20.7 → 15.1 ms in close-up, the kernel table removing Satin 3's slight darkening.

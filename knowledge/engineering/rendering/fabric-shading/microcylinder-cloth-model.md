@@ -511,6 +511,32 @@ black (`app/captures/satin-micro/duo/duo-diagnosis.jpg`).
   Each colour would then show in its own bands: floats' across the body, cross threads' round it.
   Estimated cost: one more constant-segment tangent, under 1 ms.
 
+**Duotone satin (owner, 2026-10-28).** A separate material, `satinduo` "Duotone satin".
+- It keeps Satin's floats and settings. The cross threads become row e's second direction: flat,
+  γs 5°, γv 10°, kd 0.1, coverage 0.14 (floats 0.86), albedo factor 0.105 (3 × the floats', as
+  row e's 0.6 to 0.2).
+- `MICRO_XNARROW`: the cross threads' narrow lobes go through the cone path at their own
+  widths (`uMicroR2`), as one extra pass of the floats' loop through its single `microNarrow` call.
+  Their kd share goes through the broad quadrature, or under MICRO_LUT through the table
+  (`microLut(…, xn)` bakes their kd share only). `microFurnace(…, xn)` mirrors it for the energy
+  scale. Direct lights already evaluate the cross threads exactly (`microFull`).
+- Result (torso captures, `app/captures/satin-micro/duo/duotone-satin.jpg`): the cross-thread
+  colour shows as its own band running down the front, where those threads meet the specular
+  condition. The floats' colour fills the rest (teal + red, blue + gold, purple + green). The full
+  model (`duofull`) and the fast build (`duo` = all4 + XNARROW) look the same, so none of Satin's
+  speed-ups removes the effect, and the material ships on `duo`.
+- Close-up 1373 × 1764: Duotone 17.2 ms against Satin 16.3 (about +0.9 ms). The full-model build
+  runs at 112-133 ms.
+- A dark cross colour under a bright float colour (red floats, teal cross) shows only faintly: the
+  band carries the cross dye at its own brightness. One colour (Tone-on-tone) looks like Satin with
+  a second, softer band.
+- **Pitfalls found:**
+  - A second `microNarrow` call site was suspected of costing 14 ms. It did not, but the loop
+    keeps one call regardless.
+  - That 14 ms was a test artefact: switching a material's speed by mutating `FABRICS` and
+    restoring it after `panel.set` let the material fall back to the full model during timing.
+    Set the speed in code to time a build.
+
 **Testing pitfalls:**
 - A shader that fails to compile draws nothing, so its timing is faster than the scene without
   satin. Check `LINK_STATUS` before trusting a number (one edit joined a line onto `#elif`).

@@ -105,6 +105,7 @@ uniform vec4 uMicroT1;     // the floats: x gamma_s, y gamma_v (radians), z kd, 
 uniform vec3 uMicroA2;     // the cross (twisted) threads' albedo
 uniform vec4 uMicroT2;     // the cross threads, as uMicroT1 (tangent curve: offset 0)
 uniform vec2 uMicroR1;     // environment lookup roughness matching the floats' gamma_s, gamma_v
+uniform vec2 uMicroR2;     // and the cross threads' (MICRO_XNARROW)
 uniform float uMicroOff[ 8 ]; // the floats' tangent curve: offsets at its control points (radians)
 uniform float uMicroLen[ 7 ]; // and the lengths of the segments between them
 uniform sampler2D tMicroLut; // MICRO_LUT: the cross threads' and kd share's kernels by view angle (microLut)
@@ -707,6 +708,10 @@ const MICRO_SPEED = {
 	all4: { MICRO_LCULL: '', MICRO_LLOOP: '', MICRO_DYN: '', MICRO_MIP: '', MICRO_SLOPE3: '', MICRO_KD: '', MICRO_K: 6, MICRO_CROSS: '',
 		MICRO_KDENV: '', MICRO_SEG: 1, MICRO_LANA: '', MICRO_LONE: '', MICRO_LUT: '' },
 };
+// Duotone satin (owner, 2026-10-28): MICRO_XNARROW traces the cross threads' narrow lobes (see
+// FABRICS.satinduo), on the full model ('duofull') and with all of Satin's speed-ups ('duo').
+MICRO_SPEED.duofull = { MICRO_XNARROW: '' };
+MICRO_SPEED.duo = { ...MICRO_SPEED.all4, MICRO_XNARROW: '' };
 // A broad term by quadrature: the whole thread function (iso = 0), or only its kd share (iso = 1).
 // Lookups are blurred to about the quadrature's spacing (QR), which prefilters the integrand.
 // ENV false: the kernel alone, every lookup taken as 1 (MICRO_KDENV).
@@ -1024,9 +1029,19 @@ const MICRO_FRAGMENT = /* glsl */`
 		vec3 acc1 = vec3( 0. ); float sumP1 = 0., sumL1 = 0.;
 		// the floats: four tangent samples per segment of their curve; a segment of constant offset has
 		// one tangent, taken once at four times the weight
+#ifdef MICRO_XNARROW
+		// one more pass for the cross threads' narrow lobes (Duotone satin): through this loop's one
+		// microNarrow call, not a second call, which cost about 14 ms (two copies of the cone loop)
+		vec3 accX = vec3( 0. );
+		for ( int s = 0; s < MICRO_N( 29 ); s ++ ) {
+			bool xs = s == 28;
+			int seg = min( s / 4, 6 ), j = s - seg * 4; float w = xs ? 1. : uMicroLen[ seg ], o0 = xs ? 0. : uMicroOff[ seg ], o1 = xs ? 0. : uMicroOff[ seg + 1 ];
+#else
 		for ( int s = 0; s < MICRO_N( 28 ); s ++ ) {
+			const bool xs = false;
 			int seg = s / 4, j = s - seg * 4; float w = uMicroLen[ seg ], o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
-			if ( w <= 0. || ( o0 == o1 && j > 0 ) ) continue;
+#endif
+			if ( w <= 0. || ( o0 == o1 && j > 0 && ! xs ) ) continue;
 			vec2 Rt = uMicroR1;
 #if defined( MICRO_SEG )
 			// MICRO_SEG samples on a sloped segment, each lookup blurred to at least half their spacing
@@ -1044,8 +1059,14 @@ const MICRO_FRAGMENT = /* glsl */`
 #endif
 			float ca = cos( off ), sa = sin( off );
 			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
+			// (xs: the cross threads' pass, with their own tangent, frame and lobes, through the same call)
+			if ( xs ) { t = T2; nl = n; }
+			vec3 r = microNarrow( t, nl, cross( t, nl ), n, xs ? bx2 : bx1, wr, xs ? uMicroT2 : uMicroT1, xs ? uMicroA2 : uMicroA1, xs ? uMicroR2 : Rt, eta );
+#ifdef MICRO_XNARROW
+			if ( xs ) { accX = r; continue; }
+#endif
 			sumP1 += microPr( wr, n, bx1 ) * w; sumL1 += w;
-			acc1 += microNarrow( t, nl, cross( t, nl ), n, bx1, wr, uMicroT1, uMicroA1, Rt, eta ) * w;
+			acc1 += r * w;
 		}
 		// their kd share, at each segment's centre
 #ifdef MICRO_KDENV
@@ -1070,9 +1091,16 @@ const MICRO_FRAGMENT = /* glsl */`
 		// the cross threads: one tangent, in the surface
 #if defined( MICRO_LUT )
 		vec2 kc = texture2D( tMicroLut, microLutUV( T2, n, wr ) ).rg;
-		vec3 acc2 = eN * ( kc.x + kc.y * uMicroA2 );
+		vec3 acc2 = eN * ( kc.x + kc.y * uMicroA2 ); // (MICRO_XNARROW: the table holds their kd share only)
+#elif defined( MICRO_XNARROW )
+		vec3 acc2 = microBroadCross( T2, n, cross( T2, n ), n, bx2, wr, uMicroT2, uMicroA2, eta, 1. ); // their kd share
 #else
 		vec3 acc2 = microBroadCross( T2, n, cross( T2, n ), n, bx2, wr, uMicroT2, uMicroA2, eta, 0. );
+#endif
+#ifdef MICRO_XNARROW
+		// MICRO_XNARROW (Duotone satin): the cross threads' narrow lobes as deltas in theta, like a
+		// constant segment of the floats, read at their own widths (uMicroR2; the floats' loop's last pass)
+		acc2 += accX;
 #endif
 		float Pr2 = microPr( wr, n, bx2 );
 		float Q = a1 * sumP1 / max( sumL1, 1e-4 ) + a2 * Pr2 + ( 1. - a1 - a2 ) * max( dot( wr, n ), 0. );
@@ -1115,7 +1143,7 @@ export function createFabricMaterial(zone) {
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
 		uFoilRough: { value: 0.2 }, uGlint: { value: 0 },
-		uMicro: { value: 0 }, uMicroZero: { value: 0 }, uMicroEta: { value: 1.5 }, uMicroA1: { value: new THREE.Color() }, uMicroT1: { value: new THREE.Vector4() }, uMicroA2: { value: new THREE.Color() }, uMicroT2: { value: new THREE.Vector4() }, uMicroR1: { value: new THREE.Vector2(0.3, 0.4) }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uMicroKdW: { value: new Array(7).fill(0) }, tMicroLut: { value: null }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
+		uMicro: { value: 0 }, uMicroZero: { value: 0 }, uMicroEta: { value: 1.5 }, uMicroA1: { value: new THREE.Color() }, uMicroT1: { value: new THREE.Vector4() }, uMicroA2: { value: new THREE.Color() }, uMicroT2: { value: new THREE.Vector4() }, uMicroR1: { value: new THREE.Vector2(0.3, 0.4) }, uMicroR2: { value: new THREE.Vector2(0.3, 0.4) }, uMicroOff: { value: new Array(8).fill(0) }, uMicroLen: { value: new Array(7).fill(0) }, uMicroKdW: { value: new Array(7).fill(0) }, tMicroLut: { value: null }, uBlend: { value: 0 }, uBend: { value: 0 }, uColorVar: { value: 0 }, uFoilColor: { value: new THREE.Color(1, 1, 1) },
 		uHolo: { value: 0 }, uHoloFreq: { value: 3 }, uHoloJit: { value: 0.2 }, uHoloDirW: { value: new THREE.Vector3(0.3, 1, 0.5).normalize() },
 		uMesh: { value: 0 }, uMeshPitch: { value: 0.0007 }, uHoleR: { value: 0.34 },
 		uBumpAmp: { value: 0 }, uBumpScale: { value: 0.003 }, uKnit: { value: 0 },
@@ -1247,6 +1275,14 @@ export const FABRICS = {
 	glitterfoil: { label: 'Glitter-grain foil', metalness: 1, roughness: 0.3, flake: { pitch: 0.00035, dotR: 0.58, presence: 1, tilt: 0.35, rough: 0.18, colorVar: 0.25 } },
 	illusion: { label: 'Illusion mesh (very sheer)', roughness: 0.8, sheen: 0.2, sheenRoughness: 0.6, mesh: { pitch: 0.0006, holeR: 0.46 } },
 };
+// Duotone satin: Satin's floats with cross threads that catch the light themselves, so a second colour
+// shows in its own bands (round the body) instead of a glow under the floats' (across it). In Satin
+// the cross threads are the charmeuse's twisted threads (30 and 60 degree lobes, kd 0.7): an even glow
+// that blends with the floats' colour into one hue everywhere (owner, 2026-10-28). Here they are the
+// paper's shot silk (Table II row e) second direction: flat, gamma 5 and 10 degrees, kd 0.1, coverage
+// 0.14 against the floats' 0.86, albedo 3 times the floats' factor (row e's 0.6 against 0.2).
+FABRICS.satinduo = { ...FABRICS.satin, label: 'Duotone satin', micro: { ...FABRICS.satin.micro, speed: 'duo',
+	flat: { ...FABRICS.satin.micro.flat, a: 0.86 }, twisted: { A: 0.105, kd: 0.1, gs: 5, gv: 10, a: 0.14 } } };
 
 // The texture size a scanned fabric starts at (as FABRICS' texScale; owner's review, 2026-10-24):
 // pink organza with glitter, pink oil-slick vegan leather.
@@ -1335,7 +1371,9 @@ function microTerms(eta, wr) {
 	};
 	return { proj, narrow, broad };
 }
-function microFurnace(eta, F, W) {
+// xn (MICRO_XNARROW, Duotone satin): the cross threads' lobes as deltas (narrow) plus their kd share,
+// as MICRO_FRAGMENT does then
+function microFurnace(eta, F, W, xn = false) {
 	const PI = Math.PI, d2r = PI / 180, n = [0, 0, 1], wr = n, T1 = [1, 0, 0], T2 = [0, 1, 0];
 	const { proj, narrow, broad } = microTerms(eta, wr);
 	const bx1 = _cross(n, T1), bx2 = _cross(n, T2), off = F.offsets.map((o) => o * d2r), len = F.lengths;
@@ -1354,7 +1392,7 @@ function microFurnace(eta, F, W) {
 		const [w, c] = broad(_comb([ca, T1], [sa, n]), _comb([-sa, T1], [ca, n]), bx1, F, 1, MICRO_Q.KD);
 		w1 += w * l; c1 += c * l;
 	}
-	const [w2, c2] = broad(T2, n, bx2, W, 0, MICRO_Q.CROSS);
+	const [w2, c2] = xn ? [narrow(T2, n, bx2, W), broad(T2, n, bx2, W, 1, MICRO_Q.CROSS)].reduce(([a, b], [x, y]) => [a + x, b + y]) : broad(T2, n, bx2, W, 0, MICRO_Q.CROSS);
 	const Q = Math.max(F.a * sumP / Math.max(sumL, 1e-4) + W.a * proj(wr, bx2) + (1 - F.a - W.a) * 1, 1e-3);
 	return [(F.a * w1 / Math.max(sumL, 1e-4) + W.a * w2) / Q, (F.a * c1 / Math.max(sumL, 1e-4) * F.A + W.a * c2 * W.A) / Q];
 }
@@ -1362,16 +1400,17 @@ function microFurnace(eta, F, W) {
 // phi_r = ((i + 0.5) / N - 0.5) pi, as microLutUV reads them), r, g = the cross threads' white and
 // coloured kernel (MICRO_BROAD with every lookup 1, MICRO_CROSS's 2 x 3 nodes), b = the floats' kd
 // kernel (MICRO_KDENV's microBroadKdK, 2 x 3). Half floats, linearly filtered; one per setting.
+// xn (MICRO_XNARROW): the cross threads' kd share only in r, g (their narrow lobes are traced).
 const MICRO_LUT_N = 32, _microLuts = new Map();
-function microLut(eta, F, W) {
-	const key = JSON.stringify([eta, F.kd, W]);
+function microLut(eta, F, W, xn = false) {
+	const key = JSON.stringify([eta, F.kd, W, xn]);
 	if (_microLuts.has(key)) return _microLuts.get(key);
 	const N = MICRO_LUT_N, PI = Math.PI, data = new Uint16Array(N * N * 4), t = [1, 0, 0], n = [0, 0, 1], bx = _cross(n, t), bl = _cross(t, n);
 	for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
 		const tr = ((i + 0.5) / N - 0.5) * PI, phr = ((j + 0.5) / N - 0.5) * PI;
 		const wr = _comb([Math.sin(tr), t], [Math.cos(tr) * Math.cos(phr), n], [Math.cos(tr) * Math.sin(phr), bl]);
 		const { broad } = microTerms(eta, wr), Q = { NT: 2, NP: 3 };
-		const [w2, c2] = broad(t, n, bx, W, 0, Q), [, ck] = broad(t, n, bx, F, 1, Q), o = (j * N + i) * 4;
+		const [w2, c2] = broad(t, n, bx, W, xn ? 1 : 0, Q), [, ck] = broad(t, n, bx, F, 1, Q), o = (j * N + i) * 4;
 		data[o] = THREE.DataUtils.toHalfFloat(w2); data[o + 1] = THREE.DataUtils.toHalfFloat(c2); data[o + 2] = THREE.DataUtils.toHalfFloat(ck); data[o + 3] = THREE.DataUtils.toHalfFloat(1);
 	}
 	const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat, THREE.HalfFloatType);
@@ -1380,9 +1419,9 @@ function microLut(eta, F, W) {
 	return tex;
 }
 const _microScales = new Map();
-export function microScale(eta, F, W) {
-	const key = JSON.stringify([eta, F, W]);
-	if (!_microScales.has(key)) { const [w, c] = microFurnace(eta, F, W); _microScales.set(key, (1 - w) / c); }
+export function microScale(eta, F, W, xn = false) {
+	const key = JSON.stringify([eta, F, W, xn]);
+	if (!_microScales.has(key)) { const [w, c] = microFurnace(eta, F, W, xn); _microScales.set(key, (1 - w) / c); }
 	return _microScales.get(key);
 }
 // A panel's satin controls (inspect-garment.jsx), each the floats' own measured value until set:
@@ -1419,7 +1458,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1, s
 	if (mc) {
 		m.anisotropy = 0.001;
 		const d2r = Math.PI / 180, W = mc.twisted, o = satin ?? {};
-		const F = { ...mc.flat, gs: o.gs ?? mc.flat.gs, gv: o.gv ?? mc.flat.gv, kd: o.kd ?? mc.flat.kd }, eta = o.eta ?? mc.eta, k = microScale(eta, F, W);
+		const F = { ...mc.flat, gs: o.gs ?? mc.flat.gs, gv: o.gv ?? mc.flat.gv, kd: o.kd ?? mc.flat.kd }, eta = o.eta ?? mc.eta, sp = MICRO_SPEED[mc.speed] ?? {}, xn = sp.MICRO_XNARROW !== undefined, k = microScale(eta, F, W, xn);
 		// one colour unless the panel picks a second (Tone-on-tone: the same dye both ways)
 		const cross = colour2 || second !== 'Tone-on-tone' ? two(false, new THREE.Color()) : base;
 		u.uMicroEta.value = eta;
@@ -1428,7 +1467,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1, s
 		// a prefiltered lookup's roughness r blurs like GGX at alpha = r^2, whose half-width at half maximum
 		// (tan theta = 0.64 alpha) matches a Gaussian lobe of width gamma (1.177 gamma) at alpha = 1.84 gamma
 		const r = (g) => Math.sqrt(Math.min(1.84 * g * d2r, 1));
-		u.uMicroR1.value.set(r(F.gs), r(F.gv));
+		u.uMicroR1.value.set(r(F.gs), r(F.gv)); u.uMicroR2.value.set(r(W.gs), r(W.gv));
 		u.uMicroOff.value = F.offsets.map((o) => o * d2r);
 		u.uMicroLen.value = F.lengths;
 		// MICRO_LANA: each sloped segment's kd share goes to the constant segment nearest its middle
@@ -1441,7 +1480,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1, s
 			if (best >= 0) kdW[best] += l;
 		});
 		u.uMicroKdW.value = kdW;
-		if (MICRO_SPEED[mc.speed]?.MICRO_LUT !== undefined) u.tMicroLut.value = microLut(eta, F, W);
+		if (sp.MICRO_LUT !== undefined) u.tMicroLut.value = microLut(eta, F, W, xn);
 	}
 	m.iridescence = f.iridescence ?? 0;
 	m.iridescenceIOR = 1.8;
