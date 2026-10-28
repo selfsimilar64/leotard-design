@@ -464,6 +464,22 @@ narrow cones 4.8 ms, direct lights 2.9, cross threads 1.0, kd share 0.2.
 - Sheets: `app/captures/satin-micro/opt6/satin3-and-round-four.jpg`, `full-fast-satin3-all4.jpg`,
   `lana-line-check.jpg`.
 
+**What darkens Satin fastest (owner's question, 2026-10-28).** Fast → fastest adds two switches.
+Each was captured alone on top of fast (torso 1080 × 1440, owner design) and compared with the full
+model (signed mean over the satin, /255):
+
+| | Brightness | Red | Saturation (HSV) | Mean abs diff |
+|---|---|---|---|---|
+| fast | −0.7 | −1.2 | −0.5 | 1.4 |
+| fast + MICRO_K 6 | −0.6 | −1.1 | −0.6 | 1.6 |
+| fast + MICRO_CROSS (cross threads 2 × 3) | −5.6 | −8.6 | −3.0 | 9.4 |
+| fastest (both) | −5.4 | −8.5 | −3.1 | 9.3 |
+
+MICRO_CROSS is the whole darkening and desaturation: six roughness-1 lookups miss part of the room's
+light, which the 8 × 12 quadrature catches. MICRO_LUT (one lookup about n times the 2 × 3 kernel,
+integrated with every lookup 1) does not lose that light, which is why the kernel table brings Satin 3's
+brightness back. Map: `app/captures/satin-micro/opt7/darkening.jpg`.
+
 **Testing pitfalls:**
 - A shader that fails to compile draws nothing, so its timing is faster than the scene without
   satin. Check `LINK_STATUS` before trusting a number (one edit joined a line onto `#elif`).
