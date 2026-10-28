@@ -5,7 +5,7 @@ import { Section, Row, Select, Colour, Slider, Toggle, run } from './controls.js
 import { selection, tool } from './state.js';
 import { toolOptions } from './tools.js';
 import { StoneToolOptions } from './inspect-stones.jsx';
-import { FABRICS, SECOND, SATIN_DEFAULTS, texScaleOf } from '../materials/fabric.js';
+import { FABRICS, SECOND, SATIN_DEFAULTS, texScaleOf, hasSecondColour } from '../materials/fabric.js';
 import { MaterialPicker } from './FabricPicker.jsx';
 import { Pane, More, Line, Chips } from './Gallery.jsx';
 import { DecalToolOptions } from './inspect-decals.jsx';
@@ -84,7 +84,7 @@ function PanelInspector({ sel, doc }) {
 				<Row label="Texture size"><Slider value={texScaleOf(s)} min={0.25} max={4} step={0.05} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ texScale: v }, g)} /></Row>
 				<Row label="Name"><input type="text" value={p.name ?? ''} onChange={(e) => run({ op: 'panel.set', id: p.id, name: e.currentTarget.value })} /></Row>
 				<Row label="Colour from photo"><button class="btn" title="Pick the colour from a reference photo (look through it, then click the piece)" onClick={() => { toolOptions.value = { ...toolOptions.value, eyedrop: { panel: p.id, layer: 0 } }; tool.value = 'eyedrop'; }}>Pick</button></Row>
-				{f?.twoTone ? null : <>{/* a twoTone fabric's second colour sits under its colour (MaterialPicker) */}
+				{f?.twoTone || !hasSecondColour(f) ? null : <>{/* a twoTone fabric's second colour sits under its colour (MaterialPicker); a one-colour fabric has none */}
 					<Row label="Foil / second"><Select value={s.colour2 ? 'custom' : s.second ?? 'Tone-on-tone'} options={[...SECOND, ['custom', 'Custom colour']]} onChange={(v) => run(v === 'custom' ? { op: 'panel.set', id: p.id, colour2: s.colour2 ?? '#c0c0c8' } : { op: 'panel.set', id: p.id, second: v, colour2: null })} /></Row>
 					{s.colour2 ? <Row label="Second colour"><Colour value={s.colour2} onChange={(v, g) => run({ op: 'panel.set', id: p.id, colour2: v, gesture: g })} /></Row> : null}
 				</>}
@@ -103,8 +103,8 @@ function PanelInspector({ sel, doc }) {
 // The thread-model satin's controls (materials/fabric.js SATIN_DEFAULTS: the owner's settings since
 // 2026-10-28; unset fields take them), the widths shown against the paper's measured value (P): sharpness as 2.5 degrees over the highlight's width, glow width as a
 // multiple of 5 degrees, milkiness as a share, sheen as the face-on surface reflection the
-// refractive index gives. The second colour (dyed cross threads) sits under the colour on Duotone
-// satin (twoTone, MaterialPicker) and is Foil / second, under More, on Satin.
+// refractive index gives. Only Duotone satin has a second colour (its cross threads), shown under the
+// colour (twoTone, MaterialPicker); Satin is one colour.
 function SatinControls({ s, set }) {
 	const v = { ...SATIN_DEFAULTS, ...s.satin }, put = (k, x, g) => set({ satin: { ...s.satin, [k]: x } }, g);
 	const P = { gs: 2.5, gv: 5 }, refl = (eta) => ((eta - 1) / (eta + 1)) ** 2;
@@ -169,7 +169,7 @@ function StrapInspector({ sel, doc }) {
 			<Row label="Width"><Slider value={s.width} min={0.003} max={0.04} step={0.0005} format={mm} onChange={(v, g) => run({ op: 'strap.set', id: s.id, width: v, gesture: g })} /></Row>
 			<Row label="Fabric"><Select value={f.fabric} options={fabricOptions} onChange={(v) => run({ op: 'strap.set', id: s.id, fabric: v })} /></Row>
 			<Row label="Colour"><Colour value={f.colour ?? '#222222'} onChange={(v, g) => run({ op: 'strap.set', id: s.id, colour: v, gesture: g })} /></Row>
-			<Row label="Foil / second"><Select value={f.second ?? 'Tone-on-tone'} options={SECOND} onChange={(v) => run({ op: 'strap.set', id: s.id, second: v })} /></Row>
+			{hasSecondColour(FABRICS[f.fabric]) ? <Row label="Foil / second"><Select value={f.second ?? 'Tone-on-tone'} options={SECOND} onChange={(v) => run({ op: 'strap.set', id: s.id, second: v })} /></Row> : null}
 			<Row label="Edges"><Select value={s.edge ?? 'elastic'} options={[['elastic', 'Topstitched'], ['none', 'Plain']]} onChange={(v) => run({ op: 'strap.set', id: s.id, edge: v })} /></Row>
 			<Row label="Stacking"><Slider value={s.layer ?? 0} min={0} max={8} step={1} format={(v) => String(v)} onChange={(v, g) => run({ op: 'strap.set', id: s.id, layer: v, gesture: g })} /></Row>
 		</Section>

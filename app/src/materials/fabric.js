@@ -1302,6 +1302,11 @@ export const RETIRED_FABRICS = { lace: 'mesh', shattered: 'hologram', satin1: 's
 export const RETIRED_SCANS = new Set(['TX-00006026', 'TX-00005344', 'TX-00004683', 'TX-00001482', 'TX-00003863']); // opal metallic double knit, black mesh tulle, green tricot with holofoil dots, royal blue scuba, pink glitter double knit
 
 export const SECOND = ['Tone-on-tone', 'Silver', 'Gold', 'White', 'Black'];
+// Whether a fabric has a second colour at all (applyFabric's `second`/`colour2`): its foil dots or
+// glitter (flake), duochrome's shift (duo), Duotone satin's cross threads (twoTone), an ombré's far
+// end. Every other fabric is one colour and offers none (owner, 2026-10-28); a glint's colour comes
+// from the dye (FABRIC_FRAGMENT), and plain Satin's cross threads take the piece's colour.
+export const hasSecondColour = (f) => !!(f && (f.flake || f.duo || f.twoTone || f.ombre));
 const _hsl = {};
 function secondColour(base, mode, forOmbre, out) {
 	if (mode === 'Silver') return out.set(0xe6e8ee);
@@ -1460,8 +1465,8 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1, s
 		m.anisotropy = 0.001;
 		const d2r = Math.PI / 180, W = mc.twisted, o = satin ?? {};
 		const F = { ...mc.flat, gs: o.gs ?? mc.flat.gs, gv: o.gv ?? mc.flat.gv, kd: o.kd ?? mc.flat.kd }, eta = o.eta ?? mc.eta, sp = MICRO_SPEED[mc.speed] ?? {}, xn = sp.MICRO_XNARROW !== undefined, k = microScale(eta, F, W, xn);
-		// one colour unless the panel picks a second (Tone-on-tone: the same dye both ways)
-		const cross = colour2 || second !== 'Tone-on-tone' ? two(false, new THREE.Color()) : base;
+		// one colour, except on a two-tone satin whose panel picks a second (Tone-on-tone: the same dye both ways)
+		const cross = f.twoTone && (colour2 || second !== 'Tone-on-tone') ? two(false, new THREE.Color()) : base;
 		u.uMicroEta.value = eta;
 		u.uMicroA1.value.copy(base).multiplyScalar(F.A * k); u.uMicroT1.value.set(F.gs * d2r, F.gv * d2r, F.kd, F.a);
 		u.uMicroA2.value.copy(cross).multiplyScalar(W.A * k); u.uMicroT2.value.set(W.gs * d2r, W.gv * d2r, W.kd, W.a);

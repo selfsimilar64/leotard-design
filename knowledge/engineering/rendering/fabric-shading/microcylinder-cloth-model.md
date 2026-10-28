@@ -530,6 +530,11 @@ black (`app/captures/satin-micro/duo/duo-diagnosis.jpg`).
 - **UI (owner):** the second colour defines the material, so it is not under More. FABRICS
   `twoTone: true` makes `MaterialPicker` show a "Second colour" row of swatches (sets `colour2`)
   right under "Colour". The inspector hides "Foil / second" under More for such fabrics.
+- **One-colour fabrics have no second colour (owner, 2026-10-28).** `hasSecondColour(f)` (fabric.js)
+  is true only for flake (foil dots, glitter), duo (duochrome), twoTone (Duotone satin) and
+  ombre fabrics. The "Foil / second" row (panel More, strap) shows only for those. Plain Satin's
+  cross threads always take the piece's colour, even with a stored `colour2`. Shiny tricot and Wet
+  look offered the option but ignored it: their glint colour comes from the dye.
 - A dark cross colour under a bright float colour (red floats, teal cross) shows only faintly: the
   band carries the cross dye at its own brightness. One colour (Tone-on-tone) looks like Satin with
   a second, softer band.
