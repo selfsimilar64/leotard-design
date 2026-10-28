@@ -420,7 +420,28 @@ no satin 8.5-8.8). Difference from fastest over the satin, 1080 × 1440 torso:
   The owner's kd 0.5 was set by eye with this. Not changed.
 - Sheet: `app/captures/satin-micro/opt4/round-three.jpg`, full-size pair `fastest-vs-all3m.jpg`.
 
+**Round four (owner: close-ups must hold 60 fps; keep round three; no resolution drop; third Fable
+review, 2026-10-28).** Timing now in a torso close-up filling the 1373 × 1764 canvas (the satin
+covers most pixels). There: fastest 29.1 ms, all3m 17.4, no satin 8.4. all3m's satin by term:
+narrow cones 4.8 ms, direct lights 2.9, cross threads 1.0, kd share 0.2.
+
+| Switch | What | Δ vs all3m | Mean / worst vs all3m (/255) |
+|---|---|---|---|
+| MICRO_LONE | per light one `microParts` at o*; the constant segments' lobes by th = dth (o − o*), the whole curve's kd at o* | −1.1 ms | 1.3 / 11 |
+| MICRO_LUT | cross threads and kd share = one roughness-1 lookup about n × a 32 × 32 half-float kernel table by (θr, φr) in the tangent's frame (`microLut`, baked on the CPU per eta/kd from `microTerms`) | −1.6 | 7.8 / 75 (slightly lighter; mean vs the full model 4.6, against 7.9 for all3m) |
+| all4 (LONE + LUT) | | −2.6 (14.8 ms) | 8.8 / 76 |
+
+- Scrapped (under 1 ms): 3 or 4 cone directions on the sloped segments with lookups blurred to the
+  spacing (−0.6, −0.2 ms).
+- **Pitfall found:** passing the cone count as a function parameter (a variable loop bound) cost
+  about 1 ms even where it stayed 6. `microNarrow` keeps `const int K`.
+- `microFurnace`'s terms are now `microTerms(eta, wr)`, shared with `microLut`.
+- Sheet: `app/captures/satin-micro/opt5/round-four.jpg`; full model, round three and round four
+  side by side: `full-r3-r4.jpg`.
+
 **Testing pitfalls:**
+- A shader that fails to compile draws nothing, so its timing is faster than the scene without
+  satin. Check `LINK_STATUS` before trusting a number (one edit joined a line onto `#elif`).
 - Temporary defines added to a material on top of its own accumulate across runs unless reset
   (the first round-two breakdown was wrong for this reason).
 - The browser caches compiled shaders by source, so repeat compiles take about 0.5 s; use a nonce.
