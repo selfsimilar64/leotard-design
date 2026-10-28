@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-10-28
+* **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): optimisation results. Constant-segment skip kept (70 → 61.4 ms, lossless); env-space hoisting rejected (slower); kd share at five sample levels, all within 1/255 of full, 62 → 36 ms (owner to pick). Preview-pane reload pitfall recorded.
+
 ## 2026-10-27
 * **Update**: [Microcylinder cloth model](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md): satin controls (highlight sharpness, colour glow width, milkiness, sheen strength) with the energy scale recomputed per setting; two-colour (shot) satin; Table II row e recorded; cost breakdown and optimisation candidates (owner to choose).
 * **Update**: New HDRI studio "Small photo studio" (`studio_small_09_4k.hdr`, owner's addition, Poly Haven CC0) in `RIGS`; thread-model satin [showcase](/engineering/rendering/fabric-shading/microcylinder-cloth-model.md) in 12 colours in the White loft at 248° (the turn with the most shading variance).

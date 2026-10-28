@@ -246,6 +246,46 @@ look while it is being dialled in).
   4. Fewer cone directions on the narrow cones.
   5. Still-camera refinement: cheap while moving, full quality when still.
 
+**Optimisation results (owner chose 1, 2, then 3 at several levels; 2026-10-28).**
+
+How it was measured:
+- `render()` plus a 1-pixel `readPixels`, median of 10-25 frames.
+- Fixed 1071 × 1274 buffer at pixel ratio 1, camera [0.3, 1.06, 1.75] → [0, 0.98, 0], White loft at 248°.
+- Variants were **A/B-interleaved in one page**: runtime uniforms, or a temporary `#define` per level.
+
+**Pitfall:** `location.reload()` in the preview pane can silently not reload. One page ran stale
+code for 11 minutes. Check `performance.timeOrigin` or the compiled shader source
+(`gl.getShaderSource`) before trusting a timing, and restart the preview server for a new build.
+
+1. **Constant segments: kept, lossless, 70 → 61.4 ms.**
+   - The skip lives in the existing 28-sample loop: `continue` on j > 0 when o0 == o1, weight × 4.
+     It is in `MICRO_FRAGMENT` and `microPoint`.
+   - Control: nudging the offsets apart by 1e-6 rad disables the skip at runtime, and the time goes
+     back to 70 ms.
+   - Against the original render, the satin is unchanged. The only differing pixels are on the skin
+     and floor (shadow noise between runs).
+2. **Env-space hoisting: rejected, about 9 ms slower** (79.6 against 70 without the skip).
+   - Constant cos/sin tables (indexed `const float[]`) were also tried. The first load hung for over
+     45 s, so they were dropped.
+   - Note: compiling the satin program takes about 8-9 s on this machine. A design switching to it
+     stalls for that long the first time.
+3. **Floats' kd share at fewer nodes (`MICRO_Q.KD`; QR = 0.5·sqrt(φ spacing / 15°)).** Each level
+   is compared with level 0 at 720 × 1000; differences are 0-255 per channel over the satin pixels.
+
+   | Level | NT × NP | QR | Frame | Mean diff, pink / blue / softbox | Worst |
+   |---|---|---|---|---|---|
+   | 0 | 8 × 12 | 0.50 | 62.2 ms | reference | |
+   | 1 | 6 × 8 | 0.61 | 49.3 ms | 0.10 / 0.05 | 1 |
+   | 2 | 4 × 6 | 0.71 | 42.3 ms | 0.17 / 0.10 / 0.04 | 1 |
+   | 3 | 3 × 4 | 0.87 | 39.1 ms | 0.30 / 0.19 | 1 |
+   | 4 | 2 × 3 | 1.00 | 36.4 ms | 0.26 / 0.18 / 0.09 | 1 |
+
+   - The energy scale moves at most 0.2% across levels (14.634 → 14.658).
+   - Switching the kd share off entirely gives about 34.5 ms, so level 4 leaves about 2 ms in it.
+   - Sheet: `app/captures/satin-micro/opt/satin-kd-levels.jpg`.
+   - **Kept at level 0 until the owner picks.** `MICRO_Q` is shared with `microFurnace`, so picking
+     a level is one edit.
+
 **Earlier status (by-eye version):** on navy it showed soft blue bands across the chest, like GK's video. Light colours
 (pink) still read flat, partly because the studio lights from every side. Not yet judged by the
 owner. Cost not yet profiled (28 × 12 environment lookups per pixel).

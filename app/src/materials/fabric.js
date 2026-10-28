@@ -658,14 +658,47 @@ const FILM_FRAGMENT = /* glsl */`
 // - the floats' Gaussian lobes (2.5 and 5 degrees) as deltas in the longitudinal angle (their
 //   integral, 2), each read through a prefiltered lookup blurred to that lobe's own width (uMicroR1);
 // - every broad term (the cross threads' lobes, 30 and 60 degrees, and both sets' kd share) by
-//   quadrature over the longitudinal angle and azimuth (MICRO_NT x MICRO_NP), the floats' kd share at
+//   quadrature over the longitudinal angle and azimuth (MICRO_Q), the floats' kd share at
 //   each tangent segment's centre (it has no peak along the curve).
 // Not in the model: direct lights (studio area lights, an HDRI rig's key and glint lights) and
 // occlusion; the paper's Ft(eta, wi) Ft(eta', wr) is taken as Ft at one angle, squared.
+// MICRO_Q: the quadratures' sample counts, shared by the shader and its JS twin microFurnace (keep
+// them in step): K cone directions on a narrow lobe; NT x NP nodes (theta, phi) for the cross
+// threads' broad lobes (CROSS) and for the floats' kd share (KD), each node's lookup blurred to
+// about the nodes' spacing (QR). The kd share is faint: 6 x 8 down to 2 x 3 nodes (QR 0.5 x
+// sqrt(phi spacing / 15 degrees)) stayed within 1/255 of this and cut 13-26 ms a frame (knowledge
+// note, 2026-10-28); kept at full until the owner picks a level.
+const MICRO_Q = { K: 12, CROSS: { NT: 8, NP: 12, QR: 0.5 }, KD: { NT: 8, NP: 12, QR: 0.5 } };
+// A broad term by quadrature: the whole thread function (iso = 0), or only its kd share (iso = 1).
+// Lookups are blurred to about the quadrature's spacing (QR), which prefilters the integrand.
+const MICRO_BROAD = (name, { NT, NP, QR }) => /* glsl */`
+vec3 ${name}( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A, float eta, float iso ) {
+	float sr = clamp( dot( wr, t ), - 1., 1. ), tr = asin( sr ), cr = cos( tr ), Pr = microPr( wr, n, bx );
+	vec3 pv = wr - t * sr;
+	float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
+	vec3 acc = vec3( 0. );
+	if ( Pr <= 0. || Mr <= 0. ) return acc;
+	float g = 1. - iso;
+	for ( int j = 0; j < ${NT}; j ++ ) {
+		float ti = ( ( float( j ) + .5 ) / ${NT}. - .5 ) * PI, cti = cos( ti ), sti = sin( ti );
+		float th = .5 * ( ti + tr ), ctd = cos( .5 * ( ti - tr ) );
+		float gs = g * microGauss( T.x, th ), gv = g * ( 1. - T.z ) * microGauss( T.y, th );
+		for ( int k = 0; k < ${NP}; k ++ ) {
+			float phi = ( ( float( k ) + .5 ) / ${NP}. - .5 ) * PI;
+			vec3 wi = sti * t + cti * ( cos( phi ) * nl + sin( phi ) * bl );
+			float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
+			if ( mp <= 0. ) continue;
+			float c2 = cos( .5 * ( phi - phr ) ), Fr = microFresnel( ctd * c2, eta ), Ft = 1. - Fr;
+			vec3 f = ( vec3( gs * Fr * c2 ) + Ft * Ft * ( gv + T.z ) / max( cti + cr, 1e-2 ) * A ) / max( ctd * ctd, 1e-3 );
+			acc += microEnv( wi, ${QR.toFixed(3)} ) * f * ( mp * cti * cti );
+		}
+	}
+	return acc * ( PI / ${NT}. ) * ( PI / ${NP}. );
+}
+`;
 const MICRO_PARS = /* glsl */`
 #define MICRO_NT 8
 #define MICRO_NP 12
-#define MICRO_QR .5
 float microFresnel( float c, float eta ) { // exact unpolarised dielectric reflectance
 	float g2 = eta * eta - 1. + c * c;
 	if ( g2 < 0. ) return 1.;
@@ -687,7 +720,7 @@ float microPr( vec3 wr, vec3 n, vec3 bx ) { vec3 wp = wr - bx * dot( wr, bx ); r
 vec3 microEnv( vec3 w, float r ) { return textureCubeUV( envMap, envMapRotation * inverseTransformDirection( w, viewMatrix ), r ).rgb; }
 // A narrow-lobed tangent (the floats): surface and volume Gaussians as deltas in theta
 vec3 microNarrow( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A, vec2 R, float eta ) {
-	const int K = 12;
+	const int K = ${MICRO_Q.K};
 	float sr = clamp( dot( wr, t ), - 1., 1. ), cr = sqrt( max( 1. - sr * sr, 0. ) ), Pr = microPr( wr, n, bx );
 	vec3 pv = wr - t * sr;
 	float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
@@ -730,10 +763,11 @@ float microQ( vec3 wr ) {
 vec3 microPoint( vec3 wi, vec3 wr ) {
 	vec3 n = gMicroN, T1 = gMicroT1, T2 = gMicroT2, bx1 = cross( n, T1 ), bx2 = cross( n, T2 );
 	vec3 acc1 = vec3( 0. ); float sumL = 0.;
-	for ( int s = 0; s < 28; s ++ ) {
-		int seg = s / 4; float w = uMicroLen[ seg ];
-		if ( w <= 0. ) continue;
-		float off = mix( uMicroOff[ seg ], uMicroOff[ seg + 1 ], ( float( s - seg * 4 ) + .5 ) / 4. ), ca = cos( off ), sa = sin( off );
+	for ( int s = 0; s < 28; s ++ ) { // a constant-offset segment once, at four times the weight (as MICRO_FRAGMENT)
+		int seg = s / 4, j = s - seg * 4; float w = uMicroLen[ seg ], o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
+		if ( w <= 0. || ( o0 == o1 && j > 0 ) ) continue;
+		w *= o0 == o1 ? 4. : 1.;
+		float off = mix( o0, o1, ( float( j ) + .5 ) / 4. ), ca = cos( off ), sa = sin( off );
 		vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
 		acc1 += microFull( t, nl, cross( t, nl ), n, bx1, wi, wr, uMicroT1, uMicroA1, uMicroEta, microPr( wr, n, bx1 ) ) * w; sumL += w;
 	}
@@ -820,31 +854,8 @@ vec3 microRect( RectAreaLight L, vec3 p, vec3 wr ) {
 }
 #endif
 #if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV )
-// A broad term by quadrature: the whole thread function (iso = 0), or only its kd share (iso = 1).
-// Lookups are blurred to about the quadrature's spacing (MICRO_QR), which prefilters the integrand.
-vec3 microBroad( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A, float eta, float iso ) {
-	float sr = clamp( dot( wr, t ), - 1., 1. ), tr = asin( sr ), cr = cos( tr ), Pr = microPr( wr, n, bx );
-	vec3 pv = wr - t * sr;
-	float phr = atan( dot( pv, bl ), dot( pv, nl ) ), Mr = max( cos( phr ), 0. );
-	vec3 acc = vec3( 0. );
-	if ( Pr <= 0. || Mr <= 0. ) return acc;
-	float g = 1. - iso;
-	for ( int j = 0; j < MICRO_NT; j ++ ) {
-		float ti = ( ( float( j ) + .5 ) / float( MICRO_NT ) - .5 ) * PI, cti = cos( ti ), sti = sin( ti );
-		float th = .5 * ( ti + tr ), ctd = cos( .5 * ( ti - tr ) );
-		float gs = g * microGauss( T.x, th ), gv = g * ( 1. - T.z ) * microGauss( T.y, th );
-		for ( int k = 0; k < MICRO_NP; k ++ ) {
-			float phi = ( ( float( k ) + .5 ) / float( MICRO_NP ) - .5 ) * PI;
-			vec3 wi = sti * t + cti * ( cos( phi ) * nl + sin( phi ) * bl );
-			float mp = microMP( wi, n, bx, phi, phr, Mr, Pr );
-			if ( mp <= 0. ) continue;
-			float c2 = cos( .5 * ( phi - phr ) ), Fr = microFresnel( ctd * c2, eta ), Ft = 1. - Fr;
-			vec3 f = ( vec3( gs * Fr * c2 ) + Ft * Ft * ( gv + T.z ) / max( cti + cr, 1e-2 ) * A ) / max( ctd * ctd, 1e-3 );
-			acc += microEnv( wi, MICRO_QR ) * f * ( mp * cti * cti );
-		}
-	}
-	return acc * ( PI / float( MICRO_NT ) ) * ( PI / float( MICRO_NP ) );
-}
+${MICRO_BROAD('microBroadCross', MICRO_Q.CROSS)}
+${MICRO_BROAD('microBroadKd', MICRO_Q.KD)}
 #endif
 `;
 const MICRO_FRAGMENT = /* glsl */`
@@ -855,11 +866,13 @@ const MICRO_FRAGMENT = /* glsl */`
 		vec3 bx1 = cross( n, T1 ), bx2 = cross( n, T2 );                             // normals to each set's (t, n) plane
 		float eta = uMicroEta, a1 = uMicroT1.w, a2 = uMicroT2.w;
 		vec3 acc1 = vec3( 0. ); float sumP1 = 0., sumL1 = 0.;
-		// the floats: four tangent samples per segment of their curve
+		// the floats: four tangent samples per segment of their curve; a segment of constant offset has
+		// one tangent, taken once at four times the weight
 		for ( int s = 0; s < 28; s ++ ) {
-			int seg = s / 4; float w = uMicroLen[ seg ];
-			if ( w <= 0. ) continue;
-			float off = mix( uMicroOff[ seg ], uMicroOff[ seg + 1 ], ( float( s - seg * 4 ) + .5 ) / 4. );
+			int seg = s / 4, j = s - seg * 4; float w = uMicroLen[ seg ], o0 = uMicroOff[ seg ], o1 = uMicroOff[ seg + 1 ];
+			if ( w <= 0. || ( o0 == o1 && j > 0 ) ) continue;
+			w *= o0 == o1 ? 4. : 1.;
+			float off = mix( o0, o1, ( float( j ) + .5 ) / 4. );
 			float ca = cos( off ), sa = sin( off );
 			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
 			sumP1 += microPr( wr, n, bx1 ) * w; sumL1 += w;
@@ -871,10 +884,10 @@ const MICRO_FRAGMENT = /* glsl */`
 			if ( w <= 0. || uMicroT1.z <= 0. ) continue;
 			float off = .5 * ( uMicroOff[ seg ] + uMicroOff[ seg + 1 ] ), ca = cos( off ), sa = sin( off );
 			vec3 t = ca * T1 + sa * n, nl = - sa * T1 + ca * n;
-			acc1 += microBroad( t, nl, cross( t, nl ), n, bx1, wr, uMicroT1, uMicroA1, eta, 1. ) * w;
+			acc1 += microBroadKd( t, nl, cross( t, nl ), n, bx1, wr, uMicroT1, uMicroA1, eta, 1. ) * w;
 		}
 		// the cross threads: one tangent, in the surface
-		vec3 acc2 = microBroad( T2, n, cross( T2, n ), n, bx2, wr, uMicroT2, uMicroA2, eta, 0. );
+		vec3 acc2 = microBroadCross( T2, n, cross( T2, n ), n, bx2, wr, uMicroT2, uMicroA2, eta, 0. );
 		float Pr2 = microPr( wr, n, bx2 );
 		float Q = a1 * sumP1 / max( sumL1, 1e-4 ) + a2 * Pr2 + ( 1. - a1 - a2 ) * max( dot( wr, n ), 0. );
 		vec3 Lr = ( a1 * acc1 / max( sumL1, 1e-4 ) + a2 * acc2 ) / max( Q, 1e-3 );
@@ -1079,7 +1092,7 @@ function secondColour(base, mode, forOmbre, out) {
 // The thread model in a uniformly white room (radiance 1) at a normal view, for a white dye, as
 // [white surface shine, coloured light per unit of the table's albedo factors]: a transliteration of
 // MICRO_FRAGMENT (microNarrow, microBroad, Q) with every environment lookup 1, at the shader's own
-// sample counts (K 12, MICRO_NT 8, MICRO_NP 12). Keep the two in step. Its scale is the
+// sample counts (MICRO_Q). Keep the two in step. Its scale is the
 // satinmicro scale (FABRICS comment): about 14.6 at the table's values.
 const _dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const _cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -1100,7 +1113,7 @@ function microFurnace(eta, F, W) {
 		return { bl, sr, phr, Mr: Math.max(Math.cos(phr), 0), Pr: proj(wr, bx) };
 	};
 	const narrow = (t, nl, bx, T) => { // T: { kd }; returns [white, coloured]
-		const { bl, sr, phr, Mr, Pr } = frame(t, nl, bx), cr = Math.sqrt(Math.max(1 - sr * sr, 0)), K = 12;
+		const { bl, sr, phr, Mr, Pr } = frame(t, nl, bx), cr = Math.sqrt(Math.max(1 - sr * sr, 0)), K = MICRO_Q.K;
 		let w = 0, c = 0;
 		if (Pr <= 0 || Mr <= 0) return [0, 0];
 		for (let k = 0; k < K; k++) {
@@ -1112,8 +1125,8 @@ function microFurnace(eta, F, W) {
 		}
 		return [w * PI / K, c * PI / K];
 	};
-	const broad = (t, nl, bx, T, iso) => {
-		const { bl, sr, phr, Mr, Pr } = frame(t, nl, bx), tr = Math.asin(sr), cr = Math.cos(tr), NT = 8, NP = 12, g = 1 - iso;
+	const broad = (t, nl, bx, T, iso, { NT, NP }) => {
+		const { bl, sr, phr, Mr, Pr } = frame(t, nl, bx), tr = Math.asin(sr), cr = Math.cos(tr), g = 1 - iso;
 		let w = 0, c = 0;
 		if (Pr <= 0 || Mr <= 0) return [0, 0];
 		for (let j = 0; j < NT; j++) {
@@ -1143,10 +1156,10 @@ function microFurnace(eta, F, W) {
 		const l = len[seg];
 		if (l <= 0 || F.kd <= 0) continue;
 		const o = 0.5 * (off[seg] + off[seg + 1]), ca = Math.cos(o), sa = Math.sin(o);
-		const [w, c] = broad(_comb([ca, T1], [sa, n]), _comb([-sa, T1], [ca, n]), bx1, F, 1);
+		const [w, c] = broad(_comb([ca, T1], [sa, n]), _comb([-sa, T1], [ca, n]), bx1, F, 1, MICRO_Q.KD);
 		w1 += w * l; c1 += c * l;
 	}
-	const [w2, c2] = broad(T2, n, bx2, W, 0);
+	const [w2, c2] = broad(T2, n, bx2, W, 0, MICRO_Q.CROSS);
 	const Q = Math.max(F.a * sumP / Math.max(sumL, 1e-4) + W.a * proj(wr, bx2) + (1 - F.a - W.a) * 1, 1e-3);
 	return [(F.a * w1 / Math.max(sumL, 1e-4) + W.a * w2) / Q, (F.a * c1 / Math.max(sumL, 1e-4) * F.A + W.a * c2 * W.A) / Q];
 }
