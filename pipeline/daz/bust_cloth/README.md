@@ -74,6 +74,18 @@ Findings, older teen, poses draped per pose (`run_posed`):
   faint crease beside the cleft in the floor split (young, adult, petite) and a thin sliver in the
   9-year-old's stag jump; the 6-year-old's cleft is too shallow for the band to change much.
 
+## Bust: filling the gap more (2026-10-28)
+
+`fill.py <body> <out> "<name>: dict(...)" ...` runs today's drape (`shapes.BUST`) and variants on
+the body's own starting shape and renders front, three-quarter, side and a high view; `stats.json`
+has how far the midline skin came forward (`fill_*`) and the underside moved (`crease_*`).
+`cloth_pbd.drape` gained `bend` (bilaplacian bending, default 0) and scales `along > 1` so no edge
+overshoots; neither changes the shipped settings. Findings in the
+[decision](../../../knowledge/decisions/2026-10-25-sports-bra-cloth-bust.md): bending, tightness,
+thickness and the band top barely move a cloth cut from the skin's mesh; a fresh grid cloth over
+today's result fills most. Best so far (adult): `"best: dict(two=True, theta=90.0, soft_t=40.0,
+above=8.0, soft_hi=12.0, grid=dict(along=0.25))"`.
+
 ## Bust in poses (2026-10-26)
 
 `bake_bust_poses.py` bakes the owner's starting shape (flatten 0.25, in-out 1.0) in the a-pose and

@@ -18,7 +18,7 @@ def adjacency(n, faces):
 	return A
 
 
-def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stiff=0.5, relax=0.05, verbose=True, hard_pin=False, start=None, along=1.0):
+def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stiff=0.5, relax=0.05, verbose=True, hard_pin=False, start=None, along=1.0, bend=0.0):
 	"""P: cage (cm). free: per cage vertex 0..1 (0 held on the skin, > 0 inside the bra band).
 	Returns the cloth (positions, quads) on the subdivided patch."""
 	t0 = time.time()
@@ -45,6 +45,7 @@ def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stif
 	ed = X0[E[:, 1]] - X0[E[:, 0]]
 	c2 = ed[:, 0] ** 2 / np.maximum((ed ** 2).sum(1), 1e-12)
 	ke = c2 + along * (1 - c2)
+	ke = ke / max(ke.max(), 1.0)  # along > 1 (harder up and down): scaled so no edge overshoots
 	# collider: the body's surface near the patch (trunk and arms), as dense samples with normals
 	lo, hi = X.min(0) - 5, X.max(0) + 5
 	tsel = ((PS[TS] > lo) & (PS[TS] < hi)).all(2).all(1)
@@ -65,6 +66,11 @@ def drape(P, free, shrink=0.3, off=2.0, iters=300, thick=0.15, smooth_n=40, stif
 		X += stiff * dX / np.maximum(cnt, 1)[:, None]
 		# a little smoothing keeps it from rippling
 		X += (relax * w)[:, None] * ((A @ X) / deg[:, None] - X)
+		# bending stiffness (bilaplacian step): resists curving either way, so it also lifts the cloth
+		# over saddles such as the crease under the breast, which the smoothing above leaves alone
+		if bend:
+			LX = (A @ X) / deg[:, None] - X
+			X -= (bend * w)[:, None] * ((A @ LX) / deg[:, None] - LX)
 		# collision with the skin
 		_, j = tree.query(X)
 		dd = np.einsum('ij,ij->i', X - BP[j], BN[j])

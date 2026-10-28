@@ -58,6 +58,19 @@ were the bought alternative). What was tried (young adult, A-pose):[^owner]
 - Levers that change the look: the Daz starting shape and the lift (strongest), the band's edges,
   a stronger pull across than along (not tried). Not tightness.
 
+- Gap-filling experiment (2026-10-28, adult, today's starting shape, cloth only; owner: "a supported
+  and filled gap look so that the individual breasts are less defined"; `bust_cloth/fill.py`,
+  renders in `app/captures/bust-cloth/fill*/`). Midline skin brought forward (max, cm): today 0.94;
+  bending as smoothing x10 0.99; bilaplacian bending 0.05-0.4 0.96; across 4x / 10x / only 1.09 /
+  1.15 / 1.19; up-down 3x 0.86 (worse); band top +4 cm 0.97; fabric thickness 1 / 2 cm 0.95 / 1.03
+  (3 cm tore). Cause: the cloth is cut from the skin's own mesh, so it carries the cleavage walls'
+  material and its edges follow the mesh, not the chest; even with no up-down pull it dipped 1 cm
+  between the breasts. Best: today's drape, then the seat's fresh grid cloth (`seat_proto.drape_grid`,
+  seen from the front 10 degrees below) over the front: `two=True, theta=90, soft_t=40, above=8,
+  soft_hi=12, grid=dict(along=0.25)`: 1.80, one forward-facing sweep across the bust in normal
+  shading, no seam (a held top edge at 4 cm left a line). The grid alone on a 70-degree band sharpened
+  the outer underside crease. Not baked; awaiting the owner.
+
 # Revisit if
 
 - Poses show the baked shape fighting the pectoral bones (in-out 1 rotates them 10 degrees).
