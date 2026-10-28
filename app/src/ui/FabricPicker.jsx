@@ -15,7 +15,7 @@ import { thumbName } from './Inspector.jsx';
 // mesh in 83% of garments, matte 45%, wet look and foil 33%, shiny 28%, mystique 28%, then the
 // rarer finishes), the plainest first. The sublimated-ombre fabrics stay out: a gradient is a
 // setting of any piece now; the debug checker too.
-const ORDER = ['matte', 'shiny', 'mystique', 'opalmystique', 'wet', 'satin', 'satinmicro', 'satinfast', 'satinfastest', 'mesh', 'foil', 'hologram', 'glitter', 'velvet', 'illusion', 'liquidholo', 'hologlitter', 'oilslick', 'duochrome', 'glitterfoil', 'pearl', 'chrome', 'crushed', 'glittermesh'];
+const ORDER = ['matte', 'shiny', 'mystique', 'opalmystique', 'wet', 'satin', 'satinmicro', 'satinfast', 'satinfastest', 'satinfall2', 'satinflod', 'satinfaddr', 'satinflzero', 'satinflfuse', 'satinfkd1', 'satinftrig', 'mesh', 'foil', 'hologram', 'glitter', 'velvet', 'illusion', 'liquidholo', 'hologlitter', 'oilslick', 'duochrome', 'glitterfoil', 'pearl', 'chrome', 'crushed', 'glittermesh'];
 const HIDDEN = new Set(['checker', 'ombre', 'ombremystique']);
 const KEYS = [...ORDER.filter((k) => FABRICS[k]), ...Object.keys(FABRICS).filter((k) => !ORDER.includes(k) && !HIDDEN.has(k))];
 

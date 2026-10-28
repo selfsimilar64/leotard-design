@@ -346,7 +346,50 @@ model), same parameters and energy scale, only the sampling differs. `micro.spee
   satin. Frame times were not re-measured (the owner was using the test tab); the paired numbers
   above stand. The combined fastest set was never timed: expected about 27 − 8 − 6 ≈ 13-15 ms.
 
+**Owner's verdict and new defaults (2026-10-28).** Satin fastest looked no different from Satin
+fast to the owner, so fastest is the base. The owner's own satin settings are now the defaults
+(`FABRICS.satinmicro`): eta 1.505, kd 0.5, gs 10/3°, gv 9.75°. The panel sliders still read
+against the paper's widths (2.5°, 5°), so a stored design shows the same numbers. The owner's
+design (plum `#8f2861` satin front, dark shiny back, White loft, raised-arm pose) is saved with its
+camera at `app/captures/satin-micro/owner-design.json` and is the test scene from here on.
+Captures are 1080 × 1440 of the torso only (owner).
+
+**Cost at fastest, owner's design** (1071 × 1274, paired): full model 58.6 ms, fast 25.3, fastest
+17.4, the same scene with the satin panel in Shiny tricot 5.9. Removing each part from fastest:
+narrow cones −4.9 ms, direct lights −4.0 (three lights: the key and two glint lights), kd share
+−2.6, cross threads −0.6. At the owner's 1373 × 1764 canvas fastest is 25.9 ms, the scene without
+satin 8.9.
+
+**Fastest against the full model at the new defaults:** worst 20/255, mean 9, over 89% of the satin
+(slightly lighter, milkier). At kd 0.5 the kd share is five times the table's, so MICRO_KD's 2 × 3 is
+no longer within 1/255 as it was at kd 0.1. The owner judged fastest on sight; not acted on.
+
+**Round two (2026-10-28, ideas from a Fable review of this shader).** Six switches on top of
+`all` (`MICRO_ROUND2`, fabric.js), each in the picker as "Satin F …" (`satinf<key>`) plus
+"Satin F all round two" (`satinfall2`). Paired at 1373 × 1764 (1071 × 1274 in brackets), worst
+difference from fastest over the satin:
+
+| Switch | What | Δ frame | Worst |
+|---|---|---|---|
+| MICRO_LOD | textureLod instead of zero-gradient textureGrad | 0.0 (0.0) ms | 0 |
+| MICRO_ADDR | one view-to-env matrix per pixel; the floats' two lookups share a tile address | −0.5 (−0.3) | 1 |
+| MICRO_LZERO | lights with zero colour (shadowed, out of range) not lit | 0.0 (0.0) | 0 |
+| MICRO_LFUSE | lights lit tangent by tangent, view terms once (`microLights`) | +0.4 (−0.2) | 1 |
+| MICRO_KD1 | kd share: one env read per segment at the weighted mean direction | −0.5 (−0.3) | 4 (9% > 2) |
+| MICRO_TRIG | cone loop cos/sin by rotation | (+0.2) | 0 |
+| all together | | −0.8 (−0.5): 25.1 ms | 4 |
+
+Conclusion: the shader is not limited by texture fetches (LOD: no change) or by address and trig
+arithmetic; whole terms cost milliseconds but making each evaluation leaner barely moves the frame
+on the GTX 1650. Likely limits: the per-direction ALU of `microMP` and `microFresnel`, or register
+pressure. Not tried (larger infrastructure): a dedicated 16-px samplerCube of the used levels and
+SH9 for the blurriest lookups; given LOD's null result, low expected gain. Sheet:
+`app/captures/satin-micro/opt3/round-two.jpg` (torso renders and ×16 differences),
+`fastest-vs-all2.jpg` (full resolution side by side).
+
 **Testing pitfalls:**
+- Temporary defines added to a material on top of its own accumulate across runs unless reset
+  (the first round-two breakdown was wrong for this reason).
 - The browser caches compiled shaders by source, so repeat compiles take about 0.5 s; use a nonce.
 - A hidden pane throttles the page's timers, so captures stall.
 - One page hot-reloaded store modules mid-test ("Command doc.set defined twice") and drew nothing

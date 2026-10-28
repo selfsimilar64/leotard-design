@@ -98,19 +98,19 @@ function PanelInspector({ sel, doc }) {
 	);
 }
 
-// The thread-model satin's controls (materials/fabric.js SATIN_DEFAULTS), each shown against the
-// paper's measured value: sharpness as 2.5 degrees over the highlight's width, glow width as a
+// The thread-model satin's controls (materials/fabric.js SATIN_DEFAULTS: the owner's settings since
+// 2026-10-28; unset fields take them), the widths shown against the paper's measured value (P): sharpness as 2.5 degrees over the highlight's width, glow width as a
 // multiple of 5 degrees, milkiness as a share, sheen as the face-on surface reflection the
 // refractive index gives. The second colour (dyed cross threads) is Foil / second, under More.
 function SatinControls({ s, set }) {
 	const v = { ...SATIN_DEFAULTS, ...s.satin }, put = (k, x, g) => set({ satin: { ...s.satin, [k]: x } }, g);
-	const D = SATIN_DEFAULTS, refl = (eta) => ((eta - 1) / (eta + 1)) ** 2;
+	const P = { gs: 2.5, gv: 5 }, refl = (eta) => ((eta - 1) / (eta + 1)) ** 2;
 	return <>
-		<Line label="Highlight sharpness"><Slider value={D.gs / v.gs} min={0.25} max={4} step={0.05} format={(x) => x.toFixed(2) + '×'} onChange={(x, g) => put('gs', D.gs / x, g)} /></Line>
-		<Line label="Colour glow width"><Slider value={v.gv / D.gv} min={0.25} max={6} step={0.05} format={(x) => x.toFixed(2) + '×'} onChange={(x, g) => put('gv', D.gv * x, g)} /></Line>
+		<Line label="Highlight sharpness"><Slider value={P.gs / v.gs} min={0.25} max={4} step={0.05} format={(x) => x.toFixed(2) + '×'} onChange={(x, g) => put('gs', P.gs / x, g)} /></Line>
+		<Line label="Colour glow width"><Slider value={v.gv / P.gv} min={0.25} max={6} step={0.05} format={(x) => x.toFixed(2) + '×'} onChange={(x, g) => put('gv', P.gv * x, g)} /></Line>
 		<Line label="Milkiness"><Slider value={v.kd} min={0} max={1} step={0.01} format={(x) => Math.round(x * 100) + '%'} onChange={(x, g) => put('kd', x, g)} /></Line>
 		<Line label="Sheen strength"><Slider value={v.eta} min={1.2} max={2.2} step={0.005} format={(x) => (refl(x) * 100).toFixed(1) + '%'} onChange={(x, g) => put('eta', x, g)} /></Line>
-		{s.satin ? <div class="actions"><button class="btn" title="Back to the measured satin (Sadeghi et al. 2013)" onClick={() => set({ satin: null })}>Reset satin</button></div> : null}
+		{s.satin ? <div class="actions"><button class="btn" title="Back to the default satin settings" onClick={() => set({ satin: null })}>Reset satin</button></div> : null}
 	</>;
 }
 
