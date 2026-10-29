@@ -97,8 +97,9 @@ BUST = {'body_ctrl_BreastsFlatten': 0.25, 'body_ctrl_BreastsIn-Out': 1.0}
 BODIES = [
 	dict(key='child-6', label='Child, about 6', years=6, stature=1.17, skin=1, presets=[AGE_P('5-6')], morphs={}),
 	dict(key='child', label='Child, about 9', years=9, stature=1.33, skin=1, presets=[AGE_P('9-10')], morphs={}),
+	# the young teen keeps Kat's head half only (the face as before); none of her adult body (owner, 2026-10-28)
 	dict(key='teen', label='Young teen, about 13', years=13, stature=1.55, skin=2, presets=[AGE_P('young-teen')],
-		morphs={'Kat_figure_ctrl_Character': 1, **BUST}),
+		morphs={'Kat_head_bs_Head': 1, **BUST}),
 	dict(key='older-teen', label='Older teen, about 16', years=16, stature=1.6, skin=3, presets=[AGE_P('older-teen')], morphs={**BUST}),
 	# the adults take only their character's body half (a *_figure_ctrl_Character dials *_head_bs_Head
 	# and *_body_bs_body at 1 and nothing else), so the face is Stacy's alone (owner, 2026-10-26)

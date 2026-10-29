@@ -73,8 +73,10 @@ A-pose cage, so both stages must have the same shape). The bare figure stays uns
 (`*_head_bs_Head`) and body half (`*_body_bs_body` / `_Body`) at 1, so on top of it Stacy's head morph
 gave a blend of two faces (a rounder, softer jaw than hers). An Iray render of the app's young adult
 beside Stacy as shipped (her head and body morphs) showed it; the young adult and adult now take the
-body half only (`Kat_body_bs_body`, `BaseFeminine_body_bs_Body`). The teen keeps Kat's whole controller
-and the children and teens their Growing Up age presets, which shape the face on purpose. The same
+body half only (`Kat_body_bs_body`, `BaseFeminine_body_bs_Body`). The young teen keeps Kat's head half only
+(`Kat_head_bs_Head`; her whole controller until 2026-10-28, when the owner removed Kat's adult body,
+which had made the 13-year-old's bust as full as the 16-year-old's) and the children and teens their
+Growing Up age presets, which shape the face on purpose. The same
 comparison showed the larger gap is the app's drawing of the face (hard black lash and brow cut-outs,
 eyes reading wide open, flat skin shading), not the character. See
 [free character assets](/engineering/pipeline/free-character-assets.md).
