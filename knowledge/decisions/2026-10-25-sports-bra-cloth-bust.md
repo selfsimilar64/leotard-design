@@ -86,6 +86,10 @@ were the bought alternative). What was tried (young adult, A-pose):[^owner]
   today's drape: the grid cloth (`band(theta=90, soft_t=40, above=8, soft_hi=12)`, `drape_grid` seen
   from the front 10 degrees below, `along=0`) and `cloth_pbd.taut_rows(amount=1)`, then the skin
   settled onto it; identical to the adult test (`fill.py hull100`). Carried into poses as before.
+- Half-way (2026-10-28, owner: "just slightly too far with stretching the fabric fully straight
+  across the bust's hollow. Let's go with rows half way to straight"): `BRIDGE rows=0.5` (the adult
+  test `fill.py hull50`: dip 0.30 / 0.08 cm). Straight vs half-way in four poses on the teen and the
+  adult: `app/captures/bust-cloth/bridge-half/`; clean in both.
 
 # Revisit if
 
