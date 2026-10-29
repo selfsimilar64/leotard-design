@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-28
+* **Update**: [Sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md): owner found the half-way bridge "not quite right" and chose the first gap-filling iteration (second grid cloth 4x across, no rows pulled straight; `shapes.py BRIDGE along=0.25, rows=0`), now baked from the 13-year-old up.
 * **Update**: [Sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md): owner found the fully straight bridge slightly too far; the rows are now pulled half-way to straight (`shapes.py BRIDGE rows=0.5`, the adult test `hull50`) on every body from the 13-year-old up.
 * **Update**: [Sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md): the straight bridge (second grid cloth, rows pulled taut) built into every body from the 13-year-old up (`shapes.py BRIDGE`); [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md): handstand, cartwheel low and lunge arm up removed (owner), 10 Daz poses remain.
 * **Update**: [Sports-bra bust by taut cloth](/decisions/2026-10-25-sports-bra-cloth-bust.md): towards a straight bridge: the second (grid) cloth pulling across only, then each of its rows pulled taut, leaves the midline on average 0.6 mm behind a straight line between the breasts (today 7.9 mm); one even band across the bust in normal shading. Not baked.

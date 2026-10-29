@@ -3,7 +3,7 @@
 # decisions/2026-10-26-seat-cleft-cloth.md). Both are our own taut-cloth drapes over the skin
 # (pipeline/daz/bust_cloth/, the prototype these settings were chosen in):
 #   bust: drawn once on the a-pose (lift, then a membrane over a bra band, the skin settled onto it,
-#         then a grid cloth over the front with its rows pulled half-way to straight across)
+#         then a fresh grid cloth over the front pulling harder across than along)
 #         and carried into every pose like a Daz morph (each offset turned with its neighbourhood);
 #   seat: drawn on every Daz pose's own body (a grid cloth across the cleft, pressed gently into
 #         it, the skin slid onto it), since carrying it pleats the cleft when a pose opens it.
@@ -20,10 +20,11 @@ import g9
 
 # owner's choices, 2026-10-25/26 (bodies.py BUST sets the Daz starting shape the bust is drawn on)
 BUST = dict(lift=2.0, drape=dict(shrink=0.5, iters=1500, stiff=1.0, hard_pin=True, off=1.0))
-# then a second, fresh grid cloth over the front pulling only across, its rows pulled half-way to straight
-# (owner, 2026-10-28: fully straight was slightly too far; bust_cloth/fill.py hull50)
+# then a second, fresh grid cloth over the front pulling 4x harder across than along (owner, 2026-10-28:
+# the first gap-filling iteration, bust_cloth/fill.py fill8 'best'; rows pulled straight or half-way
+# (rows=1 / 0.5) were tried in the app and dropped)
 BRIDGE = dict(band=dict(theta=90.0, soft_t=40.0, above=8.0, soft_hi=12.0),
-	grid=dict(dvec=(0, 0, -1), tilt=10.0, shrink=0.5, iters=1500, stiff=1.0, off=1.0, along=0.0), rows=0.5)
+	grid=dict(dvec=(0, 0, -1), tilt=10.0, shrink=0.5, iters=1500, stiff=1.0, off=1.0, along=0.25), rows=0.0)
 SEAT = dict(along=0.25, front=-3.0, front_soft=3.0, w_lo=1.5, w_hi=4.5, w_soft=2.5, top_soft=6.0, leg_keep=0.3,
 	embed=True, t_in=0.15, jump=1.0, cling=0.001, cling_mode='pressure', smooth_settle=True, slide=True,
 	lam=5.0, mu=0.05, cut_mode='edge', cut_core=0.5, grid=True)
@@ -45,7 +46,7 @@ def bust(P_a):
 	fr, inside = C.band(Q, **BRIDGE['band'])
 	free = np.where(inside, 0.002 + fr, 0)
 	X, CF = SP.drape_grid(Q, free, verbose=False, **BRIDGE['grid'])
-	X = D.taut_rows(X, CF, SP.drape_grid.last, BRIDGE['rows'])
+	if BRIDGE['rows']: X = D.taut_rows(X, CF, SP.drape_grid.last, BRIDGE['rows'])
 	Q, _ = D.transfer(Q, free, X, CF)
 	return Q
 

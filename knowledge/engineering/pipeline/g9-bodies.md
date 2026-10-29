@@ -151,7 +151,7 @@ baked with `body_ctrl_BreastsFlatten` 0.25 and `body_ctrl_BreastsIn-Out` 1.0 (`b
 starting shape), then `shapes.py` reshapes the skin cage at convert time
 ([taut-cloth bust](/decisions/2026-10-25-sports-bra-cloth-bust.md),
 [smoothed cleft](/decisions/2026-10-26-seat-cleft-cloth.md)): the bust is lifted 2 cm and our taut
-cloth drawn over it once on the A-pose, then a second grid cloth with its rows pulled half-way to straight across the front (since 2026-10-28; fully straight was slightly too far), then carried into every pose and arm pose (each offset
+cloth drawn over it once on the A-pose, then a second grid cloth pulling 4x harder across than along over the front (since 2026-10-28; rows pulled straight or half-way were tried in the app and dropped), then carried into every pose and arm pose (each offset
 turned with its neighbourhood, as Daz skins a morph); the gluteal cleft (all eight bodies) is spanned
 by a grid cloth drawn on each Daz pose's own body. Results are cached in
 `out/bodies/<key>/shaped/` (keyed on the settings and the `.pts` time; since 2026-10-28 the bust

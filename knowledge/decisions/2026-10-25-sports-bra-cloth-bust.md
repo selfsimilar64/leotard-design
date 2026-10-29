@@ -90,6 +90,10 @@ were the bought alternative). What was tried (young adult, A-pose):[^owner]
   across the bust's hollow. Let's go with rows half way to straight"): `BRIDGE rows=0.5` (the adult
   test `fill.py hull50`: dip 0.30 / 0.08 cm). Straight vs half-way in four poses on the teen and the
   adult: `app/captures/bust-cloth/bridge-half/`; clean in both.
+- First iteration (2026-10-28, owner: "This look is just not quite right. Let's go back to the first
+  iteration"): `BRIDGE` grid `along=0.25`, `rows=0` (no rows pulled taut), identical to the adult
+  test `fill8 best` (dip 0.62 / 0.23 cm). Half-way vs this in six poses on the teen and the adult:
+  `app/captures/bust-cloth/bridge-first/`; clean, the breasts a little more defined. Current.
 
 # Revisit if
 
