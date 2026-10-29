@@ -20,6 +20,12 @@ sources:
 
 # Takeaway
 
+**Superseded on 2026-10-29** by [the studio interface](/engineering/app/studio-interface.md):
+the panel became four task tabs and a design library, the realistic person and every head left
+the app (always the headless mannequin), and every tile picture was re-rendered as a close-up on
+the matte white mannequin (fabric tiles are now a pinched, twisted sheet seen from above, not a
+twisted strip). The HDRI studio, backdrop and glare parts below still apply.
+
 **Partly superseded on 2026-10-23** by [building blocks and starting points](/engineering/app/building-blocks-and-starting-points.md):
 the Designs row sits under "Start from" beside the starting points, "Start from a basic shape"
 became the Shape pane (one element at a time, nothing reset), the material row is ordered by

@@ -42,6 +42,9 @@ The owner reviewed the revamped side panel and asked for these changes.[^owner-2
 
 # Consequences
 
+- **Item 10 superseded on 2026-10-29**: no realistic person any more, so no Stacy in the app
+  ([mannequin only and the interface overhaul](/decisions/2026-10-29-mannequin-only-interface-overhaul.md)).
+  Items 1, 2, 5-9 stand.
 - Implementation: [side panel and presets](/engineering/app/side-panel-and-presets.md),
   [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md).
 - The arm-only poses (`arms-down`, `hands-on-hips`, ...) stay in the command surface and in saved

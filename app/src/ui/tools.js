@@ -9,16 +9,19 @@
 //           Esc cancels
 //   strap   like the pen, but the line becomes a strap
 //   stones, single, erase   stone generators, one stone, the eraser (options in the panel)
-//   decal   click the body to place a logo or lettering (options in the panel)
-//   eyedrop (from the piece's Pick) while looking through a reference photo, click the photo
+//   decal   click the body to place a logo or lettering (options in the panel), or to move the
+//           one being moved (toolOptions.moveDecal)
+//   eyedrop (from the piece's match-colour button) while looking through a reference photo, click the photo
 //           where the piece is: its colour is matched to it under the rig
-// In every tool but move, right-drag orbits, middle-drag pans and the wheel zooms.
+// In every tool but move, right-drag orbits, middle-drag pans and the wheel zooms (two fingers on a
+// touch screen).
 import * as THREE from 'three';
 import { signal } from '@preact/signals';
 import { tool, selection, notify, hideOverlay } from './state.js';
 import { toSP } from '../body/surface.js';
 import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
+import { viewTo } from './camera.js';
 
 export const toolOptions = signal({
 	penRole: 'seam', penMirror: 'auto', strapWidth: 0.01,
@@ -39,11 +42,15 @@ export class ToolController {
 		el.addEventListener('pointerdown', (e) => this.down(e));
 		el.addEventListener('pointermove', (e) => this.move(e));
 		el.addEventListener('pointerup', (e) => this.up(e));
-		el.addEventListener('dblclick', (e) => { if (tool.value === 'pen' || tool.value === 'strap') { e.preventDefault(); this.finishPen(); } });
+		// a double click (or tap) finishes a line; in Select it fits the leotard in view
+		el.addEventListener('dblclick', (e) => { if (tool.value === 'pen' || tool.value === 'strap') { e.preventDefault(); this.finishPen(); } else if (tool.value === 'move') viewTo('fit'); });
 		el.addEventListener('contextmenu', (e) => e.preventDefault());
 		window.addEventListener('keydown', (e) => this.key(e));
 		tool.subscribe((t) => this.onTool(t));
 		selection.subscribe(() => this.refreshOverlay());
+		// a piece glows briefly as it is chosen
+		let last = null;
+		selection.subscribe((s) => { if (s?.kind === 'panels' && s.id !== last) engine.flashPanel(s.id); last = s?.id ?? null; });
 		hideOverlay.subscribe(() => this.refreshOverlay());
 	}
 
@@ -52,8 +59,12 @@ export class ToolController {
 		c.mouseButtons = t === 'move'
 			? { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
 			: { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+		// on a touch screen one finger turns the view in Select; in the other tools it draws or
+		// places, and two fingers turn and zoom
+		c.touches = t === 'move' ? { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN } : { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE };
 		c.enabled = true;
 		if (t !== 'pen' && t !== 'strap') this.cancelPen();
+		if (t !== 'decal' && toolOptions.value.moveDecal) toolOptions.value = { ...toolOptions.value, moveDecal: null };
 		this.el.style.cursor = t === 'move' ? 'grab' : t === 'pen' || t === 'strap' || t === 'eyedrop' ? 'crosshair' : 'default';
 		this.refreshOverlay();
 	}
@@ -105,6 +116,14 @@ export class ToolController {
 		if (t === 'decal') {
 			const h = this.engine.pickAt(x, y);
 			if (!h?.sp) return;
+			// a placed logo being moved (its page's Move), or a new one
+			const mv = toolOptions.value.moveDecal;
+			if (mv) {
+				toolOptions.value = { ...toolOptions.value, moveDecal: null };
+				this.run({ op: 'decal.set', id: mv, at: { sp: toSP(h.sp) }, layer: h.layer ?? 'L0' });
+				selection.value = { kind: 'decals', id: mv }; tool.value = 'move';
+				return;
+			}
 			const d = toolOptions.value.decal, id = this.run({ op: 'decal.add', at: { sp: toSP(h.sp) }, ...d, layer: h.layer ?? 'L0' });
 			if (id) { selection.value = { kind: 'decals', id }; tool.value = 'move'; }
 			return;
@@ -129,7 +148,7 @@ export class ToolController {
 
 	async eyedrop(x, y) {
 		const vp = this.engine.viewport, ph = vp.photo, o = toolOptions.value.eyedrop;
-		if (!ph || !o) { notify('Look through a reference photo first (Outliner, Reference photos), then click the panel on the photo'); return; }
+		if (!ph || !o) { notify('Look through a reference photo first (app.lookThrough), then click the piece on the photo'); return; }
 		const r = this.el.getBoundingClientRect(), c = ph.cam.crop ?? [0, 0, ...ph.size];
 		const px = [c[0] + (x / r.width) * (c[2] - c[0]), c[1] + (y / r.height) * (c[3] - c[1])];
 		try {

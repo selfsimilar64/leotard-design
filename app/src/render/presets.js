@@ -1,4 +1,4 @@
-// Body appearances and skin tones, lighting rigs and environments, scene constants.
+// Mannequin finishes, lighting rigs and environments, scene constants.
 
 export const SCENE = {
 	camera: { fov: 30, position: [0.25, 1.1, 2.5], target: [0, 0.99, 0] },
@@ -7,30 +7,16 @@ export const SCENE = {
 // Mannequin surfaces. Retail mannequins are matte white fibreglass by default (gloss, skin tones
 // and black are the common options); professional dress forms are linen over padding, marked
 // with black style tapes (see research_notes/mannequins_and_leotard_fit.md).
-// The body's realistic skin: Genesis 9's own skin textures (render/figure.js), under any head.
+// The body's realistic skin: Genesis 9's own skin textures (render/figure.js). No design uses it
+// since 2026-10-29 (owner: always the headless mannequin; doc/migrate-g9.js migrateBody).
 export const REALISTIC_SKIN = 'Realistic skin (Daz)';
 
-// The two ways the body is shown (the panel's Appearance choice, body.set { appearance }): a
-// headless plastic mannequin, or a realistic person (face, hair, Daz skin). Each is a set of body
-// fields; a design whose fields match neither (older files) shows no appearance selected.
-export const APPEARANCES = {
-	mannequin: { form: 'full', head: 'none', finish: 'Matte white fibreglass' },
-	realistic: { form: 'full', head: 'person', finish: REALISTIC_SKIN },
-};
-// The mannequin look takes any mannequin finish (the panel's Material choice), not only its default,
-// with or without its mannequin head (the panel's Head switch).
-export function appearanceOf(b) {
-	return Object.keys(APPEARANCES).find((k) => Object.entries(APPEARANCES[k]).every(([f, v]) => {
-		const x = b[f] ?? (f === 'head' ? 'mannequin' : undefined);
-		if (k === 'mannequin' && f === 'finish') return x in MANNEQUIN_FINISHES;
-		if (k === 'mannequin' && f === 'head') return x === 'none' || x === 'mannequin';
-		return x === v;
-	})) ?? null;
-}
+// The body is always the headless mannequin, matte white plastic unless another finish is picked.
+// Every tile picture shows designs on this body (src/dev/thumbnails.js).
+export const MANNEQUIN = { form: 'full', head: 'none', finish: 'Matte white fibreglass', headFinish: 'Matte white fibreglass' };
 
-// The Material choice of the mannequin look (ui/Inspector.jsx Character): a finish each, in the
-// finish's own colour until the body's colour (body.colour, '#rrggbb') is set; that colour then
-// stays across materials. The mannequin head and its hair (body.mannequinHair) take it too.
+// The mannequin's finish choice (ui/StageTab.jsx): a finish each, in the finish's own colour until
+// the body's colour (body.colour, '#rrggbb') is set; that colour then stays across finishes.
 export const MANNEQUIN_MATERIALS = [
 	['Matte white fibreglass', 'Matte plastic'],
 	['Gloss white', 'Gloss plastic'],
@@ -39,9 +25,6 @@ export const MANNEQUIN_MATERIALS = [
 	['Flocked velvet', 'Flocked velvet'],
 	['Linen, no tapes', 'Linen'],
 ];
-
-// The realistic person is Stacy on every body, in her own skin (pipeline/daz/bodies.py STACY);
-// the four Genesis 9 skin tones of the picker went with her (owner, 2026-10-21).
 
 export const MANNEQUIN_FINISHES = {
 	'Matte white fibreglass': { colour: 0xe9e7e2, roughness: 0.5, clearcoat: 0.25, clearcoatRoughness: 0.45 },

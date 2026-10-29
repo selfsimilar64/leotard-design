@@ -20,6 +20,11 @@ sources:
 
 # Takeaway
 
+**Interface superseded on 2026-10-29** by [the studio interface](/engineering/app/studio-interface.md):
+the tool rail, the panes and the Start from row gave way to four task tabs (the Shape tab holds
+the elements), canvas tools as modes and a design library. The elements, `block.set`, the
+reconciliation rules and the starting points below are unchanged.
+
 A designer starts from a **starting point** (the plain tank by default: crew neck, closed back,
 a gradient front, a solid back, no stones) or a moodboard design, then changes the leotard one
 **element** at a time: neckline, back, sleeves, leg, front top (a yoke seam), waist seam (and,

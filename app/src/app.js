@@ -33,6 +33,7 @@ import { migrate, setSurfaceConverter } from './doc/schema.js';
 import { MESH, surfaceConverter } from './doc/migrate-g9.js';
 import { bodyKeys } from './body/mannequin.js';
 import { poseSpec } from './body/pose.js';
+import { standardDiptych } from './render/pictures.js';
 
 // Ends a drag: touches the curves so the garment is re-cut and new cells get their panels, inside
 // the drag's own history entry.
@@ -45,9 +46,7 @@ export const VIEWS = {
 	'three-quarter': { dir: [0.55, 0.1, 0.83] }, 'back-three-quarter': { dir: [-0.55, 0.1, -0.83] },
 };
 
-// The moodboard design the tile pictures are rendered with (src/dev/thumbnails.js). A first start
-// shows the plain tank (app.new, main.jsx).
-export const STARTER = 'b2-ombre-crossover';
+// A first start shows the plain tank (app.new, main.jsx) under the designs library.
 export function defaultDocument() {
 	return newDocument('Untitled');
 }
@@ -167,7 +166,8 @@ export class App {
 		const r = await fetch('/__fs/designs/' + file, { method: 'PUT', body: this.json() }).catch(() => null);
 		if (!r || !r.ok) { download(file, new Blob([this.json()], { type: 'application/json' })); return 'downloaded ' + file; }
 		this.file = safeName(name);
-		await this.thumbnail('/__fs/designs/thumbs/' + safeName(name) + '.jpg', { view: 'front' }).catch(() => null); // its tile in the Designs row
+		// its picture in the designs library: front and back on the matte white mannequin
+		await standardDiptych(this, '/__fs/designs/thumbs/' + safeName(name) + '.jpg').catch((e) => console.warn('design picture', e));
 		return 'designs/' + file;
 	}
 

@@ -18,7 +18,7 @@ const vOut = (x, y, yV, k) => (yV + k * abs(x) - y) / sqrt(1 + k * k);
 
 const NECK_TOP = 1.47;
 
-// The elements of a leotard a designer picks one at a time (ui/Inspector.jsx Shape pane). Each
+// The elements of a leotard a designer picks one at a time (ui/ShapeTab.jsx Silhouette). Each
 // option is a set of block lines and panels; block.set swaps only the lines of one element.
 export const BLOCK_OPTIONS = {
 	neck: ['crew', 'scoop', 'v', 'high', 'boat', 'square'],

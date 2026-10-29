@@ -3,7 +3,7 @@
 // light rig's environment plus a key light, into a float target and tone-mapped on the CPU
 // (same Khronos PBR Neutral curve as the viewport). Turning frames (the cloth rocking a few
 // degrees) show sparkle and colour shift when the pointer rests on a swatch. Cached per look.
-// (Used by app.swatchSheet. The material picker's tiles are pre-rendered: clothThumb below.)
+// (Used by app.swatchSheet. The material grid's tiles are pre-rendered: swirlThumb below.)
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric, applyTexture, texScaleOf } from './fabric.js';
 
@@ -106,38 +106,48 @@ export function swatch(viewport, look, frames = 1) {
 	return out;
 }
 
-// --- picker tiles: a twisted strip of cloth ------------------------------------------------------
-// The material picker's tiles (ui/FabricPicker.jsx) are pre-rendered by src/dev/thumbnails.js
-// (materials) with clothThumb: a piece of cloth 24 x 17 cm, twisted a third of a turn along its length,
-// gathered in the middle and softly pleated, so a tile shows the fabric face on, edge on and from
-// behind (sheen, iridescence, sheerness and sparkle all change with the angle), on a plain backdrop.
+// --- picker tiles: a close-up of a pinched, twisted sheet ---------------------------------------------
+// The material grid's tiles (ui/FabricTab.jsx MaterialGrid) are pre-rendered by src/dev/thumbnails.js
+// (materials) with swirlThumb: as fabric shops photograph a swatch, a flat sheet pinched at its
+// centre and twisted, so folds spiral in towards the pinch, seen from above (the camera pitched
+// down) and so close that the fabric fills the whole picture and its texture shows. The folds turn
+// the fabric through every angle to the lights, so sheen, foil, iridescence, sparkle and sheerness
+// all show; a sheer fabric shows the table under it.
 
-const CL = 0.24, CW = 0.17;
-// position of the strip at s (0..1 along) and t (-0.5..0.5 across), metres
-function strip(s, t, out) {
-	const th = (s - 0.5) * Math.PI * 0.65;                       // the twist
-	const w = CW * (1 - 0.45 * Math.sin(Math.PI * s) ** 2);      // gathered in the middle
-	const g = 0.007 * Math.sin(2 * Math.PI * (2.2 * t + 0.9 * s)) * Math.sin(Math.PI * s) ** 0.7; // folds of the gathering
-	const cy = 0.018 * Math.sin(Math.PI * s * 2), cz = -0.035 * Math.cos(Math.PI * (s - 0.5)); // the strip's own curve
-	const ct = Math.cos(th), st = Math.sin(th);
-	return out.set((s - 0.5) * CL, cy + t * w * ct - g * st, cz + t * w * st + g * ct);
+const SW = 0.34; // the sheet, metres square (wider than any view of it)
+// height of the sheet at (x, y), metres: the pinched centre raised, and folds that spiral in to it
+// (not all alike: each fold its own height, the spiral wavering a little)
+function swirlHeight(x, y) {
+	const r = Math.hypot(x, y), th = Math.atan2(y, x);
+	const N = 6, phase = N * th + 5.2 * Math.log(Math.max(r, 0.002) / 0.02) + 0.55 * Math.sin(2 * th + 18 * r);
+	const ridge = 0.5 - 0.5 * Math.cos(phase);                                  // 0 in a valley, 1 on a fold
+	const fold = ridge * ridge * (3 - 2 * ridge);                               // rounder crests, wider valleys
+	const grow = Math.min(r / 0.018, 1), amp = 0.0105 * grow * grow * (3 - 2 * grow) * Math.exp(-r / 0.085) * (0.78 + 0.22 * Math.sin(th * 1.0 + 0.9) * Math.cos(th * 2.0 - 0.3));
+	const lift = 0.017 * Math.exp(-((r / 0.026) ** 2));                          // the pinched centre, raised
+	const lay = 0.0008 * (1 + Math.sin(x * 23 + 0.7) * Math.cos(y * 17 - 0.4)); // the rest of the sheet lies loosely
+	return lift + amp * fold + lay;
 }
 
-function twistedCloth() {
-	const nu = 140, nv = 56, pos = [], nrm = [], tan = [], uv = [], ref = [], idx = [];
-	const p = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3(), n = new THREE.Vector3(), e = 1e-4;
-	for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) {
-		const s = i / nu, t = j / nv - 0.5;
-		strip(s, t, p);
-		a.copy(strip(s + e, t, a)).sub(strip(s - e, t, n)).normalize();
-		b.copy(strip(s, t + e, b)).sub(strip(s, t - e, n));
-		n.crossVectors(a, b).normalize();
-		pos.push(p.x, p.y, p.z); nrm.push(n.x, n.y, n.z); tan.push(a.x, a.y, a.z, 1);
-		uv.push(s * CL, t * CW);
-		ref.push(p.x, 1.07 + p.y * 4, p.z); // reference heights spanning the POC ombre's fade (see cloth())
+// The sheet as rings round the pinch (denser towards it, where the folds crowd together) out to
+// the square's corners.
+function swirlCloth() {
+	const nr = 240, na = 900, R = SW * 0.72, pos = [], nrm = [], tan = [], uv = [], ref = [], idx = [], e = 1e-4;
+	pos.push(0, 0, swirlHeight(0, 0)); nrm.push(0, 0, 1); tan.push(1, 0, 0, 1); uv.push(0, 0); ref.push(0, 1.07, 0);
+	for (let i = 1; i <= nr; i++) {
+		const r = R * (i / nr) ** 1.7;
+		for (let j = 0; j < na; j++) {
+			const a = (j / na) * Math.PI * 2, x = r * Math.cos(a), y = r * Math.sin(a), z = swirlHeight(x, y);
+			const dx = (swirlHeight(x + e, y) - swirlHeight(x - e, y)) / (2 * e), dy = (swirlHeight(x, y + e) - swirlHeight(x, y - e)) / (2 * e);
+			const L = Math.hypot(dx, dy, 1), T = Math.hypot(1, dx);
+			pos.push(x, y, z); nrm.push(-dx / L, -dy / L, 1 / L); tan.push(1 / T, 0, dx / T, 1);
+			uv.push(x, y); // cloth space in metres: the fabric's own scale
+			ref.push(x, 1.07 + y * 4, z);
+		}
 	}
-	for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const k = j * (nu + 1) + i; idx.push(k, k + 1, k + nu + 1, k + 1, k + nu + 2, k + nu + 1); }
-	const g = new THREE.BufferGeometry(), N = (nu + 1) * (nv + 1);
+	const at = (i, j) => (i === 0 ? 0 : 1 + (i - 1) * na + (j % na));
+	for (let j = 0; j < na; j++) idx.push(0, at(1, j), at(1, j + 1));
+	for (let i = 1; i < nr; i++) for (let j = 0; j < na; j++) { const a = at(i, j), b = at(i, j + 1), c = at(i + 1, j), d = at(i + 1, j + 1); idx.push(a, c, b, b, c, d); }
+	const g = new THREE.BufferGeometry(), N = pos.length / 3;
 	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
 	g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
 	g.setAttribute('aGNormal', new THREE.Float32BufferAttribute(nrm, 3));
@@ -151,68 +161,80 @@ function twistedCloth() {
 	return g;
 }
 
-let thumbRig = null;
-function thumbSetup(renderer, w, h, ss) {
-	if (thumbRig?.w === w && thumbRig.h === h && thumbRig.ss === ss) return thumbRig;
-	thumbRig?.target.dispose();
-	const scene = thumbRig?.scene ?? new THREE.Scene();
-	let mesh = thumbRig?.mesh, material = thumbRig?.material;
-	if (!mesh) {
-		material = createFabricMaterial(5);
-		material.side = THREE.DoubleSide;
+// The view: from above and in front of the pinch, pitched down 52 degrees, about 6.5 cm across
+// at the pinch, which sits a little up and left of the middle. Lights: the studio's environment
+// for reflections, a key from the upper left that rakes across the folds, a rim from behind for
+// sheen on the crests, and a small light by the lens for the glints of foil and glitter.
+let swirlRig = null;
+function swirlSetup(renderer, px, ss) {
+	if (swirlRig?.px === px && swirlRig.ss === ss) return swirlRig;
+	swirlRig?.target.dispose();
+	let r = swirlRig;
+	if (!r) {
+		// the sheet is built in x, y with z up; laid on a table that stands y up as the studio rooms do
+		// (every shader then reads the room the right way up)
+		const scene = new THREE.Scene(), table = new THREE.Group(), material = createFabricMaterial(5);
+		table.rotation.x = -Math.PI / 2; scene.add(table);
 		material.userData.u.uOffset.value = 0; material.userData.u.uGarment.value = 0;
-		mesh = new THREE.Mesh(twistedCloth(), material);
-		mesh.rotation.set(0.45, -0.2, 0.9); // the piece runs from lower left to upper right
-		scene.add(mesh);
-		const key = new THREE.PointLight(0xffffff, 1.6, 0, 2); key.position.set(-0.3, 0.35, 0.55); scene.add(key);
-		const glint = new THREE.PointLight(0xffffff, 0.6, 0, 2); glint.position.set(0.25, -0.1, 0.5); scene.add(glint);
+		const mesh = new THREE.Mesh(swirlCloth(), material);
+		table.add(mesh);
+		const board = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xf2f0eb, roughness: 0.92 }));
+		board.position.z = -0.002; table.add(board);
+		const key = new THREE.PointLight(0xfff8f0, 0.22, 0, 2); key.position.set(-0.16, 0.12, 0.2); table.add(key);
+		const rim = new THREE.PointLight(0xf4f7ff, 0.12, 0, 2); rim.position.set(0.12, 0.26, 0.09); table.add(rim);
+		const camera = new THREE.PerspectiveCamera(26, 1, 0.005, 3);
+		const glint = new THREE.PointLight(0xffffff, 0.06, 0, 2); table.add(glint);
+		const at = new THREE.Vector3(0.006, -0.004, 0.006), pitch = THREE.MathUtils.degToRad(52), turn = THREE.MathUtils.degToRad(-18), d = 0.145;
+		const eye = new THREE.Vector3(at.x + Math.sin(turn) * Math.cos(pitch) * d, at.y - Math.cos(turn) * Math.cos(pitch) * d, at.z + Math.sin(pitch) * d);
+		glint.position.copy(eye).add(new THREE.Vector3(0.03, 0.02, 0.02));
+		table.updateMatrixWorld(true);
+		camera.position.copy(table.localToWorld(eye.clone()));
+		camera.lookAt(table.localToWorld(at.clone()));
+		r = { scene, mesh, material, camera };
 	}
-	// centred, and framed to fill the tile
-	const box = new THREE.Box3().setFromObject(mesh, true), size = box.getSize(new THREE.Vector3());
-	mesh.position.sub(box.getCenter(new THREE.Vector3()));
-	const camera = thumbRig?.camera ?? new THREE.PerspectiveCamera(30, 1, 0.01, 5), half = Math.tan((30 / 2) * Math.PI / 180);
-	camera.aspect = w / h;
-	camera.position.set(0, 0, size.z / 4 + Math.max(size.y, size.x / camera.aspect) / 2 / half / 0.96); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix();
-	const target = new THREE.WebGLRenderTarget(w * ss, h * ss, { type: THREE.FloatType, samples: 0 });
-	return (thumbRig = { w, h, ss, scene, mesh, material, camera, target, buf: new Float32Array(w * ss * h * ss * 4) });
+	r.px = px; r.ss = ss;
+	r.target = new THREE.WebGLRenderTarget(px * ss, px * ss, { type: THREE.FloatType, samples: 0 });
+	r.buf = new Float32Array(px * ss * px * ss * 4);
+	return (swirlRig = r);
 }
 
-// A picker tile of a look { fabric, colour, second, colour2, texture: a loaded set (materials/
-// textures.js) or null, texMode } on the twisted strip: a w x h canvas, lit by env (the studio
-// rig's environment) and two small lights, tone-mapped as the viewport, over `backdrop`.
-export function clothThumb(renderer, env, look, { w = 192, h = 240, ss = 3, backdrop = '#e4e3e0' } = {}) {
-	const r = thumbSetup(renderer, w, h, ss), m = r.material, u = m.userData.u;
-	const k = texScaleOf({ fabric: look.fabric, texture: look.texture?.id }); // at its default texture size
+// A material tile of a look { fabric, colour, second, colour2, texture: a loaded set (materials/
+// textures.js) or null, texMode }: a px-square canvas, lit by env (the studio's environment) and
+// the swirl's own lights, tone-mapped as the viewport. zoom: the fabric's texture drawn larger than
+// life (its structure, below a millimetre, would be lost at tile size); envTurn: the room turned
+// round the table (radians).
+export function swirlThumb(renderer, env, look, { px = 384, ss = 3, zoom = 1, envTurn = 0 } = {}) {
+	const r = swirlSetup(renderer, px, ss), m = r.material, u = m.userData.u;
+	const k = texScaleOf({ fabric: look.fabric, texture: look.texture?.id }) * zoom; // at its default texture size
 	applyFabric(m, look.fabric, look.colour ?? '#888888', look.second ?? 'Tone-on-tone', look.colour2 ?? null, k);
 	u.uUV.value = 1;
 	applyTexture(m, look.texture ?? null, { scale: k, recolour: look.texMode === 'recolour', colour: look.colour });
+	if (look.sheer !== undefined && u.uMesh.value > 0.5) u.uHoleR.value = Math.sqrt(Math.sqrt(Math.min(Math.max(look.sheer, 0), 0.95)) / 3.6276);
 	m.side = THREE.DoubleSide;
 	r.scene.environment = env;
+	r.scene.environmentRotation.set(0, envTurn, 0);
 	const prev = renderer.getRenderTarget();
 	renderer.setRenderTarget(r.target);
 	renderer.setClearColor(0x000000, 0);
 	renderer.clear();
 	renderer.render(r.scene, r.camera);
-	renderer.readRenderTargetPixels(r.target, 0, 0, w * ss, h * ss, r.buf);
+	renderer.readRenderTargetPixels(r.target, 0, 0, px * ss, px * ss, r.buf);
 	renderer.setRenderTarget(prev);
-	const bs = new THREE.Color(backdrop).convertLinearToSRGB(), BS = [bs.r, bs.g, bs.b].map((v) => 255 * v); // Color stores linear
-	const W = w * ss, img = new ImageData(w, h), c = [0, 0, 0], acc = [0, 0, 0], buf = r.buf;
-	for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-		// each sample un-premultiplied, tone-mapped and laid over the backdrop, then averaged (so a
-		// glint stays a glint)
+	const W = px * ss, img = new ImageData(px, px), c = [0, 0, 0], acc = [0, 0, 0], buf = r.buf;
+	for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) {
+		// each sample tone-mapped, then averaged (so a glint stays a glint)
 		acc[0] = acc[1] = acc[2] = 0;
 		for (let j = 0; j < ss; j++) for (let i = 0; i < ss; i++) {
-			const q = (((h - 1 - y) * ss + j) * W + x * ss + i) * 4, a = Math.min(Math.max(buf[q + 3], 0), 1);
-			if (a < 1e-4) { for (let k = 0; k < 3; k++) acc[k] += BS[k]; continue; }
-			for (let k = 0; k < 3; k++) c[k] = buf[q + k] / a;
+			const q = (((px - 1 - y) * ss + j) * W + x * ss + i) * 4, a = Math.max(buf[q + 3], 1e-4);
+			for (let kk = 0; kk < 3; kk++) c[kk] = buf[q + kk] / Math.min(a, 1);
 			neutral(c);
-			for (let k = 0; k < 3; k++) acc[k] += srgb(c[k]) * a + BS[k] * (1 - a);
+			for (let kk = 0; kk < 3; kk++) acc[kk] += srgb(c[kk]);
 		}
-		const o = (y * w + x) * 4;
-		for (let k = 0; k < 3; k++) img.data[o + k] = Math.round(acc[k] / (ss * ss));
+		const o = (y * px + x) * 4;
+		for (let kk = 0; kk < 3; kk++) img.data[o + kk] = Math.round(acc[kk] / (ss * ss));
 		img.data[o + 3] = 255;
 	}
-	const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+	const cv = document.createElement('canvas'); cv.width = cv.height = px;
 	cv.getContext('2d').putImageData(img, 0, 0);
 	return cv;
 }

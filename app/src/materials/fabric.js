@@ -1430,7 +1430,7 @@ export function microScale(eta, F, W, xn = false) {
 	if (!_microScales.has(key)) { const [w, c] = microFurnace(eta, F, W, xn); _microScales.set(key, (1 - w) / c); }
 	return _microScales.get(key);
 }
-// A panel's satin controls (inspect-garment.jsx), each the floats' own measured value until set:
+// A panel's satin controls (ui/FabricTab.jsx SatinControls), each the floats' own measured value until set:
 // gs (highlight sharpness: the surface lobe's width, degrees), gv (colour glow width: the volume
 // lobe's, degrees), kd (milkiness: the isotropic share of the coloured light), eta (sheen strength:
 // the threads' refractive index, shared by both sets). The cross threads keep the table's values.

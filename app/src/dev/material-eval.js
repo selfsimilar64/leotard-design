@@ -13,7 +13,7 @@ const app = new Proxy({}, { get: (_, k) => (typeof window.app[k] === 'function' 
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 export const SETUP = { rig: 'White loft studio', envRotation: 170 * Math.PI / 180, exposure: 1 }; // the panel shows degrees; the document keeps radians
-export const BODY = { form: 'full', head: 'none', finish: 'Matte white fibreglass', size: 'young', pose: 'arms-outstretched' };
+export const BODY = { form: 'full', finish: 'Matte white fibreglass', size: 'young', pose: 'arms-outstretched' };
 
 // Camera spots facing the torso (poses turn it, so the front is taken from the posed sternum, not
 // the room), turned a little to the viewer's right as in the comparison photos.

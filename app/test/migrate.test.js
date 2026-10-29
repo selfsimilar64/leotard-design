@@ -54,7 +54,15 @@ describe('migrating MakeHuman designs', () => {
 	});
 	it('maps the old body choices', () => {
 		expect(migrateBody({ size: 'daz-broad', form: 'headless' }, bodyKeys)).toMatchObject({ size: 'adult', form: 'full', head: 'none' });
-		expect(migrateBody({ size: 'fig-kid9-salute', form: 'full' }, bodyKeys)).toMatchObject({ size: 'young', head: 'person' });
-		expect(migrateBody({ size: 'teen', form: 'torso' }, bodyKeys)).toMatchObject({ size: 'teen', form: 'torso', head: 'mannequin', expression: 'neutral' });
+		expect(migrateBody({ size: 'teen', form: 'torso' }, bodyKeys)).toMatchObject({ size: 'teen', form: 'torso', head: 'none', expression: 'neutral' });
+	});
+	it('always opens on the headless matte white mannequin', () => {
+		const W = 'Matte white fibreglass';
+		expect(migrateBody({ size: 'fig-kid9-salute', form: 'full' }, bodyKeys)).toMatchObject({ size: 'young', head: 'none', finish: W, headFinish: W });
+		const real = migrateBody({ size: 'young', form: 'full', head: 'person', finish: 'Realistic skin (Daz)', hair: 'eirgrid', mannequinHair: true }, bodyKeys);
+		expect(real).toMatchObject({ head: 'none', finish: W, headFinish: W });
+		expect(real).not.toHaveProperty('hair');
+		expect(real).not.toHaveProperty('mannequinHair');
+		expect(migrateBody({ size: 'young', head: 'mannequin', finish: 'Polished metal', colour: '#d9b46a' }, bodyKeys)).toMatchObject({ head: 'none', finish: 'Polished metal', headFinish: 'Polished metal', colour: '#d9b46a' });
 	});
 });

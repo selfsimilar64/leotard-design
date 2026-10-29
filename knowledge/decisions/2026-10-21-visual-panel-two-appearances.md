@@ -37,6 +37,9 @@ with the right-hand panel.[^owner-2026-10-21]
 
 # Consequences
 
+- **Item 3 superseded on 2026-10-29**: the body is always the headless mannequin, with no
+  realistic person and no head ([mannequin only and the interface overhaul](/decisions/2026-10-29-mannequin-only-interface-overhaul.md)).
+  Items 1 and 2 stand (pictures over drop-downs; the moodboard designs as the finished designs).
 - Implementation: [side panel and presets](/engineering/app/side-panel-and-presets.md).
 - The interface no longer offers the dress form, the mannequin head or the athlete skins; the
   engine and the command surface still support them, so older design files open unchanged.

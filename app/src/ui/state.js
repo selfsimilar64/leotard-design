@@ -1,20 +1,48 @@
-// UI state that is not part of the design: selection, active tool, view layout, read-outs.
+// UI state that is not part of the design: selection, panel tab, active tool, view layout,
+// what the view hides, read-outs, and this computer's interface preferences.
 import { signal } from '@preact/signals';
 
 export const rev = signal(0);              // bumped on every document change; components read it to re-render
-export const selection = signal(null);     // { kind: 'curve' | 'panel' | 'stone-gen' | ..., id }
-export const tool = signal('move');        // active tool id (ui/toolbar.js)
-export const layout = signal('3d');        // '3d' | 'flat' | 'split'
+export const selection = signal(null);     // { kind: 'curves' | 'panels' | 'straps' | 'stones' | 'decals' | ..., id }
+export const tab = signal('shape');        // the panel's tab: 'shape' | 'fabric' | 'sparkle' | 'stage'
+export const tool = signal('move');        // what a click on the model does (ui/toolbar.js, ui/tools.js)
+export const layout = signal('3d');        // '3d' | 'split' (the pattern pieces beside the model)
 export const stats = signal({});
 export const display = signal(null);       // display settings of this machine (render/display.js), set at start-up
 export const toast = signal(null);         // { text, kind } shown briefly
-export const designsRev = signal(0);       // bumped when designs/ changes (a save), so the Designs row lists it
+export const designsRev = signal(0);       // bumped when designs/ changes (a save), so the library lists it
 export const showStats = signal(false);    // the frame-rate read-out over the view (Settings)
 export const hideOverlay = signal(false);  // hide the editing lines and points to preview the look (H)
+export const hideMannequin = signal(false); // the leotard floats with the mannequin hidden (M)
+export const libraryOpen = signal(false);  // the designs library over the whole window
+export const busy = signal(null);          // { text } while a slow change (a new shape, a design) is applied
+export const savedRev = signal(-1);        // the design's revision when it was last saved or opened
+
+// Which tab shows a selected part: a piece's fabric, a line's or strap's shape, stones and logos.
+const TAB_OF = { panels: 'fabric', curves: 'shape', straps: 'shape', trims: 'shape', stones: 'sparkle', placed: 'sparkle', decals: 'sparkle' };
+selection.subscribe((s) => { if (s && TAB_OF[s.kind]) tab.value = TAB_OF[s.kind]; });
 
 let toastTimer;
 export function notify(text, kind = 'info') {
-	toast.value = { text, kind };
+	toast.value = { text, kind, at: Date.now() };
 	clearTimeout(toastTimer);
-	toastTimer = setTimeout(() => { toast.value = null; }, kind === 'error' ? 6000 : 2500);
+	toastTimer = setTimeout(() => { toast.value = null; }, kind === 'error' ? 6000 : 2600);
+}
+
+// Runs a change that holds the page for a while (a new neckline re-cuts and re-flattens the
+// garment, ~1-5 s) after the interface has shown that it is working on it.
+export async function slow(text, fn) {
+	busy.value = { text };
+	await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+	try { return await fn(); } finally { busy.value = null; }
+}
+
+// Interface preferences of this computer (not the design's): kept in the browser.
+const PREFS = 'leotard.ui.v1';
+const PREF_DEFAULTS = { followCamera: true, shapeOpen: 'neck', sections: {} };
+function loadPrefs() { try { return { ...PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREFS) ?? '{}') }; } catch { return { ...PREF_DEFAULTS }; } }
+export const prefs = signal(loadPrefs());
+export function setPref(k, v) {
+	prefs.value = { ...prefs.value, [k]: v };
+	try { localStorage.setItem(PREFS, JSON.stringify(prefs.value)); } catch { /* storage blocked: kept for this session */ }
 }

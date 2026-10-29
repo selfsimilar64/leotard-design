@@ -33,6 +33,7 @@ export class GarmentView {
 		this.materials = new Map(); // panel id -> material
 		this.g = null;
 		this.flattener = new Flattener();
+		this.doubleSided = false; // the mannequin hidden: the inside of the garment shows (setDoubleSided)
 	}
 
 	dispose() {
@@ -122,6 +123,7 @@ export class GarmentView {
 			m.userData.u.uOffset.value = z >= 0 ? 0.0012 + 0.0009 * z : 0.0007;
 			m.userData.u.uSeam.value = 1; // panels carry aSeam
 			m.userData.u.uClipShell.value = z < 0 ? 1 : 0; // linings: aCover is the shell's cover (setClip)
+			if (this.doubleSided) m.side = THREE.DoubleSide;
 			this.materials.set(id, m);
 		}
 		return m;
@@ -230,5 +232,25 @@ export class GarmentView {
 	}
 
 	setVisible(v) { this.group.visible = v; }
+	// With the mannequin hidden the garment floats, hollow: its inside (the back faces) is drawn too,
+	// as in a ghost-mannequin photo, instead of showing the backdrop through the openings.
+	setDoubleSided(v) {
+		this.doubleSided = v;
+		for (const m of this.materials.values()) { m.side = v ? THREE.DoubleSide : THREE.FrontSide; m.needsUpdate = true; }
+	}
+	// A short glow over a piece as it is chosen (the Fabric tab, or a click on the model), so the eye
+	// finds which piece the panel is showing.
+	flash(id) {
+		const m = this.materials.get(id);
+		if (!m) return;
+		const base = (m.userData.emissive ??= m.emissive.clone()), t0 = performance.now(), me = (m.userData.flash = {});
+		const step = () => {
+			if (m.userData.flash !== me) return;
+			const k = Math.min((performance.now() - t0) / 650, 1);
+			m.emissive.copy(base).addScalar(0.2 * (1 - k) * (1 - k));
+			if (k < 1) requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	}
 	frame(keyDir) { for (const m of this.materials.values()) m.userData.u.uHoloDirW.value.copy(keyDir); }
 }

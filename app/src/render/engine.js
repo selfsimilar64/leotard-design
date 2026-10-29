@@ -198,6 +198,7 @@ export class Engine {
 					L = { layer, view: new GarmentView(scene, this.body, layer), rims: new Rims(scene, this.body, this.textures), g: null };
 					L.view.textures = this.textures;
 					L.view.wrinkles = this.wrinkleZones();
+					L.view.doubleSided = !!this.bodyHidden;
 					this.layers.set(layer.id, L);
 				}
 				L.layer = layer; L.view.layer = layer; L.rims.kind = layer.kind; L.rims.layerId = layer.id;
@@ -355,14 +356,13 @@ export class Engine {
 		if (!torso && body.headless) this.stand.add(cutCaps(body, this.capMaterial));
 		if (!torso && !person && !daz) this.stand.add(fullBodyStand(body));
 		scene.add(this.stand);
-		this.skinMesh.visible = !real;
-		this.headMesh.visible = !torso && head === 'mannequin';
+		this.shown = { skin: !real, head: !torso && head === 'mannequin', blob: !daz };
+		this.applyHidden();
 		// the closed lids (body.eyeCaps, after the body's triangles) only where no eyeballs are drawn
 		this.headMesh.geometry.setDrawRange(0, sculpt ? body.idx.length : Infinity);
 		figure();
 		const s = torso ? 0.9 : 0.75, blob = this.viewport.blob;
 		blob.scale.set(s, s, 1); blob.position.z = torso ? body.crotch.z : 0;
-		blob.visible = !daz;
 		this.timing.mannequin = performance.now() - t;
 		if (this.legacyMode) this.legacy.onBodyChanged();
 		else {
@@ -370,6 +370,23 @@ export class Engine {
 			if (this.app) { this.drawOverlay(this.app.doc); for (const L of this.layers.values()) L.rims.build(L.g, this.app.doc, L.view.garmentCells, this.evaluated, layerLift(L.layer)); this.straps.build(this.app.doc, this.fabricCover); this.hardware.build(this.app.doc); this.stoneView.build(); }
 		}
 		if (reframe) this.frameCamera(b.form);
+	}
+
+	// The mannequin hidden (the view bar's switch, ui/state.js hideMannequin; not part of the
+	// design): the leotard floats in the studio, drawn from inside too (GarmentView.setDoubleSided),
+	// with no stand, cut caps or contact shadow under it. The key's shadow on the floor stays.
+	setBodyHidden(v) {
+		this.bodyHidden = !!v;
+		this.applyHidden();
+		for (const L of this.layers.values()) L.view.setDoubleSided(this.bodyHidden);
+	}
+	flashPanel(id) { for (const L of this.layers.values()) L.view.flash(id); }
+	applyHidden() {
+		const s = this.shown ?? { skin: true, head: false, blob: true }, h = !!this.bodyHidden;
+		this.skinMesh.visible = s.skin && !h;
+		this.headMesh.visible = s.head && !h;
+		if (this.stand) this.stand.visible = !h;
+		this.viewport.blob.visible = s.blob && !h;
 	}
 
 	// Fit the leotard area (mid-thigh to the top of the head, or the whole dress form) in view,

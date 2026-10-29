@@ -2,15 +2,13 @@ import { render } from 'preact';
 import { app } from './instance.js';
 import { withKnownPose } from './app.js';
 import { Shell, useShortcuts } from './ui/Shell.jsx';
-import { rev, stats, display } from './ui/state.js';
+import { rev, stats, display, hideMannequin, libraryOpen, savedRev } from './ui/state.js';
 import { loadDisplay } from './render/display.js';
 import { Viewport } from './render/viewport.js';
 import { Engine } from './render/engine.js';
 import { loadMannequins } from './body/mannequin.js';
 import { buildReference } from './body/reference.js';
 import { ToolController } from './ui/tools.js';
-import './ui/inspect-garment.jsx';
-import './ui/inspect-decals.jsx';
 import './ui/styles.css';
 
 app.onChange(() => { rev.value++; });
@@ -32,7 +30,10 @@ async function start(el) {
 	if (!app.fresh && withKnownPose(app.doc) !== app.doc) app.load(app.doc);
 	app.attach(engine);
 	app.tools = new ToolController(app, engine);
-	if (app.fresh) app.new();
+	hideMannequin.subscribe((v) => engine.setBodyHidden(v));
+	// a first start shows the plain tank under the designs library, to start from
+	if (app.fresh) { app.new(); libraryOpen.value = true; }
+	else if (app.file) savedRev.value = app.revision;
 	rev.value++;
 	setInterval(() => { stats.value = { ...viewport.stats, stones: engine.stoneCount?.() ?? 0 }; }, 500);
 }

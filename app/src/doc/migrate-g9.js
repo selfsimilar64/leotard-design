@@ -14,16 +14,19 @@ export const MESH = 'g9-sd1';
 const SIZES = { 'daz-petite': 'young', 'daz-young': 'young', 'daz-adult': 'adult', 'daz-broad': 'adult', petite: 'young', broad: 'adult' };
 
 // The body section of any saved design -> { size, form, head, expression, pose, finish, headFinish }.
+// The body is always the headless mannequin (owner, 2026-10-29: no realistic person, no head): a
+// design saved with the person, her skin or a mannequin head opens on the matte white mannequin.
 export function migrateBody(b, bodyKeys = []) {
 	const out = { ...b };
-	if (out.form === 'headless') { out.form = 'full'; out.head ??= 'none'; }
-	if (typeof out.size === 'string' && out.size.startsWith('fig-')) { out.size = 'young'; out.head ??= 'person'; out.finish = 'Realistic skin (Daz)'; }
+	if (out.form === 'headless') out.form = 'full';
+	if (typeof out.size === 'string' && out.size.startsWith('fig-')) out.size = 'young';
 	out.size = SIZES[out.size] ?? out.size;
 	if (bodyKeys.length && !bodyKeys.includes(out.size)) out.size = 'young';
-	out.head ??= 'mannequin';
+	out.head = 'none';
 	out.expression ??= 'neutral';
-	// before body and head finishes were separate the mannequin head wore the body's finish
-	if (!out.headFinish) out.headFinish = out.finish && !/^Realistic/.test(out.finish) && !/^Linen/.test(out.finish) ? out.finish : 'Matte white fibreglass';
+	if (!out.finish || /^Realistic/.test(out.finish)) out.finish = 'Matte white fibreglass';
+	out.headFinish = out.finish;
+	delete out.hair; delete out.mannequinHair;
 	return out;
 }
 

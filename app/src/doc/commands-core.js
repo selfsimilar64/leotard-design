@@ -1,11 +1,11 @@
 // Core commands: raw edits, document metadata, body, scene, and the first-generation garment.
 import { defineCommand } from './store.js';
-import { RIGS, MANNEQUIN_FINISHES, REALISTIC_SKIN, APPEARANCES } from '../render/presets.js';
+import { RIGS, MANNEQUIN_FINISHES } from '../render/presets.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
 import { poseSpec, POSES, ARMS, DAZ_POSES } from '../body/pose.js';
-import { bodyKeys, catalogue, HEADS } from '../body/mannequin.js';
+import { bodyKeys } from '../body/mannequin.js';
 import { GLARE } from '../render/glare.js';
 
 const SIZES = ['child-6', 'child', 'teen', 'older-teen', 'young', 'adult'];
@@ -46,26 +46,25 @@ defineCommand('meta.set', {
 
 defineCommand('body.set', {
 	label: 'Change body',
+	// The body is always the headless mannequin (owner, 2026-10-29): no realistic person, no head,
+	// so no appearance, head, expression or hair to set (doc/migrate-g9.js opens older designs so).
 	get args() {
-		return `{ appearance?: ${Object.keys(APPEARANCES).join('|')} (sets form, head and finish), size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, head?: ${HEADS.join('|')}, finish? (body: a mannequin finish or '${REALISTIC_SKIN}'), headFinish? (the mannequin head's), colour?: '#rrggbb' | null (the mannequin finishes' colour; null: each finish's own), mannequinHair?: true|false (the mannequin head wears the hair in its finish), expression?: ${(catalogue.expressions.map((e) => e.key).join('|')) || 'neutral|...'}, hair?: ${(catalogue.hairs.map((h) => h.key).join('|')) || 'eirgrid|...'}, `
+		return `{ size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, finish? (a mannequin finish: ${Object.keys(MANNEQUIN_FINISHES).join(', ')}), colour?: '#rrggbb' | null (the mannequin finish's colour; null: the finish's own), `
 			+ `pose?: ${[...Object.keys(POSES), ...DAZ_POSES].join('|')} | { left, right } (arms: ${ARMS.join('|')}) }`;
 	},
 	run(tx, a) {
 		// 'headless' (before head types) = the full body with no head
-		if (a.form === 'headless') a = { ...a, form: 'full', head: a.head ?? 'none' };
-		if (a.appearance !== undefined) { oneOf('appearance', a.appearance, Object.keys(APPEARANCES)); const { appearance, ...rest } = a; a = { ...rest, ...APPEARANCES[appearance] }; }
+		if (a.form === 'headless') a = { ...a, form: 'full' };
+		for (const k of ['appearance', 'head', 'headFinish', 'expression', 'hair', 'mannequinHair']) if (a[k] !== undefined) throw new Error(`body.set: ${k} is no longer offered (the body is always the headless mannequin)`);
 		setFields(tx, 'body', a, {
 			size: (v) => oneOf('size', v, bodyKeys.length ? bodyKeys : SIZES),
 			form: (v) => oneOf('form', v, ['full', 'torso']),
-			head: (v) => oneOf('head', v, HEADS),
-			expression: (v) => { if (catalogue.expressions.length) oneOf('expression', v, catalogue.expressions.map((e) => e.key)); },
-			hair: (v) => { if (catalogue.hairs.length) oneOf('hair', v, catalogue.hairs.map((h) => h.key)); },
-			finish: (v) => oneOf('finish', v, [...Object.keys(MANNEQUIN_FINISHES), REALISTIC_SKIN]),
-			headFinish: (v) => oneOf('headFinish', v, Object.keys(MANNEQUIN_FINISHES)),
-			mannequinHair: (v) => { if (typeof v !== 'boolean') throw new Error('mannequinHair must be true or false'); },
+			finish: (v) => oneOf('finish', v, Object.keys(MANNEQUIN_FINISHES)),
 			colour: (v) => { if (v !== null && !/^#[0-9a-f]{6}$/i.test(v)) throw new Error('colour must be a colour like #e9e7e2, or null'); },
 			pose: (v) => { poseSpec(v); },
 		});
+		// the body's finish is the cut caps' and the (unused) head's too
+		if (a.finish !== undefined) tx.set('body/headFinish', a.finish);
 	},
 });
 

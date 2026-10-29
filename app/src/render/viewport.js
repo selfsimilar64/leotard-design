@@ -118,7 +118,9 @@ export class Viewport {
 		// floor that shows only shadows (the key's) laid on that ground
 		this.hdris = new Map(); // file -> Promise<{ tex, env, key: Vector3, sky }>
 		this.hdriOn = null;     // the HDRI studio on show
-		const catcher = this.catcher = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.32 }));
+		// (no depth: the contact-shadow pass read the disc's far edge as a crease, a faint line across
+		// the backdrop behind the figure)
+		const catcher = this.catcher = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.32, depthWrite: false }));
 		catcher.rotation.x = -Math.PI / 2; catcher.position.y = -0.0085; catcher.receiveShadow = true; catcher.visible = false;
 		this.world.add(catcher);
 		// The softbox studio (rig.areas): area lights in the turning rig, created on first use (the LTC
