@@ -130,13 +130,11 @@ function Drawn({ doc }) {
 }
 
 const PEN_ROLES = [['seam', 'Seam'], ['edge', 'Edge'], ['print', 'Print line'], ['guide', 'Guide']];
-const MIRRORS = [['auto', 'Auto'], ['both', 'Both sides'], ['none', 'One side']];
 function PenOptions() {
 	const o = toolOptions.value, set = (patch) => { toolOptions.value = { ...o, ...patch }; };
 	return (
 		<div class="tool-opts">
 			<Field label="Draws"><Segmented value={o.penRole} options={PEN_ROLES} onPick={(v) => set({ penRole: v })} /></Field>
-			<Field label="Mirror"><Segmented value={o.penMirror} options={MIRRORS.map(([v, l]) => [v, l, null, v === 'auto' ? 'Mirrored, unless it crosses the centre' : undefined])} onPick={(v) => set({ penMirror: v })} /></Field>
 		</div>
 	);
 }
@@ -170,7 +168,6 @@ function LineEditor({ id, doc }) {
 				{own || !['edge', 'seam'].includes(c.role) ? <Field label="Kind">
 					<Segmented value={c.role} options={[...PEN_ROLES, ...(PEN_ROLES.some(([v]) => v === c.role) ? [] : [[c.role, ROLE_LABELS[c.role] ?? c.role]])]} onPick={(v) => set({ role: v })} />
 				</Field> : null}
-				<Switch label="Mirrored on the other side" value={(c.mirror ?? 'none') === 'both'} onChange={(v) => set({ mirror: v ? 'both' : 'none' })} />
 				{own ? <Switch label="Closed loop" value={!!c.closed} onChange={(v) => set({ closed: v })} /> : null}
 				<Hint>Drag its points on the model. Alt-click the line to add a point; C turns the last point into a corner; Delete removes it.</Hint>
 			</Section>

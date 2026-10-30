@@ -291,7 +291,8 @@ const GENERATORS = {
 		const region = panelRegion(ctx, gen.on?.panel);
 		let distTo;
 		if (P.from?.curve) {
-			const paths = [ctx.evaluated.get(P.from.curve), ctx.evaluated.get(P.from.curve + '~m')].filter(Boolean);
+			const twin = ctx.doc.curves.find((c) => c.id === P.from.curve)?.twin; // split from its pair (doc/symmetry.js)
+			const paths = [ctx.evaluated.get(P.from.curve), ctx.evaluated.get(P.from.curve + '~m') ?? (twin && ctx.evaluated.get(twin))].filter(Boolean);
 			const pts = paths.flatMap((e) => e.pts.filter((_, i) => i % 3 === 0));
 			distTo = (p) => { let d = Infinity; for (const q of pts) d = Math.min(d, q.distanceToSquared(p)); return Math.sqrt(d); };
 		} else if (P.from) {
@@ -574,7 +575,11 @@ export function runStones(doc, ctx) {
 		if (gen.mirror === 'both') {
 			const m = list.map((s) => ({ ...s, sp: mirrorSP(s.sp, ctx.surf), angle: Math.PI - s.angle, mirrored: true }));
 			list = list.concat(m);
+		} else if (gen.mirror === 'only') { // the mirror half of a group split from its pair (doc/symmetry.js)
+			list = list.map((s) => ({ ...s, sp: mirrorSP(s.sp, ctx.surf), angle: Math.PI - s.angle, mirrored: true }));
 		}
+		// one side of a paired line or piece: left is the wearer's (+x)
+		if (gen.side) list = list.filter((s) => (sp3(s.sp).x >= 0) === (gen.side === 'left'));
 		// eraser marks
 		if (gen.erase?.length) {
 			const marks = gen.erase.map((e) => ({ p: sp3(e.sp ? { f: e.sp.f, b0: 1 - e.sp.b[0] - e.sp.b[1], b1: e.sp.b[0], b2: e.sp.b[1] } : e), r: e.r ?? 0.005 }));

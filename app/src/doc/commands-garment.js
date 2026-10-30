@@ -186,11 +186,14 @@ defineCommand('block.set', {
 			if (old.role !== c.role) tx.set(['curves', old.id, 'role'], c.role);
 			if (!!old.closed !== !!c.closed) tx.set(['curves', old.id, 'closed'], c.closed);
 			if ((old.mirror ?? 'none') !== c.mirror) tx.set(['curves', old.id, 'mirror'], c.mirror);
+			if (old.twin) { tx.set(['curves', old.id, 'twin'], undefined); tx.set(['curves', old.id, 'name'], c.name); } // one line again: no "(left)"
 			if (old.name !== c.name && BLOCK_NAMES.has(old.name)) tx.set(['curves', old.id, 'name'], c.name); // an armhole that becomes a sleeve seam
 			if (!old.block) tx.set(['curves', old.id, 'block'], key);
 		}
 		const have = new Set(blk.curves.map((c) => c.key));
 		const doomed = oldBlk.curves.map(({ key }) => byKey.get(key)).filter((c) => c && keys.has(blockKeyOf(c)) && !have.has(blockKeyOf(c)));
+		// a block line split into two sides (doc/symmetry.js): the new option replaces both
+		for (const c of tx.doc.curves) if (L0(c) && keys.has(blockKeyOf(c)) && byKey.has(blockKeyOf(c)) && byKey.get(blockKeyOf(c)) !== c && !doomed.includes(c)) doomed.push(c);
 		const doomedIds = new Set(doomed.map((c) => c.id));
 		for (const c of doomed) removeCurve(tx, c, impact, doomedIds);
 
@@ -201,7 +204,13 @@ defineCommand('block.set', {
 		for (const p of blk.panels) {
 			if (!pkeys.has(p.key)) continue;
 			const old = pByKey.get(p.key);
-			if (old) { tx.set(['panels', old.id, 'seed'], p.seed); if (!old.block) tx.set(['panels', old.id, 'block'], p.key); continue; }
+			if (old) {
+				tx.set(['panels', old.id, 'seed'], p.seed); if (!old.block) tx.set(['panels', old.id, 'block'], p.key);
+				// a block piece split into two sides (doc/symmetry.js) is one again
+				if (old.twin) { tx.set(['panels', old.id, 'twin'], undefined); tx.set(['panels', old.id, 'mirror'], p.mirror); tx.set(['panels', old.id, 'name'], p.name); }
+				for (const q of panels0) if (q !== old && blockKeyOf(q) === p.key) removePanel(tx, q, impact);
+				continue;
+			}
 			// a new yoke is mesh in the front's colour, as most moodboard yokes are
 			const st = p.key === 'yoke' ? [{ fabric: 'mesh', colour: p.stack[0]?.colour ?? '#888888', second: 'Tone-on-tone', sheer: 0.3 }] : p.stack;
 			tx.insert('panels', { id: tx.newId('p'), layer: 'L0', block: p.key, name: p.name, seed: p.seed, mirror: p.mirror, stack: st });

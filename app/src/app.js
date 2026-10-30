@@ -18,6 +18,7 @@ import './doc/commands-garment.js';
 import './doc/commands-reference.js';
 import './doc/commands-stones.js';
 import './doc/commands-decals.js';
+import './doc/symmetry.js';
 import { surfaceLandmarks } from './body/landmarks.js';
 import { resolvePoint } from './curves/points.js';
 import { defineCommand } from './doc/store.js';
@@ -137,6 +138,13 @@ export class App {
 		if (first?.gesture) this._gesture = first.gesture;
 		try { return this.store.exec(cmd, opts); } finally { this._inGesture = false; }
 	}
+	// An edit from the interface: follows the Mirror toggle (doc/symmetry.js). -> { result, id, split }
+	edit(cmd, side) {
+		const label = commandList().find((c) => c.op === cmd.op)?.label;
+		return this.exec({ op: 'sym.edit', cmd, side, gesture: cmd.gesture }, label ? { label } : undefined);
+	}
+	// The toggle is a working mode saved with the design, not an edit: no undo step of its own.
+	setSymmetry(on) { this.doc.symmetry = on; this.store._emit(new Set(['symmetry']), 'mode'); }
 	undo() { return this.store.undo(); }
 	redo() { return this.store.redo(); }
 	endGesture() {

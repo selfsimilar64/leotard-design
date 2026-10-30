@@ -1,6 +1,7 @@
 // UI state that is not part of the design: selection, panel tab, active tool, view layout,
 // what the view hides, read-outs, and this computer's interface preferences.
 import { signal } from '@preact/signals';
+import { targetOf } from '../doc/symmetry.js';
 
 export const rev = signal(0);              // bumped on every document change; components read it to re-render
 export const selection = signal(null);     // { kind: 'curves' | 'panels' | 'straps' | 'stones' | 'decals' | ..., id }
@@ -27,6 +28,18 @@ export function notify(text, kind = 'info') {
 	toast.value = { text, kind, at: Date.now() };
 	clearTimeout(toastTimer);
 	toastTimer = setTimeout(() => { toast.value = null; }, kind === 'error' ? 6000 : 2600);
+}
+
+// Runs an edit through the Mirror toggle (doc/symmetry.js). When it splits a pair and lands on the
+// mirror image's new record, the selection moves there. Returns the command's own result.
+export function edit(app, cmd, side) {
+	const t = targetOf(cmd), sel = selection.value, mine = t && sel?.id === t.id;
+	const r = app.edit(cmd, side ?? (mine ? sel.side : undefined));
+	if (r.split) {
+		notify('Split from its pair: the two sides are now separate');
+		if (mine && cmd.op !== 'curve.remove') selection.value = { kind: sel.kind, id: r.id };
+	}
+	return r.result;
 }
 
 // Runs a change that holds the page for a while (a new neckline re-cuts and re-flattens the

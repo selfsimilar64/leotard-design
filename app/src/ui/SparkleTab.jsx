@@ -178,7 +178,6 @@ function GroupEditor({ id, doc }) {
 				{typeof p.offset === 'number' ? <Field label="Distance from the line"><Slider value={p.offset} min={-0.03} max={0.03} step={0.0005} format={mm1} onChange={(v) => param('offset', v)} /></Field> : null}
 				{typeof p.gap === 'number' ? <Field label="Spacing"><Slider value={p.gap} min={1} max={3} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v) => param('gap', v)} /></Field> : null}
 				{p.pattern === 'random' || p.pattern === 'contour' ? <Field label="Fill"><Segmented value={p.pattern} options={[['random', 'Random pavé'], ['contour', 'Rings along the edge']]} onPick={(v) => param('pattern', v)} /></Field> : null}
-				<Switch label="Mirrored on the other side" value={(g.mirror ?? 'none') === 'both'} onChange={(v) => set({ mirror: v ? 'both' : 'none' })} />
 				<div class="btn-row"><Button icon={<I.shuffle size={18} />} title="A new random layout" onClick={() => set({ seed: Math.floor(Math.random() * 1e6) })}>Reshuffle</Button></div>
 				{Object.keys(p).some((k) => !known.has(k)) ? <Disclosure label="Advanced">
 					{Object.entries(p).filter(([k]) => !known.has(k)).map(([k, v]) => <ParamField key={k} k={k} v={v} onSet={(x) => param(k, x)} />)}

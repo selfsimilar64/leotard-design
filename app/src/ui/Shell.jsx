@@ -13,6 +13,7 @@ import { Field, Segmented, Switch, CommitSlider, Button, IconButton } from './ki
 import { I } from './icons.jsx';
 import { viewTo, cancel as cancelFlight } from './camera.js';
 import { DISPLAY_OPTIONS, saveDisplay } from '../render/display.js';
+import { symmetryOn } from '../doc/symmetry.js';
 
 export function Shell({ onViewport }) {
 	return (
@@ -61,6 +62,7 @@ function TopBar() {
 					<IconButton icon={<I.redo size={20} />} label={h.redo.length ? 'Redo ' + h.redo[0] + ' (Ctrl+Y)' : 'Nothing to redo'} disabled={!h.redo.length} onClick={() => app.redo()} />
 				</span>
 				<span class="tb-div" />
+				<button class={`tb-btn ${symmetryOn(app.doc) ? 'active' : ''}`} title={symmetryOn(app.doc) ? 'Mirror is on: changes reach both sides. Turn off to change one side only (X)' : 'Mirror is off: changes reach one side only. A mirrored part you change splits from its pair (X)'} aria-pressed={symmetryOn(app.doc)} onClick={toggleMirror}><I.mirror size={19} /><span>Mirror</span></button>
 				<button class={`tb-btn ${layout.value !== '3d' ? 'active' : ''}`} title="Show the pattern pieces beside the model" aria-pressed={layout.value !== '3d'} onClick={() => { layout.value = layout.value === '3d' ? 'split' : '3d'; }}><I.pattern size={19} /><span>Pattern</span></button>
 				<button class="tb-btn" title="Save the printable full-size pattern (PDF)" onClick={exportPattern}><I.export size={19} /><span>Export</span></button>
 				<button class="btn primary" title="Save to your designs (Ctrl+S)" onClick={save}>Save</button>
@@ -72,6 +74,7 @@ function TopBar() {
 		</header>
 	);
 }
+const toggleMirror = () => app.setSymmetry(!symmetryOn(app.doc));
 const run1 = (cmd) => { try { app.exec(cmd); } catch (e) { notify(e.message, 'error'); } };
 
 // This computer's settings (render/display.js, ui/state.js prefs): not part of the design, no undo.
@@ -241,6 +244,7 @@ export function useShortcuts() {
 				else if (k === 'escape') { if (tool.value !== 'move') tool.value = 'move'; else selection.value = null; cancelFlight(); }
 				else if (k === 'h') hideOverlay.value = !hideOverlay.value;
 				else if (k === 'm') hideMannequin.value = !hideMannequin.value;
+				else if (k === 'x') toggleMirror();
 			}
 		};
 		window.addEventListener('keydown', onKey);

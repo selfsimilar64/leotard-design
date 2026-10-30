@@ -4,11 +4,11 @@
 // (Swatches), switches and sliders. Nothing scrolls sideways: the panel is the only scroller.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { notify, prefs, setPref } from './state.js';
+import { edit, notify, prefs, setPref } from './state.js';
 import { I } from './icons.jsx';
 
 export function run(cmd) {
-	try { return app.exec(cmd); } catch (e) { notify(e.message, 'error'); return undefined; }
+	try { return edit(app, cmd); } catch (e) { notify(e.message, 'error'); return undefined; }
 }
 
 let gestureN = 0;

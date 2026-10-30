@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-30
+* **Update**: [The studio interface](/engineering/app/studio-interface.md): hover in Select: outlines of a piece's, strap's or logo's 3D shape, rings on stones with the whole group lit, and clicking stones, straps and logos in the view now chooses them.
 * **Creation**: [The Mirror toggle and paired parts](/engineering/architecture/mirror-toggle.md): one toolbar toggle replaces every per-part mirror control; with it off, editing one side of a pair splits the pair for good.
 
 ## 2026-10-29

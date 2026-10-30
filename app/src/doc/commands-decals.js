@@ -13,7 +13,7 @@ function check(a, doc) {
 }
 
 defineCommand('decal.add', {
-	label: 'Add logo, lettering or stamp', args: '{ at: point spec, text? (\\n for lines) | src? (image URL), font?, weight?, size?: width m (0.08), aspect? (stamps: height / width), rotate?: degrees, colour?, look?: print|foil|holo|glitter|flock | gather|ruche|twist (surface stamps: folds, no art), rough?, layer?, name? }',
+	label: 'Add logo, lettering or stamp', args: '{ at: point spec, text? (\\n for lines) | src? (image URL), font?, weight?, size?: width m (0.08), aspect? (stamps: height / width), rotate?: degrees, colour?, look?: print|foil|holo|glitter|flock | gather|ruche|twist (surface stamps: folds, no art), rough?, layer?, name?, mirror?: none|both }',
 	run(tx, a) {
 		if (!a.at) throw new Error('decal.add needs at: a point on the body');
 		const stamp = ['gather', 'ruche', 'twist'].includes(a.look);
@@ -23,6 +23,12 @@ defineCommand('decal.add', {
 		const d = { id, at: { sp: toSP(resolvePoint(a.at, tx.ctx)) }, size: 0.08, rotate: 0, colour: '#ffffff', look: 'print', layer: 'L0' };
 		for (const k of FIELDS) if (a[k] !== undefined) d[k] = a[k];
 		tx.insert('decals', d);
+		// the mirrored copy stays readable: only its place and turn are mirrored (doc/symmetry.js)
+		if (a.mirror === 'both') {
+			const id2 = tx.newId('d');
+			tx.insert('decals', { ...structuredClone(d), id: id2, pair: id, at: { sp: toSP(resolvePoint({ mirror: a.at }, tx.ctx)) }, rotate: -(d.rotate ?? 0) });
+			tx.set(['decals', id, 'pair'], id2);
+		}
 		return id;
 	},
 });

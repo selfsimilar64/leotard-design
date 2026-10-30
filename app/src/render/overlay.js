@@ -58,7 +58,10 @@ export class Overlay {
 	}
 
 	// evaluated: Map(key -> { sps, closed, role, curve }); sel: selected curve id; hover: hovered id
-	setCurves(evaluated, doc, { selected = null, hover = null, showPoints = false } = {}) {
+	// selectedSide: Mirror off, the one side of a paired line an edit will change ('own' | 'm');
+	// centre: draw the body's centre line
+	setCurves(evaluated, doc, { selected = null, hover = null, showPoints = false, selectedSide = null, centre = false } = {}) {
+		this.setCentre(centre);
 		for (const l of this.lines.values()) { this.group.remove(l); l.geometry.dispose(); }
 		this.lines.clear();
 		if (!this.man.garmentPos) return;
@@ -70,7 +73,7 @@ export class Overlay {
 			if (e.closed) pos.push(pos[0], pos[1], pos[2]);
 			const g = new LineGeometry();
 			g.setPositions(pos);
-			const isSel = e.curve === selected, isHover = e.curve === hover;
+			const isSel = e.curve === selected && (!selectedSide || !!e.mirrored === (selectedSide === 'm')), isHover = e.curve === hover;
 			const colour = isSel ? 0xffffff : ROLE_COLOURS[e.role] ?? 0xffffff;
 			const line = new Line2(g, this.material(colour, isSel ? 3.2 : isHover ? 2.6 : 1.6, e.role === 'guide'));
 			if (e.role === 'guide') line.computeLineDistances();
@@ -83,18 +86,90 @@ export class Overlay {
 		this.setPoints(cur, cur ? [evaluated.get(selected), evaluated.get(selected + '~m')].filter(Boolean) : []);
 	}
 
-	// Pen preview: the curve being drawn (evaluated), drawn bright and dashed.
-	setPreview(e) {
-		if (this.preview) { this.group.remove(this.preview); this.preview.geometry.dispose(); this.preview = null; }
-		if (!e || e.sps.length < 2) return;
+	// Pen preview: the curve being drawn (evaluated), drawn bright and dashed; its mirrored copy
+	// (Mirror on), the same but thinner.
+	setPreview(e, mirrored = null) {
+		for (const l of this.previews ?? []) { this.group.remove(l); l.geometry.dispose(); }
+		this.previews = [];
+		const v = new THREE.Vector3();
+		for (const [c, width] of [[e, 2.4], [mirrored, 1.6]]) {
+			if (!c || c.sps.length < 2) continue;
+			const pos = [];
+			for (const sp of c.sps) { this.place(sp, v); pos.push(v.x, v.y, v.z); }
+			const g = new LineGeometry();
+			g.setPositions(pos);
+			const l = new Line2(g, this.material(0xffffff, width, true));
+			l.computeLineDistances();
+			l.renderOrder = 12;
+			this.group.add(l);
+			this.previews.push(l);
+		}
+	}
+
+	// Where a stone or lettering placed under the pointer gets its mirrored copy (Mirror on).
+	setCursor(sp) {
+		if (this.cursor) { this.group.remove(this.cursor); this.cursor.geometry.dispose(); this.cursor = null; }
+		if (!sp) return;
+		const v = this.place(sp, new THREE.Vector3()), g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.Float32BufferAttribute([v.x, v.y, v.z], 3));
+		g.setAttribute('color', new THREE.Float32BufferAttribute([1, 1, 1], 3));
+		this.cursor = new THREE.Points(g, this.pointMat);
+		this.cursor.renderOrder = 12;
+		this.group.add(this.cursor);
+	}
+
+	// The body's centre line (x = 0 on the reference surface, placed on the body as shown): faint,
+	// so it reads as a guide and not as a seam. The crossing is found once, then only re-placed.
+	setCentre(on) {
+		if (this.centre) { this.group.remove(this.centre); this.centre.geometry.dispose(); this.centre = null; }
+		if (!on || !this.surf || !this.man.garmentPos) return;
+		if (!this.centreSps) {
+			const S = this.surf, idx = S.idx, P = S.P, out = [];
+			for (let f = 0; f < S.F; f++) {
+				const b = [[], [], []], xs = [0, 1, 2].map((k) => P[idx[f * 3 + k] * 3]), cut = [];
+				for (let k = 0; k < 3; k++) {
+					const n = (k + 1) % 3;
+					if ((xs[k] < 0) === (xs[n] < 0)) continue;
+					const t = xs[k] / (xs[k] - xs[n]), q = [0, 0, 0];
+					q[k] = 1 - t; q[n] = t;
+					cut.push({ f, b0: q[0], b1: q[1], b2: q[2] });
+				}
+				b.length = 0;
+				if (cut.length === 2) out.push(cut[0], cut[1]);
+			}
+			this.centreSps = out;
+		}
 		const pos = [], v = new THREE.Vector3();
-		for (const sp of e.sps) { this.place(sp, v); pos.push(v.x, v.y, v.z); }
-		const g = new LineGeometry();
-		g.setPositions(pos);
-		this.preview = new Line2(g, this.material(0xffffff, 2.4, true));
-		this.preview.computeLineDistances();
-		this.preview.renderOrder = 12;
-		this.group.add(this.preview);
+		for (const sp of this.centreSps) { this.place(sp, v); pos.push(v.x, v.y, v.z); }
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+		this.centreMat ??= new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+		this.centre = new THREE.LineSegments(g, this.centreMat);
+		this.centre.renderOrder = 9;
+		this.group.add(this.centre);
+	}
+
+	// One piece of a paired part glows and fades (Mirror off: the side an edit will change).
+	// cellSps: surface points, three per triangle.
+	flashCell(cellSps) {
+		if (this.glow) { this.group.remove(this.glow); this.glow.geometry.dispose(); this.glow.material.dispose(); }
+		const pos = new Float32Array(cellSps.length * 3), v = new THREE.Vector3();
+		cellSps.forEach((sp, i) => { this.place(sp, v); pos.set([v.x, v.y, v.z], i * 3); });
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+		const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide });
+		const glow = this.glow = new THREE.Mesh(g, m);
+		glow.renderOrder = 9;
+		this.group.add(glow);
+		const t0 = performance.now();
+		const step = () => {
+			if (this.glow !== glow) return;
+			const k = Math.min((performance.now() - t0) / 650, 1);
+			m.opacity = 0.35 * (1 - k) * (1 - k);
+			if (k < 1) requestAnimationFrame(step);
+			else { this.group.remove(glow); g.dispose(); m.dispose(); this.glow = null; }
+		};
+		requestAnimationFrame(step);
 	}
 
 	// Control points of the selected curve (and of its mirror image, dimmed).

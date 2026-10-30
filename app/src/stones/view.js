@@ -152,6 +152,7 @@ export class StoneView {
 				x.copy(t0).multiplyScalar(Math.cos(a)).addScaledVector(b0, Math.sin(a));
 				y.crossVectors(n, x);
 				p.addScaledVector(n, ABOVE + (s.lift ?? 0) + heightAt(s));
+				s.at = p.clone(); s.up = n.clone(); // where it sits, for picking and the hover rings
 				const d = s.size;
 				m4.makeBasis(x.multiplyScalar(d), y.multiplyScalar(d * aspect), n.clone().multiplyScalar(d)).setPosition(p);
 				mesh.setMatrixAt(i, m4);

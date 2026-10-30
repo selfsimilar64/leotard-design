@@ -20,7 +20,9 @@ export function evaluateAll(doc, surf, layer = null, cache = null) {
 	const mfn = (sp) => mirrorSP(sp, surf);
 	const curves = doc.curves.filter((c) => layer === null || (c.layer ?? 'L0') === layer);
 	const byId = new Map(curves.map((c) => [c.id, c]));
-	const deps = (c) => c.points.filter((p) => p.on && byId.has(p.on.curve) && p.on.curve !== c.id).map((p) => p.on.curve);
+	// a line that was split from its pair (doc/symmetry.js): its twin stands in for its mirror image
+	const twinOf = (id) => { const t = byId.get(id)?.twin; return t && byId.has(t) ? t : null; };
+	const deps = (c) => c.points.filter((p) => p.on && byId.has(p.on.curve) && p.on.curve !== c.id).flatMap((p) => { const t = twinOf(p.on.curve); return t && t !== c.id ? [p.on.curve, t] : [p.on.curve]; });
 	// depth-first topological order; a dependency cycle just drops the attachment
 	const order = [], state = new Map();
 	const visit = (c) => {
@@ -41,6 +43,8 @@ export function evaluateAll(doc, surf, layer = null, cache = null) {
 			const flip = on.mirror ? !mirrored : mirrored;
 			const tgt = out.get(on.curve + (flip ? '~m' : ''));
 			if (tgt && tgt.sps.length) return pointAlong(tgt, on.t ?? 0);
+			const tw = flip && twinOf(on.curve) ? out.get(twinOf(on.curve)) : null;
+			if (tw && tw.sps.length) return pointAlong(tw, on.t ?? 0);
 			const own = out.get(on.curve);
 			if (!own || !own.sps.length) return null;
 			const sp = pointAlong(own, on.t ?? 0);

@@ -150,3 +150,25 @@ back, without a command or an undo step.
 - A console `import('/src/ui/state.js')` after hot updates can load a second copy of the module
   (the app's has a `?t=` stamp): setting its signals changes nothing on screen. Drive the UI by
   clicks, or `window.app` commands.
+
+## Hover in Select
+
+Rule: hovering shows exactly what a click would choose (`Engine.hitAt`, used by both; order: a stone
+directly under the pointer, a strap, a line within 7 px, a logo, the piece). Mouse and Apple Pencil
+behave alike (`ui/tools.js`, `queueHover`, once a frame); touch has no hover. Nothing shows while
+the view turns, in the other tools, while H hides the overlay, or in captures: everything is tied to
+`overlay.group.visible`.
+
+- Pieces, straps and logos: `render/highlight.js` OutlinePass, after the tone mapping. The parts are
+  drawn into a mask (R everywhere, G unless something over 6 mm in front hides them, so stones and
+  straps on the cloth do not cut holes in it), then a white edge with a dark halo outside the
+  visible shape and a faint edge round what runs behind the body. The mask's vertex shader repeats
+  the fabric's displacement (`materials/fabric.js`, position + normal * uOffset + aLift * uGarment):
+  keep the two in step. A logo is its art's box on the cloth (`DecalSet.boxOf`).
+- Stones: a group lights all its members as points in the overlay's group, the one under the pointer
+  with a stronger ring; a stone too small on screen for a ring is a soft dot, so a dense group reads
+  as a tint. Picking is a ray test against every stone (2 ms at 6,500 stones), at least 3 px wide.
+- Mirror (see [the Mirror toggle](/engineering/architecture/mirror-toggle.md)): with it on, a part's
+  `pair` lights too; with it off, only the cell of a paired piece or the half of a mirrored stone
+  group that a click would take. A line still thickens on both sides with it off (overlay.js).
+- A strap's centre line lies under the strap, so the strap wins unless that line is the selection.

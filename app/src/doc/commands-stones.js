@@ -19,7 +19,7 @@ function checkStones(a) {
 }
 
 defineCommand('stones.add', {
-	label: 'Add stones', args: '{ kind: row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...}, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, seed?, name? }',
+	label: 'Add stones', args: '{ kind: row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...}, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, side?: left|right (one side of a paired line or piece), seed?, name? }',
 	run(tx, a) {
 		if (!GENERATOR_KINDS.includes(a.kind)) throw new Error('kind must be one of: ' + GENERATOR_KINDS.join(', '));
 		checkStones(a);
@@ -28,7 +28,7 @@ defineCommand('stones.add', {
 		tx.insert('stones', {
 			id, kind: a.kind, name: a.name ?? '', on: a.on ?? null, ...(at ? { at: { sp: at } } : {}),
 			params: a.params ?? {}, stone: a.stone ?? (a.palette ? undefined : 'Crystal AB'), palette: a.palette ?? null, colourRamp: a.colourRamp ?? null,
-			shape: a.shape ?? 'round', mirror: a.mirror ?? 'none', seed: a.seed ?? (tx.doc.stones.length * 7919 + 13), ...(a.layer ? { layer: a.layer } : {}),
+			shape: a.shape ?? 'round', mirror: a.mirror ?? 'none', seed: a.seed ?? (tx.doc.stones.length * 7919 + 13), ...(a.layer ? { layer: a.layer } : {}), ...(a.side ? { side: a.side } : {}),
 			...(a.nodeStone ? { nodeStone: a.nodeStone } : {}), ...(a.fillStone ? { fillStone: a.fillStone } : {}),
 		});
 		return id;

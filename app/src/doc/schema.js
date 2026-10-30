@@ -20,6 +20,7 @@ export function newDocument(name = 'Untitled') {
 		// 2026-10-29 (owner; doc/migrate-g9.js opens older designs on it)
 		body: { size: 'young', form: 'full', head: 'none', expression: 'neutral', finish: 'Matte white fibreglass', headFinish: 'Matte white fibreglass', pose: 'a-pose' },
 		scene: { rig: DEFAULT_RIG, exposure: 1, bloom: 0.18, envRotation: 0, glare: 'plain' },
+		symmetry: true, // the Mirror toggle (doc/symmetry.js): edits reach both sides of the body
 		// first-generation garment (analytic regions, garment/legacy.js), kept so old files open;
 		// null for every design made with the cut-and-sew tools
 		legacy: null,

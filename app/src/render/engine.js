@@ -12,16 +12,20 @@ import { GarmentView, sameSign } from './garment.js';
 import { buildGarment, evaluateAll, panelAt } from '../garment/build.js';
 import { Surface } from '../body/surface.js';
 import { Overlay } from './overlay.js';
+import { HoverHighlight } from './highlight.js';
 import { Rims } from './rims.js';
 import { TextureLibrary } from '../materials/textures.js';
 import { StrapView } from './straps.js';
 import { HardwareView } from './hardware.js';
 import { StoneView } from '../stones/view.js';
 import { runStones } from '../stones/generators.js';
-import { locate } from '../garment/arrangement.js';
+import { locate, baryOfVertexInFace } from '../garment/arrangement.js';
 import { TRIMS } from '../garment/trim.js';
 import { FigureView, finishSurface } from './figure.js';
 import { markSkin } from './postfx.js';
+
+const BEHIND = 0.006; // m: picks count this far behind the surface hit (what sits on the fabric)
+const _v = new THREE.Vector3();
 
 export class Engine {
 	// ref: the reference garment surface (body/reference.js), where curves live
@@ -66,6 +70,8 @@ export class Engine {
 		this.coverHooks = [(cover) => this.straps.markCover(cover)];
 		this.overlay = new Overlay(scene, body);
 		this.ui = { selected: null, hover: null, showPoints: false, hidden: false }; // overlay state from the UI
+		this.highlight = new HoverHighlight(viewport, this.overlay.group, () => this.overlay.group.visible);
+		this.hover = null; // what the pointer is over in Select: { kind, id, stone? } (setHover)
 		this.timing = { mannequin: 0, garment: null };
 		this.bodyKey = null;
 		this.g = null;          // the shell layer's build (tools and picking use it)
@@ -93,6 +99,7 @@ export class Engine {
 		vp.world.updateMatrixWorld();
 		const ray = this.raycaster.ray.clone().applyMatrix4(vp.world.matrixWorld.clone().invert());
 		ray.direction.normalize();
+		this.lastRay = ray;
 		const hit = this.pick.raycast(ray);
 		const out = { x, y, sp: hit ? { f: hit.f, b0: hit.b0, b1: hit.b1, b2: hit.b2 } : null, point: hit?.point ?? null, distance: hit?.distance ?? Infinity };
 		if (out.sp && this.app) {
@@ -128,6 +135,88 @@ export class Engine {
 			}
 		}
 		return best;
+	}
+
+	// What a click in Select would choose at a screen point, front to back: a stone directly under
+	// it, a strap, a line near it, a logo, the piece. -> { kind, id, stone? } or null
+	hitAt(x, y) {
+		const h = this.pickAt(x, y);
+		if (!h) return null;
+		const stone = this.stoneAt(h.distance, this.viewport.renderer.domElement.clientHeight);
+		if (stone) return { kind: stone.gen === 'placed' ? 'placed' : 'stones', id: stone.gen === 'placed' ? stone.id : stone.gen, stone };
+		// a strap before the line it runs along (that line lies under it), unless the line is the one
+		// being edited; the line's list in the Shape tab reaches it otherwise
+		const strap = this.raycaster.intersectObjects(this.straps.meshes.filter((m) => m.userData.strap), false)[0];
+		const sid = strap && strap.distance < h.distance + BEHIND ? strap.object.userData.strap : null;
+		const c = this.curveAt(x, y);
+		const onPath = c && (this.ui.selected === c.curve ? null : this.app.doc.straps.find((s) => s.path === c.curve));
+		if (c && !sid && !onPath) return { kind: 'curves', id: c.curve, mirrored: c.mirrored };
+		if (sid || onPath) { if (c && this.ui.selected === c.curve) return { kind: 'curves', id: c.curve, mirrored: c.mirrored }; return { kind: 'straps', id: sid ?? onPath.id }; }
+		if (h.sp && this.decals) { const d = this.decals.at(this.surf.pos(h.sp)); if (d) return { kind: 'decals', id: d.id }; }
+		if (!h.panel) return null;
+		// Mirror off: a click chooses one side of a paired piece, so the hover shows that cell only
+		const off = this.app.doc.symmetry === false && this.app.doc.panels.find((p) => p.id === h.panel)?.mirror === 'both';
+		const g = off ? this.layers.get(h.layer)?.g : null, t = g ? locate(g.arr, this.surf, h.sp) : -1;
+		return { kind: 'panels', id: h.panel, sp: h.sp, layer: h.layer, cell: t >= 0 ? g.arr.cellOf[t] : null };
+	}
+
+	// The stone on the last pickAt's ray, not behind the surface it hit: within its own radius, or
+	// a few pixels for one too small to aim at.
+	stoneAt(surfaceDistance, height) {
+		const ray = this.lastRay, stones = this.stoneView.stones;
+		if (!ray || !stones.length) return null;
+		const perPx = 2 / (this.viewport.camera.projectionMatrix.elements[5] * height), v = _v;
+		let best = null, bd = 1;
+		for (const s of stones) {
+			if (!s.at) continue;
+			v.subVectors(s.at, ray.origin);
+			const t = v.dot(ray.direction);
+			if (t <= 0 || t > surfaceDistance + BEHIND) continue;
+			const r = Math.max(s.size / 2, 3 * perPx * t), d = (v.lengthSq() - t * t) / (r * r); // 1 at its rim
+			if (d < bd) { bd = d; best = s; }
+		}
+		return best;
+	}
+
+	// Show what the pointer is over (null: nothing). Lines thicken; everything else: render/highlight.js
+	setHover(hit) {
+		const key = (o) => (o ? o.kind + ':' + o.id + ':' + (o.cell ?? '') : '');
+		const same = key(hit) === key(this.hover);
+		if (same && hit?.stone === this.hover?.stone) return;
+		this.hover = hit;
+		if (!same || hit?.kind !== 'stones') this.showHover();
+		else this.highlight.setStones(this.hoverStones(hit), hit.stone);
+	}
+
+	// A paired part's other half is chosen with it while the Mirror toggle is on (doc/symmetry.js).
+	hoverIds(list, id) {
+		const doc = this.app.doc, o = doc[list]?.find((x) => x.id === id);
+		return o?.pair && doc.symmetry !== false ? [id, o.pair] : [id];
+	}
+
+	hoverStones(hit) {
+		if (hit.kind === 'placed') return this.stoneView.stones.filter((s) => s.gen === 'placed' && s.id === hit.id);
+		const ids = this.hoverIds('stones', hit.id), doc = this.app.doc;
+		const list = this.stoneView.stones.filter((s) => ids.includes(s.gen));
+		// Mirror off: a click chooses one half of a mirrored group
+		if (doc.symmetry === false && hit.stone && doc.stones.find((g) => g.id === hit.id)?.mirror === 'both') return list.filter((s) => !!s.mirrored === !!hit.stone.mirrored);
+		return list;
+	}
+
+	// Draws this.hover (again after a change to the design: the meshes and stones are new).
+	showHover() {
+		const hit = this.hover, parts = [];
+		const hoverLine = hit?.kind === 'curves' ? hit.id : null;
+		if (hoverLine !== this.ui.hover) this.setUI({ hover: hoverLine });
+		if (hit?.kind === 'panels') { for (const L of this.layers.values()) for (const c of L.view.cells) if (c.panelId === hit.id && (hit.cell == null || (L.layer.id === hit.layer && c.cell === hit.cell))) parts.push({ mesh: c.mesh }); }
+		if (hit?.kind === 'straps') for (const mesh of this.straps.meshes) if (mesh.userData.strap === hit.id) parts.push({ mesh });
+		if (hit?.kind === 'decals') for (const id of this.hoverIds('decals', hit.id)) {
+			const d = this.decals?.boxOf(id), L = d && this.layers.get(d.layer);
+			if (L) for (const c of L.view.cells) parts.push({ mesh: c.mesh, box: d.box });
+		}
+		this.highlight.setParts(parts);
+		const stones = hit?.kind === 'stones' || hit?.kind === 'placed' ? this.hoverStones(hit) : [];
+		this.highlight.setStones(stones, stones.includes(hit?.stone) ? hit.stone : null);
 	}
 
 	stoneCount() { return this.legacyMode ? this.legacy.stones.count : this.stoneView.count; }
@@ -171,10 +260,12 @@ export class Engine {
 			if (t('body')) this.applyBody(doc.body, all);
 		}
 		if (!legacy && why !== 'gesture') this.drawOverlay(doc);
+		if (this.hover && why !== 'gesture') this.showHover();
 		this.synced = true;
 	}
 
 	drawOverlay(doc, evaluated = this.evaluated) {
+		this.overlay.surf = this.surf;
 		this.overlay.setVisible(!doc.legacy && !this.ui.hidden);
 		if (evaluated) this.overlay.setCurves(evaluated, doc, this.ui);
 		this.lastEvaluated = evaluated;
@@ -381,6 +472,20 @@ export class Engine {
 		for (const L of this.layers.values()) L.view.setDoubleSided(this.bodyHidden);
 	}
 	flashPanel(id) { for (const L of this.layers.values()) L.view.flash(id); }
+	// Glow on just the cell under a surface point (one side of a paired piece). -> false if none.
+	flashCell(sp, layer = 'L0') {
+		const g = this.layers.get(layer)?.g;
+		if (!g) return false;
+		const arr = g.arr, t = locate(arr, this.surf, sp);
+		if (t < 0) return false;
+		const sps = [];
+		for (const tri of arr.cells[arr.cellOf[t]].tris) {
+			const f = arr.triFace[tri];
+			for (let k = 0; k < 3; k++) { const b = baryOfVertexInFace(arr, this.surf, arr.tris[tri * 3 + k], f); sps.push({ f, b0: b[0], b1: b[1], b2: b[2] }); }
+		}
+		this.overlay.flashCell(sps);
+		return true;
+	}
 	applyHidden() {
 		const s = this.shown ?? { skin: true, head: false, blob: true }, h = !!this.bodyHidden;
 		this.skinMesh.visible = s.skin && !h;

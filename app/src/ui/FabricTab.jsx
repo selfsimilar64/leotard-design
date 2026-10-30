@@ -216,7 +216,6 @@ function FineTune({ p, s, f, doc, set }) {
 			</> : null}
 			<Field label="Print image"><input class="text-in" type="text" placeholder="/moodboard/… or a web address" value={s.print?.src ?? ''} onChange={(e) => set({ print: e.currentTarget.value ? { src: e.currentTarget.value, size: s.print?.size ?? [0.2, 0.2] } : null })} /></Field>
 			{s.print ? <Field label="Print repeat"><Slider value={s.print.size?.[0] ?? 0.2} min={0.02} max={0.8} step={0.005} format={mm} onChange={(v, g) => set({ print: { ...s.print, size: [v, v * (s.print.size?.[1] ?? 0.2) / (s.print.size?.[0] ?? 0.2)] } }, g)} /></Field> : null}
-			<p class="fine-note">{p.mirror === 'both' ? 'Mirrored: the same piece on both sides.' : 'One side only.'}</p>
 		</>
 	);
 }

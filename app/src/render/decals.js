@@ -29,6 +29,20 @@ export class DecalSet {
 
 	forLayer(id) { return this.layers.get(id) ?? null; }
 
+	// The logo at a reference position (the outermost layer's first), and a logo's box.
+	at(p) {
+		const q = new THREE.Vector3();
+		for (const [layer, L] of this.layers) for (let i = 0; i < L.count; i++) {
+			q.copy(p).applyMatrix4(L.M[i]);
+			if (Math.abs(q.x) <= 0.5 && Math.abs(q.y) <= 0.5 && Math.abs(q.z) <= 1) return { id: L.ids[i], layer };
+		}
+		return null;
+	}
+	boxOf(id) {
+		for (const [layer, L] of this.layers) { const i = L.ids?.indexOf(id) ?? -1; if (i >= 0 && i < L.count) return { layer, box: L.M[i] }; }
+		return null;
+	}
+
 	buildLayer(id, list, surf) {
 		let L = this.layers.get(id);
 		if (!L) {
@@ -39,6 +53,7 @@ export class DecalSet {
 			this.layers.set(id, L);
 		}
 		L.count = list.length;
+		L.ids = list.map((d) => d.id);
 		const ctx = L.canvas.getContext('2d');
 		const artSig = JSON.stringify(list.map((d) => [STAMP(d.look) ? null : [d.text, d.font, d.weight, d.src], this.images.has(d.src)]));
 		const redraw = artSig !== L.sig;
