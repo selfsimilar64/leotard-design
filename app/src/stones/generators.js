@@ -5,6 +5,10 @@
 // Spec: knowledge/engineering/architecture/design-document-model.md (stones), tool T9.
 import * as THREE from 'three';
 import { sizeOf, SHAPES } from './library.js';
+import { motifOutline, insidePoly, distPoly } from './motifs.js';
+import { runPattern } from './pattern.js';
+import { mirrorFast } from './cloth.js';
+import { hash2 } from './fields.js';
 import { projectNear } from '../curves/evaluate.js';
 import { mirrorSP, resolvePoint } from '../curves/points.js';
 import { locate } from '../garment/arrangement.js';
@@ -184,7 +188,8 @@ function picker(gen, rand) {
 function ramp(list, u) { if (!list?.length) return null; const i = Math.min(list.length - 1, Math.floor(u * list.length)); return list[i]; }
 function lerpSize(from, to, u) { return sizeOf(from) + (sizeOf(to) - sizeOf(from)) * u; }
 
-// Angle of a direction in the surface frame at sp: 0 along the body's horizontal tangent.
+// Angle of a direction in the surface frame at sp: 0 along the body's horizontal tangent. (The same
+// frame: stones/view.js build, which turns a stone by it; stones/cloth.js jac, per triangle of a piece.)
 function angleAt(ctx, sp, dir) {
 	const n = ctx.surf.faceNormal(sp.f, new THREE.Vector3());
 	const t0 = new THREE.Vector3(0, 1, 0).cross(n).normalize(); // around the body
@@ -483,6 +488,9 @@ const GENERATORS = {
 		return out;
 	},
 
+	// a live procedure on the flat cloth of one piece: stones/pattern.js
+	pattern(gen, ctx) { return runPattern(gen, ctx, ctx.patternCache); },
+
 	// a tight random cluster around a point
 	cluster(gen, ctx, rand) {
 		const P = gen.params ?? {}, pick = picker(gen, rand), out = [];
@@ -524,87 +532,130 @@ function dart(region, rand, candidates, gap, sizeFor, pick, ctx) {
 	return out;
 }
 
-// Unit motif outlines (about [-1, 1]).
-export function motifOutline(shape, points) {
-	if (points?.length) return points;
-	const out = [], N = 72;
-	for (let i = 0; i < N; i++) {
-		const t = (i / N) * Math.PI * 2;
-		switch (shape) {
-			case 'circle': out.push([Math.cos(t), Math.sin(t)]); break;
-			case 'star': { const r = i % 12 < 6 ? 1 - (Math.abs((i % 12) - 3) / 3) * 0.55 : 0.45 + (Math.abs((i % 12) - 9) / 3) * 0.55; const k = Math.floor(i / 12) * 2 + (i % 12 < 6 ? 0 : 1); void k; out.push([r * Math.cos(t), r * Math.sin(t)]); break; }
-			case 'diamond': out.push([Math.cos(t) * 0.7 * (Math.abs(Math.cos(t)) + Math.abs(Math.sin(t))) ** -1 * 1.4, Math.sin(t) * (Math.abs(Math.cos(t)) + Math.abs(Math.sin(t))) ** -1]); break;
-			case 'flower': { const r = 0.6 + 0.4 * Math.cos(5 * t); out.push([r * Math.cos(t), r * Math.sin(t)]); break; }
-			default: out.push([(16 * Math.sin(t) ** 3) / 17, (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 17]); // heart
-		}
-	}
-	return out;
-}
-function insidePoly(p, poly) {
-	let inside = false;
-	for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-		const a = poly[i], b = poly[j];
-		if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1]) + a[0]) inside = !inside;
-	}
-	return inside;
-}
-function distPoly(p, poly) {
-	let d = Infinity;
-	for (let i = 0; i < poly.length; i++) {
-		const a = poly[i], b = poly[(i + 1) % poly.length], bx = b[0] - a[0], by = b[1] - a[1], l2 = bx * bx + by * by;
-		const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * bx + (p[1] - a[1]) * by) / l2)) : 0;
-		d = Math.min(d, Math.hypot(p[0] - a[0] - bx * t, p[1] - a[1] - by * t));
-	}
-	return d;
-}
-
 // ---------------------------------------------------------------------------------------------
 // Run every generator (plus single stones), mirror them, keep them on fabric and apart.
-// ctx: { surf, doc, evaluated, garment(layer), landmarks, isFabric(sp) }
-export function runStones(doc, ctx) {
-	const all = [], errors = [];
-	const sp3 = (sp) => ctx.surf.pos(sp);
-	for (const gen of doc.stones) {
-		if (gen.hidden) continue;
-		const fn = GENERATORS[gen.kind];
-		if (!fn) { errors.push(gen.id + ': unknown kind ' + gen.kind); continue; }
-		let list;
-		try { list = fn(gen, ctx, rng(gen.seed ?? 1)); } catch (e) { errors.push(gen.id + ': ' + e.message); continue; }
-		const shape = gen.shape ?? 'round', keepOut = gen.params?.keepOut;
-		for (const s of list) { s.gen = gen.id; s.shape = s.shape ?? shape; s.layer = gen.layer ?? null; if (keepOut !== undefined) s.keepOut = keepOut; }
-		if (gen.mirror === 'both') {
-			const m = list.map((s) => ({ ...s, sp: mirrorSP(s.sp, ctx.surf), angle: Math.PI - s.angle, mirrored: true }));
-			list = list.concat(m);
-		} else if (gen.mirror === 'only') { // the mirror half of a group split from its pair (doc/symmetry.js)
-			list = list.map((s) => ({ ...s, sp: mirrorSP(s.sp, ctx.surf), angle: Math.PI - s.angle, mirrored: true }));
-		}
-		// one side of a paired line or piece: left is the wearer's (+x)
-		if (gen.side) list = list.filter((s) => (sp3(s.sp).x >= 0) === (gen.side === 'left'));
-		// eraser marks
-		if (gen.erase?.length) {
-			const marks = gen.erase.map((e) => ({ p: sp3(e.sp ? { f: e.sp.f, b0: 1 - e.sp.b[0] - e.sp.b[1], b1: e.sp.b[0], b2: e.sp.b[1] } : e), r: e.r ?? 0.005 }));
-			list = list.filter((s) => { const p = sp3(s.sp); return !marks.some((m) => p.distanceTo(m.p) < m.r); });
-		}
-		all.push(...list);
+// ctx: { surf, doc, evaluated, garment(layer), landmarks, isFabric(sp, p, size, keepOut), edge(p, keepOut),
+// cloth(panelId), pending: Set, patternCache: Map, geoRev, placedSame }
+// cache (optional): what the last run made, per group. A group whose record and whose geometry have not
+// changed keeps its stones, so editing one group costs that group and the final pass.
+
+// A group's stones as they go on the body: mirrored, cut to one side, erased.
+function stonesOfGroup(gen, ctx, errors) {
+	const fn = GENERATORS[gen.kind], surf = ctx.surf, seed = gen.seed ?? 1, isPattern = gen.kind === 'pattern';
+	let list;
+	try { list = fn(gen, ctx, rng(seed)); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
+	const shape = gen.shape ?? 'round', keepOut = gen.params?.keepOut;
+	if (!isPattern) list.forEach((s, i) => {
+		s.gen = gen.id; s.shape = s.shape ?? shape; s.layer = gen.layer ?? null; if (keepOut !== undefined) s.keepOut = keepOut;
+		const p = surf.pos(s.sp, _a);
+		s.x = p.x; s.y = p.y; s.z = p.z; s.r = hash2(i, 13, seed);
+	});
+	const mirror = isPattern ? mirrorFast : mirrorSP;
+	const mirrored = (s) => {
+		const sp = isPattern ? mirror(surf, s.sp) : mirror(s.sp, surf), p = surf.pos(sp, _a);
+		return { ...s, sp, angle: Math.PI - s.angle, mirrored: true, x: p.x, y: p.y, z: p.z, r: (s.r * 7.13 + 0.37) % 1 };
+	};
+	if (isPattern) {
+		// a pattern across the centre of the body, made symmetric about it: the wearer's left, twice
+		if (gen.params?.symmetric) { list = list.filter((s) => s.x >= 0); list = list.concat(list.map(mirrored)); }
+		// a pattern is laid on one piece of a pair; its other side is that piece's mirror image
+		else if (ctx.cloth?.(gen.on?.panel)?.paired && gen.mirror !== 'both' && gen.mirror !== 'only') list = list.concat(list.map(mirrored));
 	}
-	for (const pl of doc.placed) all.push({ sp: { f: pl.sp.f, b0: 1 - pl.sp.b[0] - pl.sp.b[1], b1: pl.sp.b[0], b2: pl.sp.b[1] }, size: sizeOf(pl.size ?? 'ss16'), shape: pl.shape ?? 'round', stone: pl.stone ?? 'Crystal AB', angle: pl.angle ?? 0, lift: pl.lift ?? 0, gen: 'placed', id: pl.id });
-	// keep stones on fabric (or on their strap), off opening edges, and apart from earlier ones
-	const kept = [], grid = new Map(), cell = 0.01;
-	for (const s of all) {
-		const p = sp3(s.sp);
-		if (!s.lift && ctx.isFabric && !ctx.isFabric(s.sp, p, s.size, s.keepOut)) continue;
-		const cx = Math.floor(p.x / cell), cy = Math.floor(p.y / cell), cz = Math.floor(p.z / cell);
+	if (gen.mirror === 'both') list = list.concat(list.map(mirrored));
+	else if (gen.mirror === 'only') list = list.map(mirrored); // the mirror half of a group split from its pair (doc/symmetry.js)
+	// one side of a paired line or piece: left is the wearer's (+x)
+	if (gen.side) list = list.filter((s) => (s.x >= 0) === (gen.side === 'left'));
+	// eraser marks
+	if (gen.erase?.length) {
+		const marks = gen.erase.map((e) => ({ p: surf.pos(e.sp ? { f: e.sp.f, b0: 1 - e.sp.b[0] - e.sp.b[1], b1: e.sp.b[0], b2: e.sp.b[1] } : e), r: e.r ?? 0.005 }));
+		list = list.filter((s) => { for (const m of marks) { const dx = s.x - m.p.x, dy = s.y - m.p.y, dz = s.z - m.p.z; if (dx * dx + dy * dy + dz * dz < m.r * m.r) return false; } return true; });
+	}
+	return list;
+}
+
+function placedStones(doc, surf) {
+	return doc.placed.map((pl) => {
+		const sp = { f: pl.sp.f, b0: 1 - pl.sp.b[0] - pl.sp.b[1], b1: pl.sp.b[0], b2: pl.sp.b[1] }, p = surf.pos(sp, _a);
+		return { sp, size: sizeOf(pl.size ?? 'ss16'), shape: pl.shape ?? 'round', stone: pl.stone ?? 'Crystal AB', angle: pl.angle ?? 0, lift: pl.lift ?? 0, gen: 'placed', id: pl.id, x: p.x, y: p.y, z: p.z, r: hash2(pl.id.length, parseInt(pl.id.slice(1), 10) || 0, 7) };
+	});
+}
+
+// Each stone against those before it: a cell hash over flat arrays (no strings, nothing allocated per
+// stone), so this final pass stays cheap enough for every frame of a drag.
+const CELL = 0.012, HASH = 1 << 16;
+const keep = { head: new Int32Array(HASH), next: new Int32Array(0), x: new Float32Array(0), y: new Float32Array(0), z: new Float32Array(0), size: new Float32Array(0), lift: new Float32Array(0) };
+const cellHash = (i, j, k) => ((Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ Math.imul(k, 83492791)) >>> 0) & (HASH - 1);
+function keepApart(lists, ctx) {
+	let total = 0;
+	for (const l of lists) total += l.length;
+	if (keep.next.length < total) {
+		const cap = Math.ceil(total * 1.5);
+		keep.next = new Int32Array(cap); keep.x = new Float32Array(cap); keep.y = new Float32Array(cap); keep.z = new Float32Array(cap); keep.size = new Float32Array(cap); keep.lift = new Float32Array(cap);
+	}
+	const { head, next, x: KX, y: KY, z: KZ, size: KS, lift: KL } = keep, kept = [];
+	head.fill(-1);
+	let m = 0, biggest = 0;
+	for (const list of lists) for (const s of list) {
+		// on fabric (or on their strap) and off opening edges: known for a pattern's stones, asked once for others
+		if (!s.lift && !s.fab) {
+			if (s.onFabric === undefined) s.onFabric = !ctx.isFabric || ctx.isFabric(s.sp, _b.set(s.x, s.y, s.z), s.size, s.keepOut);
+			if (!s.onFabric) continue;
+		}
+		const px = s.x, py = s.y, pz = s.z, sz = s.size, lift = s.lift ?? 0;
+		// only the cells this stone could reach, given the biggest stone so far
+		const reach = ((biggest + sz) / 2) * 0.92, i1 = Math.floor((px + reach) / CELL), j1 = Math.floor((py + reach) / CELL), l1 = Math.floor((pz + reach) / CELL);
 		let ok = true;
-		for (let i = -1; i <= 1 && ok; i++) for (let j = -1; j <= 1 && ok; j++) for (let l = -1; l <= 1 && ok; l++) {
-			for (const o of grid.get((cx + i) + ',' + (cy + j) + ',' + (cz + l)) ?? []) if (o.lift === s.lift && o.p.distanceTo(p) < ((o.size + s.size) / 2) * 0.92) { ok = false; break; }
+		for (let i = Math.floor((px - reach) / CELL); i <= i1 && ok; i++) for (let j = Math.floor((py - reach) / CELL); j <= j1 && ok; j++) for (let l = Math.floor((pz - reach) / CELL); l <= l1 && ok; l++) {
+			for (let k = head[cellHash(i, j, l)]; k >= 0; k = next[k]) {
+				if (KL[k] !== lift) continue;
+				const dx = KX[k] - px, dy = KY[k] - py, dz = KZ[k] - pz, r = ((KS[k] + sz) / 2) * 0.92;
+				if (dx * dx + dy * dy + dz * dz < r * r) { ok = false; break; }
+			}
 		}
 		if (!ok) continue;
-		const k = cx + ',' + cy + ',' + cz;
-		if (!grid.has(k)) grid.set(k, []);
-		grid.get(k).push({ p, size: s.size, lift: s.lift });
+		const h = cellHash(Math.floor(px / CELL), Math.floor(py / CELL), Math.floor(pz / CELL));
+		KX[m] = px; KY[m] = py; KZ[m] = pz; KS[m] = sz; KL[m] = lift; next[m] = head[h]; head[h] = m; m++;
+		if (sz > biggest) biggest = sz;
 		kept.push(s);
 	}
-	return { stones: kept, errors, dropped: all.length - kept.length };
+	return { kept, total };
+}
+
+export function runStones(doc, ctx, cache = null) {
+	if (cache && cache.geoRev !== ctx.geoRev) { cache.geoRev = ctx.geoRev; cache.gens = new Map(); cache.placed = null; cache.last = null; }
+	const lists = [], errors = [];
+	let changed = !cache?.last, order = '';
+	for (const gen of doc.stones) {
+		if (gen.hidden) continue;
+		if (!GENERATORS[gen.kind]) { errors.push(gen.id + ': unknown kind ' + gen.kind); continue; }
+		const sig = cache ? JSON.stringify(gen) : null;
+		let rec = cache?.gens.get(gen.id);
+		if (!rec || rec.sig !== sig) {
+			const errs = [];
+			ctx.pending?.delete(gen.id);
+			rec = { sig, list: stonesOfGroup(gen, ctx, errs), errors: errs };
+			changed = true;
+			// waiting for its piece to be flattened: not an answer worth keeping
+			if (cache) { if (ctx.pending?.has(gen.id)) cache.gens.delete(gen.id); else cache.gens.set(gen.id, rec); }
+		}
+		errors.push(...rec.errors);
+		lists.push(rec.list);
+		order += gen.id + ',';
+	}
+	if (cache) {
+		const pj = ctx.placedSame && cache.placed ? cache.placed.json : JSON.stringify(doc.placed);
+		if (!cache.placed || cache.placed.json !== pj) { cache.placed = { json: pj, list: placedStones(doc, ctx.surf) }; changed = true; }
+		lists.push(cache.placed.list);
+		if (order !== cache.order) {
+			cache.order = order; changed = true;
+			for (const id of cache.gens.keys()) if (!doc.stones.some((g) => g.id === id)) cache.gens.delete(id);
+		}
+		if (!changed) return cache.last;
+	} else lists.push(placedStones(doc, ctx.surf));
+	const { kept, total } = keepApart(lists, ctx);
+	const out = { stones: kept, errors, dropped: total - kept.length };
+	if (cache) cache.last = out;
+	return out;
 }
 
 export const GENERATOR_KINDS = Object.keys(GENERATORS);

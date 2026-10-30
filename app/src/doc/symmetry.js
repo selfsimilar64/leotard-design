@@ -15,6 +15,7 @@
 import { defineCommand } from './store.js';
 import { mirrorSP } from '../curves/points.js';
 import { fromSP, toSP } from '../body/surface.js';
+import { flipPatternParams } from '../stones/pattern.js';
 
 export const symmetryOn = (doc) => doc.symmetry !== false;
 
@@ -62,9 +63,10 @@ const otherSide = (s) => (s === 'left' ? 'right' : 'left');
 const SIDE_WORD = { left: 'left', right: 'right' };
 const named = (name, side) => (name ? `${name} (${SIDE_WORD[side]})` : name);
 // a row or fringe on the mirror image runs the other way round: its offset and side change sign
-function flipParams(p) {
+// (a pattern's own place, turn and gradient too: stones/pattern.js)
+function flipParams(p, whole = false) {
 	if (!p) return p;
-	const out = { ...p };
+	const out = flipPatternParams(p, whole);
 	if (typeof out.offset === 'number') out.offset = -out.offset;
 	if (out.side === 'left' || out.side === 'right') out.side = otherSide(out.side);
 	return out;
@@ -81,7 +83,7 @@ function splitHosted(tx, match, on2, side2) {
 			continue;
 		}
 		const id = tx.newId('g');
-		tx.insert('stones', { ...structuredClone(g), id, on: on2, mirror: 'none', pair: g.id, params: flipParams(g.params) });
+		tx.insert('stones', { ...structuredClone(g), id, on: on2, mirror: 'none', pair: g.id, params: flipParams(g.params, g.kind === 'pattern') });
 		tx.set(['stones', g.id, 'mirror'], 'none');
 		tx.set(['stones', g.id, 'pair'], id);
 	}

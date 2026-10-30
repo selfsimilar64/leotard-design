@@ -1,6 +1,8 @@
 # Bundle update log
 
 ## 2026-10-30
+* **Decision**: [Stone groups are live procedures on the flat cloth](/decisions/2026-10-30-procedural-stone-patterns.md): gemstone groups are edited live and open to a broad class of procedural designs, each adjustable inside its piece with on-screen handles.
+* **Creation**: [Procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md): 48 arrangements (123 starting points) laid on a piece's flat cloth, a gradient driving density, size and colour, distortions, handles on the body; 7 ms per drag frame at 6,300 stones against about 300 ms before.
 * **Update**: [The studio interface](/engineering/app/studio-interface.md): hover in Select: outlines of a piece's, strap's or logo's 3D shape, rings on stones with the whole group lit, and clicking stones, straps and logos in the view now chooses them.
 * **Creation**: [The Mirror toggle and paired parts](/engineering/architecture/mirror-toggle.md): one toolbar toggle replaces every per-part mirror control; with it off, editing one side of a pair splits the pair for good.
 

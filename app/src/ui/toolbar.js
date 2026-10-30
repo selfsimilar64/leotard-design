@@ -7,6 +7,7 @@ export const tools = [
 	{ id: 'pen', label: 'Draw a seam', key: 'P', tab: 'shape' },
 	{ id: 'strap', label: 'Draw a strap', key: 'S', tab: 'shape' },
 	{ id: 'stones', label: 'Rows and fills', key: 'G', tab: 'sparkle' },
+	{ id: 'pattern', label: 'Patterns', key: 'F', tab: 'sparkle' },
 	{ id: 'single', label: 'Single crystals', key: '1', tab: 'sparkle' },
 	{ id: 'erase', label: 'Eraser', key: 'D', tab: 'sparkle' },
 	{ id: 'decal', label: 'Lettering', key: 'L', tab: 'sparkle' },

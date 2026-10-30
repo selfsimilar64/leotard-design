@@ -70,12 +70,17 @@ hint on the stage says how to turn, zoom and pick a piece (`prefs.hintDone`).
   first: sheerness for mesh, the satin's four, then the grid of every fabric in moodboard order and
   the scanned fabrics); *Fine-tune* (texture size, grain, effect, rainbow speed, gradient
   positions, print). `LookControls` (compact, 5 columns) serves straps and bindings.
-- **Sparkle** (`ui/SparkleTab.jsx`): three modes as big buttons (Rows & fills, Single, Eraser);
-  the crystal: colour as gem dots in the library's order with an AB switch, size as discs drawn to
+- **Sparkle** (`ui/SparkleTab.jsx`): four modes as big buttons (Patterns, Rows & fills, Single,
+  Eraser); under Patterns, the gallery of [stone patterns](/engineering/architecture/procedural-stone-patterns.md)
+  by family, every picture drawn by the pattern's own code (`ui/PatternPanel.jsx`); the crystal:
+  colour as gem dots in the library's order with an AB switch, size as discs drawn to
   scale (ss3-ss48), cut as outline icons; rows-and-fills options; *On this design*: crystal groups
   (rows with counts) and counts by size and colour; *Lettering and logos* (font previews in each
   face, look as segments, colour, width, turn). A selected group gets its page (crystal, layout,
-  release, delete, unknown parameters under Advanced); a selected logo its page, with Move it.
+  release, delete, unknown parameters under Advanced), a pattern's being arrangement and its own
+  settings, place on the piece, gradient, crystal (colours as stops that blend), distortions, all
+  live, with its handles on the body while it is chosen in Select; a selected logo its page, with
+  Move it.
 - **Stage** (`ui/StageTab.jsx`): the mannequin (Show switch, finish as round close-ups, colour),
   age and build (3 columns, one scale), pose (4 columns), studio (4 columns, brightness, turn the
   lights, behind the mannequin: plain colour or the studio room), sparkle effects (glow, crystal
@@ -92,7 +97,7 @@ them, `blockKeyOf`) count as the silhouette's, not as drawn lines.
 # Tools as modes (`ui/toolbar.js`, `ui/tools.js`)
 
 There is no tool rail. Select (`move`) is the default; the others start from their tab or key
-(P seam, S strap, G rows and fills, 1 single, D eraser, L lettering) and show the mode bar: what
+(P seam, S strap, F patterns, G rows and fills, 1 single, D eraser, L lettering) and show the mode bar: what
 a click does, Finish (Enter) / Cancel or Done (Esc). On a touch screen one finger turns the view in
 Select and draws or places in the other tools, two fingers turn and zoom (`controls.touches`). H
 hides the lines, M the mannequin; Esc ends a tool, then clears the selection; a double click (tap)

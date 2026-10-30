@@ -94,8 +94,9 @@ export class GarmentView {
 			const done = (r) => {
 				if (this.gen !== gen) return;
 				geo.attributes.aUV.array.set(r.uv); geo.attributes.aUV.needsUpdate = true;
-				rec.hasUV = true; rec.stretch = r.stretch;
+				rec.hasUV = true; rec.stretch = r.stretch; rec.uv = r.uv;
 				this.updateUVFlags();
+				this.onFlat?.(rec); // patterns on this piece were waiting for its flat shape (Engine.syncStones)
 			};
 			const hit = this.flattener.get(sig);
 			if (hit) done(hit); else this.flattener.request(sig, piece).then(done, (e) => console.warn('flatten failed', e));

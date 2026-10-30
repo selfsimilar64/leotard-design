@@ -43,7 +43,7 @@ export class Overlay {
 	setResolution(w, h) { this.resolution.set(w, h); }
 
 	// Position of a surface point on the current garment surface, lifted along the normal.
-	place(sp, out) {
+	place(sp, out, lift = LIFT) {
 		const man = this.man, G = man.garmentPos, N = man.aGNormal.array, idx = man.idx, f = sp.f;
 		const b = [sp.b0, sp.b1, sp.b2];
 		out.set(0, 0, 0);
@@ -54,7 +54,7 @@ export class Overlay {
 			nx += b[k] * N[v]; ny += b[k] * N[v + 1]; nz += b[k] * N[v + 2];
 		}
 		const l = Math.hypot(nx, ny, nz) || 1;
-		return out.set(out.x + nx / l * LIFT, out.y + ny / l * LIFT, out.z + nz / l * LIFT);
+		return out.set(out.x + nx / l * lift, out.y + ny / l * lift, out.z + nz / l * lift);
 	}
 
 	// evaluated: Map(key -> { sps, closed, role, curve }); sel: selected curve id; hover: hovered id

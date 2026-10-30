@@ -10,6 +10,8 @@
 //           Esc cancels
 //   strap   like the pen, but the line becomes a strap
 //   stones, single, erase   stone generators, one stone, the eraser (options in the panel)
+//   pattern a click on a piece lays the pattern chosen in the panel; in Select, a chosen pattern's
+//           handles (render/gizmo.js) move, turn and scale it and set its gradient, live
 //   decal   click the body to place a logo or lettering (options in the panel), or to move the
 //           one being moved (toolOptions.moveDecal)
 //   eyedrop (from the piece's match-colour button) while looking through a reference photo, click the photo
@@ -18,13 +20,17 @@
 // touch screen).
 import * as THREE from 'three';
 import { signal } from '@preact/signals';
-import { tool, selection, notify, hideOverlay, edit } from './state.js';
+import { tool, selection, notify, hideOverlay, edit, stonesRun } from './state.js';
 import { fromSP, toSP } from '../body/surface.js';
 import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
 import { panelAt } from '../garment/build.js';
 import { symmetryOn } from '../doc/symmetry.js';
+import { sizeOf } from '../stones/library.js';
 import { viewTo } from './camera.js';
+import { GALLERY_ITEMS } from '../stones/layouts.js';
+import { mirrorFast } from '../stones/cloth.js';
+import { patternParams, minScale } from '../stones/pattern.js';
 
 // Mirror on: a part this close to the centre is one part, not a pair (metres).
 const CENTRE = 0.006;
@@ -37,7 +43,11 @@ export const toolOptions = signal({
 	swatch: { fabric: 'mystique', colour: '#2b1d6e', second: 'Tone-on-tone' },
 	stone: { stone: 'Crystal AB', size: 'ss12', shape: 'round', rows: 1, offset: 0.004, gap: 1.15, fill: 'random', eraseR: 0.004 },
 	decal: { text: 'Name', font: 'Segoe Script', size: 0.08, look: 'print', colour: '#ffffff', rotate: 0 },
+	pattern: 'fade-linear', // the gallery's entry a click lays (stones/layouts.js)
 });
+
+const tenth = (v) => Math.round(v * 1e4) / 1e4; // of a millimetre
+const HANDLE_CURSOR = { move: 'move', rotate: 'grab', scale: 'nwse-resize', ga: 'crosshair', gb: 'crosshair' };
 
 export class ToolController {
 	constructor(app, engine) {
@@ -62,7 +72,11 @@ export class ToolController {
 		let last = null;
 		selection.subscribe((s) => { if (s?.kind === 'panels' && s.id !== last) this.flashPiece(s); last = s?.id ?? null; });
 		hideOverlay.subscribe(() => this.refreshOverlay());
-		app.onChange((touched) => { if (touched.has('symmetry')) { this.refreshOverlay(); this.previewPen(null); } });
+		app.onChange((touched) => {
+			if (touched.has('symmetry')) { this.refreshOverlay(); this.previewPen(null); }
+			if (touched.has('stones') || touched.has('curves') || touched.has('panels')) this.refreshHandles();
+		});
+		engine.onStones = () => { stonesRun.value++; this.refreshHandles(); }; // (also when a piece's flat shape arrives)
 	}
 
 	get mirrorOn() { return symmetryOn(this.app.doc); }
@@ -87,9 +101,10 @@ export class ToolController {
 		c.touches = t === 'move' ? { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN } : { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE };
 		c.enabled = true;
 		if (t !== 'pen' && t !== 'strap') this.cancelPen();
+		if (t === 'pattern' && selection.value?.kind === 'stones') selection.value = null;
 		this.clearHover();
 		if (t !== 'decal' && toolOptions.value.moveDecal) toolOptions.value = { ...toolOptions.value, moveDecal: null };
-		this.el.style.cursor = t === 'move' ? 'grab' : t === 'pen' || t === 'strap' || t === 'eyedrop' ? 'crosshair' : 'default';
+		this.el.style.cursor = t === 'move' ? 'grab' : t === 'pen' || t === 'strap' || t === 'eyedrop' || t === 'pattern' ? 'crosshair' : 'default';
 		this.engine.overlay.setCursor(null);
 		this.refreshOverlay();
 	}
@@ -103,6 +118,98 @@ export class ToolController {
 			selectedSide: on || sel?.kind !== 'curves' ? null : sel.side ?? 'own',
 			// the centre line shows while working symmetrically: placing anything, or a line chosen
 			centre: on && (tool.value !== 'move' || sel?.kind === 'curves') });
+		this.refreshHandles();
+	}
+
+	// A chosen pattern's handles, in Select.
+	refreshHandles() {
+		const sel = selection.value, gen = sel?.kind === 'stones' && tool.value === 'move' ? this.app.doc.stones.find((g) => g.id === sel.id && g.kind === 'pattern') : null;
+		this.engine.gizmo.show(gen ?? null);
+	}
+
+	// The flat-cloth point under the pointer for a handle being dragged: on the piece, directly; off it
+	// (over another piece, past the body), carried on from the last good point. A tube of cloth is cut
+	// along a seam, so crossing that seam would land on the far side of the flat piece: a point nowhere
+	// near where the pointer is heading counts as off the piece too.
+	clothPointer(x, y, d) {
+		const surf = this.engine.surf, h = this.engine.pickAt(x, y);
+		let uv = null;
+		if (h?.sp) uv = d.piece.uvOf(d.mirrored ? mirrorFast(surf, h.sp) : h.sp);
+		if (uv && Math.hypot(uv[0] - d.lastUv[0], uv[1] - d.lastUv[1]) > 0.02) {
+			const p = this.carryOn(x, y, d);
+			if (Math.hypot(uv[0] - p[0], uv[1] - p[1]) > 0.015) uv = null;
+		}
+		if (uv) { d.lastUv = uv; d.lastXY = [x, y]; return uv; }
+		return this.carryOn(x, y, d);
+	}
+	// From the last good point, by how the cloth looks on the screen there.
+	carryOn(x, y, d) {
+		const engine = this.engine, surf = engine.surf;
+		const at = (u, v) => { const sp = d.piece.spAt(u, v); return engine.toScreen(d.mirrored ? mirrorFast(surf, sp) : sp); };
+		const e = 0.01, [u0, v0] = d.lastUv, o = at(u0, v0), a = at(u0 + e, v0), b = at(u0, v0 + e);
+		const j00 = (a.x - o.x) / e, j10 = (a.y - o.y) / e, j01 = (b.x - o.x) / e, j11 = (b.y - o.y) / e, det = j00 * j11 - j01 * j10;
+		if (Math.abs(det) < 1e-3) return d.lastUv;
+		const dx = x - d.lastXY[0], dy = y - d.lastXY[1];
+		return [u0 + (j11 * dx - j01 * dy) / det, v0 + (j00 * dy - j10 * dx) / det];
+	}
+
+	startHandle(k, e) {
+		const sel = selection.value, gen = this.app.doc.stones.find((g) => g.id === sel?.id), piece = gen && this.engine.clothOf(gen.on?.panel)?.piece;
+		if (!piece) return false;
+		const P = patternParams(gen, piece);
+		const d = this.hdrag = { kind: k.kind, mirrored: k.mirrored, id: gen.id, piece, gesture: 'pattern' + (++this.gestureN), x: P.x, y: P.y, rotate: P.rotate, scale: P.scale, minScale: Math.max(0.1, minScale(P)), ga: P.ga, gb: P.gb };
+		// the drag starts at the handle's own place, whatever lies under the pointer; moves are relative to the grab
+		const s = this.engine.toScreen(k.sp), [x, y] = this.xy(e);
+		d.lastUv = [k.u, k.v]; d.lastXY = [s.x, s.y];
+		[d.u0, d.v0] = this.clothPointer(x, y, d);
+		this.engine.viewport.controls.enabled = false;
+		this.el.setPointerCapture(e.pointerId);
+		return true;
+	}
+
+	dragHandle(x, y, e) {
+		const d = this.hdrag, uv = this.clothPointer(x, y, d), p = d.piece, m = 0.05, params = {};
+		const ang = (u, v) => Math.atan2(v - d.y, u - d.x);
+		switch (d.kind) {
+			case 'move': // from where it was grabbed, kept where its handle can still be reached
+				params.x = tenth(Math.max(p.x0 - m, Math.min(p.x1 + m, d.x + uv[0] - d.u0)));
+				params.y = tenth(Math.max(p.y0 - m, Math.min(p.y1 + m, d.y + uv[1] - d.v0)));
+				break;
+			case 'rotate': {
+				let a = d.rotate + ((ang(uv[0], uv[1]) - ang(d.u0, d.v0)) * 180) / Math.PI;
+				a = ((a + 180) % 360 + 360) % 360 - 180;
+				params.rotate = e.shiftKey ? Math.round(a / 15) * 15 : Math.round(a * 10) / 10;
+				break;
+			}
+			case 'scale': {
+				const r0 = Math.hypot(d.u0 - d.x, d.v0 - d.y) || 1e-3;
+				params.scale = Math.round(Math.max(d.minScale, Math.min(8, (d.scale * Math.hypot(uv[0] - d.x, uv[1] - d.y)) / r0)) * 1000) / 1000;
+				break;
+			}
+			// from where they were grabbed: a handle held at the piece's edge may stand for a point past it
+			case 'ga': params.ga = [tenth(d.ga[0] + uv[0] - d.u0), tenth(d.ga[1] + uv[1] - d.v0)]; params.gb = d.gb; break;
+			case 'gb': params.gb = [tenth(d.gb[0] + uv[0] - d.u0), tenth(d.gb[1] + uv[1] - d.v0)]; params.ga = d.ga; break;
+		}
+		this.runEdit({ op: 'stones.set', id: d.id, params, gesture: d.gesture }, d.mirrored ? 'm' : undefined);
+		// Mirror off: the first move split the group from its pair; the drag carries on with this side's
+		const now = selection.value?.id;
+		if (now && now !== d.id) d.id = now;
+	}
+
+	placePattern(h) {
+		const item = GALLERY_ITEMS.get(toolOptions.value.pattern) ?? GALLERY_ITEMS.get('fade-linear'), st = toolOptions.value.stone;
+		const id = this.run({ op: 'stones.add', kind: 'pattern', on: { panel: h.panel }, stone: st.stone, shape: st.shape, ...this.pieceSymmetry(h), ...(h.layer && h.layer !== 'L0' ? { layer: h.layer } : {}), name: item.label, params: this.patternAt(h, item) });
+		if (id) { selection.value = { kind: 'stones', id }; tool.value = 'move'; }
+	}
+	// A new pattern's parameters: its gallery entry, the crystal chosen in the panel, centred where it was clicked.
+	patternAt(h, item) {
+		const st = toolOptions.value.stone, piece = this.engine.clothOf(h.panel)?.piece, uv = piece?.uvOf(h.sp), P = { layout: item.layout, preset: item.key, size: st.size, gap: Math.max(st.gap, 1.05), ...item.params };
+		if (uv) {
+			P.x = tenth(uv[0]); P.y = tenth(uv[1]);
+			// a gradient that grows from a point grows from here
+			if (['radial', 'oval', 'diamond', 'square', 'angular', 'spiral', 'ripple'].includes(P.gradient)) { P.ga = [P.x, P.y]; P.gb = [P.x, P.y - Math.min(0.14, (piece.y1 - piece.y0) * 0.4)]; }
+		}
+		return P;
 	}
 
 	xy(e) { const r = this.el.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
@@ -154,6 +261,8 @@ export class ToolController {
 		if (e.button !== 0) return;
 		const t = tool.value, [x, y] = this.xy(e);
 		if (t === 'move') {
+			const k = this.engine.gizmo.hit(x, y);
+			if (k && this.startHandle(k, e)) return;
 			// over a control point of the selected line (the orbit controls were switched off on
 			// hover, see move): drag it; otherwise remember the press: a click selects on release
 			const p = this.pointAt(x, y);
@@ -185,6 +294,11 @@ export class ToolController {
 			if (id) { selection.value = { kind: 'decals', id }; tool.value = 'move'; }
 			return;
 		}
+		if (t === 'pattern') {
+			const h = this.engine.pickAt(x, y);
+			if (h?.panel) this.placePattern(h); else notify('Click a piece of the leotard', 'info');
+			return;
+		}
 		if (t === 'stones' || t === 'single' || t === 'erase') {
 			const st = toolOptions.value.stone, h = this.engine.pickAt(x, y);
 			if (t === 'stones') {
@@ -192,7 +306,7 @@ export class ToolController {
 				const c = this.engine.curveAt(x, y, 8);
 				let id;
 				if (c) id = this.run({ op: 'stones.add', kind: 'row', on: { curve: c.curve }, stone: st.stone, shape: st.shape, ...this.lineSymmetry(c), params: { size: st.size, rows: st.rows, offset: st.offset, gap: st.gap } });
-				else if (h?.panel) id = this.run({ op: 'stones.add', kind: 'fill', on: { panel: h.panel }, stone: st.stone, shape: st.shape, ...this.pieceSymmetry(h), params: { size: st.size, pattern: st.fill, gap: st.gap } });
+				else if (h?.panel) id = this.run({ op: 'stones.add', kind: 'pattern', on: { panel: h.panel }, stone: st.stone, shape: st.shape, ...this.pieceSymmetry(h), ...(h.layer && h.layer !== 'L0' ? { layer: h.layer } : {}), name: st.fill === 'contour' ? 'Rings along the edge' : 'Pavé', params: st.fill === 'contour' ? { layout: 'edgelines', preset: 'edge-rings', size: st.size, gap: st.gap, spacing: sizeOf(st.size) * 1.25 * Math.max(st.gap / 1.15, 1) } : { layout: 'scatter', preset: 'scatter', size: st.size, gap: st.gap } });
 				if (id) selection.value = { kind: 'stones', id };
 				return;
 			}
@@ -249,6 +363,7 @@ export class ToolController {
 
 	move(e) {
 		const [x, y] = this.xy(e);
+		if (this.hdrag) { this.dragHandle(x, y, e); return; }
 		if (this.drag) {
 			const h = this.engine.pickAt(x, y);
 			if (!h?.sp) return;
@@ -282,9 +397,10 @@ export class ToolController {
 		if (tool.value === 'move' && !this.press) {
 			// the orbit controls act on the same pointer events before this tool does: switch them
 			// off while the pointer is over a control point, so the press drags the point
-			const over = !!this.pointAt(x, y);
+			const knob = e.buttons ? null : this.engine.gizmo.hit(x, y), over = !!knob || !!this.pointAt(x, y);
+			this.engine.gizmo.setHot(knob?.kind ?? null);
 			this.engine.viewport.controls.enabled = !over;
-			this.el.style.cursor = over ? 'move' : 'grab';
+			this.el.style.cursor = knob ? HANDLE_CURSOR[knob.kind] : over ? 'move' : 'grab';
 			if (over || e.buttons || e.pointerType === 'touch') this.clearHover();
 			else this.queueHover(x, y);
 		} else if (this.press && Math.hypot(x - this.press.x, y - this.press.y) >= 5) this.clearHover(); // turning the view
@@ -307,6 +423,13 @@ export class ToolController {
 	}
 
 	up(e) {
+		if (this.hdrag) {
+			this.hdrag = null;
+			this.app.endGesture();
+			this.engine.viewport.controls.enabled = true;
+			try { this.el.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+			return;
+		}
 		// move: a click that did not turn the view picks the line or the piece under it (or
 		// clears the choice); Alt-click on the selected line adds a point there
 		const pr = this.press;

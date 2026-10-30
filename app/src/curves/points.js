@@ -83,7 +83,8 @@ export function pointAlong(c, t) {
 }
 
 // Mirror image of a surface point across the body's mid-plane (x = 0). The body is symmetric, so
-// the closest point to the mirrored position is the mirrored surface point.
+// the closest point to the mirrored position is the mirrored surface point. (Its twin for many points
+// a frame: stones/cloth.js mirrorFast; test/patterns.test.js holds the two together.)
 const mirrorCache = new WeakMap();
 export function mirrorSP(sp, S) {
 	let cache = mirrorCache.get(S);

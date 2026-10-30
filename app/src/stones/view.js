@@ -92,6 +92,20 @@ const FAMILY_MATS = () => ({
 	nailhead: new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 1, roughness: 0.16 }),
 });
 
+// A stone's colour and coating, once per name.
+const finishes = new Map();
+const _col = new THREE.Color();
+function finishOf(name) {
+	let f = finishes.get(name);
+	if (!f) {
+		const st = parseStone(name);
+		_col.set(st.colour);
+		f = { r: _col.r, g: _col.g, b: _col.b, ab: st.coating === 'ab' ? 0.85 : st.coating === 'shimmer' ? 0.4 : 0, metal: st.coating === 'metallic' ? 1 : 0, opal: st.coating === 'opal' ? 1 : 0 };
+		finishes.set(name, f);
+	}
+	return f;
+}
+
 export class StoneView {
 	constructor(scene, man) {
 		this.man = man;
@@ -100,9 +114,10 @@ export class StoneView {
 		this.geos = new Map();
 		this.crystal = crystalMaterial();
 		this.mats = FAMILY_MATS();
-		this.meshes = [];
+		this.meshes = new Map(); // shape -> InstancedMesh, kept and refilled (grown when it must)
 		this.count = 0;
 		this.stones = [];
+		this.placedDirty = false;
 	}
 
 	geometry(shape) {
@@ -115,7 +130,26 @@ export class StoneView {
 		return g;
 	}
 
-	dispose() { for (const m of this.meshes) { this.group.remove(m); m.geometry.dispose(); m.dispose(); } this.meshes = []; }
+	meshFor(shape, n) {
+		let mesh = this.meshes.get(shape);
+		if (mesh && mesh.userData.cap >= n) return mesh;
+		if (mesh) { this.group.remove(mesh); mesh.geometry.dispose(); mesh.dispose(); }
+		const fam = SHAPES[shape]?.family ?? 'crystal', cap = Math.ceil(Math.max(n, 32) * 1.5);
+		mesh = new THREE.InstancedMesh(this.geometry(shape), fam === 'crystal' ? this.crystal : this.mats[fam], cap);
+		mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+		mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+		mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+		mesh.geometry = mesh.geometry.clone(); // per-mesh instanced attribute
+		const finish = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+		finish.setUsage(THREE.DynamicDrawUsage);
+		mesh.geometry.setAttribute('aFinish', finish);
+		mesh.frustumCulled = false;
+		mesh.renderOrder = -8; // in front of everything: draw first and let depth reject what is behind
+		mesh.userData = { shape, cap };
+		this.group.add(mesh);
+		this.meshes.set(shape, mesh);
+		return mesh;
+	}
 
 	// stones: from runStones; heightAt(stone) -> extra metres above the garment surface for its layer
 	set(stones, heightAt = () => 0) {
@@ -123,57 +157,69 @@ export class StoneView {
 		this.build(heightAt);
 	}
 
+	// Where a stone sits on the body on show: position and normal, written to P and N.
+	frameOf(s, fam, P, N) {
+		const man = this.man, G = man.garmentPos, A = man.aGNormal.array, idx = man.idx, sp = s.sp, f = sp.f * 3, b0 = sp.b0, b1 = sp.b1, b2 = sp.b2;
+		const v0 = idx[f] * 3, v1 = idx[f + 1] * 3, v2 = idx[f + 2] * 3;
+		let nx = b0 * A[v0] + b1 * A[v1] + b2 * A[v2], ny = b0 * A[v0 + 1] + b1 * A[v1 + 1] + b2 * A[v2 + 1], nz = b0 * A[v0 + 2] + b1 * A[v1 + 2] + b2 * A[v2 + 2];
+		let l = Math.hypot(nx, ny, nz) || 1;
+		nx /= l; ny /= l; nz /= l;
+		// spangles never lie quite flat: a small random tilt makes them flash in turn
+		if (fam === 'spangle') { const r = s.r ?? 0.5; nx += (((r * 137.13) % 1) - 0.5) * 0.16; ny += (((r * 271.77) % 1) - 0.5) * 0.16; nz += (((r * 419.31) % 1) - 0.5) * 0.16; l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l; }
+		const up = ABOVE + (s.lift ?? 0) + this.heightAt(s);
+		P[0] = b0 * G[v0] + b1 * G[v1] + b2 * G[v2] + nx * up; P[1] = b0 * G[v0 + 1] + b1 * G[v1 + 1] + b2 * G[v2 + 1] + ny * up; P[2] = b0 * G[v0 + 2] + b1 * G[v1 + 2] + b2 * G[v2 + 2] + nz * up;
+		N[0] = nx; N[1] = ny; N[2] = nz;
+	}
+
 	build(heightAt = this.heightAt ?? (() => 0)) {
 		this.heightAt = heightAt;
-		this.dispose();
-		const man = this.man;
-		if (!man.garmentPos || !this.stones.length) { this.count = 0; return; }
-		const G = man.garmentPos, N = man.aGNormal.array, idx = man.idx;
-		const byShape = new Map();
-		for (const s of this.stones) { const l = byShape.get(s.shape); if (l) l.push(s); else byShape.set(s.shape, [s]); }
-		const m4 = new THREE.Matrix4(), p = new THREE.Vector3(), n = new THREE.Vector3(), t0 = new THREE.Vector3(), b0 = new THREE.Vector3(), x = new THREE.Vector3(), y = new THREE.Vector3(), col = new THREE.Color();
-		let rnd = 1;
-		const R = () => { rnd = (rnd * 16807) % 2147483647; return rnd / 2147483647; };
-		for (const [shape, list] of byShape) {
-			const fam = SHAPES[shape]?.family ?? 'crystal', aspect = SHAPES[shape]?.aspect ?? 1;
-			const mat = fam === 'crystal' ? this.crystal : this.mats[fam];
-			const mesh = new THREE.InstancedMesh(this.geometry(shape), mat, list.length);
-			const finish = new Float32Array(list.length * 4);
-			list.forEach((s, i) => {
-				const sp = s.sp, b = [sp.b0, sp.b1, sp.b2];
-				p.set(0, 0, 0); n.set(0, 0, 0);
-				for (let k = 0; k < 3; k++) { const v = idx[sp.f * 3 + k] * 3; p.x += b[k] * G[v]; p.y += b[k] * G[v + 1]; p.z += b[k] * G[v + 2]; n.x += b[k] * N[v]; n.y += b[k] * N[v + 1]; n.z += b[k] * N[v + 2]; }
-				n.normalize();
-				// spangles never lie quite flat: a small random tilt makes them flash in turn
-				if (fam === 'spangle') { n.x += (R() - 0.5) * 0.16; n.y += (R() - 0.5) * 0.16; n.z += (R() - 0.5) * 0.16; n.normalize(); }
-				t0.set(0, 1, 0).cross(n); if (t0.lengthSq() < 1e-6) t0.set(1, 0, 0); t0.normalize();
-				b0.crossVectors(n, t0);
-				const a = s.angle ?? 0;
-				x.copy(t0).multiplyScalar(Math.cos(a)).addScaledVector(b0, Math.sin(a));
-				y.crossVectors(n, x);
-				p.addScaledVector(n, ABOVE + (s.lift ?? 0) + heightAt(s));
-				s.at = p.clone(); s.up = n.clone(); // where it sits, for picking and the hover rings
-				const d = s.size;
-				m4.makeBasis(x.multiplyScalar(d), y.multiplyScalar(d * aspect), n.clone().multiplyScalar(d)).setPosition(p);
-				mesh.setMatrixAt(i, m4);
-				const st = parseStone(s.stone);
-				col.set(st.colour);
-				if (fam === 'crystal') col.multiplyScalar(0.88 + 0.12 * R());
-				mesh.setColorAt(i, col);
-				finish[i * 4] = st.coating === 'ab' ? 0.85 : st.coating === 'shimmer' ? 0.4 : 0;
-				finish[i * 4 + 1] = st.coating === 'metallic' ? 1 : 0;
-				finish[i * 4 + 2] = st.coating === 'opal' ? 1 : 0;
-				finish[i * 4 + 3] = R();
-			});
-			mesh.geometry = mesh.geometry.clone(); // per-mesh instanced attribute
-			mesh.geometry.setAttribute('aFinish', new THREE.InstancedBufferAttribute(finish, 4));
-			mesh.frustumCulled = false;
-			mesh.renderOrder = -8; // in front of everything: draw first and let depth reject what is behind
-			mesh.userData = { shape, stones: list };
-			this.group.add(mesh);
-			this.meshes.push(mesh);
+		this.placedDirty = true;
+		const shown = new Set();
+		if (this.man.garmentPos && this.stones.length) {
+			const byShape = new Map(), P = [0, 0, 0], N = [0, 0, 0];
+			for (const s of this.stones) { const l = byShape.get(s.shape); if (l) l.push(s); else byShape.set(s.shape, [s]); }
+			for (const [shape, list] of byShape) {
+				const fam = SHAPES[shape]?.family ?? 'crystal', aspect = SHAPES[shape]?.aspect ?? 1, n = list.length;
+				const mesh = this.meshFor(shape, n), M = mesh.instanceMatrix.array, C = mesh.instanceColor.array, attr = mesh.geometry.attributes.aFinish, F = attr.array;
+				for (let i = 0; i < n; i++) {
+					const s = list[i], o = i * 16, d = s.size, a = s.angle ?? 0, ca = Math.cos(a), sa = Math.sin(a);
+					this.frameOf(s, fam, P, N);
+					const nx = N[0], ny = N[1], nz = N[2];
+					// t0 = (0, 1, 0) x n, b0 = n x t0
+					let tx = nz, tz = -nx, tl = Math.hypot(tx, tz);
+					if (tl < 1e-3) { tx = 1; tz = 0; tl = 1; }
+					tx /= tl; tz /= tl;
+					const bx = ny * tz, by = nz * tx - nx * tz, bz = -ny * tx;
+					const xx = tx * ca + bx * sa, xy = by * sa, xz = tz * ca + bz * sa;
+					const yx = ny * xz - nz * xy, yy = nz * xx - nx * xz, yz = nx * xy - ny * xx, dy = d * aspect;
+					M[o] = xx * d; M[o + 1] = xy * d; M[o + 2] = xz * d; M[o + 3] = 0;
+					M[o + 4] = yx * dy; M[o + 5] = yy * dy; M[o + 6] = yz * dy; M[o + 7] = 0;
+					M[o + 8] = nx * d; M[o + 9] = ny * d; M[o + 10] = nz * d; M[o + 11] = 0;
+					M[o + 12] = P[0]; M[o + 13] = P[1]; M[o + 14] = P[2]; M[o + 15] = 1;
+					const f = finishOf(s.stone), r = s.r ?? 0.5, k = fam === 'crystal' ? 0.88 + 0.12 * ((r * 31.7) % 1) : 1;
+					C[i * 3] = f.r * k; C[i * 3 + 1] = f.g * k; C[i * 3 + 2] = f.b * k;
+					F[i * 4] = f.ab; F[i * 4 + 1] = f.metal; F[i * 4 + 2] = f.opal; F[i * 4 + 3] = r;
+				}
+				mesh.count = n;
+				mesh.visible = true;
+				mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true; attr.needsUpdate = true;
+				shown.add(shape);
+			}
 		}
-		this.count = this.stones.length;
+		for (const [shape, mesh] of this.meshes) if (!shown.has(shape)) { mesh.count = 0; mesh.visible = false; }
+		this.count = this.man.garmentPos ? this.stones.length : 0;
+	}
+
+	// Each stone's place and normal as vectors, for picking and the hover rings: made when first asked
+	// for after a change, not on every frame of a drag.
+	ensurePlaced() {
+		if (!this.placedDirty || !this.man.garmentPos) return;
+		this.placedDirty = false;
+		const P = [0, 0, 0], N = [0, 0, 0];
+		for (const s of this.stones) {
+			this.frameOf(s, SHAPES[s.shape]?.family ?? 'crystal', P, N);
+			s.at = new THREE.Vector3(P[0], P[1], P[2]); s.up = new THREE.Vector3(N[0], N[1], N[2]);
+		}
 	}
 
 	// counts by size (ss) and colour, for the live read-out

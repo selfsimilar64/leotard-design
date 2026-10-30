@@ -180,6 +180,7 @@ const MODE_TEXT = {
 	pen: ['Drawing a seam', 'Click the body to place points · Shift for a corner · click the first point to close, or end on another line'],
 	strap: ['Drawing a strap', 'Click points from edge to edge · Shift for a corner · end on an edge'],
 	stones: ['Adding crystals', 'Click a line for rows along it, or a piece to fill it'],
+	pattern: ['Laying a pattern', 'Click the piece to lay it on; its handles and settings come next'],
 	single: ['Placing crystals', 'Click to place one crystal'],
 	erase: ['Erasing crystals', 'Click to erase the crystals there'],
 	decal: ['Placing lettering', 'Click the leotard where its centre goes'],

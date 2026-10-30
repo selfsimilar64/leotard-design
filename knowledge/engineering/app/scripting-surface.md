@@ -71,9 +71,12 @@ mirror? } }` (attached ends follow their line).
   `hardware.add { kind: clear-hook|hook-and-bar|zip-pull, at }`, `hardware.remove`.
 - Logos, lettering and fold stamps: `decal.add { at, text | src, font, weight, size, aspect, rotate,
   colour, look: print|foil|holo|glitter|flock | gather|ruche|twist, layer }`, `decal.set`, `decal.remove`.
-- Stones: `stones.add { kind: row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on, at, params, stone |
+- Stones: `stones.add { kind: pattern|row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on, at, params, stone |
   palette | colourRamp, shape, mirror }` (fringe: `{ lengths | random, min, max, spacing, sizeFrom, sizeTo,
-  direction: down|away }`; lettering: `{ text, font, height, stoneSize, mode: fill|outline|both, angle }`), `stones.set`, `stones.remove`, `stones.erase`,
+  direction: down|away }`; lettering: `{ text, font, height, stoneSize, mode: fill|outline|both, angle }`;
+  pattern: `on: { panel }`, `params: { layout, x, y, rotate, scale, gradient, ga, gb, densityFrom, densityTo, size,
+  sizeTo, ... }`, see [procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md); a `gesture` id on
+  `stones.set` makes a drag one undo step, the stones following each frame), `stones.set`, `stones.remove`, `stones.erase`,
   `stone.place`, `stone.remove`, `stones.release`.
 - Reference photos: `reference.add`, `reference.pin { id, lm, px }`, `reference.unpin`,
   `reference.solve`, `reference.set`, `reference.remove`.

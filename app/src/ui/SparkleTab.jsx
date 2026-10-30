@@ -1,8 +1,8 @@
-// The Sparkle tab: crystals and lettering. Three ways to place crystals (rows along a line or a
-// fill of a piece, single crystals, the eraser) are modes of a click on the model; the crystal they
-// place is picked here by colour (gem dots), coating, size (drawn to scale) and cut. Below: the
-// crystal groups on the design and their counts, and logos and lettering. A selected group or
-// logo gets its own page.
+// The Sparkle tab: crystals and lettering. Four ways to place crystals (a pattern laid on a piece,
+// rows along a line or a fill of a piece, single crystals, the eraser) are modes of a click on the
+// model; the crystal they place is picked here by colour (gem dots), coating, size (drawn to scale)
+// and cut. Below: the crystal groups on the design and their counts, and logos and lettering. A
+// selected group or logo gets its own page; a pattern's is ui/PatternPanel.jsx.
 import { app } from '../instance.js';
 import { rev, selection, tool } from './state.js';
 import { toolOptions } from './tools.js';
@@ -10,10 +10,12 @@ import { run, Section, Field, Segmented, Swatches, Slider, Switch, Stepper, Disc
 import { I } from './icons.jsx';
 import { PALETTE } from './FabricTab.jsx';
 import { COLOURS, SHAPES, SS } from '../stones/library.js';
+import { PatternGallery, PatternEditor, patternLabel } from './PatternPanel.jsx';
 
 const METALS = new Set(['Gold', 'Silver', 'Rose Gold', 'Hematite']);
 const SIZES = Object.keys(SS).map(Number);
 const parse = (name = 'Crystal') => { const ab = / AB$/.test(name); return { base: ab ? name.slice(0, -3) : name, ab }; };
+export const parseStoneName = parse;
 const join = (base, ab) => (ab && !METALS.has(base) ? base + ' AB' : base);
 const mm1 = (v) => (v * 1000).toFixed(1) + ' mm';
 
@@ -28,6 +30,7 @@ export function SparkleTab() {
 // --- placing crystals -------------------------------------------------------------------------------
 
 const MODES = [
+	['pattern', 'Patterns', <I.fill size={22} />, 'Pick a pattern, then click a piece to lay it on; its handles and settings stay live (F)'],
 	['stones', 'Rows & fills', <I.rows size={22} />, 'Click a line for rows of crystals along it, or a piece to fill it (G)'],
 	['single', 'Single', <I.gem size={22} />, 'Click to place one crystal at a time (1)'],
 	['erase', 'Eraser', <I.eraser size={22} />, 'Click to erase the crystals there; the groups stay live (D)'],
@@ -44,6 +47,7 @@ function Crystals() {
 					</button>
 				))}
 			</div>
+			{t === 'pattern' ? <PatternGallery value={o.pattern} onPick={(v) => { toolOptions.value = { ...toolOptions.value, pattern: v }; }} /> : null}
 			{t === 'erase' ? (
 				<Field label="Eraser size"><Slider value={st.eraseR} min={0.002} max={0.03} step={0.001} format={mm1} onChange={(v) => set({ eraseR: v })} /></Field>
 			) : <>
@@ -62,7 +66,7 @@ function Crystals() {
 }
 
 // A crystal's colour (gem dots, in the library's order) and its AB coating.
-function StonePicker({ stone, onPick }) {
+export function StonePicker({ stone, onPick }) {
 	const { base, ab } = parse(stone);
 	return (
 		<>
@@ -79,7 +83,7 @@ function StonePicker({ stone, onPick }) {
 }
 
 // Sizes as discs drawn to scale (ss3 1.4 mm ... ss48 11.1 mm).
-function SizeLadder({ value, onPick }) {
+export function SizeLadder({ value, onPick }) {
 	return (
 		<div class="sizes">
 			{SIZES.map((k) => {
@@ -113,8 +117,8 @@ const CUT_PATHS = {
 	nailhead: <><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="4" opacity=".55" /></>,
 };
 const CUT_LABELS = { 'holo-dot': 'Holo dot', nailhead: 'Nailhead' };
-const cutLabel = (k) => CUT_LABELS[k] ?? k.charAt(0).toUpperCase() + k.slice(1);
-function CutPicker({ value, onPick }) {
+export const cutLabel = (k) => CUT_LABELS[k] ?? k.charAt(0).toUpperCase() + k.slice(1);
+export function CutPicker({ value, onPick }) {
 	return (
 		<div class="cuts">
 			{Object.keys(SHAPES).map((k) => (
@@ -128,7 +132,8 @@ function CutPicker({ value, onPick }) {
 
 // --- what is on the design --------------------------------------------------------------------------
 
-const KINDS = { row: 'Rows along a line', fill: 'Fill', scatter: 'Scatter', rays: 'Rays', motif: 'Motif', lattice: 'Lattice', cluster: 'Cluster', fringe: 'Fringe', lettering: 'Crystal lettering' };
+const groupLabel = (g) => g.name || (g.kind === 'pattern' ? patternLabel(g) : KINDS[g.kind] || g.kind);
+const KINDS = { pattern: 'Pattern', row: 'Rows along a line', fill: 'Fill', scatter: 'Scatter', rays: 'Rays', motif: 'Motif', lattice: 'Lattice', cluster: 'Cluster', fringe: 'Fringe', lettering: 'Crystal lettering' };
 function OnDesign({ doc }) {
 	if (!app.engine || doc.legacy) return null;
 	const s = app.stoneStats(), sel = selection.value;
@@ -137,7 +142,7 @@ function OnDesign({ doc }) {
 	return (
 		<Section title="On this design" aside={<span class="sec-value">{s.total.toLocaleString()} crystals</span>} id="sparkle-on">
 			<div class="part-list">
-				{doc.stones.map((g) => <PartRow key={g.id} icon={<I.rows size={18} />} label={g.name || KINDS[g.kind] || g.kind} meta={count(g).toLocaleString()} on={sel?.id === g.id} onClick={() => { selection.value = { kind: 'stones', id: g.id }; }} />)}
+				{doc.stones.map((g) => <PartRow key={g.id} icon={<I.rows size={18} />} label={groupLabel(g)} meta={count(g).toLocaleString()} on={sel?.id === g.id} onClick={() => { selection.value = { kind: 'stones', id: g.id }; }} />)}
 				{doc.placed.length ? <div class="part-row static"><span class="part-icon"><I.gem size={18} /></span><span class="part-label">Single crystals</span><span class="part-meta">{doc.placed.length.toLocaleString()}</span></div> : null}
 			</div>
 			<Disclosure label="Counts by size and colour">
@@ -158,16 +163,17 @@ function GroupEditor({ id, doc }) {
 	const g = doc.stones.find((x) => x.id === id), back = () => { selection.value = null; };
 	if (!g) return <PartHeader back="Sparkle" onBack={back} title="These crystals no longer exist" />;
 	const count = app.engine?.stoneRun.stones.filter((s) => s.gen === g.id).length ?? 0, p = g.params ?? {};
-	const set = (patch) => run({ op: 'stones.set', id: g.id, ...patch });
-	const param = (k, v) => set({ params: { [k]: v } });
+	const set = (patch, gesture) => run({ op: 'stones.set', id: g.id, ...patch, ...(gesture ? { gesture } : {}) });
+	const param = (k, v, gesture) => set({ params: { [k]: v } }, gesture);
 	const known = new Set(['size', 'rows', 'offset', 'gap', 'pattern']);
 	return (
 		<>
-			<PartHeader back="Sparkle" onBack={back} title={g.name ?? ''} placeholder={KINDS[g.kind] ?? g.kind} onRename={(v) => set({ name: v })}
+			<PartHeader back="Sparkle" onBack={back} title={g.name ?? ''} placeholder={groupLabel(g)} onRename={(v) => set({ name: v })}
 				actions={<>
 					<IconButton icon={<I.release size={18} />} label="Release: freeze into single crystals" onClick={() => { run({ op: 'stones.release', id: g.id }); selection.value = null; }} />
 					<IconButton icon={<I.trash size={18} />} label="Delete these crystals" kind="danger" onClick={() => { run({ op: 'stones.remove', id: g.id }); selection.value = null; }} />
 				</>} />
+			{g.kind === 'pattern' ? <PatternEditor key={g.id} g={g} /> : <>
 			<Section aside={<span class="sec-value">{count.toLocaleString()} crystals · {KINDS[g.kind] ?? g.kind}</span>} title="Crystal">
 				<StonePicker stone={g.stone ?? 'Crystal AB'} onPick={(v) => set({ stone: v, palette: null })} />
 				{typeof p.size === 'string' ? <Field label="Size" aside={<span class="field-value">{p.size}</span>}><SizeLadder value={p.size} onPick={(v) => param('size', v)} /></Field> : null}
@@ -175,14 +181,15 @@ function GroupEditor({ id, doc }) {
 			</Section>
 			<Section title="Layout">
 				{typeof p.rows === 'number' ? <Field label="Rows" inline><Stepper value={p.rows} min={1} max={6} onChange={(v) => param('rows', v)} /></Field> : null}
-				{typeof p.offset === 'number' ? <Field label="Distance from the line"><Slider value={p.offset} min={-0.03} max={0.03} step={0.0005} format={mm1} onChange={(v) => param('offset', v)} /></Field> : null}
-				{typeof p.gap === 'number' ? <Field label="Spacing"><Slider value={p.gap} min={1} max={3} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v) => param('gap', v)} /></Field> : null}
+				{typeof p.offset === 'number' ? <Field label="Distance from the line"><Slider value={p.offset} min={-0.03} max={0.03} step={0.0005} format={mm1} onChange={(v, gs) => param('offset', v, gs)} /></Field> : null}
+				{typeof p.gap === 'number' ? <Field label="Spacing"><Slider value={p.gap} min={1} max={3} step={0.05} format={(v) => v.toFixed(2) + '×'} onChange={(v, gs) => param('gap', v, gs)} /></Field> : null}
 				{p.pattern === 'random' || p.pattern === 'contour' ? <Field label="Fill"><Segmented value={p.pattern} options={[['random', 'Random pavé'], ['contour', 'Rings along the edge']]} onPick={(v) => param('pattern', v)} /></Field> : null}
 				<div class="btn-row"><Button icon={<I.shuffle size={18} />} title="A new random layout" onClick={() => set({ seed: Math.floor(Math.random() * 1e6) })}>Reshuffle</Button></div>
 				{Object.keys(p).some((k) => !known.has(k)) ? <Disclosure label="Advanced">
 					{Object.entries(p).filter(([k]) => !known.has(k)).map(([k, v]) => <ParamField key={k} k={k} v={v} onSet={(x) => param(k, x)} />)}
 				</Disclosure> : null}
 			</Section>
+			</>}
 		</>
 	);
 }

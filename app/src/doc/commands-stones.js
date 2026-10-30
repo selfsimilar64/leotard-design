@@ -5,6 +5,8 @@ import { resolvePoint } from '../curves/points.js';
 import { toSP } from '../body/surface.js';
 import { sizeOf, parseStone, SHAPES } from '../stones/library.js';
 import { GENERATOR_KINDS } from '../stones/generators.js';
+import { LAYOUTS } from '../stones/layouts.js';
+import { GRADIENTS } from '../stones/fields.js';
 
 function gen(tx, id) {
 	const g = tx.doc.stones.find((x) => x.id === id);
@@ -15,11 +17,17 @@ function checkStones(a) {
 	for (const n of [a.stone, ...(a.palette ?? []).map((p) => p.stone), ...(a.colourRamp ?? []), a.nodeStone, a.fillStone].filter(Boolean)) parseStone(n);
 	if (a.shape && !SHAPES[a.shape]) throw new Error('Unknown stone shape ' + a.shape + '. Shapes: ' + Object.keys(SHAPES).join(', '));
 	const p = a.params ?? {};
-	for (const s of [p.size, ...(p.sizes ?? []).map((x) => (typeof x === 'object' ? x.size : x)), p.sizeFrom, p.sizeTo, p.stoneSize, p.fillSize, p.nodeSize, ...(p.sizeRamp ?? [])].filter((x) => x !== undefined)) sizeOf(s);
+	// (a pattern's nodeSize is a factor, its sizeB a second size)
+	for (const s of [p.size, p.sizeB, ...(p.sizes ?? []).map((x) => (typeof x === 'object' ? x.size : x)), p.sizeFrom, p.sizeTo, p.stoneSize, p.fillSize, a.kind === 'pattern' ? undefined : p.nodeSize, ...(p.sizeRamp ?? [])].filter((x) => x !== undefined)) sizeOf(s);
+	if (a.kind === 'pattern') {
+		if (!a.on?.panel) throw new Error('A pattern lies on a piece: on: { panel }');
+		if (p.layout !== undefined && !LAYOUTS[p.layout]) throw new Error('Unknown pattern layout ' + p.layout + '. Layouts: ' + Object.keys(LAYOUTS).join(', '));
+		if (p.gradient !== undefined && !GRADIENTS[p.gradient]) throw new Error('Unknown gradient ' + p.gradient + '. Gradients: ' + Object.keys(GRADIENTS).join(', '));
+	}
 }
 
 defineCommand('stones.add', {
-	label: 'Add stones', args: '{ kind: row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...}, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, side?: left|right (one side of a paired line or piece), seed?, name? }',
+	label: 'Add stones', args: '{ kind: pattern|row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...}, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, side?: left|right (one side of a paired line or piece), seed?, name? }',
 	run(tx, a) {
 		if (!GENERATOR_KINDS.includes(a.kind)) throw new Error('kind must be one of: ' + GENERATOR_KINDS.join(', '));
 		checkStones(a);

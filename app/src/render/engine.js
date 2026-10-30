@@ -13,12 +13,14 @@ import { buildGarment, evaluateAll, panelAt } from '../garment/build.js';
 import { Surface } from '../body/surface.js';
 import { Overlay } from './overlay.js';
 import { HoverHighlight } from './highlight.js';
+import { PatternGizmo } from './gizmo.js';
 import { Rims } from './rims.js';
 import { TextureLibrary } from '../materials/textures.js';
 import { StrapView } from './straps.js';
 import { HardwareView } from './hardware.js';
 import { StoneView } from '../stones/view.js';
 import { runStones } from '../stones/generators.js';
+import { ClothPiece } from '../stones/cloth.js';
 import { locate, baryOfVertexInFace } from '../garment/arrangement.js';
 import { TRIMS } from '../garment/trim.js';
 import { FigureView, finishSurface } from './figure.js';
@@ -67,10 +69,15 @@ export class Engine {
 		this.hardware = new HardwareView(scene, body, this.surf);
 		this.stoneView = new StoneView(scene, body);
 		this.stoneRun = { stones: [], errors: [], dropped: 0 };
+		this.stoneCache = { gens: new Map() };  // per group, what the last run made (stones/generators.js)
+		this.patternCache = new Map();          // per pattern, its heavy candidates between frames
+		this.stonePending = new Set();          // patterns waiting for their piece's flat shape
+		this.stoneGeoRev = 0;
 		this.coverHooks = [(cover) => this.straps.markCover(cover)];
 		this.overlay = new Overlay(scene, body);
 		this.ui = { selected: null, hover: null, showPoints: false, hidden: false }; // overlay state from the UI
 		this.highlight = new HoverHighlight(viewport, this.overlay.group, () => this.overlay.group.visible);
+		this.gizmo = new PatternGizmo(this);
 		this.hover = null; // what the pointer is over in Select: { kind, id, stone? } (setHover)
 		this.timing = { mannequin: 0, garment: null };
 		this.bodyKey = null;
@@ -81,6 +88,8 @@ export class Engine {
 			this.legacy.frame(viewport.keyDir);
 			for (const L of this.layers.values()) { L.view.frame(viewport.keyDir); L.rims.frame(viewport.keyDir); }
 			this.straps.frame(viewport.keyDir);
+			// a drag edits a stone group many times a frame's worth of pointer events: run it once, here
+			if (this.stonesDirty && this.app) { this.stonesDirty = false; this.syncStones(this.app.doc, this.stonesLive ? new Set(['stones']) : null); this.stonesLive = false; this.onStones?.(); }
 		});
 		// picking surface: the garment surface of the body on show (same canonical faces as everywhere)
 		this.pick = null;
@@ -165,6 +174,7 @@ export class Engine {
 	stoneAt(surfaceDistance, height) {
 		const ray = this.lastRay, stones = this.stoneView.stones;
 		if (!ray || !stones.length) return null;
+		this.stoneView.ensurePlaced();
 		const perPx = 2 / (this.viewport.camera.projectionMatrix.elements[5] * height), v = _v;
 		let best = null, bd = 1;
 		for (const s of stones) {
@@ -195,6 +205,7 @@ export class Engine {
 	}
 
 	hoverStones(hit) {
+		this.stoneView.ensurePlaced();
 		if (hit.kind === 'placed') return this.stoneView.stones.filter((s) => s.gen === 'placed' && s.id === hit.id);
 		const ids = this.hoverIds('stones', hit.id), doc = this.app.doc;
 		const list = this.stoneView.stones.filter((s) => ids.includes(s.gen));
@@ -249,13 +260,15 @@ export class Engine {
 			// mid-drag: only the dragged lines move; the garment is re-cut when the gesture ends
 			if (touched.has('curves')) this.drawOverlay(doc, evaluateAll(doc, this.surf, null, this.evaluated));
 			if (touched.has('panels')) for (const v of this.views) v.applyMaterials(doc);
+			// a stone group's slider or handle: redrawn in this frame
+			if (touched.has('stones')) { this.stonesDirty = true; this.stonesLive = true; }
 			// the mannequin's colour picker: a finish change only (same body key: no re-fit)
 			if (touched.has('body')) this.applyBody(doc.body, false);
 		} else {
 			if (t('curves') || t('panels') || t('layers') || t('trims') || this.geoSig === null) this.syncGarment(doc);
 			else if (t('straps')) this.syncStraps(doc);
 			if (t('hardware') || t('curves') || t('panels')) this.hardware.build(doc);
-			if (t('stones') || t('placed') || t('curves') || t('panels') || t('straps') || t('trims') || t('layers')) this.syncStones(doc);
+			if (t('stones') || t('placed') || t('curves') || t('panels') || t('straps') || t('trims') || t('layers')) { this.syncStones(doc, all ? null : touched); this.stonesDirty = false; }
 			if (t('decals') || t('layers') || t('curves') || t('panels')) this.syncDecals(doc);
 			if (t('body')) this.applyBody(doc.body, all);
 		}
@@ -290,6 +303,7 @@ export class Engine {
 					L.view.textures = this.textures;
 					L.view.wrinkles = this.wrinkleZones();
 					L.view.doubleSided = !!this.bodyHidden;
+					L.view.onFlat = () => { if (this.stonePending.size) this.stonesDirty = true; };
 					this.layers.set(layer.id, L);
 				}
 				L.layer = layer; L.view.layer = layer; L.rims.kind = layer.kind; L.rims.layerId = layer.id;
@@ -526,34 +540,57 @@ function setFinish(m, f) {
 function layerLift(layer) { const z = layer?.z ?? 0; return z > 0 ? 0.0009 * z : 0; }
 
 // --- stones --------------------------------------------------------------------------------------
-Engine.prototype.syncStones = function (doc) {
+
+// A panel as flat cloth (stones/cloth.js): its own piece (the one its seed lies in), or that it is still
+// being flattened. paired: its other cell is the mirror image, carried by the same record.
+Engine.prototype.clothOf = function (panelId) {
+	const p = this.app.doc.panels.find((x) => x.id === panelId), L = p && this.layers.get(p.layer ?? 'L0');
+	if (!L?.g) return null;
+	const seeds = L.g.seeds.filter((s) => s.panel === panelId && s.cell >= 0), rec = seeds.length ? L.view.cells.find((c) => c.cell === seeds[0].cell && c.panelId === panelId) : null;
+	if (!rec) return null;
+	if (!rec.hasUV) return { piece: null, pending: true };
+	rec.cloth ??= new ClothPiece(L.g.arr, this.surf, rec.cell, rec.piece, rec.uv);
+	return { piece: rec.cloth, pending: false, paired: seeds.length > 1 && seeds[1].cell !== seeds[0].cell && L.view.cells.some((c) => c.cell === seeds[1].cell && c.panelId === panelId) };
+};
+
+// touched: the sections a change touched (null: anything may have). Placement reads the stones, the
+// lines, where the panels are (not their fabric or colour), the straps, trims and layers, all on the
+// reference surface (no pose). What those last ones build is kept until one of them changes; a group
+// runs again only when its own record changes (stones/generators.js runStones).
+Engine.prototype.syncStones = function (doc, touched = null) {
 	if (!this.g) return;
-	// placement reads the stones, the lines, where the panels are (not their fabric or colour), the
-	// straps, trims and layers, all on the reference surface (no pose): unchanged, nothing to redo
-	// (a colour change re-ran 2,600 stones, ~0.45 s)
-	const sig = JSON.stringify([doc.stones, doc.placed, doc.curves, doc.panels.map((p) => [p.id, p.seed, p.removed, p.mirror, p.layer]), doc.straps, doc.trims, doc.layers]);
-	if (sig === this.stoneSig) return;
-	this.stoneSig = sig;
+	if (!touched || !this.stoneGeo || touched.has('curves') || touched.has('panels') || touched.has('straps') || touched.has('trims') || touched.has('layers')) {
+		const geo = JSON.stringify([doc.curves, doc.panels.map((p) => [p.id, p.seed, p.removed, p.mirror, p.layer]), doc.straps, doc.trims, doc.layers]);
+		if (geo !== this.stoneGeo) {
+			this.stoneGeo = geo; this.stoneGeoRev++;
+			this.stoneEdge = this.edgeKeepOut(doc);
+		}
+	}
 	const t0 = performance.now();
-	const edge = this.edgeKeepOut(doc);
-	const layerZ = new Map(doc.layers.map((l) => [l.id, l.z ?? 0]));
-	const ctx = {
-		surf: this.surf, man: this.body, doc, evaluated: this.evaluated, landmarks: this.app?.store.ctx.landmarks, // man: point specs such as { front: [x, y] }
+	const layerZ = new Map(doc.layers.map((l) => [l.id, l.z ?? 0])), edge = this.stoneEdge;
+	const ctx = this.stoneCtx ??= {
+		surf: this.surf, man: this.body, landmarks: this.app?.store.ctx.landmarks, // man: point specs such as { front: [x, y] }
 		garment: (layer = 'L0') => this.layers.get(layer)?.g ?? this.g,
 		strapHeight: (s) => 0.0009 + 0.0013 * (s.layer ?? 0) + 0.0019 * Math.min(s.width / 0.01, 1.4),
+		cloth: (id) => this.clothOf(id), pending: this.stonePending, patternCache: this.patternCache,
 		// on fabric (any layer's panel that is not cut out) and clear of finished opening edges
 		isFabric: (sp, p, size, keepOut) => {
+			const d = ctx.doc;
 			let on = false;
 			for (const L of this.layers.values()) {
 				const t = locate(L.g.arr, this.surf, sp);
 				if (t < 0) continue;
 				const pi = L.g.cellPanel[L.g.arr.cellOf[t]];
-				if (pi >= 0 && !doc.panels[pi].removed) { on = true; break; }
+				if (pi >= 0 && !d.panels[pi].removed) { on = true; break; }
 			}
-			return on && edge(p, keepOut) > size / 2;
+			return on && ctx.edge(p, keepOut) > size / 2;
 		},
 	};
-	this.stoneRun = runStones(doc, ctx);
+	ctx.doc = doc; ctx.evaluated = this.evaluated; ctx.edge = edge; ctx.geoRev = this.stoneGeoRev;
+	ctx.placedSame = !!touched && !touched.has('placed');
+	const was = this.stoneRun;
+	this.stoneRun = runStones(doc, ctx, this.stoneCache);
+	if (this.stoneRun === was) return;
 	this.stoneView.set(this.stoneRun.stones, (s) => (s.layer ? 0.0009 * Math.max(layerZ.get(s.layer) ?? 0, 0) : 0));
 	this.timing.stones = { ms: performance.now() - t0, count: this.stoneRun.stones.length, dropped: this.stoneRun.dropped, errors: this.stoneRun.errors };
 };
@@ -564,15 +601,17 @@ Engine.prototype.edgeKeepOut = function (doc) {
 	const L0 = this.layers.get('L0');
 	const loops = L0?.rims?.loops ?? [];
 	const arr = this.g.arr, VP = arr.VP, cell = 0.02, grid = new Map();
+	const keyOf = (i, j, k) => (i + 512) * 1048576 + (j + 512) * 1024 + (k + 512);
 	for (const loop of loops) {
 		let keep = TRIMS.elastic.width + 0.0015;
 		const main = loop.curves.find(Boolean)?.replace(/~m$/, '');
 		const t = main && doc.trims.find((x) => x.on.includes(main));
 		if (t) keep = t.kind === 'none' ? 0.002 : t.kind === 'binding' ? TRIMS.binding.width + 0.0015 : keep;
 		for (const v of loop.verts) {
-			const x = VP[v * 3], y = VP[v * 3 + 1], z = VP[v * 3 + 2], k = Math.floor(x / cell) + ',' + Math.floor(y / cell) + ',' + Math.floor(z / cell);
-			if (!grid.has(k)) grid.set(k, []);
-			grid.get(k).push([x, y, z, keep]);
+			const x = VP[v * 3], y = VP[v * 3 + 1], z = VP[v * 3 + 2], k = keyOf(Math.floor(x / cell), Math.floor(y / cell), Math.floor(z / cell));
+			let l = grid.get(k);
+			if (!l) grid.set(k, l = []);
+			l.push(x, y, z, keep);
 		}
 	}
 	// override: a generator's own keep-out (metres) instead of the edge finish's
@@ -580,7 +619,12 @@ Engine.prototype.edgeKeepOut = function (doc) {
 		let best = Infinity;
 		const cx = Math.floor(p.x / cell), cy = Math.floor(p.y / cell), cz = Math.floor(p.z / cell);
 		for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
-			for (const q of grid.get((cx + i) + ',' + (cy + j) + ',' + (cz + k)) ?? []) best = Math.min(best, Math.hypot(p.x - q[0], p.y - q[1], p.z - q[2]) - (override ?? q[3]));
+			const l = grid.get(keyOf(cx + i, cy + j, cz + k));
+			if (!l) continue;
+			for (let q = 0; q < l.length; q += 4) {
+				const d = Math.hypot(p.x - l[q], p.y - l[q + 1], p.z - l[q + 2]) - (override ?? l[q + 3]);
+				if (d < best) best = d;
+			}
 		}
 		return best;
 	};

@@ -4,6 +4,7 @@ import { signal } from '@preact/signals';
 import { targetOf } from '../doc/symmetry.js';
 
 export const rev = signal(0);              // bumped on every document change; components read it to re-render
+export const stonesRun = signal(0);        // bumped when a drag's stones have been laid (a frame after its command)
 export const selection = signal(null);     // { kind: 'curves' | 'panels' | 'straps' | 'stones' | 'decals' | ..., id }
 export const tab = signal('shape');        // the panel's tab: 'shape' | 'fabric' | 'sparkle' | 'stage'
 export const tool = signal('move');        // what a click on the model does (ui/toolbar.js, ui/tools.js)
