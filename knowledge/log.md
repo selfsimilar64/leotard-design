@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-10-30
+* **Creation**: [The Mirror toggle and paired parts](/engineering/architecture/mirror-toggle.md): one toolbar toggle replaces every per-part mirror control; with it off, editing one side of a pair splits the pair for good.
+
 ## 2026-10-29
 * **Decision**: [Mannequin only, close-up thumbnails, and an interface rebuilt from first principles](/decisions/2026-10-29-mannequin-only-interface-overhaul.md): no realistic person and no head (a switch hides the mannequin instead), every tile re-rendered on the matte white mannequin as a close-up of what it shows (design diptychs front and back, leg cuts at three-quarter, fabrics as a pinched, twisted sheet filling the frame), no sideways-scrolling rows, drop-downs only where nothing visual fits, a polish pass after. Items of the two 2026-10-21 decisions marked superseded.
 * **Creation**: [The studio interface](/engineering/app/studio-interface.md): top bar, rounded stage with a view bar and a mode bar, four task tabs (Shape, Fabric, Sparkle, Stage) of wrapping picture grids, a full-window design library, tools as modes of their tab, the camera gliding to the element opened, the hidden mannequin drawn as a hollow garment, and the thumbnail pipeline (`render/pictures.js`, `materials/swatches.js swirlThumb`, `src/dev/thumbnails.js`). Pitfalls: the floor disc's depth drew a line across the backdrop (fixed for the whole app), a swatch scene must stand y up for the satin shader, the surface `crotch` landmark is not at the crotch. [Side panel](/engineering/app/side-panel-and-presets.md) and [building blocks](/engineering/app/building-blocks-and-starting-points.md) marked superseded where the interface changed.

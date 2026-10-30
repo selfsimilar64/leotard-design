@@ -12,6 +12,10 @@
 
 * [Design document model (garment as data)](design-document-model.md) (draft) - The serialisable design file every tool edits: body and pose, a curve graph on the canonical body, panels derived from it with fabric stacks, straps, trims, decals and procedural stone generators; all edits are commands, everything derived is a rebuildable cache.
 
+# Design Note
+
+* [The Mirror toggle and paired parts](mirror-toggle.md) (draft) - One toolbar toggle decides whether an edit reaches both sides of the body. Mirror off, an edit of a paired part splits the pair permanently; there is no per-part mirror control.
+
 # Section
 
 * [Architecture](about.md) - System-level structure of the product: what the POC provides, the garment data model, and how role views sit on one design.
