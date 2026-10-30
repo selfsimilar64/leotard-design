@@ -658,6 +658,16 @@ describe('handles', () => {
 		expect(ids(linear).sort()).toEqual(['mod-end', 'mod-move', 'mod-side-a', 'mod-side-b', 'mod-start', 'mod-turn', 'pick-frame'].sort());
 		// its bounds are drawn: a closed box, an arrow for its direction
 		expect(linear.lines.length).toBeGreaterThanOrEqual(3);
+		// a regular shape, wherever the piece's edge is, on a sheet at its middle that turns about its length
+		const wide = withMod('linear', { clip: true, x: 0, y: 0, a: 0, w: 2, h: 0.1 }), box = wide.lines[0].pts, xs = box.map((q) => q[0]);
+		expect([Math.min(...xs), Math.max(...xs)]).toEqual([expect.closeTo(-1, 6), expect.closeTo(1, 6)]);
+		expect(box[0]).toEqual(box[box.length - 1]);
+		expect(wide.lines[0].at).toEqual([expect.closeTo(0, 6), expect.closeTo(0, 6)]);
+		expect(wide.lines[0].pivot).toBeCloseTo(0, 6);
+		expect(withMod('radial').lines[0].pivot).toBeUndefined();
+		const rim = withMod('radial', { x: 0, y: 0, w: 5 }).lines[0].pts;
+		for (const q of rim) expect(Math.hypot(q[0], q[1])).toBeCloseTo(5, 6);
+		expect(withMod('edge').lines.every((l) => l.cloth)).toBe(true);
 		const open = withMod('linear', { clip: false });
 		expect(ids(open)).not.toContain('mod-side-a');
 		expect(ids(withMod('radial')).sort()).toEqual(['mod-move', 'mod-radius', 'pick-frame']);

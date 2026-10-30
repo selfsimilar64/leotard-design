@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-30
+* **Update**: [Procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md): handles are regular shapes on flat sheets instead of being laid over the body; a box turns about its length to face the view.
 * **Update**: [The studio interface](/engineering/app/studio-interface.md): why a pattern's page froze after an edit, and the rule that prevents it. A fractal's Detail now goes as far as its rule can grow, whatever the stones' size.
 * **Decision**: [Patterns have a frame, stacked modifiers and keystones](/decisions/2026-10-30-stone-pattern-modifiers-and-keystones.md): the owner's tuning notes on the first version of stone patterns, and what was chosen.
 * **Update**: [Procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md): placing moves the whole pattern with its mask; modifiers on density, size and colour replace the one gradient; arrangements carry their own sizes; corners, centres and crossings are placed first and judged on the flat cloth; handles over the view, specific to each kind; a test holds every control to doing something.

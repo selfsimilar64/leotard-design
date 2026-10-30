@@ -9,9 +9,12 @@
 // grab. render/gizmo.js draws them over the view, ui/tools.js calls drag().
 // A knob: { id, icon, tone, u, v, dir?, title, cursor, drag({ u, v, u0, v0, shift, alt }) -> params, read(params) -> text, pick?: focus }
 // A line: { pts: [[u, v]...], tone, width, faint?, dash? }
+// The drawing is a regular shape, not laid over the body: each knob and line has `at` [u, v], the middle of the flat
+// sheet it is drawn on, and may have `pivot`, the way (on the cloth) of an axis the sheet turns about to face the
+// view (render/gizmo.js). What only means something on the piece (a depth from its edge) has `cloth`: it lies on it.
 import { LAYOUTS } from './layouts.js';
 import { patternParams, patternMap, frameOf, frameToCloth, clothToFrame, clothToPattern, minScale, pieceMiddle } from './pattern.js';
-import { MOD_SHAPES, isSpatial, modBounds } from './modifiers.js';
+import { MOD_SHAPES, isSpatial } from './modifiers.js';
 
 const tenth = (v) => Math.round(v * 1e4) / 1e4; // of a millimetre
 const STEP = 0.006; // how finely a line is laid on the cloth
@@ -159,16 +162,19 @@ function modFrame(P, m) {
 	const f = frameOf(P), a = ((m.a ?? 0) * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), ox = m.x ?? 0, oy = m.y ?? 0;
 	return { f, a, c, s, ox, oy, at: (ax, ay) => frameToCloth(f, ox + ax * c - ay * s, oy + ax * s + ay * c), toMod: (u, v) => { const [lx, ly] = clothToFrame(f, u, v), dx = lx - ox, dy = ly - oy; return [dx * c + dy * s, dy * c - dx * s]; }, local: (u, v) => clothToFrame(f, u, v) };
 }
-// The outline of a modifier, as lines on the cloth. What has bounds shows them as they lie on the piece: where
-// they run past its edge, they follow the edge, so what shows is the shape the crystals fill.
+// The outline of a modifier: its own regular shape, whatever the piece does under it.
 function modOutline(m, F, piece, tone, faint) {
-	const w = m.w ?? 0.1, cls = MOD_SHAPES[m.shape]?.cls, opts = { faint, width: faint ? 1.2 : 1.8 };
-	if (cls === 'box' && !m.clip) {
-		// not cut off at its sides: only its two ends
-		const hw = w / 2, hh = (m.h ?? w) / 2, c = [F.at(-hw, -hh), F.at(hw, -hh), F.at(hw, hh), F.at(-hw, hh)];
-		return [line(through([c[0], c[3]]), tone, opts), line(through([c[1], c[2]]), tone, opts)];
+	const w = m.w ?? 0.1, h = m.h ?? w, cls = MOD_SHAPES[m.shape]?.cls, opts = { faint, width: faint ? 1.2 : 1.8 };
+	if (cls === 'box') {
+		const hw = w / 2, hh = h / 2, c = [F.at(-hw, -hh), F.at(hw, -hh), F.at(hw, hh), F.at(-hw, hh)];
+		if (m.clip) return [line(through([c[0], c[1], c[2], c[3], c[0]]), tone, opts)];
+		// not cut off at its sides: its two ends are what it is, and its sides only say how it lies
+		return [line(through([c[0], c[3]]), tone, opts), line(through([c[1], c[2]]), tone, opts), line(through([c[0], c[1]]), tone, { ...opts, faint: true, dash: true, width: 1.2 }), line(through([c[3], c[2]]), tone, { ...opts, faint: true, dash: true, width: 1.2 })];
 	}
-	if (MOD_SHAPES[m.shape]?.bounds) return [contour(piece, modBounds(m, F.f, null), tone, opts)];
+	if (m.shape === 'diamond') return [line(through([F.at(w, 0), F.at(0, h), F.at(-w, 0), F.at(0, -h), F.at(w, 0)]), tone, opts)];
+	if (m.shape === 'square') return [line(through([F.at(-w, -h), F.at(w, -h), F.at(w, h), F.at(-w, h), F.at(-w, -h)]), tone, opts)];
+	if (cls === 'round') return [line(loop((t) => F.at(w * Math.cos(t), h * Math.sin(t))), tone, opts)];
+	if (cls === 'ring' || cls === 'dial') return [line(loop((t) => F.at(w * Math.cos(t), w * Math.sin(t))), tone, opts)];
 	if (m.shape === 'ripple' || m.shape === 'clouds' || m.shape === 'spiral') return [line(loop((t) => F.at(w * Math.cos(t), w * Math.sin(t))), tone, { ...opts, dash: true })];
 	if (m.shape === 'checks') return [line(through([F.at(0, 0), F.at(w, 0), F.at(w, w), F.at(0, w), F.at(0, 0)]), tone, opts)];
 	if (m.shape === 'waves' || m.shape === 'stripes') {
@@ -221,13 +227,13 @@ function modHandles(P, m, piece, pxPerM, out) {
 	if (cls === 'follow') return;
 	if (cls === 'edge') {
 		const edge = (u, v) => piece.edgeAt(u, v);
-		out.lines.push(contour(piece, (u, v) => edge(u, v) - w * S, tone, { width: 1.8 }, false));
+		out.lines.push({ ...contour(piece, (u, v) => edge(u, v) - w * S, tone, { width: 1.8 }, false), cloth: true });
 		// on the line, below the piece's middle
 		const [cx, cy] = pieceMiddle(piece);
 		let v = cy;
 		for (let k = 0; k < 400 && v > piece.y0; k++, v -= 0.002) if (piece.edgeAt(cx, v) <= w * S) break;
 		out.knobs.push({
-			id: 'mod-depth', icon: 'stretch', tone, u: cx, v, dir: Math.PI / 2, title: 'How far in from the edge', cursor: 'ns-resize',
+			id: 'mod-depth', cloth: true, icon: 'stretch', tone, u: cx, v, dir: Math.PI / 2, title: 'How far in from the edge', cursor: 'ns-resize',
 			drag: (s) => set({ w: tenth(Math.max(0.004, w + (piece.edgeAt(s.u, s.v) - piece.edgeAt(s.u0, s.v0)) / S)) }),
 			read: (p) => `From the edge ${FORMAT.mm((p.mods.find((x) => x.id === m.id) ?? m).w)}`,
 		});
@@ -305,6 +311,15 @@ function modHandles(P, m, piece, pxPerM, out) {
 	});
 }
 
+// What fn adds to out is drawn on one sheet.
+function onSheet(out, at, pivot, fn) {
+	const nl = out.lines.length, nk = out.knobs.length;
+	fn();
+	for (const x of [...out.lines.slice(nl), ...out.knobs.slice(nk)]) { x.at = at; if (pivot !== undefined) x.pivot = pivot; }
+}
+// A box turns about the way it runs, so it reads as a box from anywhere round that line.
+const pivotOf = (m, F) => { if (MOD_SHAPES[m.shape]?.cls !== 'box') return undefined; const a = F.at(0, 0), b = F.at(1, 0); return Math.atan2(b[1] - a[1], b[0] - a[0]); };
+
 // Every handle of a pattern, for what is being worked on.
 export function patternHandles(gen, piece, { focus = 'frame', pxPerM = 700 } = {}) {
 	const P = patternParams(gen, piece), layout = LAYOUTS[P.layout], out = { knobs: [], lines: [], P };
@@ -313,18 +328,19 @@ export function patternHandles(gen, piece, { focus = 'frame', pxPerM = 700 } = {
 	for (const m of mods) {
 		if (m.off || !isSpatial(m.shape) || m === active) continue;
 		const F = modFrame(P, m);
-		if (MOD_SHAPES[m.shape]?.cls !== 'edge') out.lines.push(...modOutline(m, F, piece, m.on, true));
 		const c = MOD_SHAPES[m.shape]?.cls === 'edge' ? pieceMiddle(piece) : F.at(0, 0);
-		out.knobs.push({ id: 'pick-' + m.id, icon: 'dot', tone: m.on, u: c[0], v: c[1], small: true, title: `Work on this ${(MOD_SHAPES[m.shape]?.label ?? '').toLowerCase()}`, cursor: 'pointer', pick: m.id });
+		if (MOD_SHAPES[m.shape]?.cls !== 'edge') onSheet(out, c, pivotOf(m, F), () => out.lines.push(...modOutline(m, F, piece, m.on, true)));
+		out.knobs.push({ at: c, id: 'pick-' + m.id, icon: 'dot', tone: m.on, u: c[0], v: c[1], small: true, title: `Work on this ${(MOD_SHAPES[m.shape]?.label ?? '').toLowerCase()}`, cursor: 'pointer', pick: m.id });
 	}
-	if (focus === 'plane' && !layout.flat) planeHandles(P, pxPerM, out);
+	const f = frameOf(P);
+	if (focus === 'plane' && !layout.flat) onSheet(out, frameToCloth(f, P.px ?? 0, P.py ?? 0), undefined, () => planeHandles(P, pxPerM, out));
 	else if (active) {
-		modHandles(P, active, piece, pxPerM, out);
+		const F = modFrame(P, active);
+		onSheet(out, F.at(0, 0), pivotOf(active, F), () => modHandles(P, active, piece, pxPerM, out));
 		// the whole pattern can still be picked up
-		if (!layout.flat) { const f = frameOf(P); out.knobs.push({ id: 'pick-frame', icon: 'dot', tone: 'frame', u: f.x, v: f.y, small: true, title: 'Work on the whole pattern', cursor: 'pointer', pick: 'frame' }); }
+		if (!layout.flat) { out.knobs.push({ at: [f.x, f.y], id: 'pick-frame', icon: 'dot', tone: 'frame', u: f.x, v: f.y, small: true, title: 'Work on the whole pattern', cursor: 'pointer', pick: 'frame' }); }
 	} else if (!layout.flat) {
-		frameHandles(P, piece, pxPerM, out);
-		gripHandles(P, layout, piece, pxPerM, out);
+		onSheet(out, [f.x, f.y], undefined, () => { frameHandles(P, piece, pxPerM, out); gripHandles(P, layout, piece, pxPerM, out); });
 	}
 	return out;
 }

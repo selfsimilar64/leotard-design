@@ -182,7 +182,9 @@ export class ToolController {
 		// the drag starts at the handle's own place, whatever lies under the pointer; moves are relative to the grab
 		const [x, y] = this.xy(e);
 		d.lastUv = [k.uGrab, k.vGrab]; d.lastXY = [k.px ?? x, k.py ?? y];
-		[d.u0, d.v0] = this.clothPointer(x, y, d);
+		// a handle follows the pointer on its flat sheet; only what moves the middle of a shape, which lies on the cloth, goes by the cloth
+		if (k.icon !== 'move' && k.sheet) { d.map = this.engine.gizmo.dragMap(k); d.x0 = x; d.y0 = y; d.u0 = k.u; d.v0 = k.v; }
+		else [d.u0, d.v0] = this.clothPointer(x, y, d);
 		this.engine.viewport.controls.enabled = false;
 		this.el.setPointerCapture(e.pointerId);
 		this.engine.gizmo.hold(k.key, k.read?.(patternParams(gen, piece)) ?? '');
@@ -190,7 +192,7 @@ export class ToolController {
 	}
 
 	dragHandle(x, y, e) {
-		const d = this.hdrag, uv = this.clothPointer(x, y, d), params = d.knob.drag({ u: uv[0], v: uv[1], u0: d.u0, v0: d.v0, shift: e.shiftKey, alt: e.altKey });
+		const d = this.hdrag, uv = d.map ? [d.u0 + d.map[0] * (x - d.x0) + d.map[1] * (y - d.y0), d.v0 + d.map[2] * (x - d.x0) + d.map[3] * (y - d.y0)] : this.clothPointer(x, y, d), params = d.knob.drag({ u: uv[0], v: uv[1], u0: d.u0, v0: d.v0, shift: e.shiftKey, alt: e.altKey });
 		this.runEdit({ op: 'stones.set', id: d.id, params, gesture: d.gesture }, d.mirrored ? 'm' : undefined);
 		// Mirror off: the first move split the group from its pair; the drag carries on with this side's
 		const now = selection.value?.id;

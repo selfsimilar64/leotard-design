@@ -1,6 +1,8 @@
 // The handles of the chosen stone pattern, drawn over the view in their own layer of the page: always on top
-// of the crystals and the light, sharp at any resolution, and big enough for a finger. Where they lie on the
-// body comes from stones/handles.js; each frame only what moved is projected onto the screen, and whatever
+// of the crystals and the light, sharp at any resolution, and big enough for a finger. What they are comes from
+// stones/handles.js. They are regular shapes on flat sheets, not laid over the body: a sheet touches the cloth at its
+// middle and lies along it there, so a circle is an ellipse from an angle. A box's sheet also turns about the way
+// it runs, to face the view. Each frame only what moved is projected onto the screen, and a sheet that
 // faces away from the camera does not show. On a pair, the mirror image's handles show dimmer and work too.
 // What dragging them does: ui/tools.js. They take no part in the lines' H; ui/state.js showHandles hides them.
 import * as THREE from 'three';
@@ -9,6 +11,8 @@ import { mirrorFast } from '../stones/cloth.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const LIFT = 0.0012;
+const REACH = 0.012;       // how far along the cloth a sheet takes its lie from
+const AWAY = -0.25;        // how far past edge-on a sheet still shows
 // the drawings on the knobs, about the origin in a 24 unit box
 const GLYPHS = {
 	move: 'M0-9v18M-9 0h18M0-9l-3 3M0-9l3 3M0 9l-3-3M0 9l3-3M-9 0l3-3M-9 0l3 3M9 0l-3-3M9 0l-3 3',
@@ -64,7 +68,7 @@ export class PatternGizmo {
 	build() {
 		this.stale = false;
 		const gen = this.gen, focus = this.focus;
-		this.lines = []; this.knobs = [];
+		this.lines = []; this.knobs = []; this.sheets = null;
 		const engine = this.engine, cloth = gen ? engine.clothOf(gen.on?.panel) : null, piece = cloth?.piece;
 		this.piece = piece ?? null;
 		this.dirty = true;
@@ -78,8 +82,15 @@ export class PatternGizmo {
 			out[o] = v.x; out[o + 1] = v.y; out[o + 2] = v.z; out[o + 3] = n.x; out[o + 4] = n.y; out[o + 5] = n.z;
 			return s;
 		};
+		this.sheets = new Map();
 		for (const mirrored of this.sidesOf(gen, cloth, cx)) {
 			for (const line of H.lines) {
+				if (!line.cloth) {
+					const sheet = this.sheetOf(piece, line.at, line.pivot, mirrored), N = line.pts.length, Q = new Float32Array(N * 2);
+					for (let i = 0; i < N; i++) { Q[i * 2] = line.pts[i][0] - sheet.u; Q[i * 2 + 1] = line.pts[i][1] - sheet.v; }
+					this.lines.push({ tone: line.tone, width: line.width, faint: !!line.faint, dash: !!line.dash, pairs: !!line.pairs, mirrored, n: N, Q, sheet });
+					continue;
+				}
 				// (past the piece's edge there is nothing to draw on)
 				const N = line.pts.length, P = new Float32Array(N * 6), off = new Uint8Array(N);
 				for (let i = 0; i < N; i++) {
@@ -90,6 +101,11 @@ export class PatternGizmo {
 				this.lines.push({ tone: line.tone, width: line.width, faint: !!line.faint, dash: !!line.dash, pairs: !!line.pairs, mirrored, n: N, P, off });
 			}
 			for (const k of H.knobs) {
+				if (!k.cloth) {
+					const sheet = this.sheetOf(piece, k.at, k.pivot, mirrored), on = piece.spOnPiece(k.u, k.v), uv = (on && piece.uvOf(on)) ?? [k.u, k.v];
+					this.knobs.push({ ...k, key: k.id + (mirrored ? '~m' : ''), mirrored, sheet, du: k.u - sheet.u, dv: k.v - sheet.v, uGrab: uv[0], vGrab: uv[1] });
+					continue;
+				}
 				const on = piece.spOnPiece(k.u, k.v);
 				if (!on) continue;
 				const P = new Float32Array(12), sp = put(on, mirrored, P, 0), uv = piece.uvOf(on) ?? [k.u, k.v];
@@ -99,6 +115,65 @@ export class PatternGizmo {
 			}
 		}
 		this.syncKnobs();
+	}
+
+	// The sheet a shape is drawn on: where its middle meets the piece, and the cloth's two ways there as they run in
+	// the body (a metre of cloth is a metre on the sheet). A middle off the piece: from the nearest place on it.
+	sheetOf(piece, at, pivot, mirrored) {
+		const key = `${at[0]},${at[1]},${pivot},${mirrored}`;
+		let sheet = this.sheets.get(key);
+		if (sheet) return sheet;
+		const on = piece.spOnPiece(at[0], at[1]), [u, v] = (on && piece.uvOf(on)) ?? at, surf = this.engine.surf, O = new THREE.Vector3(), N = new THREE.Vector3(), p = new THREE.Vector3(), n = new THREE.Vector3();
+		this.overlay.placeWithNormal(on, O, N, LIFT);
+		const way = (du, dv) => {
+			const out = new THREE.Vector3();
+			for (const sg of [1, -1]) {
+				const q = piece.spAt(u + sg * du * REACH, v + sg * dv * REACH);
+				if (!q) continue;
+				this.overlay.placeWithNormal(q, p, n, LIFT);
+				// (across the seam of a tube the flat piece's neighbour is on the far side of it)
+				if (p.distanceTo(O) < REACH * 2) out.addScaledVector(p.sub(O), sg);
+			}
+			return out.addScaledVector(N, -out.dot(N));
+		};
+		const Eu = way(1, 0), Ev = way(0, 1);
+		if (Eu.lengthSq() < 1e-10) Eu.crossVectors(Ev, N);
+		Eu.normalize();
+		Ev.addScaledVector(Eu, -Ev.dot(Eu));
+		if (Ev.lengthSq() < 1e-10) Ev.crossVectors(N, Eu);
+		Ev.normalize();
+		if (mirrored) {
+			this.overlay.placeWithNormal(mirrorFast(surf, on), O, n, LIFT);
+			for (const e of [Eu, Ev, N]) e.x = -e.x;
+		}
+		sheet = { u, v, O, N, Eu, Ev, Bu: Eu.clone(), Bv: Ev.clone(), pivot, shows: true };
+		this.sheets.set(key, sheet);
+		return sheet;
+	}
+	// A sheet as the view now has it: whether it shows, and for a box, turned about its length to face the view.
+	aim(sheet, cx, cy, cz) {
+		const O = sheet.O, vx = cx - O.x, vy = cy - O.y, vz = cz - O.z, len = Math.hypot(vx, vy, vz) || 1, N = sheet.N;
+		sheet.shows = (N.x * vx + N.y * vy + N.z * vz) / len > AWAY;
+		if (sheet.pivot === undefined) return;
+		const ca = Math.cos(sheet.pivot), sa = Math.sin(sheet.pivot), E = sheet.Eu, F = sheet.Ev;
+		const ax = ca * E.x + sa * F.x, ay = ca * E.y + sa * F.y, az = ca * E.z + sa * F.z, bx = ca * F.x - sa * E.x, by = ca * F.y - sa * E.y, bz = ca * F.z - sa * E.z;
+		let px = ay * vz - az * vy, py = az * vx - ax * vz, pz = ax * vy - ay * vx, l = Math.hypot(px, py, pz);
+		// (looking straight down its length it has no way to turn: it stays as it lies)
+		if (l < 1e-3 * len) { px = bx; py = by; pz = bz; l = 1; } else if (px * bx + py * by + pz * bz < 0) l = -l;
+		px /= l; py /= l; pz /= l;
+		sheet.Bu.set(ca * ax - sa * px, ca * ay - sa * py, ca * az - sa * pz);
+		sheet.Bv.set(sa * ax + ca * px, sa * ay + ca * py, sa * az + ca * pz);
+	}
+	// A drag on a sheet: from pixels moved to cloth moved, as the sheet lay on the screen when it was grabbed. Edge-on, a
+	// way that hardly shows on the screen is one the pointer hardly moves.
+	dragMap(k) {
+		const s = k.sheet;
+		if (!s) return null;
+		const vp = this.engine.viewport, cam = vp.camera, w = vp.renderer.domElement.clientWidth, h = vp.renderer.domElement.clientHeight, a = new THREE.Vector3(), M = vp.world.matrixWorld;
+		const at = (B) => { a.copy(s.O).addScaledVector(s.Bu, k.du).addScaledVector(s.Bv, k.dv); if (B) a.addScaledVector(B, 0.01); a.applyMatrix4(M).project(cam); return [(a.x * 0.5 + 0.5) * w, (0.5 - a.y * 0.5) * h]; };
+		const o = at(), e = at(s.Bu), f = at(s.Bv), j00 = (e[0] - o[0]) / 0.01, j10 = (e[1] - o[1]) / 0.01, j01 = (f[0] - o[0]) / 0.01, j11 = (f[1] - o[1]) / 0.01;
+		const a00 = j00 * j00 + j10 * j10, a01 = j00 * j01 + j10 * j11, a11 = j01 * j01 + j11 * j11, soft = 4e-4 * (a00 + a11) + 1e-9, p = a00 + soft, q = a11 + soft, det = p * q - a01 * a01;
+		return [(q * j00 - a01 * j01) / det, (q * j10 - a01 * j11) / det, (p * j01 - a01 * j00) / det, (p * j11 - a01 * j10) / det];
 	}
 
 	// One element per knob, kept for as long as it is there.
@@ -161,6 +236,7 @@ export class PatternGizmo {
 		vp.world.updateMatrixWorld();
 		const M = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).multiply(vp.world.matrixWorld).elements, W = vp.world.matrixWorld.elements;
 		const cx = cam.position.x, cy = cam.position.y, cz = cam.position.z;
+		if (this.sheets) for (const sheet of this.sheets.values()) this.aim(sheet, (cx - W[12]) / W[0], (cy - W[13]) / W[5], (cz - W[14]) / W[10]);
 		const project = (x, y, z, out) => {
 			const iw = 1 / (M[3] * x + M[7] * y + M[11] * z + M[15]);
 			out[0] = ((M[0] * x + M[4] * y + M[8] * z + M[12]) * iw * 0.5 + 0.5) * w;
@@ -176,6 +252,17 @@ export class PatternGizmo {
 		for (const L of this.lines) {
 			const p = this.pathFor(L), P = L.P;
 			let open = false;
+			if (L.sheet) {
+				const { O, Bu, Bv, shows } = L.sheet, Q = L.Q;
+				if (shows) for (let i = 0; i < L.n; i++) {
+					const a = Q[i * 2], b = Q[i * 2 + 1];
+					project(O.x + a * Bu.x + b * Bv.x, O.y + a * Bu.y + b * Bv.y, O.z + a * Bu.z + b * Bv.z, s);
+					if (!s[2]) { open = false; continue; }
+					p.d.push((open ? 'L' : 'M') + s[0].toFixed(1) + ' ' + s[1].toFixed(1));
+					open = true;
+				}
+				continue;
+			}
 			for (let i = 0; i < L.n; i++) {
 				const o = i * 6;
 				if (L.pairs && i % 2 === 0) open = false;
@@ -191,6 +278,21 @@ export class PatternGizmo {
 		for (const k of this.knobs) {
 			const e = this.knobEls.get(k.key);
 			if (!e) continue;
+			if (k.sheet) {
+				const { O, Bu, Bv, shows } = k.sheet, a = k.du, b = k.dv;
+				project(O.x + a * Bu.x + b * Bv.x, O.y + a * Bu.y + b * Bv.y, O.z + a * Bu.z + b * Bv.z, s);
+				if (!s[2] || (!shows && this.grabbed !== k.key)) { e.style.display = 'none'; continue; }
+				e.style.display = '';
+				k.px = k.sx = s[0]; k.py = k.sy = s[1];
+				k.rot = 0;
+				if (k.dir !== undefined) {
+					const a2 = a + 0.01 * Math.cos(k.dir), b2 = b + 0.01 * Math.sin(k.dir);
+					project(O.x + a2 * Bu.x + b2 * Bv.x, O.y + a2 * Bu.y + b2 * Bv.y, O.z + a2 * Bu.z + b2 * Bv.z, t);
+					if (t[2]) k.rot = (Math.atan2(t[1] - s[1], t[0] - s[0]) * 180) / Math.PI;
+				}
+				on.push(k);
+				continue;
+			}
 			const P = k.P;
 			project(P[0], P[1], P[2], s);
 			// a held knob stays; the far side of the body has none to grab

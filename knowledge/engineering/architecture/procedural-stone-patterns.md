@@ -219,9 +219,19 @@ The arrangements have sizes of their own, not only what a gradient lays over the
 Handles are an SVG layer over the canvas, not part of the 3D scene: always on top of the crystals, untouched by bloom and
 tone mapping, sharp, and with hit areas big enough for a finger. They do not hide with the editing lines (H), which is how
 they had been lost; the view bar has its own switch for them. Each frame only what moved is projected; what faces away
-from the camera does not show; knobs that would overlap are eased apart. Lines are drawn only where they lie on the
-piece. `patternHandles(gen, piece, { focus, pxPerM })` is pure: every knob has a `drag({ u, v, u0, v0, shift, alt })`
-returning the change to the record, and a `read` for the bubble shown while it is held.
+from the camera does not show; knobs that would overlap are eased apart. `patternHandles(gen, piece, { focus, pxPerM })`
+is pure: every knob has a `drag({ u, v, u0, v0, shift, alt })` returning the change to the record, and a `read` for the
+bubble shown while it is held.
+
+The drawing is regular shapes, not projected onto the body, at the owner's request: laid over the cloth, circles came out
+as irregular loops. Each shape lies on a flat sheet (`gizmo.sheetOf`) that touches the cloth at the shape's middle, along
+the cloth's two directions there, a metre of cloth being a metre on the sheet. So a circle is an ellipse from an angle and
+a line edge-on from the side. A box's sheet also turns about the way the box runs, to face the view
+(`gizmo.aim`), so it reads as a rectangle from anywhere round that line and squashes only when looked at along it.
+A sheet more than a little past edge-on does not show. The outlines therefore no longer stop at the piece's edge or say
+exactly where the crystals end on a curved body. The exception is From the edge (`cloth: true`), whose line only means
+something on the piece. A drag goes by the sheet too, through a pixel-to-cloth map frozen when the knob is grabbed
+(`gizmo.dragMap`); only Move knobs still go by the cloth under the pointer, because a shape's middle lies on it.
 
 What shows depends on the focus (`ui/state.js patternFocus`; the panel's cards and Pattern positioning set it, and a dot
 on the body picks a modifier):
@@ -229,7 +239,7 @@ on the body picks a modifier):
 | Focus | Handles |
 |---|---|
 | The whole pattern | A dial: move (drawn to the piece's middle line, Alt not), turn (Shift: 15 degrees), scale. And the arrangement's own grips (`layout.grips`): `along` (a spacing, as many spacings out as it takes to be easy to grab, with a tick for each), `radius` (a real circle, such as a rose's size), `point` (a fractal's square, a wallpaper motif dragged about in its cell) |
-| A box modifier (linear, reflected) | Its bounds, as they lie on the piece; an arrow for its direction; start and end (each moves alone, the other stays; Alt: both), two sides, turn |
+| A box modifier (linear, reflected) | Its rectangle (not cut off at its sides: solid ends, dashed sides); an arrow for its direction; start and end (each moves alone, the other stays; Alt: both), two sides, turn |
 | A round one | Its outline, centre; one radius (radial) or two and a turn (oval, diamond, square); sweep: one knob for size and start |
 | A repeat (waves, stripes, ripple, checks, clouds, spiral) | Centre, and one knob for its length and direction, out at as many repeats as it takes |
 | From the edge | The line at its depth, and a knob on it |
