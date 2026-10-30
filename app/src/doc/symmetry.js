@@ -63,7 +63,7 @@ const otherSide = (s) => (s === 'left' ? 'right' : 'left');
 const SIDE_WORD = { left: 'left', right: 'right' };
 const named = (name, side) => (name ? `${name} (${SIDE_WORD[side]})` : name);
 // a row or fringe on the mirror image runs the other way round: its offset and side change sign
-// (a pattern's own place, turn and gradient too: stones/pattern.js)
+// (a pattern's own place and turn too, with its modifiers in its frame: stones/pattern.js)
 function flipParams(p, whole = false) {
 	if (!p) return p;
 	const out = flipPatternParams(p, whole);

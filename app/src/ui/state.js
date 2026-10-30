@@ -15,6 +15,8 @@ export const toast = signal(null);         // { text, kind } shown briefly
 export const designsRev = signal(0);       // bumped when designs/ changes (a save), so the library lists it
 export const showStats = signal(false);    // the frame-rate read-out over the view (Settings)
 export const hideOverlay = signal(false);  // hide the editing lines and points to preview the look (H)
+export const showHandles = signal(true);   // a chosen pattern's handles on the body (the view bar's switch)
+export const patternFocus = signal('frame'); // what a chosen pattern's handles work on: 'frame' | 'plane' | a modifier's id (stones/handles.js)
 export const hideMannequin = signal(false); // the leotard floats with the mannequin hidden (M)
 export const libraryOpen = signal(false);  // the designs library over the whole window
 export const busy = signal(null);          // { text } while a slow change (a new shape, a design) is applied
@@ -22,7 +24,7 @@ export const savedRev = signal(-1);        // the design's revision when it was 
 
 // Which tab shows a selected part: a piece's fabric, a line's or strap's shape, stones and logos.
 const TAB_OF = { panels: 'fabric', curves: 'shape', straps: 'shape', trims: 'shape', stones: 'sparkle', placed: 'sparkle', decals: 'sparkle' };
-selection.subscribe((s) => { if (s && TAB_OF[s.kind]) tab.value = TAB_OF[s.kind]; });
+selection.subscribe((s) => { if (s && TAB_OF[s.kind]) tab.value = TAB_OF[s.kind]; patternFocus.value = 'frame'; });
 
 let toastTimer;
 export function notify(text, kind = 'info') {
@@ -38,7 +40,10 @@ export function edit(app, cmd, side) {
 	const r = app.edit(cmd, side ?? (mine ? sel.side : undefined));
 	if (r.split) {
 		notify('Split from its pair: the two sides are now separate');
+		// (the same thing goes on being worked on, on its new record)
+		const focus = patternFocus.value;
 		if (mine && cmd.op !== 'curve.remove') selection.value = { kind: sel.kind, id: r.id };
+		patternFocus.value = focus;
 	}
 	return r.result;
 }

@@ -90,10 +90,11 @@ export class Engine {
 			this.straps.frame(viewport.keyDir);
 			// a drag edits a stone group many times a frame's worth of pointer events: run it once, here
 			if (this.stonesDirty && this.app) { this.stonesDirty = false; this.syncStones(this.app.doc, this.stonesLive ? new Set(['stones']) : null); this.stonesLive = false; this.onStones?.(); }
+			this.gizmo.frame();
 		});
 		// picking surface: the garment surface of the body on show (same canonical faces as everywhere)
 		this.pick = null;
-		body.onGarment = [() => { if (this.pick) this.pick.update(body.garmentPos); else this.pick = new Surface(body.idx, body.garmentPos); }];
+		body.onGarment = [() => { if (this.pick) this.pick.update(body.garmentPos); else this.pick = new Surface(body.idx, body.garmentPos); this.gizmo?.again(); }];
 		this.raycaster = new THREE.Raycaster();
 	}
 
@@ -282,6 +283,7 @@ export class Engine {
 		this.overlay.setVisible(!doc.legacy && !this.ui.hidden);
 		if (evaluated) this.overlay.setCurves(evaluated, doc, this.ui);
 		this.lastEvaluated = evaluated;
+		this.gizmo?.again();
 	}
 	setUI(ui) { Object.assign(this.ui, ui); if (this.lastEvaluated && this.app) this.drawOverlay(this.app.doc, this.lastEvaluated); }
 

@@ -57,6 +57,17 @@ export class Overlay {
 		return out.set(out.x + nx / l * lift, out.y + ny / l * lift, out.z + nz / l * lift);
 	}
 
+	// The same, with the surface's normal there (the stone handles' test of what faces the camera).
+	placeWithNormal(sp, out, normal, lift = LIFT) {
+		const man = this.man, G = man.garmentPos, N = man.aGNormal.array, idx = man.idx, f = sp.f;
+		const b0 = sp.b0, b1 = sp.b1, b2 = sp.b2, i0 = idx[f * 3] * 3, i1 = idx[f * 3 + 1] * 3, i2 = idx[f * 3 + 2] * 3;
+		let nx = b0 * N[i0] + b1 * N[i1] + b2 * N[i2], ny = b0 * N[i0 + 1] + b1 * N[i1 + 1] + b2 * N[i2 + 1], nz = b0 * N[i0 + 2] + b1 * N[i1 + 2] + b2 * N[i2 + 2];
+		const l = Math.hypot(nx, ny, nz) || 1;
+		nx /= l; ny /= l; nz /= l;
+		normal.set(nx, ny, nz);
+		return out.set(b0 * G[i0] + b1 * G[i1] + b2 * G[i2] + nx * lift, b0 * G[i0 + 1] + b1 * G[i1 + 1] + b2 * G[i2 + 1] + ny * lift, b0 * G[i0 + 2] + b1 * G[i1 + 2] + b2 * G[i2 + 2] + nz * lift);
+	}
+
 	// evaluated: Map(key -> { sps, closed, role, curve }); sel: selected curve id; hover: hovered id
 	// selectedSide: Mirror off, the one side of a paired line an edit will change ('own' | 'm');
 	// centre: draw the body's centre line

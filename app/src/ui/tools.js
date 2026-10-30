@@ -11,7 +11,7 @@
 //   strap   like the pen, but the line becomes a strap
 //   stones, single, erase   stone generators, one stone, the eraser (options in the panel)
 //   pattern a click on a piece lays the pattern chosen in the panel; in Select, a chosen pattern's
-//           handles (render/gizmo.js) move, turn and scale it and set its gradient, live
+//           handles (render/gizmo.js, stones/handles.js) change it and its modifiers, live
 //   decal   click the body to place a logo or lettering (options in the panel), or to move the
 //           one being moved (toolOptions.moveDecal)
 //   eyedrop (from the piece's match-colour button) while looking through a reference photo, click the photo
@@ -20,17 +20,18 @@
 // touch screen).
 import * as THREE from 'three';
 import { signal } from '@preact/signals';
-import { tool, selection, notify, hideOverlay, edit, stonesRun } from './state.js';
+import { tool, selection, notify, hideOverlay, showHandles, patternFocus, edit, stonesRun, prefs } from './state.js';
 import { fromSP, toSP } from '../body/surface.js';
 import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
 import { panelAt } from '../garment/build.js';
 import { symmetryOn } from '../doc/symmetry.js';
 import { sizeOf } from '../stones/library.js';
-import { viewTo } from './camera.js';
-import { GALLERY_ITEMS } from '../stones/layouts.js';
+import { viewTo, flyTo } from './camera.js';
+import { GALLERY_ITEMS, LAYOUTS, layoutDefaults } from '../stones/layouts.js';
 import { mirrorFast } from '../stones/cloth.js';
-import { patternParams, minScale } from '../stones/pattern.js';
+import { presetMods } from '../stones/modifiers.js';
+import { patternParams } from '../stones/pattern.js';
 
 // Mirror on: a part this close to the centre is one part, not a pair (metres).
 const CENTRE = 0.006;
@@ -47,7 +48,6 @@ export const toolOptions = signal({
 });
 
 const tenth = (v) => Math.round(v * 1e4) / 1e4; // of a millimetre
-const HANDLE_CURSOR = { move: 'move', rotate: 'grab', scale: 'nwse-resize', ga: 'crosshair', gb: 'crosshair' };
 
 export class ToolController {
 	constructor(app, engine) {
@@ -68,6 +68,8 @@ export class ToolController {
 		window.addEventListener('keydown', (e) => this.key(e));
 		tool.subscribe((t) => this.onTool(t));
 		selection.subscribe(() => this.refreshOverlay());
+		// a pattern chosen from the list, on the far side of the body: the view turns to it, so its handles can be seen
+		selection.subscribe((s) => { if (s?.kind === 'stones') this.faceChosen(s.id); });
 		// a piece glows briefly as it is chosen
 		let last = null;
 		selection.subscribe((s) => { if (s?.kind === 'panels' && s.id !== last) this.flashPiece(s); last = s?.id ?? null; });
@@ -77,6 +79,10 @@ export class ToolController {
 			if (touched.has('stones') || touched.has('curves') || touched.has('panels')) this.refreshHandles();
 		});
 		engine.onStones = () => { stonesRun.value++; this.refreshHandles(); }; // (also when a piece's flat shape arrives)
+		engine.gizmo.onGrab = (k, e) => this.startHandle(k, e);
+		engine.gizmo.onPick = (id) => { patternFocus.value = id; };
+		patternFocus.subscribe(() => this.refreshHandles());
+		showHandles.subscribe(() => this.refreshHandles());
 	}
 
 	get mirrorOn() { return symmetryOn(this.app.doc); }
@@ -121,10 +127,26 @@ export class ToolController {
 		this.refreshHandles();
 	}
 
+	faceChosen(id) {
+		const gen = this.app.doc.stones.find((g) => g.id === id && g.kind === 'pattern'), cloth = gen && this.engine.clothOf(gen.on?.panel), piece = cloth?.piece, vp = this.engine.viewport;
+		if (!piece || !prefs.value.followCamera || vp.photo) return;
+		const P = patternParams(gen, piece), own = piece.spOnPiece(P.x, P.y);
+		if (!own) return;
+		const at = new THREE.Vector3(), n = new THREE.Vector3(), sides = [own];
+		if (cloth.paired || gen.mirror === 'both' || P.symmetric) sides.push(mirrorFast(this.engine.surf, own));
+		for (const sp of sides) {
+			this.engine.overlay.placeWithNormal(sp, at, n, 0);
+			at.applyMatrix4(vp.world.matrixWorld);
+			if (n.dot(vp.camera.position.clone().sub(at).normalize()) > 0.2) return;
+		}
+		const t = vp.controls.target, d = vp.camera.position.distanceTo(t), dir = n.setY(0.06).normalize();
+		flyTo({ position: [t.x + dir.x * d, t.y + dir.y * d, t.z + dir.z * d], target: t.toArray() });
+	}
+
 	// A chosen pattern's handles, in Select.
 	refreshHandles() {
-		const sel = selection.value, gen = sel?.kind === 'stones' && tool.value === 'move' ? this.app.doc.stones.find((g) => g.id === sel.id && g.kind === 'pattern') : null;
-		this.engine.gizmo.show(gen ?? null);
+		const sel = selection.value, gen = showHandles.value && sel?.kind === 'stones' && tool.value === 'move' ? this.app.doc.stones.find((g) => g.id === sel.id && g.kind === 'pattern') : null;
+		this.engine.gizmo.show(gen ?? null, patternFocus.value);
 	}
 
 	// The flat-cloth point under the pointer for a handle being dragged: on the piece, directly; off it
@@ -156,44 +178,25 @@ export class ToolController {
 	startHandle(k, e) {
 		const sel = selection.value, gen = this.app.doc.stones.find((g) => g.id === sel?.id), piece = gen && this.engine.clothOf(gen.on?.panel)?.piece;
 		if (!piece) return false;
-		const P = patternParams(gen, piece);
-		const d = this.hdrag = { kind: k.kind, mirrored: k.mirrored, id: gen.id, piece, gesture: 'pattern' + (++this.gestureN), x: P.x, y: P.y, rotate: P.rotate, scale: P.scale, minScale: Math.max(0.1, minScale(P)), ga: P.ga, gb: P.gb };
+		const d = this.hdrag = { knob: k, mirrored: k.mirrored, id: gen.id, piece, gesture: 'pattern' + (++this.gestureN) };
 		// the drag starts at the handle's own place, whatever lies under the pointer; moves are relative to the grab
-		const s = this.engine.toScreen(k.sp), [x, y] = this.xy(e);
-		d.lastUv = [k.u, k.v]; d.lastXY = [s.x, s.y];
+		const [x, y] = this.xy(e);
+		d.lastUv = [k.uGrab, k.vGrab]; d.lastXY = [k.px ?? x, k.py ?? y];
 		[d.u0, d.v0] = this.clothPointer(x, y, d);
 		this.engine.viewport.controls.enabled = false;
 		this.el.setPointerCapture(e.pointerId);
+		this.engine.gizmo.hold(k.key, k.read?.(patternParams(gen, piece)) ?? '');
 		return true;
 	}
 
 	dragHandle(x, y, e) {
-		const d = this.hdrag, uv = this.clothPointer(x, y, d), p = d.piece, m = 0.05, params = {};
-		const ang = (u, v) => Math.atan2(v - d.y, u - d.x);
-		switch (d.kind) {
-			case 'move': // from where it was grabbed, kept where its handle can still be reached
-				params.x = tenth(Math.max(p.x0 - m, Math.min(p.x1 + m, d.x + uv[0] - d.u0)));
-				params.y = tenth(Math.max(p.y0 - m, Math.min(p.y1 + m, d.y + uv[1] - d.v0)));
-				break;
-			case 'rotate': {
-				let a = d.rotate + ((ang(uv[0], uv[1]) - ang(d.u0, d.v0)) * 180) / Math.PI;
-				a = ((a + 180) % 360 + 360) % 360 - 180;
-				params.rotate = e.shiftKey ? Math.round(a / 15) * 15 : Math.round(a * 10) / 10;
-				break;
-			}
-			case 'scale': {
-				const r0 = Math.hypot(d.u0 - d.x, d.v0 - d.y) || 1e-3;
-				params.scale = Math.round(Math.max(d.minScale, Math.min(8, (d.scale * Math.hypot(uv[0] - d.x, uv[1] - d.y)) / r0)) * 1000) / 1000;
-				break;
-			}
-			// from where they were grabbed: a handle held at the piece's edge may stand for a point past it
-			case 'ga': params.ga = [tenth(d.ga[0] + uv[0] - d.u0), tenth(d.ga[1] + uv[1] - d.v0)]; params.gb = d.gb; break;
-			case 'gb': params.gb = [tenth(d.gb[0] + uv[0] - d.u0), tenth(d.gb[1] + uv[1] - d.v0)]; params.ga = d.ga; break;
-		}
+		const d = this.hdrag, uv = this.clothPointer(x, y, d), params = d.knob.drag({ u: uv[0], v: uv[1], u0: d.u0, v0: d.v0, shift: e.shiftKey, alt: e.altKey });
 		this.runEdit({ op: 'stones.set', id: d.id, params, gesture: d.gesture }, d.mirrored ? 'm' : undefined);
 		// Mirror off: the first move split the group from its pair; the drag carries on with this side's
 		const now = selection.value?.id;
 		if (now && now !== d.id) d.id = now;
+		const gen = this.app.doc.stones.find((g) => g.id === d.id);
+		if (gen) this.engine.gizmo.hold(d.knob.key, d.knob.read?.(patternParams(gen, d.piece)) ?? '');
 	}
 
 	placePattern(h) {
@@ -201,13 +204,15 @@ export class ToolController {
 		const id = this.run({ op: 'stones.add', kind: 'pattern', on: { panel: h.panel }, stone: st.stone, shape: st.shape, ...this.pieceSymmetry(h), ...(h.layer && h.layer !== 'L0' ? { layer: h.layer } : {}), name: item.label, params: this.patternAt(h, item) });
 		if (id) { selection.value = { kind: 'stones', id }; tool.value = 'move'; }
 	}
-	// A new pattern's parameters: its gallery entry, the crystal chosen in the panel, centred where it was clicked.
+	// A new pattern's parameters: its preset, the crystal chosen in the panel. It lies in the middle of the piece
+	// (a pattern that fills the piece, a gradient), or, for a design of its own size, where it was clicked.
 	patternAt(h, item) {
-		const st = toolOptions.value.stone, piece = this.engine.clothOf(h.panel)?.piece, uv = piece?.uvOf(h.sp), P = { layout: item.layout, preset: item.key, size: st.size, gap: Math.max(st.gap, 1.05), ...item.params };
-		if (uv) {
-			P.x = tenth(uv[0]); P.y = tenth(uv[1]);
-			// a gradient that grows from a point grows from here
-			if (['radial', 'oval', 'diamond', 'square', 'angular', 'spiral', 'ripple'].includes(P.gradient)) { P.ga = [P.x, P.y]; P.gb = [P.x, P.y - Math.min(0.14, (piece.y1 - piece.y0) * 0.4)]; }
+		const st = toolOptions.value.stone, piece = this.engine.clothOf(h.panel)?.piece, uv = piece?.uvOf(h.sp), layout = LAYOUTS[item.layout];
+		const P = { layout: item.layout, preset: item.key, size: st.size, gap: Math.max(st.gap, 1.05), ...layoutDefaults(item.layout), ...item.params, mods: presetMods(item) };
+		if (uv && layout.own && !item.mods) {
+			// (drawn to the piece's middle line, for a design meant to sit on it)
+			const mid = (piece.x0 + piece.x1) / 2;
+			P.x = Math.abs(uv[0] - mid) < 0.02 ? tenth(mid) : tenth(uv[0]); P.y = tenth(uv[1]);
 		}
 		return P;
 	}
@@ -261,8 +266,6 @@ export class ToolController {
 		if (e.button !== 0) return;
 		const t = tool.value, [x, y] = this.xy(e);
 		if (t === 'move') {
-			const k = this.engine.gizmo.hit(x, y);
-			if (k && this.startHandle(k, e)) return;
 			// over a control point of the selected line (the orbit controls were switched off on
 			// hover, see move): drag it; otherwise remember the press: a click selects on release
 			const p = this.pointAt(x, y);
@@ -397,10 +400,9 @@ export class ToolController {
 		if (tool.value === 'move' && !this.press) {
 			// the orbit controls act on the same pointer events before this tool does: switch them
 			// off while the pointer is over a control point, so the press drags the point
-			const knob = e.buttons ? null : this.engine.gizmo.hit(x, y), over = !!knob || !!this.pointAt(x, y);
-			this.engine.gizmo.setHot(knob?.kind ?? null);
+			const over = !!this.pointAt(x, y);
 			this.engine.viewport.controls.enabled = !over;
-			this.el.style.cursor = knob ? HANDLE_CURSOR[knob.kind] : over ? 'move' : 'grab';
+			this.el.style.cursor = over ? 'move' : 'grab';
 			if (over || e.buttons || e.pointerType === 'touch') this.clearHover();
 			else this.queueHover(x, y);
 		} else if (this.press && Math.hypot(x - this.press.x, y - this.press.y) >= 5) this.clearHover(); // turning the view
@@ -425,6 +427,7 @@ export class ToolController {
 	up(e) {
 		if (this.hdrag) {
 			this.hdrag = null;
+			this.engine.gizmo.hold(null);
 			this.app.endGesture();
 			this.engine.viewport.controls.enabled = true;
 			try { this.el.releasePointerCapture(e.pointerId); } catch { /* already released */ }

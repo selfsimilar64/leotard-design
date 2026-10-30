@@ -2,7 +2,7 @@
 // relatives), star-and-strap tilings, and Voronoi cells. See stones/layouts-lattice.js for what a
 // layout is.
 import { TAU, hash2, rankOf1 } from './fields.js';
-import { mm, num, deg, pct, opt, lattice } from './layouts-lattice.js';
+import { mm, num, ratio, stoneRatio, deg, pct, opt, when, along, point, lattice, farT, varied } from './layouts-lattice.js';
 
 const S3 = Math.sqrt(3);
 
@@ -63,31 +63,26 @@ export function wallpaperOps(name) {
 	return G;
 }
 
-// The motif a group repeats, in units of the cell, as stones [x, y, angle]. Line motifs lay one stone
-// every `pitch` (pitch also in cells).
-function motifStones(P, pitch, seed) {
-	const out = [], sz = P.motifSize, kind = P.motif;
-	const stroke = (fn, steps = 40) => {
-		let [px, py] = fn(0), rest = pitch / 2;
-		for (let i = 1; i <= steps; i++) {
-			const [x, y] = fn(i / steps), dx = x - px, dy = y - py, l = Math.hypot(dx, dy);
-			let s = rest;
-			while (s <= l) { out.push([px + (dx / l) * s, py + (dy / l) * s, Math.atan2(dy, dx)]); s += pitch; }
-			rest = s - l; px = x; py = y;
-		}
-	};
-	if (kind === 'dot') out.push([0, 0, 0]);
+// The motif a group repeats, in units of the cell: strokes (each a list of points, its stones laid as a
+// run with a stone at each end) and single stones [x, y, angle, k].
+function motifShape(P, seed) {
+	const sz = P.motifSize, kind = P.motif, strokes = [], dots = [];
+	const stroke = (fn, steps = 12) => { const pts = []; for (let i = 0; i <= steps; i++) pts.push(fn(i / steps)); strokes.push(pts); };
+	if (kind === 'dot') dots.push([0, 0, 0, 1]);
 	else if (kind === 'petal') { stroke((t) => [t * sz, Math.sin(t * Math.PI) * sz * 0.28]); stroke((t) => [t * sz, -Math.sin(t * Math.PI) * sz * 0.28]); }
-	else if (kind === 'comma') stroke((t) => { const a = t * 4.4, r = sz * (0.12 + 0.88 * t); return [r * Math.cos(a), r * Math.sin(a)]; }, 60);
-	else if (kind === 'arrow') { stroke((t) => [t * sz, 0]); stroke((t) => [sz - t * sz * 0.4, t * sz * 0.4]); stroke((t) => [sz - t * sz * 0.4, -t * sz * 0.4]); }
-	else if (kind === 'ring') stroke((t) => [sz * 0.5 * Math.cos(t * TAU), sz * 0.5 * Math.sin(t * TAU)], 48);
-	else if (kind === 'leaf') { stroke((t) => [t * sz, 0]); for (const sgn of [1, -1]) stroke((t) => [t * sz, sgn * Math.sin(t * Math.PI) * sz * 0.34 * (1 - t * 0.4)]); }
-	else { // seeds: a few stones of the seed's choosing
+	else if (kind === 'comma') stroke((t) => { const a = t * 4.4, r = sz * (0.12 + 0.88 * t); return [r * Math.cos(a), r * Math.sin(a)]; }, 20);
+	else if (kind === 'arrow') { stroke((t) => [t * sz, 0], 2); stroke((t) => [sz - t * sz * 0.4, t * sz * 0.4], 2); stroke((t) => [sz - t * sz * 0.4, -t * sz * 0.4], 2); }
+	else if (kind === 'ring') { const pts = []; for (let i = 0; i <= 24; i++) pts.push([sz * 0.5 * Math.cos((i / 24) * TAU), sz * 0.5 * Math.sin((i / 24) * TAU)]); strokes.push(pts); strokes[0].closed = true; }
+	else if (kind === 'leaf') { stroke((t) => [t * sz, 0], 2); for (const sgn of [1, -1]) stroke((t) => [t * sz, sgn * Math.sin(t * Math.PI) * sz * 0.34 * (1 - t * 0.4)]); }
+	else { // seeds: a few stones of the seed's choosing, their sizes too
 		const n = Math.max(1, Math.round(P.motifCount ?? 5));
-		for (let i = 0; i < n; i++) out.push([(hash2(i, 1, seed) - 0.5) * sz, (hash2(i, 2, seed) - 0.5) * sz, hash2(i, 3, seed) * TAU]);
+		for (let i = 0; i < n; i++) dots.push([(hash2(i, 1, seed) - 0.5) * sz, (hash2(i, 2, seed) - 0.5) * sz, hash2(i, 3, seed) * TAU, varied(hash2(i, 4, seed), 0.7)]);
 	}
-	const a = (P.motifTurn * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), ox = P.motifX, oy = P.motifY;
-	return out.map(([x, y, an]) => [ox + c * x - s * y, oy + s * x + c * y, an + a]);
+	const a = (P.motifTurn * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), ox = P.motifX, oy = P.motifY, place = ([x, y]) => [ox + c * x - s * y, oy + s * x + c * y];
+	return {
+		strokes: strokes.map((pts) => { const q = pts.map(place); q.closed = pts.closed; return q; }),
+		dots: dots.map(([x, y, an, k]) => { const [u, v] = place([x, y]); return [u, v, an + a, k]; }),
+	};
 }
 
 // --- quasicrystals: de Bruijn's multigrid ------------------------------------------------------------
@@ -95,13 +90,15 @@ function multigrid(P, E) {
 	const fold = P.fold, F = fold % 2 ? fold : fold / 2, s = P.spacing, r = E.box.r;
 	const ex = [], ey = [], gam = [];
 	let sum = 0;
-	for (let j = 0; j < F; j++) { const a = (TAU * j) / fold; ex.push(Math.cos(a)); ey.push(Math.sin(a)); const g = (hash2(j, 11, E.seed) - 0.5) * (P.phase ?? 1); gam.push(g); sum += g; }
+	// (no variation at all lines every grid up through one point, which no rhombs can tile)
+	for (let j = 0; j < F; j++) { const a = (TAU * j) / fold; ex.push(Math.cos(a)); ey.push(Math.sin(a)); const g = (hash2(j, 11, E.seed) - 0.5) * Math.max(P.phase ?? 1, 0.02); gam.push(g); sum += g; }
 	for (let j = 0; j < F; j++) gam[j] -= sum / F; // sums to zero: a true Penrose tiling at 5
-	const K = Math.ceil((2 * r) / (F * s)) + 2, seen = new Set(), edges = P.draw === 'edges', K_ = new Float64Array(F);
+	const K = Math.ceil((2 * r) / (F * s)) + 2, K_ = new Float64Array(F), lim = (r / s) * 1.2;
 	const vertexKey = (x, y) => Math.round(x * 2000) * 1e7 + Math.round(y * 2000);
-	const emit = (x, y, cat) => { const key = vertexKey(x, y); if (seen.has(key)) return; seen.add(key); E.add(x * s, y * s, rankOf1(Math.abs(key) % 100003), 0, Math.hypot(x, y) * s / r, 1, cat); };
-	const emitEdge = (x0, y0, x1, y1, cat) => { const key = vertexKey((x0 + x1) / 2, (y0 + y1) / 2); if (seen.has(key)) return; seen.add(key); E.cat = cat; E.t = Math.hypot(x0, y0) * s / r; E.seg(x0 * s, y0 * s, x1 * s, y1 * s); };
-	const lim = (r / s) * 1.2;
+	// the rhombs: every corner counts how many meet there, every edge once
+	const corners = new Map(), edges = new Map();
+	const corner = (x, y, cat) => { const key = vertexKey(x, y), c = corners.get(key); if (c) c[2]++; else corners.set(key, [x, y, 1, cat]); return key; };
+	const edge = (a, b, x0, y0, x1, y1, cat) => { const key = vertexKey((x0 + x1) / 2, (y0 + y1) / 2); if (!edges.has(key)) edges.set(key, [a, b, cat]); };
 	for (let j = 0; j < F; j++) for (let l = j + 1; l < F; l++) {
 		const det = ex[j] * ey[l] - ey[j] * ex[l];
 		if (Math.abs(det) < 1e-6) continue;
@@ -115,8 +112,21 @@ function multigrid(P, E) {
 			if (Math.abs(vx) > lim || Math.abs(vy) > lim) continue;
 			// either side of a grid line, K is k or k + 1 (K = ceil(x.e - gamma)): the four corners of the rhomb
 			const cat = l - j, x1 = vx + ex[j], y1 = vy + ey[j], x2 = vx + ex[l], y2 = vy + ey[l], x3 = x1 + ex[l], y3 = y1 + ey[l];
-			if (edges) { emitEdge(vx, vy, x1, y1, cat); emitEdge(vx, vy, x2, y2, cat); emitEdge(x1, y1, x3, y3, cat); emitEdge(x2, y2, x3, y3, cat); }
-			else { emit(vx, vy, cat); emit(x1, y1, cat); emit(x2, y2, cat); emit(x3, y3, cat); }
+			const c0 = corner(vx, vy, cat), c1 = corner(x1, y1, cat), c2 = corner(x2, y2, cat), c3 = corner(x3, y3, cat);
+			edge(c0, c1, vx, vy, x1, y1, cat); edge(c0, c2, vx, vy, x2, y2, cat); edge(c1, c3, x1, y1, x3, y3, cat); edge(c2, c3, x2, y2, x3, y3, cat);
+		}
+	}
+	// a corner where many rhombs meet (the middle of a star) is a bigger stone, by how many
+	const kOf = (c) => 1 + P.valence * Math.max(0, c[2] - 3) * 0.32;
+	const alone = P.draw !== 'edges'; // (corners and nothing else thin over the whole range, the stars of them last)
+	for (const c of corners.values()) E.key(c[0] * s, c[1] * s, 0, Math.hypot(c[0], c[1]) * (s / 0.35), kOf(c), c[3], Math.max(0, 12 - c[2]), alone ? hash2(Math.round(c[0] * 1e3), Math.round(c[1] * 1e3), 3) * Math.max(0.3, 1.3 - c[2] * 0.1) : -1);
+	if (P.draw === 'edges') {
+		for (const [a, b, cat] of edges.values()) {
+			const p = corners.get(a), q = corners.get(b);
+			E.cat = cat; E.t = Math.hypot(p[0], p[1]) * (s / 0.35);
+			// (their stones are already there: the run only needs to know how big, to keep clear of them)
+			E.jk = kOf(p);
+			E.seg(p[0] * s, p[1] * s, q[0] * s, q[1] * s, true, true, kOf(q));
 		}
 	}
 }
@@ -149,10 +159,25 @@ function stars(P, E) {
 		}
 	}
 	const ax = T.a[0] * s, ay = T.a[1] * s, bx = T.b[0] * s, by = T.b[1] * s, m = s * 3, B = { ...E.box, x0: E.box.x0 - m, x1: E.box.x1 + m, y0: E.box.y0 - m, y1: E.box.y1 + m };
-	lattice(B, ax, ay, bx, by, (i, j, x, y) => {
-		E.t = Math.hypot(x, y) / E.box.r;
-		for (const q of struts) { E.cat = q[4] === T.polys[0][0] ? 0 : 1; E.seg(x + q[0] * s, y + q[1] * s, x + q[2] * s, y + q[3] * s); }
+	const star = E.stamped((C, x, y) => {
+		for (let q = 0; q < struts.length; q += 2) {
+			const a = struts[q], b = struts[q + 1];
+			C.cat = a[4] === T.polys[0][0] ? 0 : 1;
+			// the star's point in the middle of two struts is the stone that draws the eye; the strut's far ends meet the next star
+			C.jk = P.nodeSize; C.jpri = 0;
+			C.begin(x + a[2] * s, y + a[3] * s, true);
+			C.to(x + a[0] * s, y + a[1] * s);
+			C.jk = P.waist; C.jpri = 1;
+			C.end(true);
+			C.jk = P.nodeSize; C.jpri = 0;
+			C.begin(x + b[0] * s, y + b[1] * s, true);
+			C.to(x + b[2] * s, y + b[3] * s);
+			C.jk = P.waist; C.jpri = 1;
+			C.end(true);
+		}
 	});
+	lattice(B, ax, ay, bx, by, (i, j, x, y) => { E.t = farT(x, y); E.cat = 0; star(x, y); });
+	E.jpri = 0;
 }
 
 // --- Voronoi cells ------------------------------------------------------------------------------------
@@ -161,13 +186,16 @@ function voronoi(P, E) {
 	const site = (i, j) => [(i + 0.5 + (hash2(i, j, seed) - 0.5) * J) * s, (j + 0.5 + (hash2(i, j, seed + 1) - 0.5) * J) * s];
 	const i0 = Math.floor(B.x0 / s) - 1, i1 = Math.floor(B.x1 / s) + 1, j0 = Math.floor(B.y0 / s) - 1, j1 = Math.floor(B.y1 / s) + 1;
 	if ((i1 - i0) * (j1 - j0) > 8000) return;
+	E.jk = P.nodeSize;
 	for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
 		const [cx, cy] = site(i, j), big = s * 4;
+		let inr = big;
 		// the cell: a big square clipped by the bisector with each near site; each edge remembers whose
 		let poly = [[cx - big, cy - big, -1], [cx + big, cy - big, -1], [cx + big, cy + big, -1], [cx - big, cy + big, -1]];
 		for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
 			if (!di && !dj) continue;
 			const id = (i + di) * 65536 + (j + dj), [ox, oy] = site(i + di, j + dj), nx = ox - cx, ny = oy - cy, mx = (ox + cx) / 2, my = (oy + cy) / 2, out = [];
+			inr = Math.min(inr, Math.hypot(nx, ny) / 2);
 			for (let k = 0; k < poly.length; k++) {
 				const a = poly[k], b = poly[(k + 1) % poly.length], da = (a[0] - mx) * nx + (a[1] - my) * ny, db = (b[0] - mx) * nx + (b[1] - my) * ny;
 				if (da <= 0) out.push(a);
@@ -182,52 +210,82 @@ function voronoi(P, E) {
 			if (poly.length < 3) break;
 		}
 		const me = i * 65536 + j;
-		E.t = Math.hypot(cx, cy) / B.r; E.cat = (i & 1) + 2 * (j & 1);
+		E.t = farT(cx, cy); E.cat = (i & 1) + 2 * (j & 1);
 		for (let k = 0; k < poly.length; k++) {
 			const a = poly[k], b = poly[(k + 1) % poly.length];
 			if (a[2] > me) E.seg(a[0], a[1], b[0], b[1]);
 		}
+		// a gem in the cell, as big as the cell has room for
+		if (P.gem > 0) E.key(cx, cy, 0, E.t, Math.max(0.3, (P.gem * 2 * inr) / (E.d0 * E.gap)), E.cat, 3);
 	}
 }
 
 export const TILING_LAYOUTS = {
 	wallpaper: {
-		label: 'Wallpaper group',
+		label: 'Wallpaper group', random: (P) => P.motif === 'seeds',
 		params: [
 			opt('group', 'Symmetry', 'p6m', Object.entries(WALLPAPER_GROUPS).map(([k, g]) => [k, g.label + ' · ' + k])),
 			mm('spacing', 'Cell size', 0.06, 0.012, 0.16),
 			opt('motif', 'Motif', 'petal', [['petal', 'Petal'], ['leaf', 'Leaf'], ['comma', 'Comma'], ['arrow', 'Arrow'], ['ring', 'Ring'], ['dot', 'Dot'], ['seeds', 'Random']]),
-			num('motifSize', 'Motif size', 0.36, 0.05, 0.9, 0.01, 'x'), num('motifX', 'Motif across', 0.18, -0.5, 0.5, 0.005, 'x'), num('motifY', 'Motif up', 0.08, -0.5, 0.5, 0.005, 'x'),
-			deg('motifTurn', 'Motif turn', 20), num('motifCount', 'Random stones', 5, 1, 20),
+			when(ratio('motifSize', 'Motif size', 0.36, 0.05, 0.9), (P) => P.motif !== 'dot'), ratio('motifX', 'Motif across', 0.18, -0.5, 0.5, 0.005), ratio('motifY', 'Motif up', 0.08, -0.5, 0.5, 0.005),
+			when(deg('motifTurn', 'Motif turn', 20), (P) => P.motif !== 'dot'), when(num('motifCount', 'Random stones', 5, 1, 20), (P) => P.motif === 'seeds'),
+			when(pct('taper', 'Taper along the motif', 0.45, -1, 0.85), (P) => P.motif !== 'dot' && P.motif !== 'seeds' && P.motif !== 'ring'),
+			when(stoneRatio('nodeSize', 'Stones at its ends', 1.25, 1, 3.5), (P) => P.motif !== 'dot' && P.motif !== 'seeds' && P.motif !== 'ring'),
+			when(stoneRatio('dotSize', 'Dot size', 1.5, 0.4, 4), (P) => P.motif === 'dot'),
+		],
+		grips: [
+			along('spacing', [1, 0], 'Cell size'),
+			// the motif itself: where it sits in its cell
+			point((P) => [P.motifX * P.spacing, P.motifY * P.spacing], (P, x, y) => ({ motifX: Math.max(-0.5, Math.min(0.5, x / P.spacing)), motifY: Math.max(-0.5, Math.min(0.5, y / P.spacing)) }), 'Motif: drag it about in its cell'),
 		],
 		make(P, E) {
-			const G = wallpaperOps(P.group), L = P.spacing, stones = motifStones(P, E.pitch / L, E.seed);
-			const placed = G.ops.map((o) => stones.map(([x, y, an]) => {
-				const dx = Math.cos(an), dy = Math.sin(an);
-				return [(o.a * x + o.b * y + o.e) * L, (o.c * x + o.d * y + o.f) * L, Math.atan2(o.c * dx + o.d * dy, o.a * dx + o.b * dy)];
-			}));
-			const m = L * 1.8, B = { ...E.box, x0: E.box.x0 - m, x1: E.box.x1 + m, y0: E.box.y0 - m, y1: E.box.y1 + m };
-			lattice(B, G.a[0] * L, G.a[1] * L, G.b[0] * L, G.b[1] * L, (i, j, x, y) => {
-				const t = Math.hypot(x, y) / E.box.r;
-				placed.forEach((list, q) => { for (let k = 0; k < list.length; k++) { const s = list[k]; E.add(x + s[0], y + s[1], rankOf1(i * 37 + j * 101 + k * 7 + q), s[2], t, 1, q); } });
+			const G = wallpaperOps(P.group), L = P.spacing, M = motifShape(P, E.seed), kEnd = Math.max(0.15, 1 - (P.taper ?? 0)), kDot = P.motif === 'dot' ? P.dotSize : 1;
+			// the motif under each operation, in metres from its cell
+			const placed = G.ops.map((o) => {
+				const map = ([x, y]) => [(o.a * x + o.b * y + o.e) * L, (o.c * x + o.d * y + o.f) * L];
+				const flat = (a) => { const dx = Math.cos(a), dy = Math.sin(a); return Math.atan2(o.c * dx + o.d * dy, o.a * dx + o.b * dy); };
+				return { strokes: M.strokes.map((pts) => { const q = pts.map(map); q.closed = pts.closed; return q; }), dots: M.dots.map(([x, y, an, k]) => { const [u, v] = map([x, y]); return [u, v, flat(an), k * kDot]; }) };
 			});
+			const m = L * 1.8, B = { ...E.box, x0: E.box.x0 - m, x1: E.box.x1 + m, y0: E.box.y0 - m, y1: E.box.y1 + m };
+			E.jk = P.nodeSize;
+			// the motif under one operation; each comes and goes whole, as a density thins it
+			const stamps = placed.map(({ strokes, dots }) => E.stamped((T, x, y) => {
+				for (const s of dots) T.add(x + s[0], y + s[1], T.unit, s[2], T.t, s[3]);
+				for (const pts of strokes) {
+					const n = pts.length - 1;
+					T.k = 1; T.jk = P.nodeSize;
+					T.begin(x + pts[0][0], y + pts[0][1], !pts.closed);
+					if (pts.closed) { for (let v = 1; v <= n; v++) T.to(x + pts[v][0], y + pts[v][1]); T.end(false, true); continue; }
+					for (let v = 1; v <= n; v++) { T.k = 1 + (kEnd - 1) * (v / n); T.to(x + pts[v][0], y + pts[v][1]); }
+					T.jk = P.nodeSize * kEnd;
+					T.end(true);
+				}
+			}));
+			lattice(B, G.a[0] * L, G.a[1] * L, G.b[0] * L, G.b[1] * L, (i, j, x, y) => {
+				E.t = farT(x, y);
+				for (let q = 0; q < stamps.length; q++) { E.cat = q; E.unit = rankOf1(i * 37 + j * 101 + q * 7); stamps[q](x, y); }
+			});
+			E.k = 1; E.unit = -1; E.jk = P.nodeSize;
 		},
 	},
 	quasicrystal: {
 		label: 'Quasicrystal',
-		heavy: true,
-		params: [num('fold', 'Fold', 5, 5, 16), mm('spacing', 'Tile size', 0.016, 0.005, 0.06), opt('draw', 'Stones on', 'edges', [['edges', 'Edges'], ['vertices', 'Corners']]), num('phase', 'Variation', 1, 0, 3, 0.01, 'x')],
+		heavy: true, random: true, points: (P) => P.draw !== 'edges',
+		params: [num('fold', 'Fold', 5, 5, 16), mm('spacing', 'Tile size', 0.016, 0.005, 0.06), opt('draw', 'Stones on', 'edges', [['edges', 'Edges'], ['vertices', 'Corners']]), num('phase', 'Variation', 1, 0, 3, 0.01, 'x'), pct('valence', 'Bigger where more meet', 0.4, 0, 1.5)],
+		grips: [along('spacing', [1, 0], 'Tile size')],
 		make: multigrid,
 	},
 	stars: {
 		label: 'Star and strap',
-		params: [opt('tiling', 'Built on', 'hex', Object.entries(STAR_TILINGS).map(([k, t]) => [k, t.label])), mm('spacing', 'Size', 0.03, 0.008, 0.1), num('contact', 'Star sharpness', 62, 20, 85, 0.5, 'deg')],
+		params: [opt('tiling', 'Built on', 'hex', Object.entries(STAR_TILINGS).map(([k, t]) => [k, t.label])), mm('spacing', 'Size', 0.03, 0.008, 0.1), num('contact', 'Star sharpness', 62, 20, 85, 0.5, 'deg'), stoneRatio('nodeSize', 'Stones at the points', 1.5, 1, 4), stoneRatio('waist', 'Stones where stars meet', 1, 1, 3)],
+		grips: [along('spacing', [1, 0], 'Size')],
 		make: stars,
 	},
 	voronoi: {
 		label: 'Stained glass',
-		heavy: true,
-		params: [mm('spacing', 'Cell size', 0.028, 0.008, 0.1), pct('jitterCells', 'Irregular', 0.85)],
+		heavy: true, random: true,
+		params: [mm('spacing', 'Cell size', 0.028, 0.008, 0.1), pct('jitterCells', 'Irregular', 0.85), stoneRatio('nodeSize', 'Stones at the joints', 1.15, 1, 3.5), pct('gem', 'Gem in each cell', 0, 0, 0.9)],
+		grips: [along('spacing', [1, 0], 'Cell size')],
 		make: voronoi,
 	},
 };

@@ -6,7 +6,7 @@ import { toSP } from '../body/surface.js';
 import { sizeOf, parseStone, SHAPES } from '../stones/library.js';
 import { GENERATOR_KINDS } from '../stones/generators.js';
 import { LAYOUTS } from '../stones/layouts.js';
-import { GRADIENTS } from '../stones/fields.js';
+import { MOD_SHAPES, MOD_TARGETS } from '../stones/modifiers.js';
 
 function gen(tx, id) {
 	const g = tx.doc.stones.find((x) => x.id === id);
@@ -22,7 +22,11 @@ function checkStones(a) {
 	if (a.kind === 'pattern') {
 		if (!a.on?.panel) throw new Error('A pattern lies on a piece: on: { panel }');
 		if (p.layout !== undefined && !LAYOUTS[p.layout]) throw new Error('Unknown pattern layout ' + p.layout + '. Layouts: ' + Object.keys(LAYOUTS).join(', '));
-		if (p.gradient !== undefined && !GRADIENTS[p.gradient]) throw new Error('Unknown gradient ' + p.gradient + '. Gradients: ' + Object.keys(GRADIENTS).join(', '));
+		for (const m of p.mods ?? []) {
+			if (!MOD_TARGETS[m.on]) throw new Error('A modifier acts on ' + Object.keys(MOD_TARGETS).join(', ') + ', not ' + m.on);
+			if (!MOD_SHAPES[m.shape]) throw new Error('Unknown modifier shape ' + m.shape + '. Shapes: ' + Object.keys(MOD_SHAPES).join(', '));
+			for (const s of m.stops ?? []) if (s) parseStone(s);
+		}
 	}
 }
 
@@ -44,11 +48,12 @@ defineCommand('stones.add', {
 });
 
 defineCommand('stones.set', {
-	label: 'Change stones', args: '{ id, params?: {...merged}, stone?, palette?, colourRamp?, shape?, mirror?, seed?, on?, at?, hidden?, name? }',
+	label: 'Change stones', args: '{ id, params?: {...merged; undefined removes one}, stone?, palette?, colourRamp?, shape?, mirror?, seed?, on?, at?, hidden?, name? }',
 	run(tx, a) {
 		const g = gen(tx, a.id);
 		checkStones({ ...g, ...a, params: { ...g.params, ...(a.params ?? {}) } });
-		if (a.params) tx.set(['stones', a.id, 'params'], { ...g.params, ...a.params });
+		// (a parameter set to undefined is gone: what a preset does to the last one's settings)
+		if (a.params) { const next = { ...g.params, ...a.params }; for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k]; tx.set(['stones', a.id, 'params'], next); }
 		for (const k of ['stone', 'palette', 'colourRamp', 'shape', 'mirror', 'seed', 'on', 'hidden', 'name', 'nodeStone', 'fillStone']) if (a[k] !== undefined) tx.set(['stones', a.id, k], a[k]);
 		if (a.at) tx.set(['stones', a.id, 'at'], { sp: toSP(resolvePoint(a.at, tx.ctx)) });
 	},

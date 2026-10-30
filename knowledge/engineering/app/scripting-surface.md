@@ -74,8 +74,9 @@ mirror? } }` (attached ends follow their line).
 - Stones: `stones.add { kind: pattern|row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on, at, params, stone |
   palette | colourRamp, shape, mirror }` (fringe: `{ lengths | random, min, max, spacing, sizeFrom, sizeTo,
   direction: down|away }`; lettering: `{ text, font, height, stoneSize, mode: fill|outline|both, angle }`;
-  pattern: `on: { panel }`, `params: { layout, x, y, rotate, scale, gradient, ga, gb, densityFrom, densityTo, size,
-  sizeTo, ... }`, see [procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md); a `gesture` id on
+  pattern: `on: { panel }`, `params: { layout, x, y, rotate, scale, px, py, pturn, pscale, size, gap, density,
+  mods: [{ id, on: density|size|colour, shape, x, y, a, w, h, from, to, stops, ... }], ... }`, see
+  [procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md); a `gesture` id on
   `stones.set` makes a drag one undo step, the stones following each frame), `stones.set`, `stones.remove`, `stones.erase`,
   `stone.place`, `stone.remove`, `stones.release`.
 - Reference photos: `reference.add`, `reference.pin { id, lm, px }`, `reference.unpin`,

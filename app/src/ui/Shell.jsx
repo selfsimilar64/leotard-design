@@ -4,7 +4,7 @@
 // library (ui/Library.jsx) opens over everything.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { rev, selection, tool, layout, stats, toast, notify, display, designsRev, showStats, hideOverlay, hideMannequin, libraryOpen, busy, savedRev, prefs, setPref } from './state.js';
+import { rev, stonesRun, selection, tool, layout, stats, toast, notify, display, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, savedRev, prefs, setPref } from './state.js';
 import { Panel, pickTab } from './Panel.jsx';
 import { Library } from './Library.jsx';
 import { FlatView } from './FlatView.jsx';
@@ -165,12 +165,33 @@ const VIEWS = [['front', 'Front'], ['threeq', '¾'], ['side', 'Side'], ['back', 
 function ViewBar() {
 	return (
 		<div class="viewbar" role="toolbar" aria-label="View">
+			<CrystalCount />
 			{VIEWS.map(([k, l]) => <button key={k} class="vb-btn" title={`View from the ${k === 'threeq' ? 'front, three-quarter' : k}`} onClick={() => viewTo(k)}>{l}</button>)}
 			<span class="vb-div" />
 			<IconButton icon={<I.lines size={20} />} label={hideOverlay.value ? 'Show the lines and points (H)' : 'Hide the lines and points to see the look (H)'} active={!hideOverlay.value} kind="vb" onClick={() => { hideOverlay.value = !hideOverlay.value; }} />
 			<IconButton icon={<I.mannequin size={20} />} label={hideMannequin.value ? 'Show the mannequin (M)' : 'Hide the mannequin: the leotard floats on its own (M)'} active={!hideMannequin.value} kind="vb" onClick={() => { hideMannequin.value = !hideMannequin.value; }} />
+			{chosenPattern() ? <IconButton icon={<I.handles size={20} />} label={showHandles.value ? 'Hide the pattern\'s handles to see it clean' : 'Show the pattern\'s handles'} active={showHandles.value} kind="vb" onClick={() => { showHandles.value = !showHandles.value; }} /> : null}
 			<span class="vb-div" />
 			<IconButton icon={<I.fit size={20} />} label="Fit the leotard in view" kind="vb" onClick={() => viewTo('fit')} />
+		</div>
+	);
+}
+
+// The pattern on show in the panel, if one is.
+const chosenPattern = () => { const s = selection.value; return s?.kind === 'stones' ? app.doc.stones.find((g) => g.id === s.id && g.kind === 'pattern') ?? null : null; };
+
+// The crystals on the design, always in view; with a stone group chosen, how many of them are its.
+function CrystalCount() {
+	rev.value; stonesRun.value;
+	const stones = app.engine?.stoneRun.stones;
+	if (!stones?.length) return null;
+	const s = selection.value, id = s?.kind === 'stones' ? s.id : null;
+	let mine = 0;
+	if (id) for (let i = 0; i < stones.length; i++) if (stones[i].gen === id) mine++;
+	return (
+		<div class="crystal-count" role="status" title="Crystals on the whole design, and in the group being edited">
+			{id ? <span class="cc-part cc-mine"><span class="cc-label">{chosenPattern() ? 'This pattern' : 'This group'}</span><span class="cc-num">{mine.toLocaleString()}</span></span> : null}
+			<span class="cc-part"><span class="cc-label">Whole design</span><span class="cc-num">{stones.length.toLocaleString()}</span></span>
 		</div>
 	);
 }

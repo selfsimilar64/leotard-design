@@ -34,7 +34,7 @@ finished designs and saves live in a full-window **library**. Supersedes the sid
 | Place | Contents |
 |---|---|
 | Top bar | Designs (opens the library), the design's name (serif, edit in place), its state (Saved / Unsaved changes / Not saved yet, `savedRev` against `app.revision`); undo, redo; Pattern (the pattern pieces beside the model), Export (the PDF pattern), Save; settings |
-| Stage | the 3D view; with Pattern on, the flat pieces beside it (`ui/FlatView.jsx`); the **view bar** floating at the bottom (Front, ¾, Side, Back, lines on/off, mannequin on/off, fit); the **mode bar** at the top while a tool is on; a busy chip (top right) while a slow change runs; toasts; the frame-rate read-out |
+| Stage | the 3D view; with Pattern on, the flat pieces beside it (`ui/FlatView.jsx`); the **view bar** floating at the bottom (the crystal count, whole design and the group chosen; Front, ¾, Side, Back, lines on/off, mannequin on/off, a chosen pattern's handles on/off, fit); a chosen pattern's handles over the view (`render/gizmo.js`); the **mode bar** at the top while a tool is on; a busy chip (top right) while a slow change runs; toasts; the frame-rate read-out |
 | Panel | the four tabs (sliding underline); one vertical scroller per tab page |
 | Library | over everything: Start fresh (the six starting points), Finished designs (`designs/b<n>-*`), Your designs (other saves); each a front-and-back picture |
 | Settings popover | display (resolution, smooth edges, shadows as segments; lower resolution while turning, glow, contact shadows as switches), Working (the view turns to the part being changed), fabric fit (experimental, folded), performance |
@@ -72,19 +72,25 @@ hint on the stage says how to turn, zoom and pick a piece (`prefs.hintDone`).
   positions, print). `LookControls` (compact, 5 columns) serves straps and bindings.
 - **Sparkle** (`ui/SparkleTab.jsx`): four modes as big buttons (Patterns, Rows & fills, Single,
   Eraser); under Patterns, the gallery of [stone patterns](/engineering/architecture/procedural-stone-patterns.md)
-  by family, every picture drawn by the pattern's own code (`ui/PatternPanel.jsx`); the crystal:
+  by family: labelled Presets, two rows and See all, every picture drawn by the pattern's own code
+  (`ui/PatternPanel.jsx`); the crystal:
   colour as gem dots in the library's order with an AB switch, size as discs drawn to
   scale (ss3-ss48), cut as outline icons; rows-and-fills options; *On this design*: crystal groups
   (rows with counts) and counts by size and colour; *Lettering and logos* (font previews in each
   face, look as segments, colour, width, turn). A selected group gets its page (crystal, layout,
-  release, delete, unknown parameters under Advanced), a pattern's being arrangement and its own
-  settings, place on the piece, gradient, crystal (colours as stops that blend), distortions, all
-  live, with its handles on the body while it is chosen in Select; a selected logo its page, with
-  Move it.
+  release, delete, unknown parameters under Advanced), a pattern's being, in this order: arrangement
+  (presets, then its own settings, with what does nothing now hidden), crystal, place on the piece (the
+  whole pattern and what is on it), modifiers (cards on density, size and colour, one open at a time,
+  whose handles then show; Add modifier), distortions, and last Pattern positioning (the crystals under
+  it). All live, with its handles on the body while it is chosen in Select; a pattern chosen on the far
+  side of the body turns the view to it. A selected logo its page, with Move it.
 - **Stage** (`ui/StageTab.jsx`): the mannequin (Show switch, finish as round close-ups, colour),
   age and build (3 columns, one scale), pose (4 columns), studio (4 columns, brightness, turn the
   lights, behind the mannequin: plain colour or the studio room), sparkle effects (glow, crystal
   glare as star icons with size and strength).
+
+Sliders (`ui/kit.jsx Slider`): the read-out is a button that takes a typed value, in the units it
+shows; where a default is given, a small arrow beside it, or a double click on the track, goes back to it.
 
 Selecting a part on the model opens its tab (`ui/state.js TAB_OF`); leaving the Fabric tab
 deselects a piece; a tool belonging to another tab stops when the tab changes. A chosen piece glows
@@ -100,7 +106,7 @@ There is no tool rail. Select (`move`) is the default; the others start from the
 (P seam, S strap, F patterns, G rows and fills, 1 single, D eraser, L lettering) and show the mode bar: what
 a click does, Finish (Enter) / Cancel or Done (Esc). On a touch screen one finger turns the view in
 Select and draws or places in the other tools, two fingers turn and zoom (`controls.touches`). H
-hides the lines, M the mannequin; Esc ends a tool, then clears the selection; a double click (tap)
+hides the lines (not a pattern's handles, which have their own switch), M the mannequin; Esc ends a tool, then clears the selection; a double click (tap)
 in Select fits the leotard in view (with the mannequin hidden, Fit frames the leotard alone). A logo's page can
 move it (`toolOptions.moveDecal`: the lettering tool's next click sets its `at`).
 

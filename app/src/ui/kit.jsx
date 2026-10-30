@@ -135,11 +135,14 @@ export function Switch({ value, onChange, label, hint }) {
 	);
 }
 
-// A slider whose value applies while dragging (one undo step per drag).
-export function Slider({ value, min, max, step = 0.01, onChange, format = (v) => v.toFixed(2) }) {
+// A slider whose value applies while dragging (one undo step per drag). Its read-out is a button: click to
+// type a value. def: its value to go back to, by the small arrow beside it or a double click on the track.
+// log: a track that gives small values as much room as big ones.
+export function Slider({ value, min, max, step = 0.01, onChange, format = (v) => v.toFixed(2), def, log = false, parse }) {
 	const g = useGesture();
-	return <SliderView value={value} min={min} max={max} step={step} format={format}
-		onInput={(v) => onChange(v, g.id())} onCommit={() => g.end()} />;
+	const once = (v) => { onChange(v, g.id()); g.end(); };
+	return <SliderView value={value} min={min} max={max} step={step} format={format} log={log} def={def} parse={parse}
+		onInput={(v) => onChange(v, g.id())} onCommit={() => g.end()} onOnce={once} />;
 }
 // A slider that applies when it is let go (changes that take a while, such as a re-fit).
 export function CommitSlider({ value, min, max, step, format, onCommit }) {
@@ -147,13 +150,39 @@ export function CommitSlider({ value, min, max, step, format, onCommit }) {
 	useEffect(() => setV(value), [value]);
 	return <SliderView value={v} min={min} max={max} step={step} format={format} onInput={setV} onCommit={(x) => onCommit(x)} />;
 }
-function SliderView({ value, min, max, step, format, onInput, onCommit }) {
-	const p = Math.max(0, Math.min(1, (value - min) / (max - min || 1)));
+function SliderView({ value, min, max, step, format, onInput, onCommit, onOnce, def, log = false, parse }) {
+	const [typing, setTyping] = useState(null);
+	// a logarithmic track: the input runs 0..1 and stands for a value by ratio
+	const lg = log && min > 0;
+	const toTrack = (v) => (lg ? Math.log(Math.max(v, min) / min) / Math.log(max / min) : v);
+	const fromTrack = (t) => { if (!lg) return t; const v = min * (max / min) ** t; return step ? +(Math.round(v / step) * step).toFixed(6) : v; };
+	const p = lg ? Math.max(0, Math.min(1, toTrack(value))) : Math.max(0, Math.min(1, (value - min) / (max - min || 1)));
+	const near = Math.abs(value - def) <= (step ?? 0) / 2 + 1e-9, changed = def !== undefined && !near;
+	const shown = format(value);
+	// typing goes by what the read-out shows: "12 mm" of a value in metres means typed numbers are millimetres
+	const shownNumber = (v) => parseFloat(String(format(v)).replace(/[^\d.+-]/g, ' ').trim());
+	const unit = () => { for (const v of [value, max, min]) { const s = shownNumber(v); if (v && s && Number.isFinite(s)) return s / v; } return 1; };
+	const commitTyped = (text) => {
+		setTyping(null);
+		const n = parseFloat(String(text).replace(',', '.'));
+		if (!Number.isFinite(n)) return;
+		const v = parse ? parse(n) : n / unit();
+		if (onOnce) onOnce(Math.max(min, Math.min(max, step ? +(Math.round(v / step) * step).toFixed(6) : v)));
+		else { onInput(Math.max(min, Math.min(max, v))); onCommit(Math.max(min, Math.min(max, v))); }
+	};
 	return (
 		<span class="slider">
-			<input type="range" min={min} max={max} step={step} value={value} style={{ '--p': p }}
-				onInput={(e) => onInput(Number(e.currentTarget.value))} onChange={(e) => onCommit(Number(e.currentTarget.value))} />
-			<span class="slider-val">{format(value)}</span>
+			<input type="range" min={lg ? 0 : min} max={lg ? 1 : max} step={lg ? 0.001 : step} value={toTrack(value)} style={{ '--p': p }}
+				onDblClick={changed && onOnce ? () => onOnce(def) : undefined}
+				onInput={(e) => onInput(fromTrack(Number(e.currentTarget.value)))} onChange={(e) => onCommit(fromTrack(Number(e.currentTarget.value)))} />
+			{typing !== null ? (
+				<input class="slider-type" type="text" inputMode="decimal" value={typing} ref={(el) => { if (el && document.activeElement !== el) { el.focus(); el.select(); } }}
+					onInput={(e) => setTyping(e.currentTarget.value)} onBlur={(e) => commitTyped(e.currentTarget.value)}
+					onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setTyping(null); e.stopPropagation(); }} />
+			) : (
+				<button class="slider-val" title="Type a value" onClick={() => setTyping(String(shownNumber(value) || 0))}>{shown}</button>
+			)}
+			{def !== undefined ? <button class={`slider-reset ${changed ? '' : 'idle'}`} title={changed ? 'Back to ' + format(def) : 'At its default'} aria-label="Back to its default" tabIndex={changed ? 0 : -1} disabled={!changed} onClick={() => onOnce(def)}><I.undo size={13} /></button> : null}
 		</span>
 	);
 }

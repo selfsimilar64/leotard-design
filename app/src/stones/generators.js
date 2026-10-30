@@ -594,8 +594,19 @@ function keepApart(lists, ctx) {
 	}
 	const { head, next, x: KX, y: KY, z: KZ, size: KS, lift: KL } = keep, kept = [];
 	head.fill(-1);
-	let m = 0, biggest = 0;
-	for (const list of lists) for (const s of list) {
+	let m = 0, biggest = 0, li = 0, linked = 0, side = 0;
+	// what has been kept joins the hash; a pattern's stones only when that side of it is done: they have been kept
+	// apart already, on the flat cloth they are pressed on, and a piece that lies a little tighter on the body
+	// must not knock out every other stone of a line
+	const link = () => {
+		for (; linked < m; linked++) {
+			const h = cellHash(Math.floor(KX[linked] / CELL), Math.floor(KY[linked] / CELL), Math.floor(KZ[linked] / CELL));
+			next[linked] = head[h]; head[h] = linked;
+		}
+	};
+	for (const list of lists) for (let n = 0, count = (li++, list.length); n < count; n++) {
+		const s = list[n], own = s.fab ? li * 2 + (s.mirrored ? 1 : 0) : 0;
+		if (own !== side) { link(); side = own; }
 		// on fabric (or on their strap) and off opening edges: known for a pattern's stones, asked once for others
 		if (!s.lift && !s.fab) {
 			if (s.onFabric === undefined) s.onFabric = !ctx.isFabric || ctx.isFabric(s.sp, _b.set(s.x, s.y, s.z), s.size, s.keepOut);
@@ -605,6 +616,7 @@ function keepApart(lists, ctx) {
 		// only the cells this stone could reach, given the biggest stone so far
 		const reach = ((biggest + sz) / 2) * 0.92, i1 = Math.floor((px + reach) / CELL), j1 = Math.floor((py + reach) / CELL), l1 = Math.floor((pz + reach) / CELL);
 		let ok = true;
+		if (linked) // (nothing to keep clear of yet: the first group)
 		for (let i = Math.floor((px - reach) / CELL); i <= i1 && ok; i++) for (let j = Math.floor((py - reach) / CELL); j <= j1 && ok; j++) for (let l = Math.floor((pz - reach) / CELL); l <= l1 && ok; l++) {
 			for (let k = head[cellHash(i, j, l)]; k >= 0; k = next[k]) {
 				if (KL[k] !== lift) continue;
@@ -613,8 +625,8 @@ function keepApart(lists, ctx) {
 			}
 		}
 		if (!ok) continue;
-		const h = cellHash(Math.floor(px / CELL), Math.floor(py / CELL), Math.floor(pz / CELL));
-		KX[m] = px; KY[m] = py; KZ[m] = pz; KS[m] = sz; KL[m] = lift; next[m] = head[h]; head[h] = m; m++;
+		KX[m] = px; KY[m] = py; KZ[m] = pz; KS[m] = sz; KL[m] = lift; m++;
+		if (!own) link();
 		if (sz > biggest) biggest = sz;
 		kept.push(s);
 	}

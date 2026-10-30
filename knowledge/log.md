@@ -1,6 +1,9 @@
 # Bundle update log
 
 ## 2026-10-30
+* **Decision**: [Patterns have a frame, stacked modifiers and keystones](/decisions/2026-10-30-stone-pattern-modifiers-and-keystones.md): the owner's tuning notes on the first version of stone patterns, and what was chosen.
+* **Update**: [Procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md): placing moves the whole pattern with its mask; modifiers on density, size and colour replace the one gradient; arrangements carry their own sizes; corners, centres and crossings are placed first and judged on the flat cloth; handles over the view, specific to each kind; a test holds every control to doing something.
+* **Update**: [The studio interface](/engineering/app/studio-interface.md) and [the scripting surface](/engineering/app/scripting-surface.md): a pattern's page in its new order, modifiers, labelled presets in two rows, sliders that take a typed value and go back to their default, the crystal count on the view bar.
 * **Decision**: [Stone groups are live procedures on the flat cloth](/decisions/2026-10-30-procedural-stone-patterns.md): gemstone groups are edited live and open to a broad class of procedural designs, each adjustable inside its piece with on-screen handles.
 * **Creation**: [Procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md): 48 arrangements (123 starting points) laid on a piece's flat cloth, a gradient driving density, size and colour, distortions, handles on the body; 7 ms per drag frame at 6,300 stones against about 300 ms before.
 * **Update**: [The studio interface](/engineering/app/studio-interface.md): hover in Select: outlines of a piece's, strap's or logo's 3D shape, rings on stones with the whole group lit, and clicking stones, straps and logos in the view now chooses them.
