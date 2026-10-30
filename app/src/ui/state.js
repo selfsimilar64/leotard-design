@@ -3,7 +3,10 @@
 import { signal } from '@preact/signals';
 import { targetOf } from '../doc/symmetry.js';
 
-export const rev = signal(0);              // bumped on every document change; components read it to re-render
+// Bumped on every document change; components read it to re-render. A component that reads any signal is memoized by
+// @preact/signals: it redraws only for its signals or a changed prop, and records in the document are edited in place, so
+// a component that shows a record and reads another signal must read rev too.
+export const rev = signal(0);
 export const stonesRun = signal(0);        // bumped when a drag's stones have been laid (a frame after its command)
 export const selection = signal(null);     // { kind: 'curves' | 'panels' | 'straps' | 'stones' | 'decals' | ..., id }
 export const tab = signal('shape');        // the panel's tab: 'shape' | 'fabric' | 'sparkle' | 'stage'

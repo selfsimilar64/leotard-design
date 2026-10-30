@@ -405,6 +405,8 @@ describe('no dead controls', () => {
 				if (!visible(s, P) || s.options) continue;
 				const max = s.maxOf ? s.maxOf(P, FLAT) : s.max, lo = onStep(s, s.min + (max - s.min) * 0.72);
 				if (max <= s.min) continue;
+				// (a fractal's top detail is free to be finer than its stones can show at the preset's size: it is judged where they can)
+				if (s.k === 'order') { const big = { ...P, extent: 0.8, size: 'ss3' }; if (wide({ ...big, order: lo }) === wide({ ...big, order: max })) dead.push(`${it.key}.${s.k}`); continue; }
 				if (quick({ ...P, [s.k]: lo }) === quick({ ...P, [s.k]: max }) && wide({ ...P, [s.k]: lo }) === wide({ ...P, [s.k]: max })) dead.push(`${it.key}.${s.k}`);
 			}
 		}

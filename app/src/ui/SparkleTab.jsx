@@ -135,6 +135,7 @@ export function CutPicker({ value, onPick }) {
 const groupLabel = (g) => g.name || (g.kind === 'pattern' ? patternLabel(g) : KINDS[g.kind] || g.kind);
 const KINDS = { pattern: 'Pattern', row: 'Rows along a line', fill: 'Fill', scatter: 'Scatter', rays: 'Rays', motif: 'Motif', lattice: 'Lattice', cluster: 'Cluster', fringe: 'Fringe', lettering: 'Crystal lettering' };
 function OnDesign({ doc }) {
+	rev.value;
 	if (!app.engine || doc.legacy) return null;
 	const s = app.stoneStats(), sel = selection.value;
 	const count = (g) => app.engine.stoneRun.stones.filter((x) => x.gen === g.id).length;
@@ -210,6 +211,7 @@ export const FONTS = ['Segoe Script', 'Brush Script MT', 'Lucida Handwriting', '
 const mm = (v) => (v * 1000).toFixed(0) + ' mm';
 
 function Lettering({ doc }) {
+	rev.value;
 	const t = tool.value, sel = selection.value, o = toolOptions.value, d = o.decal;
 	const set = (patch) => { toolOptions.value = { ...o, decal: { ...d, ...patch } }; };
 	return (
@@ -246,6 +248,7 @@ function DecalFields({ d, set }) {
 }
 
 function DecalEditor({ id, doc }) {
+	rev.value;
 	const d = doc.decals.find((x) => x.id === id), back = () => { selection.value = null; };
 	if (!d) return <PartHeader back="Sparkle" onBack={back} title="This logo no longer exists" />;
 	const set = (patch, gesture) => run({ op: 'decal.set', id: d.id, ...patch, ...(gesture ? { gesture } : {}) });

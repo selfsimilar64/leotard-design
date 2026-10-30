@@ -109,6 +109,7 @@ function Ask({ ask, onYes, onNo }) {
 
 const ROLE_LABELS = { seam: 'Seam', edge: 'Edge', print: 'Print line', guide: 'Guide', 'strap-path': 'Strap path', 'trim-path': 'Trim path' };
 function Drawn({ doc }) {
+	rev.value;
 	// the block's own lines (keyed, or named so in designs saved before keys) are the silhouette's
 	const t = tool.value, lines = doc.curves.filter((c) => !blockKeyOf(c) && c.role !== 'strap-path'), straps = doc.straps;
 	const sel = selection.value;

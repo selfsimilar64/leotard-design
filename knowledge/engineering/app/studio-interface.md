@@ -161,6 +161,11 @@ back, without a command or an undo step.
 - A console `import('/src/ui/state.js')` after hot updates can load a second copy of the module
   (the app's has a `?t=` stamp): setting its signals changes nothing on screen. Drive the UI by
   clicks, or `window.app` commands.
+- `@preact/signals` memoizes any component that reads a signal: it then redraws only for its own
+  signals or a changed prop. Records in the document are edited in place, so a component that takes a
+  record or `doc` as a prop and reads any signal must also read `rev.value`, or it goes stale.
+  `PatternEditor` read only `patternFocus`, and its whole page froze after an edit while the design
+  changed (highlights, slider fills, a previous category's controls). A parent's redraw does not help.
 
 ## Hover in Select
 

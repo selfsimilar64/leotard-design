@@ -243,12 +243,9 @@ function circleStones(E, x, y, r, rank, ringFrom, pri = 6) {
 }
 // A square a grip draws round a fractal.
 const squareOf = (e) => [[[-e / 2, -e / 2], [e / 2, -e / 2], [e / 2, e / 2], [-e / 2, e / 2], [-e / 2, -e / 2]]];
-// How much detail a fractal can show: past the point where its steps are smaller than the smallest stone there is, more
-// detail changes nothing.
-const SMALLEST_STONE = 0.0014;
-const onCloth = (P) => P.extent * (P.scale ?? 1) * (P.pscale ?? 1);
-const curveDetail = (P) => { const C = CURVES[P.curve] ?? CURVES.hilbert; let n = C.most; while (n > 1 && curveData(P.curve, n).unit * onCloth(P) < SMALLEST_STONE) n--; return n; };
-const dustDetail = (P) => { const D = DUSTS[P.dust] ?? DUSTS.carpet; let n = D.most; while (n > 1 && onCloth(P) / D.cells ** n < SMALLEST_STONE) n--; return n; };
+// How much detail a fractal can have: as much as its rule can grow (curveData, dustPoints), whatever the pattern's size.
+const curveDetail = (P) => (CURVES[P.curve] ?? CURVES.hilbert).most;
+const dustDetail = (P) => (DUSTS[P.dust] ?? DUSTS.carpet).most;
 const SQUARE_GRIP = point((P) => [P.extent / 2, P.extent / 2], (P, x, y) => ({ extent: Math.max(Math.abs(x), Math.abs(y)) * 2 }), 'Size', (P) => squareOf(P.extent));
 
 export const CURVE_LAYOUTS = {

@@ -6,7 +6,7 @@
 // render/gizmo.js, ui/tools.js).
 import { useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { patternFocus, stonesRun } from './state.js';
+import { patternFocus, rev, stonesRun } from './state.js';
 import { toolOptions } from './tools.js';
 import { run, Section, Field, Segmented, Slider, Switch, Tiles, Disclosure, Button, IconButton, Hint } from './kit.jsx';
 import { I } from './icons.jsx';
@@ -90,7 +90,7 @@ function ParamControl({ spec, P, set, piece }) {
 	// (its default is what the preset gives it; its end, where it stops doing anything)
 	const value = P[spec.k] ?? spec.d, max = spec.maxOf ? Math.max(spec.min + (spec.step ?? 0), Math.min(spec.max, spec.maxOf(P, piece))) : spec.max, def = GALLERY_ITEMS.get(P.preset)?.params?.[spec.k] ?? spec.d;
 	if (spec.options) return <Field label={spec.l}><Segmented wrap value={value} options={spec.options} onPick={(v) => set(spec.k, v)} /></Field>;
-	return <Field label={spec.l}><Slider value={value} min={spec.min} max={max} step={spec.step} log={spec.log} def={def} format={FORMAT[spec.f]} onChange={(v, g) => set(spec.k, v, g)} /></Field>;
+	return <Field label={spec.l}><Slider value={Math.min(value, max)} min={spec.min} max={max} step={spec.step} log={spec.log} def={def} format={FORMAT[spec.f]} onChange={(v, g) => set(spec.k, v, g)} /></Field>;
 }
 
 const DISTORT = [
@@ -105,6 +105,7 @@ const DISTORT = [
 ];
 
 export function PatternEditor({ g }) {
+	rev.value; // (g is edited in place, and a component that reads a signal redraws only for a new prop or its signals: see state.js)
 	const piece = app.engine?.clothOf(g.on?.panel)?.piece, P = patternParams(g, piece), layout = LAYOUTS[P.layout], focus = patternFocus.value;
 	if (!piece) stonesRun.value; // (shown again when its flat shape arrives)
 	const set = (patch, gesture) => run({ op: 'stones.set', id: g.id, ...patch, ...(gesture ? { gesture } : {}) });
@@ -160,7 +161,7 @@ export function PatternEditor({ g }) {
 				</Disclosure>
 			</Section>}
 			{layout.flat ? null : <Section>
-				<details class="disclosure" onToggle={(e) => { patternFocus.value = e.currentTarget.open ? 'plane' : patternFocus.value === 'plane' ? 'frame' : patternFocus.value; }}>
+				<details class="disclosure" open={focus === 'plane'} onToggle={(e) => { patternFocus.value = e.currentTarget.open ? 'plane' : patternFocus.value === 'plane' ? 'frame' : patternFocus.value; }}>
 					<summary><I.chevronRight size={16} class="disc-chev" /><span>Pattern positioning: how the crystals lie under it</span></summary>
 					<div class="disc-body">
 						<p class="sec-note">Shifts, turns and scales the crystals only: the modifiers stay where they are.</p>
