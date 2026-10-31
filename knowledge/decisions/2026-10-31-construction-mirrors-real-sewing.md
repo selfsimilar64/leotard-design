@@ -37,7 +37,7 @@ pieces and measurements that "correspond directly to pieces that will be cut and
    with no seam allowance, and a placement line on the piece it is sewn onto.
 3. **Only finishes a line can really take are offered.** Elastic and binding go on an opening; a line with
    fabric on both sides is a seam whatever it is called. A plain seam has no width control, because its stitching
-   is inside; every visible finish has one, within the widths it is really made in.
+   is inside; every visible finish has one, over a range that is a working assumption until a maker confirms it.
 4. **The owner's reference design** was judged to be a mesh bodice with two satin plates appliquéd on
    it, not pieces joined edge to edge. That reading comes from a photo and is not confirmed by the maker.
 

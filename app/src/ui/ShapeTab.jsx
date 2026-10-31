@@ -188,8 +188,8 @@ function LineEditor({ id, doc }) {
 	);
 }
 
-// The widths each finish is really made in (metres): knowledge/domain/construction/edge-finishing-elastic-and-binding.md
-// for elastic and binding; piping, tape and the narrow zigzag from the makers' own ranges.
+// Slider ranges for each finish (metres). Working assumptions, not sourced maker limits: check them
+// against knowledge/domain/construction/edge-finishing-elastic-and-binding.md and a real maker.
 const WIDTHS = { elastic: [0.005, 0.02], binding: [0.003, 0.016], piping: [0.0015, 0.006], tape: [0.003, 0.02], zigzag: [0.001, 0.005] };
 
 // Is this line the edge of the fabric on its layer (an opening, or an overlay piece's outline), as
