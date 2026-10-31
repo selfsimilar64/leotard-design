@@ -83,6 +83,7 @@ uniform float uTrimInset;  // metres the fabric's cut is pulled back under the f
 uniform float uTrimWidth;  // finished edge width, for the contact shadow it casts on the fabric beside it
 varying vec2 vRim;         // finished edge: x = distance from the edge (profile metres), y = metres along it
 uniform vec2 uRows;        // topstitch rows, metres from the edge (0 = no row)
+uniform float uZig;        // a zigzag stitch along the edge: half its width, metres (0 = none)
 uniform vec3 uThread;
 float gTrimAO = 1.;
 
@@ -578,10 +579,18 @@ const FABRIC_FRAGMENT = /* glsl */`
 		for ( int k = 0; k < 2; k ++ ) {
 			float r = k == 0 ? uRows.x : uRows.y;
 			if ( r <= 0. ) continue;
-			float du = abs( vRim.x - r ), along = fract( vRim.y / .003 + float( k ) * .37 );
+			// (a flat tape's rows run either side of its line)
+			float du = abs( abs( vRim.x ) - r ), along = fract( vRim.y / .003 + float( k ) * .37 );
 			float dash = smoothstep( .02, .1, along ) * ( 1. - smoothstep( .86, .94, along ) );
 			thread = max( thread, ( 1. - smoothstep( .00016 - fx, .00016 + fx, du ) ) * dash * fade );
 			groove = max( groove, 1. - smoothstep( .0001, .0007 + fx, du ) );
+		}
+		if ( uZig > 0. ) {
+			// one thread running from side to side of the edge, about 1.4 mm to the repeat
+			float tri = abs( fract( vRim.y / .0014 ) * 2. - 1. ) * 2. - 1.;
+			float slope = uZig * 4. / .0014, du = abs( vRim.x - tri * uZig ) / sqrt( 1. + slope * slope );
+			thread = ( 1. - smoothstep( .00011 - fx, .00011 + fx, du ) ) * fade;
+			groove = 1. - smoothstep( uZig * .9, uZig * 1.25, abs( vRim.x ) );
 		}
 		normal = bumpN( normal, ( thread * .00012 - groove * .00018 ) * fade );
 		diffuseColor.rgb = mix( diffuseColor.rgb * ( 1. - groove * mix( .12, .3, fade ) ), uThread, thread );
@@ -1139,7 +1148,7 @@ export function createFabricMaterial(zone) {
 	const u = {
 		uZone: { value: zone }, uSleeveSplit: { value: 0 }, uOffset: { value: panel ? 0.0012 : zone >= 3 ? 0 : 0.0012 + zone * 0.00015 },
 		uGarment: { value: panel || zone < 3 ? 1 : 0 }, uClip: { value: 0 }, uTape: { value: 0 }, uUV: { value: panel ? 1 : 0 }, uGrain: { value: 0 },
-		uTrimInset: { value: 0 }, uTrimWidth: { value: 0 }, uRows: { value: new THREE.Vector2() }, uThread: { value: new THREE.Color() },
+		uTrimInset: { value: 0 }, uTrimWidth: { value: 0 }, uRows: { value: new THREE.Vector2() }, uZig: { value: 0 }, uThread: { value: new THREE.Color() },
 		uTapeY: { value: new THREE.Vector4(1.04, 1.168, 0.83, 1.357) }, uTapeColor: { value: new THREE.Color(0x15151a) },
 		uFlake: { value: 0 }, uPitch: { value: 0.001 }, uDotR: { value: 0.4 }, uPresence: { value: 1 }, uTilt: { value: 0.1 },
 		uFoilRough: { value: 0.2 }, uGlint: { value: 0 },

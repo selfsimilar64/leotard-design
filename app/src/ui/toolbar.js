@@ -6,6 +6,7 @@ export const tools = [
 	{ id: 'move', label: 'Select', key: 'V', tab: null },
 	{ id: 'pen', label: 'Draw a seam', key: 'P', tab: 'shape' },
 	{ id: 'strap', label: 'Draw a strap', key: 'S', tab: 'shape' },
+	{ id: 'overlay', label: 'Add overlay piece', key: 'O', tab: 'shape' },
 	{ id: 'stones', label: 'Rows and fills', key: 'G', tab: 'sparkle' },
 	{ id: 'pattern', label: 'Patterns', key: 'F', tab: 'sparkle' },
 	{ id: 'single', label: 'Single crystals', key: '1', tab: 'sparkle' },

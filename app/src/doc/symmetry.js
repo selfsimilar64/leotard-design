@@ -16,6 +16,7 @@ import { defineCommand } from './store.js';
 import { mirrorSP } from '../curves/points.js';
 import { fromSP, toSP } from '../body/surface.js';
 import { flipPatternParams } from '../stones/pattern.js';
+import { LOOK } from './materials.js';
 
 export const symmetryOn = (doc) => doc.symmetry !== false;
 
@@ -23,8 +24,8 @@ export const symmetryOn = (doc) => doc.symmetry !== false;
 const TARGETS = {
 	'curve.set': ['curves', 'id'], 'curve.points': ['curves', 'id'], 'curve.movePoint': ['curves', 'id'], 'curve.insertPoint': ['curves', 'id'],
 	'curve.removePoint': ['curves', 'id'], 'curve.setKind': ['curves', 'id'], 'curve.remove': ['curves', 'id'], 'trim.set': ['curves', 'on'], 'band.add': ['curves', 'on'],
-	'panel.set': ['panels', 'id'], 'panel.cut': ['panels', 'id'], 'panel.restore': ['panels', 'id'],
-	'strap.set': ['straps', 'id'], 'strap.remove': ['straps', 'id'],
+	'panel.set': ['panels', 'id'], 'panel.cut': ['panels', 'id'], 'panel.restore': ['panels', 'id'], 'panel.material': ['panels', 'id'], 'panel.separate': ['panels', 'id'], 'overlay.remove': ['panels', 'id'],
+	'strap.set': ['straps', 'id'], 'strap.remove': ['straps', 'id'], 'strap.material': ['straps', 'id'], 'strap.separate': ['straps', 'id'],
 	'stones.set': ['stones', 'id'], 'stones.remove': ['stones', 'id'], 'stones.release': ['stones', 'id'],
 	'decal.set': ['decals', 'id'], 'decal.remove': ['decals', 'id'],
 };
@@ -186,6 +187,8 @@ defineCommand('sym.edit', {
 			return { result, id: t.id, split: false };
 		}
 		const other = split(tx, t.list, t.id), id = a.side === 'm' && other ? other : t.id;
+		// the two sides share a material: a new look for one side alone needs its own (doc/materials.js)
+		if (LOOK.some((k) => a.cmd[k] !== undefined)) { if (t.list === 'panels') tx.exec({ op: 'panel.separate', id }); else if (t.list === 'straps') tx.exec({ op: 'strap.separate', id }); }
 		return { result: tx.exec({ ...a.cmd, [t.key]: id }), id, split: true };
 	},
 });

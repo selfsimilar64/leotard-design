@@ -4,7 +4,8 @@
 // of the loop's curves), else turned self-fabric elastic. Rebuilt when the cut or the body changes.
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric, bindScan, texScaleOf } from '../materials/fabric.js';
-import { TRIMS, KAPPA_MAX, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
+import { TRIMS, KAPPA_MAX, trimAtWidth, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
+import { lookOf } from '../doc/materials.js';
 import { openingLoops } from '../garment/edges.js';
 
 export class Rims {
@@ -24,15 +25,15 @@ export class Rims {
 	finishOf(doc, loop, panel) {
 		const counts = new Map();
 		for (const c of loop.curves) if (c) { const id = c.replace(/~m$/, ''); counts.set(id, (counts.get(id) ?? 0) + 1); }
-		const main = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
-		const t = main && doc.trims.find((x) => x.on?.includes(main));
+		// the finish of the loop's longest line that has one: a finish set on any of its lines shows
+		const t = [...counts].sort((a, b) => b[1] - a[1]).map(([id]) => doc.trims.find((x) => x.on?.includes(id))).find(Boolean);
 		const s = panel?.stack?.[0] ?? { fabric: 'matte', colour: '#888888', second: 'Tone-on-tone' };
 		// overlay pieces (lace, appliqué) and linings are raw-edged unless a finish is set
 		if (!t && this.kind && this.kind !== 'shell') return null;
 		if (!t) return { kind: 'elastic', fabric: s.fabric, colour: s.colour, second: s.second ?? 'Tone-on-tone' };
 		if (t.kind === 'none') return null;
-		const f = t.kind === 'binding' && t.fabric ? t.fabric : s;
-		return { kind: TRIMS[t.kind] ? t.kind : 'elastic', fabric: f.fabric ?? s.fabric, colour: f.colour ?? s.colour, second: f.second ?? 'Tone-on-tone' };
+		const f = (t.kind === 'binding' || t.kind === 'zigzag') && t.fabric ? t.fabric : s;
+		return { kind: TRIMS[t.kind] ? t.kind : 'elastic', width: t.width, second: 'Tone-on-tone', ...lookOf(f) };
 	}
 
 	build(g, doc, garment, evaluated = null, lift = 0) {
@@ -72,7 +73,9 @@ export class Rims {
 			gr.loops.push(recs);
 		}
 		// piping (corded) or tape (flat) along a seam line, on this layer's seams
-		if (evaluated) for (const t of doc.trims.filter((x) => x.kind === 'piping' || x.kind === 'tape')) {
+		if (evaluated) for (const t of doc.trims.filter((x) => x.kind === 'piping' || x.kind === 'tape' || x.kind === 'zigzag')) {
+			// a zigzag on an opening's own line is drawn with the opening's loop, above
+			if (t.kind === 'zigzag' && this.loops.some((l) => l.curves.some((c) => c && t.on.includes(c.replace(/~m$/, ''))))) continue;
 			for (const id of t.on) {
 				const c = doc.curves.find((x) => x.id === id);
 				if (!c || (c.layer ?? 'L0') !== (this.layerId ?? 'L0')) continue;
@@ -87,7 +90,7 @@ export class Rims {
 						const inside = new THREE.Vector3().crossVectors(nn, tt).normalize();
 						recs.push({ p, n: nn, inside, kappa: 0, ref: atSp(R, sp, new THREE.Vector3()), keep: 1, sleeve: 0 });
 					}
-					const fin = { kind: t.kind, fabric: t.fabric?.fabric ?? 'shiny', colour: t.fabric?.colour ?? '#ffffff', second: t.fabric?.second ?? 'Tone-on-tone' };
+					const fin = { kind: t.kind, width: t.width, fabric: 'shiny', colour: '#ffffff', second: 'Tone-on-tone', ...lookOf(t.fabric) };
 					const key2 = JSON.stringify(fin);
 					let gr = groups.get(key2);
 					if (!gr) groups.set(key2, gr = { fin, loops: [] });
@@ -97,13 +100,15 @@ export class Rims {
 			}
 		}
 		for (const { fin, loops } of groups.values()) {
-			const T = TRIMS[fin.kind], prof = T.profile, built = [];
+			const prof = trimAtWidth(fin.kind, fin.width).profile, built = [];
 			for (const raw of loops) {
 				if (raw.open) { built.push(openRun(raw)); continue; }
 				const { pts, length } = resample(raw);
 				const n = pts.length;
 				const P = pts.map((p) => p.p), Nn = pts.map((p) => p.n), In = pts.map((p) => p.inside), Kp = pts.map((p) => p.kappa);
-				smoothLoop(P, 3, 2, true); smoothLoop(Nn, 4, 2, true); smoothLoop(In, 4, 1, true); smoothLoop(Kp, 8, 2, false);
+				// (a narrow stitched edge follows its line closely, into the piece's corners)
+					if (fin.kind === 'zigzag') smoothLoop(P, 1, 1, true); else smoothLoop(P, 3, 2, true);
+					smoothLoop(Nn, 4, 2, true); smoothLoop(In, 4, 1, true); smoothLoop(Kp, 8, 2, false);
 				const frames = [], scale = [];
 				for (let i = 0; i < n; i++) {
 					const nn = Nn[i].normalize(), t = P[(i + 1) % n].clone().sub(P[(i - 1 + n) % n]).normalize();
@@ -131,10 +136,11 @@ export class Rims {
 		let m = this.materials.get(key);
 		if (!m) {
 			m = createFabricMaterial(4);
-			applyFabric(m, fin.fabric, fin.colour, fin.second, null, texScaleOf(fin));
+			applyFabric(m, fin.fabric, fin.colour, fin.second, fin.colour2 ?? null, texScaleOf(fin), fin.satin);
 			bindScan(m, fin, this.textures); // its fabric's default scan, as on the panels
-			const T = TRIMS[fin.kind];
+			const T = trimAtWidth(fin.kind, fin.width);
 			m.userData.u.uRows.value.set(T.rows[0], T.rows[1]);
+			m.userData.u.uZig.value = T.zigzag ? T.width / 2 : 0;
 			m.userData.u.uThread.value.set(fin.colour).multiplyScalar(0.8); // thread matched to the fabric, a shade darker
 			this.materials.set(key, m);
 		}

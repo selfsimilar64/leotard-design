@@ -11,7 +11,9 @@ import { rev, selection, tool, prefs, setPref, notify, slow } from './state.js';
 import { toolOptions } from './tools.js';
 import { run, Section, Field, Tiles, Segmented, Slider, Switch, Stepper, Button, IconButton, PartHeader, PartRow, Hint, thumb } from './kit.jsx';
 import { I, EDGE_ICONS, FINISH_ICONS } from './icons.jsx';
-import { LookControls, fabricLabel } from './FabricTab.jsx';
+import { LookControls, MaterialChoice, MaterialUse, fabricLabel } from './FabricTab.jsx';
+import { TRIMS } from '../garment/trim.js';
+import { panelAt } from '../garment/build.js';
 import { focusOn } from './camera.js';
 import { BLOCK_OPTIONS, blockOf, blockAllows, blockKeyOf } from '../garment/blocks.js';
 
@@ -118,6 +120,7 @@ function Drawn({ doc }) {
 			<div class="btn-row">
 				<Button icon={<I.pen size={18} />} active={t === 'pen'} onClick={() => { tool.value = t === 'pen' ? 'move' : 'pen'; }}>Draw a seam</Button>
 				<Button icon={<I.strap size={18} />} active={t === 'strap'} onClick={() => { tool.value = t === 'strap' ? 'move' : 'strap'; }}>Draw a strap</Button>
+				<Button icon={<I.fill size={18} />} active={t === 'overlay'} title="A piece cut to shape and stitched on top of the fabric, which stays whole under it (appliqué)" onClick={() => { tool.value = t === 'overlay' ? 'move' : 'overlay'; }}>Add overlay piece</Button>
 			</div>
 			{t === 'pen' ? <PenOptions /> : t === 'strap' ? <StrapToolOptions /> : null}
 			{lines.length || straps.length ? (
@@ -125,7 +128,7 @@ function Drawn({ doc }) {
 					{lines.map((c) => <PartRow key={c.id} icon={<I.lines size={18} />} label={c.name || 'Line ' + c.id} meta={ROLE_LABELS[c.role] ?? c.role} on={sel?.id === c.id} onClick={() => { selection.value = { kind: 'curves', id: c.id }; }} />)}
 					{straps.map((s, i) => <PartRow key={s.id} swatch={s.fabric?.colour ?? '#222'} label={s.name || 'Strap ' + (i + 1)} meta={`${(s.width * 1000).toFixed(0)} mm`} on={sel?.id === s.id} onClick={() => { selection.value = { kind: 'straps', id: s.id }; }} />)}
 				</div>
-			) : <Hint>Draw your own seams to split a piece in two, or straps across an opening. Tap any line on the model to change it.</Hint>}
+			) : <Hint>A seam joins two pieces edge to edge. An overlay piece is sewn on top of the fabric, which stays whole under it. Tap any line on the model to change it.</Hint>}
 		</Section>
 	);
 }
@@ -185,21 +188,50 @@ function LineEditor({ id, doc }) {
 	);
 }
 
-// Edge finish of a line: elastic, binding or raw on an edge; piping or tape on a seam; bands on edges.
+// The widths each finish is really made in (metres): knowledge/domain/construction/edge-finishing-elastic-and-binding.md
+// for elastic and binding; piping, tape and the narrow zigzag from the makers' own ranges.
+const WIDTHS = { elastic: [0.005, 0.02], binding: [0.003, 0.016], piping: [0.0015, 0.006], tape: [0.003, 0.02], zigzag: [0.001, 0.005] };
+
+// Is this line the edge of the fabric on its layer (an opening, or an overlay piece's outline), as
+// the rims draw it? A line with fabric on both sides is a seam whatever it is called, and an opening's
+// finishes (elastic, binding) cannot go on it.
+function isOpening(c) {
+	const loops = app.engine?.layers?.get(c.layer ?? 'L0')?.rims?.loops ?? [];
+	return loops.some((l) => l.curves.some((k) => k && k.replace(/~m$/, '') === c.id));
+}
+
+// The fabric beside a line: a stitched edge is sewn in thread to match it.
+function lookBeside(c) {
+	const e = app.engine, ev = e?.evaluated?.get(c.id), g = e?.layers?.get(c.layer ?? 'L0')?.g;
+	if (!ev?.sps.length || !g) return null;
+	const id = panelAt(g, app.doc, e.surf, ev.sps[ev.sps.length >> 1]);
+	return app.doc.panels.find((p) => p.id === id)?.stack?.[0] ?? null;
+}
+
+// How a line is sewn. On an opening: elastic, binding, a raw cut or a narrow zigzag edge. Between two
+// fabrics: a plain seam, piping, tape or a zigzag. Only the finishes this line can really take are offered.
 function FinishSection({ c, doc }) {
 	if (c.role !== 'edge' && c.role !== 'seam') return null;
-	const t = doc.trims.find((x) => x.on.includes(c.id));
-	const kind = t?.kind ?? (c.role === 'edge' ? 'elastic' : 'none');
-	const kinds = c.role === 'edge' ? [['elastic', 'Turned elastic'], ['binding', 'Binding'], ['none', 'Raw cut']] : [['none', 'Plain seam', 'seam'], ['piping', 'Piping'], ['tape', 'Flat tape']];
-	const f = t?.fabric ?? { fabric: 'shiny', colour: '#ffffff', second: 'Tone-on-tone' };
-	const coloured = kind === 'binding' || kind === 'piping' || kind === 'tape';
-	const set = (patch) => run({ op: 'trim.set', on: c.id, kind, fabric: f, ...patch });
+	const opening = isOpening(c), t = doc.trims.find((x) => x.on.includes(c.id));
+	const kinds = opening ? [['elastic', 'Turned elastic'], ['binding', 'Binding'], ['zigzag', 'Narrow zigzag'], ['none', 'Raw cut']] : [['none', 'Plain seam', 'seam'], ['piping', 'Piping'], ['tape', 'Flat tape'], ['zigzag', 'Narrow zigzag']];
+	const fallback = opening ? 'elastic' : 'none', kind = t && kinds.some(([k]) => k === t.kind) ? t.kind : fallback;
+	const beside = lookBeside(c), f = t?.fabric ?? { fabric: 'shiny', colour: '#ffffff', second: 'Tone-on-tone' };
+	const contrast = kind === 'binding' || kind === 'piping' || kind === 'tape', ownFabric = contrast || (kind === 'zigzag' && !opening);
+	const fabricFor = (v) => (v === 'binding' || v === 'piping' || v === 'tape' ? { fabric: f } : v === 'zigzag' && !opening && beside ? { fabric: beside } : {});
+	const range = WIDTHS[kind], width = t?.width ?? TRIMS[kind]?.width;
+	const lookSet = (patch, g) => { if (f.material) run({ op: 'material.set', id: f.material, ...patch, ...(g ? { gesture: g } : {}) }); };
 	return (
-		<Section title={c.role === 'edge' ? 'Edge finish' : 'Seam finish'}>
-			<Tiles cols={3} compact value={kind} onPick={(v) => run({ op: 'trim.set', on: c.id, kind: v, ...(v === 'binding' || v === 'piping' || v === 'tape' ? { fabric: f } : {}) })}
+		<Section title={opening ? 'Edge finish' : 'Seam finish'}>
+			<Tiles cols={4} compact value={kind} onPick={(v) => run({ op: 'trim.set', on: c.id, kind: v, ...fabricFor(v) })}
 				items={kinds.map(([k, l, ic]) => { const Ic = FINISH_ICONS[ic ?? k]; return { key: k, label: l, icon: <Ic size={32} /> }; })} />
-			{coloured ? <LookControls look={f} set={(patch) => set({ fabric: { ...f, ...patch } })} /> : null}
-			{c.role === 'edge' ? <div class="btn-row"><Button icon={<I.band size={18} />} title="A band of fabric along this edge: a mock-neck collar, a cuff" onClick={() => run({ op: 'band.add', on: c.id, ...toolOptions.value.swatch })}>Add a band on this edge</Button></div> : null}
+			{range ? <Field label="Width"><Slider value={width} min={range[0]} max={range[1]} step={0.0005} format={(v) => (v * 1000).toFixed(1) + ' mm'} onChange={(v, g) => run({ op: 'trim.set', on: c.id, kind, width: v, ...(ownFabric ? { fabric: f } : {}), ...(g ? { gesture: g } : {}) })} /></Field> : null}
+			{kind === 'none' && !opening ? <Hint>A plain seam joins two fabrics edge to edge with the stitching inside, so it has no visible width of its own. For a visible edge choose piping, tape or a narrow zigzag; for a shape sewn on top of the fabric, use an overlay piece.</Hint> : null}
+			{kind === 'zigzag' && opening ? <Hint>Sewn in thread to match this piece.</Hint> : null}
+			{ownFabric ? <>
+				<Field label="Material" aside={<MaterialUse id={f.material} doc={doc} kind="finish" />}><MaterialChoice value={f.material} doc={doc} onPick={(m) => run({ op: 'trim.set', on: c.id, kind, width: t?.width, material: m })} /></Field>
+				<LookControls look={f} set={lookSet} />
+			</> : null}
+			{c.role === 'edge' && opening && !doc.panels.some((p) => p.outline === c.id) ? <div class="btn-row"><Button icon={<I.band size={18} />} title="A band of fabric along this edge: a mock-neck collar, a cuff" onClick={() => run({ op: 'band.add', on: c.id, ...toolOptions.value.swatch })}>Add a band on this edge</Button></div> : null}
 		</Section>
 	);
 }
@@ -222,6 +254,9 @@ function StrapEditor({ id, doc }) {
 				<Field label="Stacking" aside={<span class="field-value">over {s.layer ?? 0} other{(s.layer ?? 0) === 1 ? '' : 's'}</span>}>
 					<Stepper value={s.layer ?? 0} min={0} max={8} onChange={(v) => set({ layer: v })} />
 				</Field>
+			</Section>
+			<Section title="Material" aside={<MaterialUse id={f.material} doc={doc} kind="strap" />}>
+				<MaterialChoice value={f.material} doc={doc} onPick={(m) => run({ op: 'strap.material', id: s.id, material: m })} onSeparate={() => run({ op: 'strap.separate', id: s.id })} />
 			</Section>
 			<Section title="Look" aside={<span class="sec-value">{fabricLabel(f.fabric)}</span>}>
 				<LookControls look={{ fabric: f.fabric ?? 'matte', colour: f.colour ?? '#222222', second: f.second ?? 'Tone-on-tone', colour2: f.colour2 ?? null, texture: f.texture ?? null, texMode: f.texMode }} set={(patch, g) => set(patch, g)} />

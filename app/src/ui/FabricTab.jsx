@@ -7,10 +7,11 @@ import { useEffect, useState } from 'preact/hooks';
 import { app } from '../instance.js';
 import { rev, selection, tool } from './state.js';
 import { toolOptions } from './tools.js';
-import { run, Section, Field, Tiles, Segmented, Swatches, ColourWell, Slider, Disclosure, Button, IconButton, Hint, thumbName } from './kit.jsx';
+import { run, Section, Field, Tiles, Segmented, Swatches, ColourWell, HexField, Slider, Disclosure, Button, IconButton, Hint, thumbName } from './kit.jsx';
 import { I } from './icons.jsx';
 import { FABRICS, SECOND, SATIN_DEFAULTS, RETIRED_SCANS, texScaleOf, hasSecondColour } from '../materials/fabric.js';
 import { baseFabricFor } from '../materials/textures.js';
+import { usage } from '../doc/materials.js';
 
 // The materials in the order the moodboard uses them (knowledge/domain/moodboard/common-patterns.md:
 // mesh in 83% of garments, matte 45%, wet look and foil 33%, shiny 28%, mystique 28%, then the
@@ -74,14 +75,19 @@ function PieceEditor({ p, doc }) {
 	const look = { fabric: s.fabric, colour: s.colour ?? '#888888', second: s.second ?? 'Tone-on-tone', colour2: s.colour2 ?? null, texture: s.texture ?? null, texMode: s.texMode };
 	return (
 		<>
+			<Section title="Material" aside={<MaterialUse id={s.material} doc={doc} kind="piece" />}>
+				<MaterialChoice value={s.material} doc={doc} onPick={(m) => run({ op: 'panel.material', id: p.id, material: m })} onSeparate={() => run({ op: 'panel.separate', id: p.id })} />
+			</Section>
 			<Section title={<PieceTitle p={p} doc={doc} />} aside={<>
 				{app.looking ? <IconButton icon={<I.eyedrop size={18} />} label="Match the colour to the reference photo: click the piece on the photo" onClick={() => { toolOptions.value = { ...toolOptions.value, eyedrop: { panel: p.id, layer: 0 } }; tool.value = 'eyedrop'; }} /> : null}
-				<IconButton icon={<I.scissors size={18} />} label="Cut it out: make this piece an opening (a keyhole, a cut-out)" onClick={() => run({ op: 'panel.cut', id: p.id })} />
+				{p.outline
+					? <IconButton icon={<I.trash size={18} />} kind="danger" label="Delete this overlay piece" onClick={() => { run({ op: 'overlay.remove', id: p.id }); selection.value = null; }} />
+					: <IconButton icon={<I.scissors size={18} />} label="Cut it out: make this piece an opening (a keyhole, a cut-out)" onClick={() => run({ op: 'panel.cut', id: p.id })} />}
 			</>}>
 				<ColourFields look={look} set={set} />
 			</Section>
 			<Gradient p={p} s={s} doc={doc} />
-			<Section title="Material" aside={<span class="sec-value">{look.texture ? 'Scanned fabric' : fabricLabel(s.fabric)}</span>}>
+			<Section title="Fabric type" aside={<span class="sec-value">{look.texture ? 'Scanned fabric' : fabricLabel(s.fabric)}</span>}>
 				{f?.mesh ? <Field label="Sheerness"><Slider value={s.sheer ?? (3.6276 * f.mesh.holeR ** 2) ** 2} min={0} max={0.95} step={0.01} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ sheer: v }, g)} /></Field> : null}
 				{f?.micro ? <SatinControls s={s} set={set} /> : null}
 				<MaterialGrid look={look} set={set} />
@@ -91,6 +97,41 @@ function PieceEditor({ p, doc }) {
 					<FineTune p={p} s={s} f={f} doc={doc} set={set} />
 				</Disclosure>
 			</Section>
+		</>
+	);
+}
+
+// How much is cut from a material, beside its heading: why a change here reaches other parts.
+export function MaterialUse({ id, doc, kind }) {
+	const u = usage(doc).get(id);
+	if (!u) return null;
+	const n = u.piece + u.strap + u.finish;
+	return <span class="sec-value">{n <= 1 ? `Only this ${kind}` : `Shared by ${n} parts`}</span>;
+}
+
+// The design's materials as chips: pick one to cut this part from it. Its colour and fabric, set
+// below, reach everything else cut from it; "Separate" gives this part its own copy first.
+export function MaterialChoice({ value, doc, onPick, onSeparate }) {
+	const m = doc.materials.find((x) => x.id === value), u = usage(doc), shared = (u.get(value)?.all ?? 0) > 1;
+	const unused = doc.materials.filter((x) => !u.get(x.id)?.all);
+	return (
+		<>
+			<div class="chips">
+				{doc.materials.filter((x) => u.get(x.id)?.all || x.id === value).map((x) => (
+					<button key={x.id} class={`chip piece ${x.id === value ? 'on' : ''}`} title={`${fabricLabel(x.fabric)} ${x.colour}`} onClick={() => x.id !== value && onPick(x.id)}>
+						<span class="chip-dot" style={{ '--c': x.colour }} />{x.name}
+					</button>
+				))}
+				{unused.filter((x) => x.id !== value).map((x) => (
+					<button key={x.id} class="chip piece" title={`${fabricLabel(x.fabric)} ${x.colour}: nothing is cut from it yet`} onClick={() => onPick(x.id)}><span class="chip-dot" style={{ '--c': x.colour }} />{x.name}</button>
+				))}
+			</div>
+			{m ? <Field label="Name"><input class="text-in" value={m.name} onChange={(e) => run({ op: 'material.set', id: m.id, name: e.currentTarget.value })} /></Field> : null}
+			<div class="btn-row">
+				{shared && onSeparate ? <Button kind="quiet" title="Give this part its own copy of the material, so a change here stays here" onClick={onSeparate}>Separate from the others</Button> : null}
+				<Button kind="quiet" icon={<I.plus size={16} />} title="A new material, starting as a copy of this one; this part is cut from it" onClick={() => { const id = run({ op: 'material.add', from: value }); if (id) onPick(id); }}>New material</Button>
+				{unused.filter((x) => x.id !== value).length ? <Button kind="quiet" title="Delete the materials nothing is cut from" onClick={() => run(unused.filter((x) => x.id !== value).map((x) => ({ op: 'material.remove', id: x.id })))}>Tidy unused</Button> : null}
+			</div>
 		</>
 	);
 }
@@ -128,6 +169,7 @@ function SecondColour({ look, f, set }) {
 				<Segmented value={custom ? null : look.second ?? 'Tone-on-tone'} wrap onPick={(v) => set({ second: v, colour2: null })}
 					options={SECOND.map((v) => [v, v === 'Tone-on-tone' ? 'Tone on tone' : v])} />
 				<ColourWell value={look.colour2 ?? '#c0c0c8'} on={custom} title="Any colour" onChange={(c, g) => set({ colour2: c }, g)} />
+				<HexField value={look.colour2} onPick={(c) => set({ colour2: c })} />
 			</div>
 		</Field>
 	);

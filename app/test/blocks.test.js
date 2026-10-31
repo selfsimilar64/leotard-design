@@ -60,6 +60,7 @@ describe('block.set changes one element and keeps the rest', () => {
 		s.exec({ op: 'block.apply', neck: 'crew', back: 'crew', sleeves: 'tank', leg: 'standard', fabric: 'matte', colour: '#112233' });
 		const front = panel(s.doc, 'Front').id, back = panel(s.doc, 'Back').id, neck = byName(s.doc, 'Neckline').id, leg = byName(s.doc, 'Leg line').id;
 		const n0 = s.doc.curves.length;
+		s.exec({ op: 'panel.separate', id: back }); // the block's pieces start in one material
 		s.exec({ op: 'panel.set', id: back, colour: '#aa0000' });
 		const row = s.exec({ op: 'stones.add', kind: 'row', on: { curve: neck }, params: { size: 'ss10', rows: 1, offset: 0.004, gap: 1.2 } });
 

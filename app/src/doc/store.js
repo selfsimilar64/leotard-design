@@ -7,6 +7,7 @@
 // Commands that carry the same `gesture` id (a drag) coalesce into a single entry.
 import { applyPrim, clone, getAt, parsePath, sectionOf } from './paths.js';
 import { migrate } from './schema.js';
+import { adoptLooks } from './materials.js';
 
 const COMMANDS = new Map();
 
@@ -75,6 +76,7 @@ export class DocumentStore {
 		try {
 			result = this._run(tx, cmd);
 			if (!opts.dryRun) for (const h of this.hooks) h(tx, tx.touched);
+			if (!opts.dryRun && (tx.touched.has('panels') || tx.touched.has('straps') || tx.touched.has('trims'))) adoptLooks(tx);
 		} catch (e) {
 			tx.rollback();
 			throw e;

@@ -153,10 +153,14 @@ export function cellSeed(arr, surf, cell) {
 
 // Cells that belong to no panel but were fabric in the previous build (a new line split a panel):
 // returns new panels to add, each inheriting the stack of the panel it was cut from. A cell and
-// its mirror image become one panel with mirror 'both'.
+// its mirror image become one panel with mirror 'both'. When the panel that was cut kept the mirror
+// image of the new cell (its seed lay inside one of two mirrored shapes), it becomes the pair:
+// { pair: panelId } (owner, 2026-10-31: the Front's seed is on the wearer's left, so its two new
+// chest pieces came out unlinked). New pieces get a name of their own: the pattern lists them by name.
 export function inheritPanels(g, prev, doc, surf) {
 	if (!prev) return [];
-	const out = [], claimed = new Set();
+	const out = [], claimed = new Set(), names = new Set(doc.panels.map((p) => p.name));
+	const nameOf = (base) => { if (!base || !names.has(base)) { names.add(base); return base; } for (let i = 2; ; i++) if (!names.has(`${base} ${i}`)) { names.add(`${base} ${i}`); return `${base} ${i}`; } };
 	// cells that were already openings stay openings: skip them by their (unchanged) shape
 	const prevOpen = new Set();
 	for (let c = 0; c < prev.arr.cells.length; c++) if (prev.cellPanel[c] < 0) prevOpen.add(cellSignature(prev.arr, c));
@@ -171,7 +175,8 @@ export function inheritPanels(g, prev, doc, surf) {
 		const m = mirrorSP(seed, surf), mt = locate(g.arr, surf, m), mc = mt >= 0 ? g.arr.cellOf[mt] : -1;
 		const both = mc >= 0 && mc !== c && g.cellPanel[mc] < 0 && !claimed.has(mc);
 		if (both) claimed.add(mc);
-		out.push({ seed: toSP(seed), mirror: both ? 'both' : 'none', stack: structuredClone(src.stack), from: src.id, name: src.name });
+		if (mc >= 0 && mc !== c && src.mirror !== 'both' && g.panelIds[g.cellPanel[mc]] === src.id) { out.push({ pair: src.id }); continue; }
+		out.push({ seed: toSP(seed), mirror: both ? 'both' : 'none', stack: structuredClone(src.stack), from: src.id, name: nameOf(src.name) });
 	}
 	return out;
 }

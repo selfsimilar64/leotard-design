@@ -29,11 +29,25 @@ export const TRIMS = {
 		label: 'Tape over a seam (flat, contrast)', width: 0.008, rows: [0.0034, 0],
 		profile: [[-0.0044, 0.0001, 0.6], [-0.004, 0.0008, 0.85], [-0.0034, 0.0012, 1], [0, 0.00125, 1], [0.0034, 0.0012, 1], [0.004, 0.0008, 0.85], [0.0044, 0.0001, 0.6]],
 	},
+	// a narrow zigzag or satin stitch straddling a cut edge: the thin appliqué edge (u runs either side
+	// of the edge); the thread is the thing seen, the rim only lifts it a little off the fabric
+	zigzag: {
+		label: 'Zigzag (a narrow stitched edge)', width: 0.002, rows: [0, 0], zigzag: true,
+		profile: [[-0.0012, 0.0001, 0.7], [-0.001, 0.0005, 0.9], [-0.0006, 0.00065, 1], [0, 0.0007, 1], [0.0006, 0.00065, 1], [0.001, 0.0005, 0.9], [0.0012, 0.0001, 0.7]],
+	},
 	binding: {
 		label: 'Binding (contrast strip)', width: 0.008, rows: [0.0064, 0],
 		profile: [[0.0005, 0.0002, 0.55], [0, 0.0011, 0.75], [0.0005, 0.0021, 0.9], [0.0015, 0.0027, 1], [0.0065, 0.0027, 1], [0.0077, 0.0021, 1], [0.008, 0.0015, 0.85], [0.0086, 0.001, 0.8]],
 	},
 };
+// A finish at its chosen width: across the edge the profile and stitch rows scale; a corded piping is
+// round, so it grows in height too.
+export function trimAtWidth(kind, width) {
+	const T = TRIMS[kind], s = width ? width / T.width : 1;
+	if (s === 1) return T;
+	const h = kind === 'piping' ? s : 1;
+	return { ...T, width: T.width * s, rows: T.rows.map((r) => r * s), profile: T.profile.map(([u, v, ao]) => [u * s, v * h, ao]) };
+}
 const INSET = 0.004; // fabric cut pulled back under the rim (must stay inside every profile's width)
 // Largest curvature (1/m) the rim's profile bends by to follow the fabric across it. 30 (a 3.3 cm
 // radius) was too little where a pose folds the fabric into a crease (the groin in the low lunge):

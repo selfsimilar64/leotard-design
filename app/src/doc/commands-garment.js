@@ -6,7 +6,8 @@ import { toSP } from '../body/surface.js';
 import { makeBlock, blockFabric, blockKeyOf, blockOf, fitToStrap, BLOCK_OPTIONS, DEFAULT_BLOCK, ELEMENT_CURVES, ELEMENT_PANELS } from '../garment/blocks.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { STARTS } from '../garment/starts.js';
-import { panelAt, buildGarment, evaluateAll, cellSeed } from '../garment/build.js';
+import { buildGarment, cellSeed, evaluateAll, panelAt } from '../garment/build.js';
+import { LOOK, lookOf, setLook, assign, usage, freshName } from './materials.js';
 import { projectNear, evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
 import { fromSP } from '../body/surface.js';
@@ -94,7 +95,7 @@ defineCommand('start.apply', {
 		const st = STARTS.find((s) => s.key === a.key);
 		if (!st) throw new Error('key must be one of: ' + STARTS.map((s) => s.key).join(', '));
 		tx.exec({ op: 'block.apply', ...st.block, ...st.fabric });
-		for (const o of ['stones', 'placed', 'straps', 'trims', 'bands', 'decals', 'details', 'hardware']) for (const x of tx.doc[o].slice()) tx.remove(o, x.id);
+		for (const o of ['materials', 'stones', 'placed', 'straps', 'trims', 'bands', 'decals', 'details', 'hardware']) for (const x of tx.doc[o].slice()) tx.remove(o, x.id);
 		for (const l of tx.doc.layers.slice()) if (l.id !== 'L0') tx.exec({ op: 'layer.remove', id: l.id });
 		const panelOf = (key) => tx.doc.panels.find((p) => p.block === key)?.id, curveOf = (key) => tx.doc.curves.find((c) => c.block === key)?.id;
 		for (const [key, patch] of Object.entries(st.panels ?? {})) { const id = panelOf(key); if (id) tx.exec({ op: 'panel.set', id, ...patch }); }
@@ -336,10 +337,84 @@ function setStackFields(tx, p, a, layer = 0) {
 	if (a.ombre?.curve && !tx.doc.curves.some((c) => c.id === a.ombre.curve)) throw new Error('ombre: no line ' + a.ombre.curve);
 	if (a.print && !a.print.src) throw new Error('print needs src (an image URL) and size [w, h] in metres');
 	// a new fabric or scan starts at its own default texture size (materials/fabric.js texScaleOf)
-	const cur = p.stack[layer];
-	if (cur && a.texScale === undefined && ((a.fabric !== undefined && a.fabric !== cur.fabric) || (a.texture !== undefined && (a.texture ?? undefined) !== cur.texture))) tx.set([...base, 'texScale'], undefined);
-	for (const k of ['fabric', 'colour', 'second', 'colour2', 'effect', 'rainbow', 'satin', 'sheer', 'grain', 'print', 'ombre', 'texture', 'texMode', 'texScale', 'texNormal', 'masks']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
+	const cur = p.stack[layer], resetScale = cur && a.texScale === undefined && ((a.fabric !== undefined && a.fabric !== cur.fabric) || (a.texture !== undefined && (a.texture ?? undefined) !== cur.texture));
+	// what the fabric is belongs to its material, so it reaches everything cut from that material;
+	// grain, gradient and print are this piece's own (doc/materials.js)
+	if (cur?.material && tx.doc.materials.some((m) => m.id === cur.material)) {
+		setLook(tx, cur.material, { ...a, ...(resetScale ? { texScale: null } : {}) });
+		for (const k of ['grain', 'print', 'ombre']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
+		return;
+	}
+	if (resetScale) tx.set([...base, 'texScale'], undefined);
+	for (const k of [...LOOK, 'grain', 'print', 'ombre']) if (a[k] !== undefined) tx.set([...base, k], a[k] === null ? undefined : a[k]);
 }
+
+// --- materials ---------------------------------------------------------------------------------
+// The fabrics a design is cut from: doc/materials.js.
+
+defineCommand('material.add', {
+	label: 'New material', args: '{ from?: materialId (copies it), name?, fabric?, colour?, second?, ... }',
+	run(tx, a) {
+		const src = a.from ? tx.doc.materials.find((m) => m.id === a.from) : null;
+		if (a.from && !src) throw new Error('No material ' + a.from);
+		const look = { fabric: 'matte', colour: '#888888', second: 'Tone-on-tone', ...lookOf(src), ...lookOf(a) };
+		oneOf('fabric', look.fabric, Object.keys(FABRICS));
+		const id = tx.newId('m');
+		tx.insert('materials', { id, name: freshName(tx.doc, a.name ?? src?.name ?? FABRICS[look.fabric].label.replace(/ \(.*\)$/, '')), ...look });
+		return id;
+	},
+});
+
+defineCommand('material.set', {
+	label: 'Change material', args: '{ id, name?, fabric?, colour?, second?, colour2?, ... } (reaches every piece, strap and finish cut from it)',
+	run(tx, a) {
+		if (!tx.doc.materials.some((m) => m.id === a.id)) throw new Error('No material ' + a.id);
+		if (a.fabric !== undefined) oneOf('fabric', a.fabric, Object.keys(FABRICS));
+		if (a.second !== undefined) oneOf('second', a.second, SECOND);
+		if (a.name !== undefined) tx.set(['materials', a.id, 'name'], a.name);
+		setLook(tx, a.id, a);
+	},
+});
+
+defineCommand('material.remove', {
+	label: 'Delete material', args: '{ id } (only one nothing is cut from)',
+	run(tx, a) {
+		const u = usage(tx.doc).get(a.id);
+		if (!u) throw new Error('No material ' + a.id);
+		if (u.all) throw new Error('This material is still in use');
+		tx.remove('materials', a.id);
+	},
+});
+
+defineCommand('panel.material', {
+	label: 'Change material', args: '{ id, material }',
+	run(tx, a) { const p = findPanel(tx, a); assign(tx, ['panels', p.id, 'stack', '0'], a.material); return p.id; },
+});
+
+defineCommand('panel.separate', {
+	label: 'Separate material', args: '{ id } (this piece gets its own copy of its material)',
+	run(tx, a) {
+		const p = findPanel(tx, a), m = tx.exec({ op: 'material.add', from: p.stack[0].material });
+		assign(tx, ['panels', p.id, 'stack', '0'], m);
+		return m;
+	},
+});
+
+defineCommand('strap.material', {
+	label: 'Change material', args: '{ id, material }',
+	run(tx, a) { if (!tx.doc.straps.some((s) => s.id === a.id)) throw new Error('No strap ' + a.id); assign(tx, ['straps', a.id, 'fabric'], a.material); },
+});
+
+defineCommand('strap.separate', {
+	label: 'Separate material', args: '{ id } (this strap gets its own copy of its material)',
+	run(tx, a) {
+		const s = tx.doc.straps.find((x) => x.id === a.id);
+		if (!s) throw new Error('No strap ' + a.id);
+		const m = tx.exec({ op: 'material.add', from: s.fabric.material });
+		assign(tx, ['straps', a.id, 'fabric'], m);
+		return m;
+	},
+});
 
 defineCommand('panel.set', {
 	label: 'Change panel', args: '{ id | at: spec, fabric?, colour?, second?, colour2? (hex: foil, ombre end, duochrome shift), effect? (0..2: hologram / film / duochrome strength), rainbow? (0.2..3: how fast hologram or opal colours change with the angle, 1 = the fabric default), satin?: { gs?, gv?, kd?, eta? } | null (Satin (thread model): highlight width and colour glow width in degrees, milkiness 0..1, refractive index; unset = the default (owner settings); colour2 or second dyes the cross threads),sheer? (0..0.95: share seen through a mesh or lace net), grain?, ombre?: { colour, curve | axis, start, end } | null, print?: { src, size: [w, h] m, offset } | null, texture? (scan id or null), texMode?: original|recolour, texScale?, texNormal?, masks?: [colours], name?, layer? (0 = outer) }',
@@ -376,20 +451,68 @@ defineCommand('panel.add', {
 // --- edge finishes -------------------------------------------------------------------------------
 
 defineCommand('trim.set', {
-	label: 'Edge finish', args: '{ on: curveId | [curveIds], kind: elastic|binding (edges)|piping|tape (seams)|none, fabric?: { fabric, colour, second } }',
+	label: 'Edge finish', args: '{ on: curveId | [curveIds], kind: elastic|binding (edges)|piping|tape (seams)|zigzag (a narrow stitched edge: an appliqué edge)|none, width? (m), material? | fabric?: { fabric, colour, second, ... } }',
 	run(tx, a) {
 		const on = Array.isArray(a.on) ? a.on : [a.on];
 		for (const id of on) findCurve(tx, id);
-		oneOf('kind', a.kind, ['elastic', 'binding', 'piping', 'tape', 'none']);
+		oneOf('kind', a.kind, ['elastic', 'binding', 'piping', 'tape', 'zigzag', 'none']);
 		if (a.fabric?.fabric) oneOf('fabric', a.fabric.fabric, Object.keys(FABRICS));
+		if (a.width !== undefined && !(a.width >= 0.0005 && a.width <= 0.04)) throw new Error('Finish width is in metres, between 0.0005 and 0.04');
+		const mat = a.material ? tx.doc.materials.find((m) => m.id === a.material) : null;
+		if (a.material && !mat) throw new Error('No material ' + a.material);
+		const look = mat ? { ...lookOf(mat), material: mat.id } : a.fabric ? { fabric: 'matte', colour: '#ffffff', second: 'Tone-on-tone', ...lookOf(a.fabric), ...(a.fabric.material ? { material: a.fabric.material } : {}) } : null;
 		// one finish per curve: drop the curves from other trims first
 		for (const t of tx.doc.trims) {
 			const keep = t.on.filter((c) => !on.includes(c));
 			if (keep.length !== t.on.length) { if (keep.length) tx.set(['trims', t.id, 'on'], keep); else tx.remove('trims', t.id); }
 		}
 		const id = tx.newId('t');
-		tx.insert('trims', { id, on, kind: a.kind, ...(a.fabric ? { fabric: { fabric: a.fabric.fabric ?? 'matte', colour: a.fabric.colour ?? '#ffffff', second: a.fabric.second ?? 'Tone-on-tone' } } : {}) });
+		tx.insert('trims', { id, on, kind: a.kind, ...(a.width !== undefined ? { width: a.width } : {}), ...(look ? { fabric: look } : {}) });
 		return id;
+	},
+});
+
+// --- overlays --------------------------------------------------------------------------------------
+// A piece cut to shape and stitched on top of the fabric under it (appliqué), which stays whole: the
+// way a line that is no seam is really made (knowledge/domain/construction/applique-and-overlays.md).
+// The export gives it its own cut piece with no seam allowance and a placement line on the piece
+// below (garment/pattern.js). panel.outline names its line.
+
+defineCommand('overlay.add', {
+	label: 'Add overlay piece', args: '{ points: [spec | { at, kind, on }] (3 or more, closed), mirror?: none|both, material?, name?, edge?: finish kind (default zigzag), width? (m, default 2 mm) }',
+	run(tx, a) {
+		if (!Array.isArray(a.points) || a.points.length < 3) throw new Error('An overlay piece needs at least three points');
+		const surf = ctxOf(tx).surf, mirror = a.mirror ?? 'both';
+		const layer = tx.doc.layers.find((l) => l.kind === 'overlay')?.id ?? tx.exec({ op: 'layer.add', kind: 'overlay', name: 'Appliqué' });
+		const curve = tx.exec({ op: 'curve.add', role: 'edge', closed: true, mirror, layer, name: (a.name || 'Overlay') + ' edge', points: a.points });
+		const evaluated = evaluateAll(tx.doc, surf, null, ctxOf(tx).evaluated), g = buildGarment(tx.doc, surf, { layer, evaluated });
+		// the new shape is the smallest cell no piece of this layer has claimed (the rest of the body is the largest)
+		let cell = -1;
+		for (let c = 0; c < g.arr.cells.length; c++) if (g.cellPanel[c] < 0 && g.arr.cells[c].area > 1e-4 && (cell < 0 || g.arr.cells[c].area < g.arr.cells[cell].area)) cell = c;
+		if (cell < 0) throw new Error('This outline does not enclose a shape: place the points further apart');
+		const seed = cellSeed(g.arr, surf, cell);
+		// it starts in the fabric of the piece it lies on; choose its own material afterwards
+		const L0 = ctxOf(tx).garment?.('L0') ?? buildGarment(tx.doc, surf, { layer: 'L0', evaluated }), under = tx.doc.panels.find((p) => p.id === panelAt(L0, tx.doc, surf, seed));
+		const mat = a.material ? tx.doc.materials.find((m) => m.id === a.material) : null;
+		if (a.material && !mat) throw new Error('No material ' + a.material);
+		const look = mat ? { ...lookOf(mat), material: mat.id } : { fabric: 'matte', colour: '#888888', second: 'Tone-on-tone', ...lookOf(under?.stack?.[0]), ...(under?.stack?.[0]?.material ? { material: under.stack[0].material } : {}) };
+		const id = tx.newId('p');
+		tx.insert('panels', { id, layer, name: a.name ?? 'Overlay', seed: toSP(seed), mirror, outline: curve, stack: [look] });
+		tx.exec({ op: 'trim.set', on: curve, kind: a.edge ?? 'zigzag', ...(a.width !== undefined ? { width: a.width } : {}) });
+		tx.noInherit = true; // this command settled its own piece
+		return id;
+	},
+});
+
+defineCommand('overlay.remove', {
+	label: 'Delete overlay piece', args: '{ id } (the piece and its outline)',
+	run(tx, a) {
+		const p = findPanel(tx, a);
+		if (!p.outline) throw new Error('Not an overlay piece');
+		for (const t of tx.doc.trims) if (t.on.includes(p.outline)) { const keep = t.on.filter((x) => x !== p.outline); if (keep.length) tx.set(['trims', t.id, 'on'], keep); else tx.remove('trims', t.id); }
+		tx.remove('panels', p.id);
+		if (tx.doc.curves.some((c) => c.id === p.outline)) tx.remove('curves', p.outline);
+		tx.noInherit = true;
 	},
 });
 
@@ -454,7 +577,8 @@ defineCommand('strap.set', {
 		if (a.edge !== undefined) { oneOf('edge', a.edge, ['elastic', 'binding', 'none']); tx.set(['straps', a.id, 'edge'], a.edge); }
 		if (a.layer !== undefined) tx.set(['straps', a.id, 'layer'], a.layer);
 		if (a.fabric !== undefined) oneOf('fabric', a.fabric, Object.keys(FABRICS));
-		for (const k of ['fabric', 'colour', 'second', 'texture', 'texMode']) if (a[k] !== undefined) tx.set(['straps', a.id, 'fabric', k], a[k] === null ? undefined : a[k]);
+		if (s.fabric?.material && tx.doc.materials.some((m) => m.id === s.fabric.material)) setLook(tx, s.fabric.material, a);
+		else for (const k of LOOK) if (a[k] !== undefined) tx.set(['straps', a.id, 'fabric', k], a[k] === null ? undefined : a[k]);
 	},
 });
 

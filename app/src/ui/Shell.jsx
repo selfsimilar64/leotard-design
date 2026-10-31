@@ -200,6 +200,7 @@ function CrystalCount() {
 const MODE_TEXT = {
 	pen: ['Drawing a seam', 'Click the body to place points · Shift for a corner · click the first point to close, or end on another line'],
 	strap: ['Drawing a strap', 'Click points from edge to edge · Shift for a corner · end on an edge'],
+	overlay: ['Drawing an overlay piece', 'Click round its outline · Shift for a corner · click a line to meet it · click the first point or press Enter to finish'],
 	stones: ['Adding crystals', 'Click a line for rows along it, or a piece to fill it'],
 	pattern: ['Laying a pattern', 'Click the piece to lay it on; its handles and settings come next'],
 	single: ['Placing crystals', 'Click to place one crystal'],
@@ -210,7 +211,7 @@ const MODE_TEXT = {
 function ModeBar() {
 	const t = tool.value, m = MODE_TEXT[t];
 	if (!m) return null;
-	const drawing = t === 'pen' || t === 'strap';
+	const drawing = t === 'pen' || t === 'strap' || t === 'overlay';
 	return (
 		<div class="modebar" role="status">
 			<span class="mb-text"><strong>{m[0]}</strong><span>{m[1]}</span></span>

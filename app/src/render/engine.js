@@ -608,7 +608,7 @@ Engine.prototype.edgeKeepOut = function (doc) {
 		let keep = TRIMS.elastic.width + 0.0015;
 		const main = loop.curves.find(Boolean)?.replace(/~m$/, '');
 		const t = main && doc.trims.find((x) => x.on.includes(main));
-		if (t) keep = t.kind === 'none' ? 0.002 : t.kind === 'binding' ? TRIMS.binding.width + 0.0015 : keep;
+		if (t) keep = t.kind === 'none' ? 0.002 : TRIMS[t.kind] ? (t.width ?? TRIMS[t.kind].width) + 0.0015 : keep;
 		for (const v of loop.verts) {
 			const x = VP[v * 3], y = VP[v * 3 + 1], z = VP[v * 3 + 2], k = keyOf(Math.floor(x / cell), Math.floor(y / cell), Math.floor(z / cell));
 			let l = grid.get(k);

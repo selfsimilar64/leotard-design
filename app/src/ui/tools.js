@@ -63,7 +63,7 @@ export class ToolController {
 		el.addEventListener('pointerup', (e) => this.up(e));
 		el.addEventListener('pointerleave', () => this.clearHover());
 		// a double click (or tap) finishes a line; in Select it fits the leotard in view
-		el.addEventListener('dblclick', (e) => { if (tool.value === 'pen' || tool.value === 'strap') { e.preventDefault(); this.finishPen(); } else if (tool.value === 'move') viewTo('fit'); });
+		el.addEventListener('dblclick', (e) => { if (isDrawing()) { e.preventDefault(); this.finishPen(); } else if (tool.value === 'move') viewTo('fit'); });
 		el.addEventListener('contextmenu', (e) => e.preventDefault());
 		window.addEventListener('keydown', (e) => this.key(e));
 		tool.subscribe((t) => this.onTool(t));
@@ -106,11 +106,11 @@ export class ToolController {
 		// places, and two fingers turn and zoom
 		c.touches = t === 'move' ? { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN } : { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE };
 		c.enabled = true;
-		if (t !== 'pen' && t !== 'strap') this.cancelPen();
+		if (!isDrawing()) this.cancelPen();
 		if (t === 'pattern' && selection.value?.kind === 'stones') selection.value = null;
 		this.clearHover();
 		if (t !== 'decal' && toolOptions.value.moveDecal) toolOptions.value = { ...toolOptions.value, moveDecal: null };
-		this.el.style.cursor = t === 'move' ? 'grab' : t === 'pen' || t === 'strap' || t === 'eyedrop' || t === 'pattern' ? 'crosshair' : 'default';
+		this.el.style.cursor = t === 'move' ? 'grab' : isDrawing() || t === 'eyedrop' || t === 'pattern' ? 'crosshair' : 'default';
 		this.engine.overlay.setCursor(null);
 		this.refreshOverlay();
 	}
@@ -118,8 +118,8 @@ export class ToolController {
 	refreshOverlay() {
 		const sel = selection.value, on = this.mirrorOn;
 		// drawing needs to see the line, so the pen and strap tools show the overlay even when hidden
-		this.engine.setUI({ selected: sel?.kind === 'curves' ? sel.id : null, showPoints: ['move', 'pen', 'strap'].includes(tool.value),
-			hidden: hideOverlay.value && !['pen', 'strap'].includes(tool.value),
+		this.engine.setUI({ selected: sel?.kind === 'curves' ? sel.id : null, showPoints: tool.value === 'move' || isDrawing(),
+			hidden: hideOverlay.value && !isDrawing(),
 			// Mirror off: only the side an edit will change is highlighted
 			selectedSide: on || sel?.kind !== 'curves' ? null : sel.side ?? 'own',
 			// the centre line shows while working symmetrically: placing anything, or a line chosen
@@ -280,7 +280,7 @@ export class ToolController {
 			} else this.press = { x, y, t: performance.now(), alt: e.altKey };
 			return;
 		}
-		if (t === 'pen' || t === 'strap') { this.penClick(x, y, e.shiftKey); return; }
+		if (isDrawing()) { this.penClick(x, y, e.shiftKey); return; }
 		if (t === 'eyedrop') { this.eyedrop(x, y); return; }
 		if (t === 'decal') {
 			const h = this.engine.pickAt(x, y);
@@ -390,7 +390,7 @@ export class ToolController {
 			this.run(cmds.length > 1 ? cmds : cmds[0]);
 			return;
 		}
-		if ((tool.value === 'pen' || tool.value === 'strap') && this.pen) {
+		if (isDrawing() && this.pen) {
 			const h = this.engine.pickAt(x, y);
 			if (h?.sp) this.previewPen(h.sp);
 		}
@@ -471,7 +471,7 @@ export class ToolController {
 	key(e) {
 		if (e.target.closest?.('input, select, textarea')) return;
 		const k = e.key;
-		if (tool.value === 'pen' || tool.value === 'strap') {
+		if (isDrawing()) {
 			if (k === 'Enter') { this.finishPen(); e.preventDefault(); }
 			else if (k === 'Escape') this.cancelPen();
 			else if (k === 'Backspace' && this.pen?.points.length) { this.pen.points.pop(); this.previewPen(null); e.preventDefault(); }
@@ -540,7 +540,8 @@ export class ToolController {
 			const e = g.evaluated.get(onCurve.key);
 			const sp = e.sps[onCurve.sample];
 			pts.push({ sp, kind: 'corner', on: { curve: onCurve.curve, t: onCurve.t, ...(onCurve.mirrored ? { mirror: true } : {}) } });
-			if (pts.length >= 2) { this.finishPen(); return; }
+			// an overlay's outline goes on past a line it meets; any other line ends there
+			if (pts.length >= 2 && tool.value !== 'overlay') { this.finishPen(); return; }
 		} else pts.push({ sp: h.sp, kind: corner ? 'corner' : 'smooth' });
 		this.previewPen(null);
 	}
@@ -565,6 +566,12 @@ export class ToolController {
 		this.cancelPen();
 		if (!pen || pen.points.length < 2) return;
 		const opt = toolOptions.value, mirror = this.penMirror(pen.points);
+		if (tool.value === 'overlay') {
+			if (pen.points.length < 3) { notify('An overlay piece needs at least three points', 'error'); return; }
+			const pid = this.run({ op: 'overlay.add', mirror, points: pen.points.map((p) => (p.on ? { at: { sp: toSP(p.sp) }, kind: p.kind, on: p.on } : { at: { sp: toSP(p.sp) }, kind: p.kind })) });
+			if (pid) { tool.value = 'move'; selection.value = { kind: 'panels', id: pid }; notify(mirror === 'both' ? 'Overlay piece added on both sides: choose its material' : 'Overlay piece added: choose its material'); }
+			return;
+		}
 		if (tool.value === 'strap') {
 			const sw = opt.swatch;
 			const sid = this.run({ op: 'strap.add', width: opt.strapWidth, mirror, fabric: sw.fabric, colour: sw.colour, second: sw.second,
@@ -581,6 +588,8 @@ export class ToolController {
 
 	cancelPen() { this.pen = null; this.penCursor = null; this.engine.overlay.setPreview(null); }
 }
+
+const isDrawing = () => tool.value === 'pen' || tool.value === 'strap' || tool.value === 'overlay';
 
 import { locate } from '../garment/arrangement.js';
 function locateIn(g, surf, sp) { return locate(g.arr, surf, sp); }

@@ -6,7 +6,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { loadBody } from './helpers.js';
+import * as THREE from 'three';
 import { evaluateAll } from '../src/garment/build.js';
+import { evaluateCurve } from '../src/curves/evaluate.js';
+import { toSP } from '../src/body/surface.js';
 import { applyStencil } from '../src/body/subdivide.js';
 import { migrate } from '../src/doc/schema.js';
 
@@ -15,7 +18,37 @@ const DESIGNS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../d
 let B;
 beforeAll(async () => { B = await loadBody(); }, 120000);
 
+// Sideways bending of a line within the surface (its geodesic curvature, 1/m): turning towards the
+// body's normal is the body's own shape and does not count.
+function bends(e, surf, win = 4) {
+	const k = [], pts = e.pts, x = new THREE.Vector3();
+	for (let i = win; i < pts.length - win; i++) {
+		const a = pts[i].clone().sub(pts[i - win]).normalize(), b = pts[i + win].clone().sub(pts[i]).normalize();
+		k.push(x.crossVectors(a, b).dot(surf.normalAt(e.sps[i])) / (pts[i + win].distanceTo(pts[i - win]) / 2));
+	}
+	let flips = 0, vary = 0;
+	for (let i = 1; i < k.length; i++) { if (k[i] * k[i - 1] < 0) flips++; vary += Math.abs(k[i] - k[i - 1]); }
+	return { flips, peak: Math.max(...k.map(Math.abs)), vary };
+}
+
 describe('curve sampling', () => {
+	// Owner, 2026-10-31: drawn seams were irregular. Clicks as a hand makes them (seen from the front,
+	// about 2 mm off the intended line) along the bowed edge of a chest piece.
+	it('a line clicked along a bow stays a smooth bow', () => {
+		const down = new THREE.Vector3(0, 0, -1);
+		for (const n of [4, 6, 10]) {
+			const points = [];
+			for (let i = 0; i < n; i++) {
+				const t = i / (n - 1), j = 0.002;
+				const o = new THREE.Vector3(0.03 + 0.09 * Math.sin(Math.PI * t) + j * Math.sin(i * 12.9898), 1.33 - 0.2 * t + j * Math.sin(i * 78.233), 0.4);
+				points.push({ sp: toSP(B.surf.raycast(new THREE.Ray(o, down), {})), kind: 'smooth' });
+			}
+			const e = evaluateCurve({ points, closed: false }, B.surf), r = bends(e, B.surf);
+			expect(r.flips).toBeLessThanOrEqual(8); // Catmull-Rom with closest-point projection: 15, 25 and 7
+			expect(r.vary).toBeLessThan(300); // and 500, 433 and 338
+			expect(Math.max(...e.pts.slice(1).map((p, i) => p.distanceTo(e.pts[i])))).toBeLessThan(0.003); // no jump across a hollow
+		}
+	});
 	it('the reference surface has an arms-raised twin to sample on', () => {
 		expect(B.surf.open).toBeTruthy();
 		expect(B.surf.open.F).toBe(B.surf.F);

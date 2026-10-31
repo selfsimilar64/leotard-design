@@ -1,5 +1,9 @@
 # Bundle update log
 
+## 2026-10-31
+* **Decision**: [The design model mirrors how a leotard is really cut and sewn](/decisions/2026-10-31-construction-mirrors-real-sewing.md): named materials, overlay pieces and real finishes, because a later export must match what is cut and sewn.
+* **Creation**: [The construction model](/engineering/architecture/construction-model.md): materials and their synchronised looks, overlay pieces, finish widths, the curvature-continuous line, pairing, what the pattern reads, and the known gaps (jagged flat outlines first).
+
 ## 2026-10-30
 * **Update**: [Procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md): handles are regular shapes on flat sheets instead of being laid over the body; a box turns about its length to face the view.
 * **Update**: [The studio interface](/engineering/app/studio-interface.md): why a pattern's page froze after an edit, and the rule that prevents it. A fractal's Detail now goes as far as its rule can grow, whatever the stones' size.

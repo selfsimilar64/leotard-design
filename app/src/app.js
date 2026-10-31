@@ -123,7 +123,10 @@ export class App {
 			if (!prev) continue;
 			const g = buildGarment(tx.doc, e.surf, { prev, layer: layer.id, evaluated });
 			const add = inheritPanels(g, prev, tx.doc, e.surf);
-			for (const p of add) tx.insert('panels', { id: tx.newId('p'), layer: layer.id, name: p.name ?? '', seed: p.seed, mirror: p.mirror, stack: p.stack });
+			for (const p of add) {
+				if (p.pair) tx.set(['panels', p.pair, 'mirror'], 'both');
+				else tx.insert('panels', { id: tx.newId('p'), layer: layer.id, name: p.name ?? '', seed: p.seed, mirror: p.mirror, stack: p.stack });
+			}
 			if (layer.id === 'L0') e.pending = g; // same curves: the engine re-locates the seeds on this arrangement
 		}
 	}
@@ -286,7 +289,7 @@ export class App {
 	// Pattern pieces of the current garment (mm), once every piece is flattened.
 	async pattern(opts) {
 		await this.engine.whenFlat();
-		return patternPieces(this.engine.views, this.doc, opts);
+		return patternPieces(this.engine.views, this.doc, { surf: this.engine.surf, ...opts });
 	}
 	// Printable full-scale PDF of the pattern: exports/<name>.pdf (dev server) or a download.
 	async exportPattern(name = (this.doc.meta.name || 'design') + ' pattern') {

@@ -24,7 +24,7 @@ export class Surface {
 		this.buildAdjacency();
 	}
 
-	update(P) { this.P.set(P); this.geometry.attributes.position.needsUpdate = true; this.bvh.refit(); this.faceAreas = null; }
+	update(P) { this.P.set(P); this.geometry.attributes.position.needsUpdate = true; this.bvh.refit(); this.faceAreas = null; this.vNormals = null; }
 
 	buildAdjacency() {
 		const { idx, F, V } = this;
@@ -63,6 +63,24 @@ export class Surface {
 	faceNormal(f, out = new THREE.Vector3()) {
 		const [a, b, c] = this.corners(f);
 		return out.subVectors(b, a).cross(_p.subVectors(c, a)).normalize();
+	}
+
+	// The smooth normal at a surface point: the corners' area-weighted normals, interpolated. Unlike
+	// faceNormal it does not jump at a facet's edge (curves/evaluate.js projects lines along it).
+	normalAt(sp, out = new THREE.Vector3()) {
+		const N = this.vNormals ?? this.buildVertexNormals(), idx = this.idx, i0 = idx[sp.f * 3] * 3, i1 = idx[sp.f * 3 + 1] * 3, i2 = idx[sp.f * 3 + 2] * 3;
+		return out.set(sp.b0 * N[i0] + sp.b1 * N[i1] + sp.b2 * N[i2], sp.b0 * N[i0 + 1] + sp.b1 * N[i1 + 1] + sp.b2 * N[i2 + 1], sp.b0 * N[i0 + 2] + sp.b1 * N[i1 + 2] + sp.b2 * N[i2 + 2]).normalize();
+	}
+	buildVertexNormals() {
+		const { idx, P, F, V } = this, N = new Float32Array(V * 3);
+		for (let f = 0; f < F; f++) {
+			const a = idx[f * 3] * 3, b = idx[f * 3 + 1] * 3, c = idx[f * 3 + 2] * 3;
+			const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+			const x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx;
+			for (const i of [a, b, c]) { N[i] += x; N[i + 1] += y; N[i + 2] += z; }
+		}
+		for (let v = 0; v < V; v++) { const L = Math.hypot(N[v * 3], N[v * 3 + 1], N[v * 3 + 2]) || 1; N[v * 3] /= L; N[v * 3 + 1] /= L; N[v * 3 + 2] /= L; }
+		return (this.vNormals = N);
 	}
 
 	// Barycentrics of p (projected onto face f's plane; may lie outside the triangle).

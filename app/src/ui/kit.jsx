@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
 import { edit, notify, prefs, setPref } from './state.js';
 import { I } from './icons.jsx';
+import { parseHex } from '../doc/materials.js';
 
 export function run(cmd) {
 	try { return edit(app, cmd); } catch (e) { notify(e.message, 'error'); return undefined; }
@@ -98,15 +99,40 @@ export function Segmented({ value, options, onPick, iconOnly = false, wrap = fal
 	);
 }
 
-// Colour dots and a well for any other colour. value: '#rrggbb' (or null: none on); onPick(hex,
-// gesture?) like a colour well's onChange.
+// The custom colours most recently used on this computer, newest first (prefs, not the design).
+const RECENT_COLOURS = 12;
+function rememberColour(c) { setPref('recentColours', [c.toLowerCase(), ...(prefs.value.recentColours ?? []).filter((x) => x !== c.toLowerCase())].slice(0, RECENT_COLOURS)); }
+
+// Type a colour by its code. Applies on Enter or on leaving the field; a code that makes no colour goes back.
+export function HexField({ value, onPick }) {
+	const [draft, setDraft] = useState(null);
+	const commit = () => {
+		if (draft === null) return;
+		const c = parseHex(draft);
+		setDraft(null);
+		if (c && c !== (value ?? '').toLowerCase()) { onPick(c); rememberColour(c); }
+	};
+	return <input class="text-in mono hex-in" type="text" spellcheck={false} maxLength={7} aria-label="Colour code" title="Colour code, such as #c58fa6" placeholder="#hex" value={draft ?? value ?? ''}
+		onInput={(e) => setDraft(e.currentTarget.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(null); } }} />;
+}
+
+// Colour dots, a well for any other colour with its code, and a row of the recent custom colours.
+// value: '#rrggbb' (or null: none on); onPick(hex, gesture?) like a colour well's onChange.
 export function Swatches({ value, colours, onPick, custom = true, extra = null, size = 'm' }) {
 	const v = (value ?? '').toLowerCase(), known = colours.some((c) => c.toLowerCase() === v);
+	const recent = custom ? (prefs.value.recentColours ?? []).filter((c) => !colours.some((x) => x.toLowerCase() === c)) : [];
 	return (
-		<div class={`swatches ${size}`}>
-			{colours.map((c) => <button key={c} class={`dot ${c.toLowerCase() === v ? 'on' : ''}`} style={{ '--c': c }} title={c} aria-label={c} onClick={() => onPick(c)} />)}
-			{custom ? <ColourWell value={value ?? '#888888'} on={!!value && !known} onChange={onPick} /> : null}
-			{extra}
+		<div class="swatch-block">
+			<div class={`swatches ${size}`}>
+				{colours.map((c) => <button key={c} class={`dot ${c.toLowerCase() === v ? 'on' : ''}`} style={{ '--c': c }} title={c} aria-label={c} onClick={() => onPick(c)} />)}
+				{custom ? <ColourWell value={value ?? '#888888'} on={!!value && !known && !recent.includes(v)} onChange={onPick} /> : null}
+				{custom ? <HexField value={value} onPick={onPick} /> : null}
+				{extra}
+			</div>
+			{recent.length ? <div class={`swatches recent ${size}`} aria-label="Recent colours">
+				<span class="recent-label">Recent</span>
+				{recent.map((c) => <button key={c} class={`dot ${c === v ? 'on' : ''}`} style={{ '--c': c }} title={c} aria-label={c} onClick={() => onPick(c)} />)}
+			</div> : null}
 		</div>
 	);
 }
@@ -117,7 +143,7 @@ export function ColourWell({ value, onChange, on = true, title = 'Any colour' })
 	const g = useGesture();
 	return (
 		<label class={`dot well ${on ? 'on' : ''}`} title={title} style={on ? { '--c': value } : null}>
-			<input type="color" value={value} onInput={(e) => onChange(e.currentTarget.value, g.id())} onChange={() => g.end()} />
+			<input type="color" value={value} onInput={(e) => onChange(e.currentTarget.value, g.id())} onChange={(e) => { g.end(); rememberColour(e.currentTarget.value); }} />
 			{on ? null : <I.plus size={14} />}
 		</label>
 	);
@@ -178,7 +204,7 @@ function SliderView({ value, min, max, step, format, onInput, onCommit, onOnce, 
 			{typing !== null ? (
 				<input class="slider-type" type="text" inputMode="decimal" value={typing} ref={(el) => { if (el && document.activeElement !== el) { el.focus(); el.select(); } }}
 					onInput={(e) => setTyping(e.currentTarget.value)} onBlur={(e) => commitTyped(e.currentTarget.value)}
-					onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setTyping(null); e.stopPropagation(); }} />
+					onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setTyping(null); e.stopPropagation(); }} />
 			) : (
 				<button class="slider-val" title="Type a value" onClick={() => setTyping(String(shownNumber(value) || 0))}>{shown}</button>
 			)}

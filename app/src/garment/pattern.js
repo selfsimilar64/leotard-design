@@ -1,7 +1,11 @@
 // Pattern pieces from the flattened garment: one outline per piece in millimetres, with the
 // grain line, name and cutting note, scaled for the fabric's negative ease and grown by the seam
 // allowance. Feeds the flat-piece view and the printable PDF (export/pdf.js).
-// Decision: knowledge/decisions/2026-10-15-printable-pdf-patterns.md.
+// Decision: knowledge/decisions/2026-10-15-printable-pdf-patterns.md. A piece on an overlay layer is
+// appliqué: cut with no seam allowance, with a placement line on the piece it is sewn onto
+// (knowledge/domain/construction/applique-and-overlays.md).
+import { locate } from './arrangement.js';
+import { fromSP } from '../body/surface.js';
 
 export const PATTERN_DEFAULTS = { easeAcross: -0.1, easeAlong: -0.05, seamAllowance: 0.006 };
 
@@ -99,11 +103,14 @@ function normOut(a, b) { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypo
 export function signedArea(poly) { let s = 0; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; }
 
 // garmentView: render/garment.js GarmentView (cells with piece + uv), doc: the design.
-// -> [{ key, panelId, name, colour, cut: 'Cut 1' | 'Cut 2 (mirror pair)', stitch: [[x, y] mm], cutLine, grain: { at, angle }, size: [w, h] }]
+// -> { pieces: [{ key, panelId, name, colour, material, construction: 'pieced' | 'appliqué' | 'lining', sewnOn: [names], placement: [polylines mm],
+//      cut: 'Cut 1' | 'Cut 2 (a mirrored pair)', stitch: [[x, y] mm], cutLine, grain: { at, angle }, size: [w, h] }], fabrics: [names], finishes: [{ kind, width, length, material }], settings }
+// opts.surf: the reference surface, needed for placement lines.
 export function patternPieces(views, doc, opts = {}) {
 	const o = { ...PATTERN_DEFAULTS, ...(doc.meta.pattern ?? {}), ...opts };
-	const out = [], seenMirror = new Set();
-	for (const c of (Array.isArray(views) ? views : [views]).flatMap((v) => v.cells)) {
+	const out = [], seenMirror = new Set(), viewList = Array.isArray(views) ? views : [views];
+	const overlayLayers = new Set(doc.layers.filter((l) => l.kind === 'overlay').map((l) => l.id));
+	for (const c of viewList.flatMap((v) => v.cells)) {
 		if (!c.hasUV) continue;
 		const panel = doc.panels.find((p) => p.id === c.panelId);
 		if (!panel) continue;
@@ -116,20 +123,72 @@ export function patternPieces(views, doc, opts = {}) {
 		stitch = simplify(smoothOutline(stitch), 0.3);
 		// a mirrored panel is one pattern piece cut twice (the second cell is its mirror image)
 		if (panel.mirror === 'both') { if (seenMirror.has(panel.id)) continue; seenMirror.add(panel.id); }
-		const cutLine = offsetPolygon(stitch, o.seamAllowance * 1000);
+		const applique = overlayLayers.has(panel.layer);
+		const cutLine = applique ? stitch : offsetPolygon(stitch, o.seamAllowance * 1000);
 		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
 		for (const [x, y] of cutLine) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
 		const shift = ([x, y]) => [x - x0, y - y0];
 		const s = panel.stack?.[0] ?? {};
 		out.push({
-			key: c.sig, panelId: panel.id, name: panel.name || panel.id, colour: s.colour ?? '#888888', fabric: s.fabric,
+			rec: c, shift, ease: o,
+			key: c.sig, panelId: panel.id, name: panel.name || panel.id, colour: s.colour ?? '#888888', fabric: s.fabric, material: doc.materials?.find((m) => m.id === s.material)?.name ?? s.fabric,
+			construction: applique ? 'appliqué' : doc.layers.find((l) => l.id === panel.layer)?.kind === 'lining' ? 'lining' : 'pieced', sewnOn: [], placement: [],
 			cut: panel.mirror === 'both' ? 'Cut 2 (a mirrored pair)' : 'Cut 1',
 			stitch: stitch.map(shift), cutLine: cutLine.map(shift), size: [x1 - x0, y1 - y0],
 			grain: { at: [(x1 - x0) / 2, (y1 - y0) / 2], angle: -(s.grain ?? 0) },
 			stretch: c.stretch,
 		});
 	}
-	return { pieces: out, settings: o };
+	if (o.surf) placements(out, viewList, doc, o.surf);
+	const fabrics = [...new Set(out.map((p) => p.material))];
+	const evaluated = viewList[0]?.g?.evaluated;
+	const finishes = doc.trims.filter((t) => t.kind !== 'none' && evaluated).map((t) => ({
+		kind: t.kind, width: t.width ?? null, material: doc.materials?.find((m) => m.id === t.fabric?.material)?.name ?? null,
+		length: t.on.reduce((L, id) => L + (evaluated.get(id)?.length ?? 0) + (evaluated.get(id + '~m')?.length ?? 0), 0) * 1000,
+	}));
+	for (const p of out) { delete p.rec; delete p.shift; delete p.ease; }
+	return { pieces: out, fabrics, finishes, settings: o };
+}
+
+// Each overlay piece's outline, on the flat shape of the pieces it lies on: where to lay it when
+// sewing. A mirrored outline's other half falls on the mirrored cut of the same piece, or on the
+// other half of a piece cut once.
+function placements(pieces, views, doc, surf) {
+	const shell = views.find((v) => (v.layer?.id ?? 'L0') === 'L0');
+	if (!shell?.g) return;
+	const arr = shell.g.arr, byPiece = new Map();
+	for (const p of pieces) byPiece.set(p.rec, p);
+	const triAt = new Map(); // arrangement triangle -> [the shell's cell record, index in its triangles]
+	for (const r of shell.cells) arr.cells[r.cell].tris.forEach((t, q) => triAt.set(t, [r, q]));
+	for (const over of pieces) {
+		if (over.construction !== 'appliqué') continue;
+		const panel = doc.panels.find((p) => p.id === over.panelId);
+		const lines = [panel?.outline, panel?.mirror === 'both' ? panel.outline + '~m' : null].map((k) => k && shell.g.evaluated?.get(k)).filter(Boolean);
+		for (const e of lines) {
+			let run = null, at = null;
+			const stop = () => { if (run?.length > 1) at.placement.push(run); run = null; };
+			for (const sp of [...e.sps, ...(e.closed ? [e.sps[0]] : [])]) {
+				const t = locate(arr, surf, sp), hit = t >= 0 ? triAt.get(t) : null, base = hit ? byPiece.get(hit[0]) : null;
+				if (!base?.rec.hasUV || base.construction !== 'pieced') { stop(); at = null; continue; }
+				if (at !== base) { stop(); at = base; if (!over.sewnOn.includes(base.name)) over.sewnOn.push(base.name); }
+				(run ??= []).push(flatPoint(arr, surf, base, hit[1], t, fromSP(sp)));
+			}
+			stop();
+		}
+	}
+}
+
+// A surface point in a shell triangle -> its place on the flat piece, in the piece's millimetres.
+function flatPoint(arr, surf, base, q, t, sp) {
+	const P = surf.pos(sp), V = arr.VP, I = base.rec.piece.I, uv = base.rec.mesh.geometry.attributes.aUV.array;
+	const c = [0, 1, 2].map((k) => { const v = arr.tris[t * 3 + k] * 3; return [V[v], V[v + 1], V[v + 2]]; });
+	const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	const e0 = sub(c[1], c[0]), e1 = sub(c[2], c[0]), e2 = sub([P.x, P.y, P.z], c[0]);
+	const d00 = dot(e0, e0), d01 = dot(e0, e1), d11 = dot(e1, e1), d20 = dot(e2, e0), d21 = dot(e2, e1), den = d00 * d11 - d01 * d01 || 1;
+	const b1 = (d11 * d20 - d01 * d21) / den, b2 = (d00 * d21 - d01 * d20) / den, b = [1 - b1 - b2, b1, b2];
+	let u = 0, v = 0;
+	for (let k = 0; k < 3; k++) { const l = I[q * 3 + k]; u += b[k] * uv[l * 2]; v += b[k] * uv[l * 2 + 1]; }
+	return base.shift([u * 1000 * (1 + base.ease.easeAcross), v * 1000 * (1 + base.ease.easeAlong)]);
 }
 
 // Shelf layout of pieces (mm) in rows no wider than maxWidth; gap between pieces.

@@ -3,13 +3,14 @@
 
 import { MESH, migrateBody } from './migrate-g9.js';
 import { RETIRED_FABRICS, RETIRED_SCANS } from '../materials/fabric.js';
+import { migrateMaterials } from './materials.js';
 import { RIGS, DEFAULT_RIG } from '../render/presets.js';
 
 export const FORMAT = 'leotard-design';
 export const VERSION = 1;
 
 // Sections that hold lists of objects with ids.
-export const LISTS = ['layers', 'curves', 'panels', 'straps', 'trims', 'bands', 'decals', 'details', 'hardware', 'stones', 'placed', 'reference'];
+export const LISTS = ['materials', 'layers', 'curves', 'panels', 'straps', 'trims', 'bands', 'decals', 'details', 'hardware', 'stones', 'placed', 'reference'];
 
 export function newDocument(name = 'Untitled') {
 	return {
@@ -24,6 +25,7 @@ export function newDocument(name = 'Untitled') {
 		// first-generation garment (analytic regions, garment/legacy.js), kept so old files open;
 		// null for every design made with the cut-and-sew tools
 		legacy: null,
+		materials: [], // the fabrics the design is cut from (doc/materials.js)
 		layers: [{ id: 'L0', kind: 'shell', z: 0 }],
 		curves: [], panels: [], straps: [], trims: [], bands: [], decals: [], details: [], hardware: [],
 		stones: [], placed: [], reference: [],
@@ -46,6 +48,7 @@ export function migrate(doc) {
 	doc.body = migrateBody(hadBody ? doc.body : base.body, knownBodies);
 	if (old && convertSurface) { convertSurface(doc); doc.mesh = MESH; }
 	retireFabrics(doc);
+	migrateMaterials(doc);
 	// lighting rigs taken out of the app (render/presets.js RIGS): the design opens in the default studio
 	if (!RIGS[doc.scene.rig]) doc.scene.rig = DEFAULT_RIG;
 	delete doc.scene.rotateLights; // only the removed light rigs could circle

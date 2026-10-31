@@ -83,6 +83,7 @@ export const EDGE_ICONS = {
 // Edge finishes (garment/trim.js) and seam finishes, drawn as a cross-section of the edge.
 export const FINISH_ICONS = {
 	elastic: svg(<><path d="M4 15h16" /><path d="M4 15c0-3.5 2-5 5-5h11" /><path d="M7 12.4h11" stroke-dasharray="1.4 1.6" opacity=".6" /></>),
+	zigzag: svg(<><path d="M3 15h18" opacity=".45" /><path d="M3 12l3 5 3-5 3 5 3-5 3 5 3-5" /></>),
 	binding: svg(<><path d="M4 16h16" /><path d="M5 16V9.5a2 2 0 0 1 2-2h13" /><path d="M5 12h15" opacity=".45" /></>),
 	none: svg(<><path d="M4 14h16" /><path d="M20 14v-3.5" opacity=".5" /></>),
 	piping: svg(<><path d="M3 15h7.5M13.5 15H21" /><circle cx="12" cy="13.5" r="2.4" /></>),
