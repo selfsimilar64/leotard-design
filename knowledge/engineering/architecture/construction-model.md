@@ -40,6 +40,16 @@ shell. The pattern reports each piece's construction.** Why: [the decision](/dec
 - The shell's arrangement is untouched: the base stays one piece.
 - The drawing tool (`ui/tools.js`, tool `overlay`) keeps going past a line it meets, where the seam tool ends on one.
 
+## Using existing lines as edges
+
+Owner, 2026-10-31: drawing from one seam to another should work for an overlay as it does for a seam, without tracing the seams.
+
+- With `at`, `overlay.add` takes a line whose two ends lie on other lines. `strokeRegions` cuts the shell by its own lines and this one, without changing the document, and `at` picks the region. The shell lines round that region become the new layer's `bounds`.
+- `buildGarment` cuts a layer by its own lines plus its `bounds`. Each such piece has a layer of its own, at the overlays' existing height, so its bounds slice no other overlay. Free-drawn overlays share a separate layer without bounds. Two pieces at one height would fight in the render if they overlapped.
+- The tool: an outline started on a line ends on the next line it meets, then the hovered region and its mirror image preview (`cellOutline`) until a click chooses. An outline started in the open works as before.
+- Along its `bounds` a piece is **caught in that seam**: `render/rims.js` draws its stitched edge only on its own line (`ownRuns`), and the pattern adds the seam allowance only there (`caughtEdges`, `offsetEdges`), dashed as a stitch line and listed as `caughtIn`.
+- An overlay goes with its own line or a line in its `bounds` (`dropOverlaysOn`), reported in the impact of a silhouette change. Splitting a bound line's pair with Mirror off adds the new line to `bounds`.
+
 # Finishes
 
 - Kinds: `elastic`, `binding`, `piping`, `tape`, `zigzag`, `none`. `trim.width` scales the profile across the edge (`trimAtWidth`); only piping, being round, also grows in height.
@@ -69,6 +79,7 @@ its millimetres); overall `fabrics` and `finishes` with total lengths. Appliqué
 # Known gaps
 
 - **The flat outlines of some pieces have small jagged steps** (seen near the armhole of a mesh Front on a racer block, about 5 mm). The 3D lines there are clean, so the cause is in flattening or outline cleanup. This must be fixed before an outline is cut from. Close-ups also show fabric texture distortion in patches on a flattened overlay, possibly the same cause.
-- A plate edge caught in the armhole or waist seam still draws its zigzag along that stretch and its export does not add the allowance needed to catch it.
+- A free-drawn overlay that merely touches a seam is not treated as caught in it; only a piece drawn from line to line is.
+- A caught stretch uses the 6 mm seam allowance even along an elastic-finished opening such as the armhole, where a different catch may be right.
 - Seam allowance is the same on every pieced edge; an elastic-finished or bound edge needs a different one ([seams and allowances](/domain/construction/seams-stitches-and-allowances.md)).
 - Stones are not yet tied to overlay deletion.

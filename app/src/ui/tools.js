@@ -20,7 +20,7 @@
 // touch screen).
 import * as THREE from 'three';
 import { signal } from '@preact/signals';
-import { tool, selection, notify, hideOverlay, showHandles, patternFocus, edit, stonesRun, prefs } from './state.js';
+import { choosingSide, tool, selection, notify, hideOverlay, showHandles, patternFocus, edit, stonesRun, prefs } from './state.js';
 import { fromSP, toSP } from '../body/surface.js';
 import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
@@ -390,6 +390,7 @@ export class ToolController {
 			this.run(cmds.length > 1 ? cmds : cmds[0]);
 			return;
 		}
+		if (this.region) { this.previewRegion(this.engine.pickAt(x, y)?.sp ?? null); return; }
 		if (isDrawing() && this.pen) {
 			const h = this.engine.pickAt(x, y);
 			if (h?.sp) this.previewPen(h.sp);
@@ -525,6 +526,7 @@ export class ToolController {
 
 	// --- pen -----------------------------------------------------------------------------------
 	penClick(x, y, corner) {
+		if (this.region) { this.chooseSide(x, y); return; }
 		const g = this.engine.g;
 		const onCurve = this.engine.curveAt(x, y, 8);
 		const h = this.engine.pickAt(x, y);
@@ -540,8 +542,9 @@ export class ToolController {
 			const e = g.evaluated.get(onCurve.key);
 			const sp = e.sps[onCurve.sample];
 			pts.push({ sp, kind: 'corner', on: { curve: onCurve.curve, t: onCurve.t, ...(onCurve.mirrored ? { mirror: true } : {}) } });
-			// an overlay's outline goes on past a line it meets; any other line ends there
-			if (pts.length >= 2 && tool.value !== 'overlay') { this.finishPen(); return; }
+			// an overlay's outline begun on a line ends on the next it meets, and then a side is chosen;
+			// one begun in the open goes on past lines it meets; any other line ends there
+			if (pts.length >= 2 && tool.value === 'overlay') { if (pts[0].on) { this.startChoosing(); return; } } else if (pts.length >= 2) { this.finishPen(); return; }
 		} else pts.push({ sp: h.sp, kind: corner ? 'corner' : 'smooth' });
 		this.previewPen(null);
 	}
@@ -561,14 +564,46 @@ export class ToolController {
 	// Mirror on: a line off to one side is drawn on both; a line reaching the centre stays one line.
 	penMirror(points) { return this.mirrorOn && !this.crosses(points) ? 'both' : 'none'; }
 
+	// The overlay tool, with its line drawn from one line to another: the regions it makes, and a click
+	// to choose one. The hovered region and its mirror image show as they would be cut.
+	strokePoints(points) { return points.map((p) => (p.on ? { at: { sp: toSP(p.sp) }, kind: p.kind, on: p.on } : { at: { sp: toSP(p.sp) }, kind: p.kind })); }
+	startChoosing() {
+		const pen = this.pen, doc = this.app.doc, surf = this.engine.surf, mirror = this.penMirror(pen.points);
+		const points = pen.points.map((p) => ({ sp: toSP(p.sp), kind: p.kind, ...(p.on ? { on: p.on } : {}) }));
+		this.region = { pen, mirror, g: strokeRegions(doc, surf, points, mirror, this.engine.evaluated) };
+		this.pen = null; this.penCursor = null;
+		choosingSide.value = true;
+		this.previewRegion(null);
+	}
+	previewRegion(sp) {
+		const { g } = this.region, surf = this.engine.surf, cellAt = (q) => { const t = locate(g.arr, surf, q); return t >= 0 ? g.arr.cellOf[t] : -1; };
+		const c = sp ? cellAt(sp) : -1;
+		if (c < 0 || g.cellPanel[c] < 0) { this.engine.overlay.setPreview(this.region.pen.points.length ? { sps: this.region.pen.points.map((p) => p.sp) } : null); return; }
+		const m = this.region.mirror === 'both' ? cellAt(mirrorSP(sp, surf)) : -1;
+		this.engine.overlay.setPreview(cellOutline(g.arr, surf, c), m >= 0 && m !== c ? cellOutline(g.arr, surf, m) : null);
+	}
+	chooseSide(x, y) {
+		const h = this.engine.pickAt(x, y);
+		if (!h?.sp) return;
+		const { pen, mirror } = this.region;
+		const pid = this.run({ op: 'overlay.add', mirror, at: { sp: toSP(h.sp) }, points: this.strokePoints(pen.points) });
+		if (!pid) return; // refused, with its reason shown: choose again
+		this.cancelPen();
+		tool.value = 'move';
+		selection.value = { kind: 'panels', id: pid };
+		notify(mirror === 'both' ? 'Overlay piece added on both sides: choose its material' : 'Overlay piece added: choose its material');
+	}
+
 	finishPen(closed = false) {
+		if (this.region) return;
 		const pen = this.pen;
 		this.cancelPen();
 		if (!pen || pen.points.length < 2) return;
 		const opt = toolOptions.value, mirror = this.penMirror(pen.points);
 		if (tool.value === 'overlay') {
+			if (pen.points[0].on && pen.points[pen.points.length - 1].on && !closed) { this.pen = pen; this.startChoosing(); return; }
 			if (pen.points.length < 3) { notify('An overlay piece needs at least three points', 'error'); return; }
-			const pid = this.run({ op: 'overlay.add', mirror, points: pen.points.map((p) => (p.on ? { at: { sp: toSP(p.sp) }, kind: p.kind, on: p.on } : { at: { sp: toSP(p.sp) }, kind: p.kind })) });
+			const pid = this.run({ op: 'overlay.add', mirror, points: this.strokePoints(pen.points) });
 			if (pid) { tool.value = 'move'; selection.value = { kind: 'panels', id: pid }; notify(mirror === 'both' ? 'Overlay piece added on both sides: choose its material' : 'Overlay piece added: choose its material'); }
 			return;
 		}
@@ -586,8 +621,10 @@ export class ToolController {
 		if (id) { selection.value = { kind: 'curves', id }; notify(`Line drawn (${mirror === 'both' ? 'mirrored' : 'one side'})`); }
 	}
 
-	cancelPen() { this.pen = null; this.penCursor = null; this.engine.overlay.setPreview(null); }
+	cancelPen() { this.pen = null; this.penCursor = null; this.region = null; choosingSide.value = false; this.engine.overlay.setPreview(null); }
 }
+
+import { strokeRegions, cellOutline } from '../garment/build.js';
 
 const isDrawing = () => tool.value === 'pen' || tool.value === 'strap' || tool.value === 'overlay';
 

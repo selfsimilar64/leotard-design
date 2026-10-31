@@ -10,6 +10,7 @@ export const rev = signal(0);
 export const stonesRun = signal(0);        // bumped when a drag's stones have been laid (a frame after its command)
 export const selection = signal(null);     // { kind: 'curves' | 'panels' | 'straps' | 'stones' | 'decals' | ..., id }
 export const tab = signal('shape');        // the panel's tab: 'shape' | 'fabric' | 'sparkle' | 'stage'
+export const choosingSide = signal(false); // the overlay tool: the line is drawn, a click chooses the side to fill
 export const tool = signal('move');        // what a click on the model does (ui/toolbar.js, ui/tools.js)
 export const layout = signal('3d');        // '3d' | 'split' (the pattern pieces beside the model)
 export const stats = signal({});

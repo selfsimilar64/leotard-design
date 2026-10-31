@@ -104,6 +104,8 @@ function splitCurve(tx, c) {
 	tx.set(['curves', c.id, 'twin'], id);
 	if (c.name) tx.set(['curves', c.id, 'name'], named(c.name, side));
 	for (const t of tx.doc.trims) if (t.on.includes(c.id)) tx.set(['trims', t.id, 'on'], [...t.on, id]);
+	// an overlay piece running up to this line also runs up to its other side, now a line of its own
+	for (const l of tx.doc.layers) if (l.bounds?.includes(c.id)) tx.set(['layers', l.id, 'bounds'], [...l.bounds, id]);
 	for (const s of tx.doc.straps.slice()) {
 		if (s.path !== c.id) continue;
 		const sid = tx.newId('s');

@@ -54,7 +54,10 @@ export class Rims {
 		const groups = new Map(); // finish key -> { finish, loops: [] }
 		for (const loop of this.loops) {
 			const panel = doc.panels[g.cellPanel[loop.cells[0]]];
-			const fin = this.finishOf(doc, loop, panel);
+			// where an overlay piece runs along a seam it is caught in that seam: no edge of its own there
+			const own = (c) => !!c && !this.bounds?.has(c.replace(/~m$/, ''));
+			const caught = this.bounds?.size > 0;
+			const fin = this.finishOf(doc, caught ? { curves: loop.curves.filter(own) } : loop, panel);
 			if (!fin) continue;
 			// edge records as the POC's body.edgeLoops() gives them
 			const n = loop.verts.length, recs = [];
@@ -70,7 +73,12 @@ export class Rims {
 			const key = JSON.stringify(fin);
 			let gr = groups.get(key);
 			if (!gr) groups.set(key, gr = { fin, loops: [] });
-			gr.loops.push(recs);
+			if (!caught || loop.curves.every(own)) { gr.loops.push(recs); continue; }
+			for (const run of ownRuns(loop.curves.map(own))) {
+				const part = run.map((i) => recs[i]);
+				part.open = true;
+				if (part.length > 2) gr.loops.push(part);
+			}
 		}
 		// piping (corded) or tape (flat) along a seam line, on this layer's seams
 		if (evaluated) for (const t of doc.trims.filter((x) => x.kind === 'piping' || x.kind === 'tape' || x.kind === 'zigzag')) {
@@ -149,6 +157,21 @@ export class Rims {
 
 	setVisible(v) { this.group.visible = v; }
 	frame(keyDir) { for (const m of this.materials.values()) m.userData.u.uHoloDirW.value.copy(keyDir); }
+}
+
+// The stretches of a closed loop where flags are true, as lists of indices; each runs on to the vertex
+// that ends its last edge.
+function ownRuns(flags) {
+	const n = flags.length, start = flags.findIndex((f, i) => !f && flags[(i + 1) % n]);
+	if (start < 0) return [];
+	const runs = [];
+	let run = null;
+	for (let k = 1; k <= n; k++) {
+		const i = (start + k) % n;
+		if (flags[i]) (run ??= []).push(i);
+		else if (run) { run.push(i); runs.push(run); run = null; }
+	}
+	return runs;
 }
 
 // An open run (piping along a seam that ends on other lines): frames without wrapping round.

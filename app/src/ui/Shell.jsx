@@ -4,7 +4,7 @@
 // library (ui/Library.jsx) opens over everything.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { rev, stonesRun, selection, tool, layout, stats, toast, notify, display, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, savedRev, prefs, setPref } from './state.js';
+import { choosingSide, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, savedRev, prefs, setPref } from './state.js';
 import { Panel, pickTab } from './Panel.jsx';
 import { Library } from './Library.jsx';
 import { FlatView } from './FlatView.jsx';
@@ -200,7 +200,7 @@ function CrystalCount() {
 const MODE_TEXT = {
 	pen: ['Drawing a seam', 'Click the body to place points · Shift for a corner · click the first point to close, or end on another line'],
 	strap: ['Drawing a strap', 'Click points from edge to edge · Shift for a corner · end on an edge'],
-	overlay: ['Drawing an overlay piece', 'Click round its outline · Shift for a corner · click a line to meet it · click the first point or press Enter to finish'],
+	overlay: ['Drawing an overlay piece', 'Start on a seam and end on another to use them as its edges, or click round a shape and back to the first point · Shift for a corner'],
 	stones: ['Adding crystals', 'Click a line for rows along it, or a piece to fill it'],
 	pattern: ['Laying a pattern', 'Click the piece to lay it on; its handles and settings come next'],
 	single: ['Placing crystals', 'Click to place one crystal'],
@@ -209,13 +209,13 @@ const MODE_TEXT = {
 	eyedrop: ['Matching a colour', 'Click the piece on the reference photo'],
 };
 function ModeBar() {
-	const t = tool.value, m = MODE_TEXT[t];
+	const t = tool.value, choosing = t === 'overlay' && choosingSide.value, m = choosing ? ['Choose a side', 'Click the side of the line that becomes the overlay piece'] : MODE_TEXT[t];
 	if (!m) return null;
 	const drawing = t === 'pen' || t === 'strap' || t === 'overlay';
 	return (
 		<div class="modebar" role="status">
 			<span class="mb-text"><strong>{m[0]}</strong><span>{m[1]}</span></span>
-			{drawing ? <button class="mb-btn" onClick={() => { app.tools?.finishPen(); }}>Finish <kbd>Enter</kbd></button> : null}
+			{drawing && !choosing ? <button class="mb-btn" onClick={() => { app.tools?.finishPen(); }}>Finish <kbd>Enter</kbd></button> : null}
 			<button class={`mb-btn ${drawing ? 'quiet' : ''}`} onClick={() => { app.tools?.cancelPen(); tool.value = 'move'; }}>{drawing ? 'Cancel' : 'Done'} <kbd>Esc</kbd></button>
 		</div>
 	);

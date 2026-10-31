@@ -308,7 +308,7 @@ export class Engine {
 					L.view.onFlat = () => { if (this.stonePending.size) this.stonesDirty = true; };
 					this.layers.set(layer.id, L);
 				}
-				L.layer = layer; L.view.layer = layer; L.rims.kind = layer.kind; L.rims.layerId = layer.id;
+				L.layer = layer; L.view.layer = layer; L.rims.kind = layer.kind; L.rims.layerId = layer.id; L.rims.bounds = new Set(layer.bounds ?? []);
 				const prev = layer.id === 'L0' && this.pending?.curveSig === curveSig ? this.pending : L.g;
 				L.g = buildGarment(doc, this.surf, { prev, layer: layer.id, evaluated });
 				L.view.setGarment(L.g, doc);

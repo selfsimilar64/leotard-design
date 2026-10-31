@@ -6,7 +6,8 @@ import { toSP } from '../body/surface.js';
 import { makeBlock, blockFabric, blockKeyOf, blockOf, fitToStrap, BLOCK_OPTIONS, DEFAULT_BLOCK, ELEMENT_CURVES, ELEMENT_PANELS } from '../garment/blocks.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { STARTS } from '../garment/starts.js';
-import { buildGarment, cellSeed, evaluateAll, panelAt } from '../garment/build.js';
+import { STROKE, buildGarment, cellLines, cellSeed, evaluateAll, panelAt, strokeRegions } from '../garment/build.js';
+import { locate } from '../garment/arrangement.js';
 import { LOOK, lookOf, setLook, assign, usage, freshName } from './materials.js';
 import { projectNear, evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
@@ -120,11 +121,22 @@ defineCommand('start.apply', {
 // Drop a block line and what hung on it. The impact lists what the designer added and loses:
 // stones and straps on the line, drawn lines that ended on it (kept, but no longer attached).
 function removeCurve(tx, c, impact, doomed = new Set([c.id])) {
+	dropOverlaysOn(tx, c.id, impact);
 	for (const t of tx.doc.trims) if (t.on.includes(c.id)) { const keep = t.on.filter((x) => x !== c.id); if (keep.length) tx.set(['trims', t.id, 'on'], keep); else tx.remove('trims', t.id); }
 	for (const g of tx.doc.stones.slice()) if (g.on?.curve === c.id || g.params?.from?.curve === c.id) { impact.stones.push(g.name || g.kind); tx.remove('stones', g.id); }
 	for (const s of tx.doc.straps.slice()) if (s.path === c.id) { impact.straps.push(s.id); tx.remove('straps', s.id); }
 	for (const o of tx.doc.curves) if (!doomed.has(o.id)) o.points.forEach((p, i) => { if (p.on?.curve === c.id) { if (!impact.lines.includes(o.name || o.id)) impact.lines.push(o.name || o.id); tx.set(['curves', o.id, 'points', String(i), 'on'], undefined); } });
 	tx.remove('curves', c.id);
+}
+// An overlay piece cannot outlive a line its shape depends on: its own outline, or a seam it runs up to.
+function dropOverlaysOn(tx, id, impact) {
+	for (const p of tx.doc.panels.slice()) {
+		if (!p.outline || !tx.doc.panels.includes(p)) continue;
+		if (p.outline !== id && !tx.doc.layers.find((l) => l.id === p.layer)?.bounds?.includes(id)) continue;
+		for (const g of tx.doc.stones.slice()) if (g.on?.panel === p.id) { impact?.stones.push(g.name || g.kind); tx.remove('stones', g.id); }
+		impact?.pieces.push(p.name || p.id);
+		tx.exec({ op: 'overlay.remove', id: p.id });
+	}
 }
 // Drop a panel and its stones; a piece the designer made (not the block's) is reported.
 function removePanel(tx, p, impact) {
@@ -322,7 +334,11 @@ defineCommand('curve.setKind', {
 
 defineCommand('curve.remove', {
 	label: 'Delete line', args: '{ id }',
-	run(tx, a) { findCurve(tx, a.id); tx.remove('curves', a.id); },
+	run(tx, a) {
+		findCurve(tx, a.id);
+		dropOverlaysOn(tx, a.id);
+		if (tx.doc.curves.some((c) => c.id === a.id)) tx.remove('curves', a.id);
+	},
 });
 
 // --- panels ------------------------------------------------------------------------------------
@@ -477,13 +493,20 @@ defineCommand('trim.set', {
 // way a line that is no seam is really made (knowledge/domain/construction/applique-and-overlays.md).
 // The export gives it its own cut piece with no seam allowance and a placement line on the piece
 // below (garment/pattern.js). panel.outline names its line.
+//
+// With `at`, points is a line from one existing line to another and `at` picks the side: the piece
+// fills that region, as a seam drawn there would have made it. Where its edge runs along those lines it
+// is caught in them when sewn, so it gets no stitched edge and the pattern adds an allowance to catch.
+// Such a piece has a layer of its own, whose `bounds` are those lines: they would slice any other overlay
+// sharing the layer (garment/build.js buildGarment). It sits at the height of the other overlays.
 
 defineCommand('overlay.add', {
-	label: 'Add overlay piece', args: '{ points: [spec | { at, kind, on }] (3 or more, closed), mirror?: none|both, material?, name?, edge?: finish kind (default zigzag), width? (m, default 2 mm) }',
+	label: 'Add overlay piece', args: '{ points: [spec | { at, kind, on }] (closed outline: 3 or more; with at: a line whose two ends lie on other lines), at?: spec (the side to fill), mirror?: none|both, material?, name?, edge?: finish kind (default zigzag), width? (m, default 2 mm) }',
 	run(tx, a) {
+		if (a.at) return addRegionOverlay(tx, a);
 		if (!Array.isArray(a.points) || a.points.length < 3) throw new Error('An overlay piece needs at least three points');
 		const surf = ctxOf(tx).surf, mirror = a.mirror ?? 'both';
-		const layer = tx.doc.layers.find((l) => l.kind === 'overlay')?.id ?? tx.exec({ op: 'layer.add', kind: 'overlay', name: 'Appliqué' });
+		const layer = tx.doc.layers.find((l) => l.kind === 'overlay' && !l.bounds)?.id ?? tx.exec({ op: 'layer.add', kind: 'overlay', name: 'Appliqué' });
 		const curve = tx.exec({ op: 'curve.add', role: 'edge', closed: true, mirror, layer, name: (a.name || 'Overlay') + ' edge', points: a.points });
 		const evaluated = evaluateAll(tx.doc, surf, null, ctxOf(tx).evaluated), g = buildGarment(tx.doc, surf, { layer, evaluated });
 		// the new shape is the smallest cell no piece of this layer has claimed (the rest of the body is the largest)
@@ -504,14 +527,42 @@ defineCommand('overlay.add', {
 	},
 });
 
+function addRegionOverlay(tx, a) {
+	if (!Array.isArray(a.points) || a.points.length < 2) throw new Error('Draw a line from one seam or edge to another');
+	if (!a.points[0].on || !a.points[a.points.length - 1].on) throw new Error('An overlay line must start and end on an existing line');
+	const ctx = ctxOf(tx), surf = ctx.surf, mirror = a.mirror ?? 'both', at = resolvePoint(a.at, ctx);
+	const pts = a.points.map((p) => controlPoint(tx, p));
+	const g = strokeRegions(tx.doc, surf, pts, mirror, ctx.evaluated), t = locate(g.arr, surf, at), cell = t >= 0 ? g.arr.cellOf[t] : -1;
+	const under = cell >= 0 && g.cellPanel[cell] >= 0 ? tx.doc.panels[g.cellPanel[cell]] : null;
+	if (!under || under.removed) throw new Error('Choose a side that has fabric');
+	const lines = cellLines(g.arr, cell);
+	if (!lines.delete(STROKE)) throw new Error('This line does not divide the fabric: end it on a line that closes the shape');
+	// only shell lines: a line of another layer does not divide the shell
+	const bounds = [...lines].filter((id) => (tx.doc.curves.find((c) => c.id === id)?.layer ?? 'L0') === 'L0');
+	const mat = a.material ? tx.doc.materials.find((m) => m.id === a.material) : null;
+	if (a.material && !mat) throw new Error('No material ' + a.material);
+	const look = mat ? { ...lookOf(mat), material: mat.id } : { ...lookOf(under.stack[0]), ...(under.stack[0].material ? { material: under.stack[0].material } : {}) };
+	const layer = tx.newId('L'), z = tx.doc.layers.find((l) => l.kind === 'overlay')?.z ?? 1;
+	tx.insert('layers', { id: layer, kind: 'overlay', z, name: 'Appliqué', bounds });
+	const curve = tx.newId('c');
+	tx.insert('curves', { id: curve, layer, role: 'edge', name: (a.name || 'Overlay') + ' edge', closed: false, mirror, shape: { mod: 'none', amp: 0, period: 0 }, points: pts });
+	const id = tx.newId('p');
+	tx.insert('panels', { id, layer, name: a.name ?? 'Overlay', seed: toSP(at), mirror, outline: curve, stack: [look] });
+	tx.exec({ op: 'trim.set', on: curve, kind: a.edge ?? 'zigzag', ...(a.width !== undefined ? { width: a.width } : {}) });
+	tx.noInherit = true; // this command settled its own piece
+	return id;
+}
+
 defineCommand('overlay.remove', {
 	label: 'Delete overlay piece', args: '{ id } (the piece and its outline)',
 	run(tx, a) {
 		const p = findPanel(tx, a);
 		if (!p.outline) throw new Error('Not an overlay piece');
 		for (const t of tx.doc.trims) if (t.on.includes(p.outline)) { const keep = t.on.filter((x) => x !== p.outline); if (keep.length) tx.set(['trims', t.id, 'on'], keep); else tx.remove('trims', t.id); }
+		const layer = tx.doc.layers.find((l) => l.id === p.layer);
 		tx.remove('panels', p.id);
 		if (tx.doc.curves.some((c) => c.id === p.outline)) tx.remove('curves', p.outline);
+		if (layer?.bounds) tx.exec({ op: 'layer.remove', id: layer.id });
 		tx.noInherit = true;
 	},
 });

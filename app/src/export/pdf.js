@@ -30,7 +30,7 @@ export function patternPDF({ pieces, settings, fabrics = [], finishes = [] }, me
 			doc.text([
 				'Print at 100% (no scaling). The square must measure 50 mm.',
 				`Seam allowance ${(settings.seamAllowance * 1000).toFixed(0)} mm included on pieced pieces (solid line = cut, dashed = stitch).`,
-				'Appliqué pieces have no allowance; a dotted line on the piece below shows where each is sewn.',
+				'Appliqué pieces have no allowance except where caught in a seam (dashed); a dotted line on the piece below shows where each is sewn.',
 				`Negative ease ${(settings.easeAcross * 100).toFixed(0)}% across, ${(settings.easeAlong * 100).toFixed(0)}% along the grain (four-way stretch fabric).`,
 				`${pieces.length} piece(s). Tape tiles together by their letters and numbers.`,
 				fabrics.length ? `Fabrics: ${fabrics.join(', ')}.` : '',
@@ -48,6 +48,8 @@ export function patternPDF({ pieces, settings, fabrics = [], finishes = [] }, me
 			poly(doc, p.cutLine.map(([x, y]) => [sx(x), sy(y)]));
 			doc.setLineWidth(0.2); doc.setLineDashPattern([2, 1.2], 0);
 			if (p.construction !== 'appliqué') poly(doc, p.stitch.map(([x, y]) => [sx(x), sy(y)]));
+			doc.setLineDashPattern([2, 1.2], 0);
+			for (const run of p.caught ?? []) for (let i = 0; i + 1 < run.length; i++) doc.line(sx(run[i][0]), sy(run[i][1]), sx(run[i + 1][0]), sy(run[i + 1][1]));
 			doc.setLineWidth(0.25); doc.setLineDashPattern([0.4, 1], 0);
 			for (const run of p.placement ?? []) for (let i = 0; i + 1 < run.length; i++) doc.line(sx(run[i][0]), sy(run[i][1]), sx(run[i + 1][0]), sy(run[i + 1][1]));
 			doc.setLineDashPattern([], 0);
@@ -58,7 +60,7 @@ export function patternPDF({ pieces, settings, fabrics = [], finishes = [] }, me
 			doc.setLineWidth(0.3); doc.line(A[0], A[1], B[0], B[1]);
 			arrow(doc, A, B); arrow(doc, B, A);
 			doc.setFontSize(9); doc.setTextColor(20);
-			doc.text([p.name, p.cut, p.material ? `Fabric: ${p.material}` : '', p.construction === 'appliqué' ? `Appliqué, no allowance${p.sewnOn?.length ? `, on ${p.sewnOn.join(' and ')}` : ''}` : ''].filter(Boolean), sx(gx) + 3, sy(gy) - 4);
+			doc.text([p.name, p.cut, p.material ? `Fabric: ${p.material}` : '', p.construction === 'appliqué' ? `Appliqué${p.sewnOn?.length ? ` on ${p.sewnOn.join(' and ')}` : ''}` : '', p.caughtIn?.length ? `Caught in ${p.caughtIn.join(', ')}` : ''].filter(Boolean), sx(gx) + 3, sy(gy) - 4);
 		}
 	}
 	return doc;

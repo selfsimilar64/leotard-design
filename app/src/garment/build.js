@@ -5,6 +5,7 @@ import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP, pointAlong } from '../curves/points.js';
 import { fromSP, toSP } from '../body/surface.js';
 import { buildArrangement, locate, baryOfVertexInFace } from './arrangement.js';
+import { openingLoops } from './edges.js';
 import { cellSignature } from './pieces.js';
 
 // Curve roles that cut the garment into cells. Guides, strap and trim paths do not.
@@ -93,14 +94,17 @@ function snapEnds(list, surf) {
 // prev: an earlier build; when the curves are unchanged its evaluation and arrangement are reused
 // and only the panel seeds are re-located.
 // layer: which layer's lines cut this garment; evaluated: a shared evaluation of all curves.
-export function buildGarment(doc, surf, { prev = null, layer = 'L0', evaluated: shared = null } = {}) {
+// A layer's `bounds` are lines of the shell that also cut it: the seams an overlay piece runs up to
+// (overlay.add). alsoCut: more line ids, for a line still being drawn (strokeRegions).
+export function buildGarment(doc, surf, { prev = null, layer = 'L0', evaluated: shared = null, alsoCut = null } = {}) {
 	const t0 = performance.now();
 	const curveSig = JSON.stringify(doc.curves);
 	let evaluated, arr, tEval = t0;
-	if (prev && prev.curveSig === curveSig && prev.layer === layer) ({ evaluated, arr } = prev);
+	const bounds = doc.layers?.find((l) => l.id === layer)?.bounds;
+	if (prev && !alsoCut && prev.curveSig === curveSig && prev.layer === layer && JSON.stringify(prev.bounds) === JSON.stringify(bounds)) ({ evaluated, arr } = prev);
 	else {
 		evaluated = shared ?? evaluateAll(doc, surf, null, prev?.evaluated);
-		const ofLayer = new Set(doc.curves.filter((c) => (c.layer ?? 'L0') === layer).map((c) => c.id));
+		const ofLayer = new Set([...doc.curves.filter((c) => (c.layer ?? 'L0') === layer).map((c) => c.id), ...(bounds ?? []), ...(alsoCut ?? [])]);
 		const cutting = [...evaluated.entries()].filter(([, e]) => ofLayer.has(e.curve) && CUTTING.has(e.role) && e.sps.length > 1);
 		// snapping edits the polylines: work on copies so cached evaluations stay pristine
 		const list = cutting.map(([key, e]) => ({ key, id: key, sps: e.sps.slice(), pts: e.pts.slice(), closed: e.closed }));
@@ -131,7 +135,7 @@ export function buildGarment(doc, surf, { prev = null, layer = 'L0', evaluated: 
 		if (best >= 0) cellPanel[c] = cellPanel[best];
 	}
 	return {
-		evaluated, arr, cellPanel, seeds, curveSig, panelIds, layer,
+		evaluated, arr, cellPanel, seeds, curveSig, panelIds, layer, bounds,
 		ms: { eval: tEval - t0, arrangement: prev?.arr === arr ? 0 : arr.ms, total: performance.now() - t0 },
 	};
 }
@@ -179,6 +183,41 @@ export function inheritPanels(g, prev, doc, surf) {
 		out.push({ seed: toSP(seed), mirror: both ? 'both' : 'none', stack: structuredClone(src.stack), from: src.id, name: nameOf(src.name) });
 	}
 	return out;
+}
+
+// The regions a line from one seam to another makes on the shell, as a seam would: the shell cut by
+// its own lines and this one. -> { g, surf, stroke: its id }. The drawn line is not in the document yet.
+export const STROKE = '__stroke';
+export function strokeRegions(doc, surf, points, mirror, cache = null) {
+	const curve = { id: STROKE, layer: '__', role: 'edge', name: '', closed: false, mirror, shape: { mod: 'none', amp: 0, period: 0 }, points };
+	const d = { ...doc, curves: [...doc.curves, curve] };
+	return buildGarment(d, surf, { layer: 'L0', evaluated: evaluateAll(d, surf, null, cache), alsoCut: [STROKE] });
+}
+
+// The lines round a cell (ids of the curves, without the mirror mark).
+export function cellLines(arr, cell) {
+	const out = new Set();
+	for (const t of arr.cells[cell].tris) for (let e = 0; e < 3; e++) {
+		const k = arr.ekey(arr.tris[t * 3 + e], arr.tris[t * 3 + (e + 1) % 3]);
+		if (arr.softEdges?.has(k)) continue;
+		for (const id of arr.constraint.get(k) ?? []) out.add(id.replace(/~m$/, ''));
+	}
+	return out;
+}
+
+// A cell's outline as a closed run of surface points, to draw it while it is being chosen.
+export function cellOutline(arr, surf, cell) {
+	const mask = new Uint8Array(arr.cells.length);
+	mask[cell] = 1;
+	const loop = openingLoops(arr, mask).sort((a, b) => b.verts.length - a.verts.length)[0];
+	if (!loop) return null;
+	const sps = loop.verts.map((v) => {
+		if (v >= surf.V) { const k = v - surf.V; return { f: arr.hostF[k], b0: arr.hostB[k * 3], b1: arr.hostB[k * 3 + 1], b2: arr.hostB[k * 3 + 2] }; }
+		const f = surf.vf[surf.vfStart[v]], c = [0, 1, 2].find((j) => surf.idx[f * 3 + j] === v);
+		return { f, b0: c === 0 ? 1 : 0, b1: c === 1 ? 1 : 0, b2: c === 2 ? 1 : 0 };
+	});
+	sps.push(sps[0]);
+	return { sps };
 }
 
 // The panel id a surface point falls in, in a built garment (or null).

@@ -30,10 +30,11 @@ export function FlatView() {
 						<g key={p.key} class={`piece ${active ? 'sel' : ''}`} onClick={() => { selection.value = { kind: 'panels', id: p.panelId }; }}>
 							<polygon points={p.cutLine.map(pt).join(' ')} fill={p.colour} fill-opacity="0.22" stroke="#2a2724" stroke-width="0.8" />
 							{p.construction === 'appliqué' ? null : <polygon points={p.stitch.map(pt).join(' ')} fill="none" stroke="#5a5650" stroke-width="0.6" stroke-dasharray="4 3" />}
+							{p.caught.map((run, i) => <polyline key={'c' + i} points={run.map(pt).join(' ')} fill="none" stroke="#5a5650" stroke-width="0.6" stroke-dasharray="4 3" />)}
 							{p.placement.map((run, i) => <polyline key={i} points={run.map(pt).join(' ')} fill="none" stroke="#2a2724" stroke-width="0.7" stroke-dasharray="1 2" />)}
 							<line x1={ox + gx - dx} y1={oy + p.size[1] - (gy - dy)} x2={ox + gx + dx} y2={oy + p.size[1] - (gy + dy)} stroke="#2a2724" stroke-width="0.8" marker-start="url(#arr)" marker-end="url(#arr)" />
 							<text x={ox + gx + 6} y={oy + p.size[1] - gy - 6} font-size="9" fill="#1f1d1a" font-family="system-ui, sans-serif">{p.name}</text>
-							<text x={ox + gx + 6} y={oy + p.size[1] - gy + 6} font-size="7" fill="#59554f" font-family="system-ui, sans-serif">{p.cut}{p.construction === 'appliqué' ? ` · appliqué${p.sewnOn.length ? ` on ${p.sewnOn.join(', ')}` : ''}` : ''}{p.stretch ? ` · stretch ${(p.stretch.mean * 100).toFixed(0)}%` : ''}</text>
+							<text x={ox + gx + 6} y={oy + p.size[1] - gy + 6} font-size="7" fill="#59554f" font-family="system-ui, sans-serif">{p.cut}{p.construction === 'appliqué' ? ` · appliqué${p.sewnOn.length ? ` on ${p.sewnOn.join(', ')}` : ''}${p.caughtIn.length ? `, caught in ${p.caughtIn.join(', ')}` : ''}` : ''}{p.stretch ? ` · stretch ${(p.stretch.mean * 100).toFixed(0)}%` : ''}</text>
 						</g>
 					);
 				})}

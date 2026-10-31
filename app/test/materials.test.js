@@ -13,6 +13,7 @@ import '../src/doc/symmetry.js';
 import { LOOK, lookHolders, usage, parseHex } from '../src/doc/materials.js';
 import { buildGarment, evaluateAll, inheritPanels } from '../src/garment/build.js';
 import { TRIMS, trimAtWidth } from '../src/garment/trim.js';
+import { offsetEdges } from '../src/garment/pattern.js';
 import { toSP, fromSP } from '../src/body/surface.js';
 import { loadBody } from './helpers.js';
 
@@ -141,6 +142,62 @@ describe('overlay pieces (appliqué)', () => {
 		expect(s.doc.panels.some((x) => x.id === b)).toBe(false);
 		expect(s.doc.curves.some((c) => c.id === line)).toBe(false);
 		expect(s.doc.trims.some((t) => t.on.includes(line))).toBe(false);
+	});
+});
+
+describe('overlay pieces that use existing seams', () => {
+	// from the waist seam up to the armhole, on the wearer's left: the piece is what lies outside the line
+	function stroke(s) {
+		const ev = evaluateAll(s.doc, surf, null, null), named = (n) => s.doc.curves.find((c) => c.name === n);
+		const near = (c, x, y) => { const e = ev.get(c.id); let b = 0, bd = Infinity; e.pts.forEach((p, i) => { const d = (p.x - x) ** 2 + (p.y - y) ** 2 + (p.z < 0 ? 1 : 0); if (d < bd) { bd = d; b = i; } }); return { i: b, e, t: e.s[b] / e.length }; };
+		const end = (c, x, y) => { const n = near(c, x, y); return { at: { sp: toSP(n.e.sps[n.i]) }, kind: 'corner', on: { curve: c.id, t: n.t } }; };
+		return [end(named('Waist seam'), 0.03, 1.0), { at: { sp: toSP(hit(0.05, 1.15)) }, kind: 'smooth' }, end(named('Armhole') ?? named('Raglan seam (front)'), 0.11, 1.28)];
+	}
+	const open = () => { const s = store(); s.exec({ op: 'block.apply', neck: 'high', back: 'crew', sleeves: 'tank', strap: 'racer', leg: 'high', waist: 'straight', fabric: 'wet', colour: '#b98aa2' }); return s; };
+
+	it('fills the chosen side, on both sides of the body, bounded by the lines the side touches', () => {
+		const s = open(), before = buildGarment(s.doc, surf, { layer: 'L0' }).arr.cells.length;
+		const id = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) }, name: 'Plate' });
+		const p = s.doc.panels.find((x) => x.id === id), layer = s.doc.layers.find((l) => l.id === p.layer);
+		expect(layer.bounds.length).toBeGreaterThan(1);
+		expect(layer.bounds).toContain(s.doc.curves.find((c) => c.name === 'Waist seam').id);
+		expect(buildGarment(s.doc, surf, { layer: 'L0' }).arr.cells.length).toBe(before); // the base stays whole
+		const g = buildGarment(s.doc, surf, { layer: p.layer }), cells = new Set(g.seeds.filter((x) => x.panel === id).map((x) => x.cell));
+		expect(cells.size).toBe(2);
+		for (const c of cells) { expect(g.arr.cells[c].area).toBeGreaterThan(0.002); expect(g.arr.cells[c].area).toBeLessThan(0.04); }
+		expectInSync(s.doc);
+	});
+	it('refuses an opening, and a line that does not divide the fabric', () => {
+		const s = open();
+		expect(() => s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(surf.closest(new THREE.Vector3(0.0, 1.5, 0.05), {})) } })).toThrow();
+	});
+	it('goes with the seam it depends on, and when its own line is deleted', () => {
+		const s = open(), id = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) } });
+		const line = s.doc.panels.find((x) => x.id === id).outline, layers = s.doc.layers.length;
+		s.exec({ op: 'curve.remove', id: line });
+		expect(s.doc.panels.some((x) => x.id === id)).toBe(false);
+		expect(s.doc.layers.length).toBe(layers - 1);
+		s.undo();
+		const waist = s.doc.curves.find((c) => c.name === 'Waist seam').id;
+		s.exec({ op: 'curve.remove', id: waist });
+		expect(s.doc.panels.some((x) => x.id === id)).toBe(false);
+	});
+	it('two such pieces do not slice each other', () => {
+		const s = open(), a = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) } });
+		const b = s.exec({ op: 'overlay.add', mirror: 'none', points: outline([[-0.03, 0.98], [0.03, 0.98], [0.03, 0.9], [-0.03, 0.9]]), name: 'Centre' });
+		const pb = s.doc.panels.find((x) => x.id === b), pa = s.doc.panels.find((x) => x.id === a);
+		expect(pb.layer).not.toBe(pa.layer); // the bounded piece's layer is its own
+	});
+});
+
+describe('edge allowances per stretch', () => {
+	it('offsets each edge by its own distance, none where it has none', () => {
+		const square = [[0, 0], [100, 0], [100, 100], [0, 100]];
+		const out = offsetEdges(square, [6, 0, 0, 0]); // only the bottom edge grows
+		expect(out[0]).toEqual([0, -6]);
+		expect(out[1]).toEqual([100, -6]);
+		expect(out[2]).toEqual([100, 100]);
+		expect(out[3]).toEqual([0, 100]);
 	});
 });
 

@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-10-31
+* **Update**: [The construction model](/engineering/architecture/construction-model.md): an overlay can be drawn from one existing line to another and fill the side chosen; where it runs along those lines it is caught in them, with no stitched edge and a seam allowance in the pattern.
 * **Decision**: [The design model mirrors how a leotard is really cut and sewn](/decisions/2026-10-31-construction-mirrors-real-sewing.md): named materials, overlay pieces and real finishes, because a later export must match what is cut and sewn.
 * **Creation**: [The construction model](/engineering/architecture/construction-model.md): materials and their synchronised looks, overlay pieces, finish widths, the curvature-continuous line, pairing, what the pattern reads, and the known gaps (jagged flat outlines first).
 
