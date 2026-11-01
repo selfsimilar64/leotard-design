@@ -44,7 +44,7 @@ atelier author (Porter) and should ship as adjustable defaults; formulas are in
 | OS-8 | Strap width vs elastic width; narrower elastic stretches out more | factory minimum | warning | sourced qualitatively[^porter-straps]; no strength data |
 | OS-9 | Elastic-finished scoop: about ¾ in of fabric lost to the finish is accounted for | automatic | info | sourced[^porter-neck] |
 | OS-10 | Boat neck has a shelf-bra lining | required | warning | sourced[^porter-neck] |
-| OS-11 | Crossover back | flag as unusual for competition | info | sourced[^porter-neck] |
+| OS-11 | Crossover back | no flag: 65 of 411 Quatro and 25 of 153 GK listings mention them ([2026-10-31 research](/references/research/techniques-and-workflow-report.md)) | none | superseded[^porter-neck] |
 | OS-12 | Dress code: leg line not above hip bone, no bare midriff, no "backless" opening, no racerback or spaghetti straps | per competition rule set | warning | GK blog summary, unattributed **[UNVERIFIED]** vs rule texts[^gk-dress-code] |
 
 All via the research note.[^pc-notes] Competition rule sets belong in [/domain/rules/](/domain/rules/about.md).

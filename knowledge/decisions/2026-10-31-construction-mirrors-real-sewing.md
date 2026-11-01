@@ -32,7 +32,7 @@ pieces and measurements that "correspond directly to pieces that will be cut and
 1. **A material is what is bought.** Pieces, straps and coloured finishes are cut from a named material; a
    change to it reaches them all, and the list is the design's bill of fabrics. Grain, gradient and print stay
    on the piece, because they depend on where the piece sits.
-2. **An overlay is not a seam.** A shape sewn on top leaves the fabric under it whole. That is appliqué,[^applique]
+2. **An overlay is not a seam.** A shape sewn on top leaves the fabric under it whole at cutting (makers often trim beneath it afterwards: [refined](/decisions/2026-10-31-draw-first-decide-how-it-sews.md)). That is appliqué,[^applique]
    one of the three real ways to make a line,[^realisations] and it exports differently: its own cut piece
    with no seam allowance, and a placement line on the piece it is sewn onto.
 3. **Only finishes a line can really take are offered.** Elastic and binding go on an opening; a line with

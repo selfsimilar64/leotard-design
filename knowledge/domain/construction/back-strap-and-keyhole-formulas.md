@@ -61,7 +61,7 @@ conversions are ours (1 in = 25.4 mm).
   (turned strap) is the more stable construction.[^porter-straps][^pc-notes]
 - Straps are cut with the greatest stretch **along** their length, an exception to the
   "stretch around the body" rule.[^porter-straps][^pc-notes]
-- Crossover backs are described as unusual for competition suits.[^porter-neck][^pc-notes]
+- Crossover backs are described as unusual for competition suits.[^porter-neck][^pc-notes] Corrected by the [2026-10-31 research](/references/research/techniques-and-workflow-report.md): 65 of 411 Quatro and 25 of 153 GK listings mention them, so they are not unusual.
 - Closures: back-neck clasp on keyhole and banded necklines (one clasp per garment in Jalie 2792);
   butterfly clasps on hole backs and halters; invisible zips and snaps on other bodysuits.[^jalie-2792][^porter-neck][^pc-notes]
 

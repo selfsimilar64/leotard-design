@@ -112,7 +112,7 @@ manufacturer's pipeline rather than something to replicate.[^notes-tools]
 
 # Learning curve
 
-One third-party estimate: a newcomer to 3D needs **4-8 weeks** to become productive in CLO, a
+A study of designers puts proficiency in CLO at roughly 6-12 months (Martin and Seo 2025, one source: [notes](/references/research/software-interaction-precedents.md)); it measures something different from the estimate that follows. One third-party estimate: a newcomer to 3D needs **4-8 weeks** to become productive in CLO, a
 steeper curve than classic 2D CAD.[^ki-syndikat] No reviews were retrievable for the others.
 
 # Rhinestones and embellishment

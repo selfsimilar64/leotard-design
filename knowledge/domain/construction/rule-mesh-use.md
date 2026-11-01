@@ -53,7 +53,7 @@ it backs a cut-out.**[^gk-care][^sp-fabrics][^porter-neck][^pc-notes]
 | ME-2 | Elastic and thread under or through mesh colour-matched to the mesh / skin tone | required | warning | sourced[^porter-elastic][^porter-sew] |
 | ME-3 | Mesh over the torso has a lining or self-backing decision recorded | required | warning | **[INFERRED]** |
 | ME-4 | Mesh in contact or abrasion zones (where the body meets apparatus) | warn; durability waiver | warning | sourced: mesh can be damaged by contact during routines, no lifespan guarantee, signed waiver at GK[^gk-care]; pulls or tears on rough surfaces[^sp-fabrics] |
-| ME-5 | Crystals on unsupported single-layer mesh | forbid unless test flag | warning | **[INFERRED]** |
+| ME-5 | Crystals on unsupported single-layer mesh | warn only: stones on mesh are widespread at the brands, though how single-layer sleeves are treated is unconfirmed ([2026-10-31 research](/references/research/techniques-and-workflow-report.md)) | warning | **[INFERRED]** |
 | ME-6 | Mesh edge finish | turned elastic, or clear elastic on unlined mesh necklines | info | sourced[^porter-elastic] |
 
 All via the research note.[^pc-notes]

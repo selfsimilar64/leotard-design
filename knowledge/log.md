@@ -1,6 +1,9 @@
 # Bundle update log
 
 ## 2026-10-31
+* **Decision**: [Draw first, decide how it sews](/decisions/2026-10-31-draw-first-decide-how-it-sews.md): the drawing tools share one grammar and existing seams count as edges without tracing; the earlier proposal of a visible tool rail is withdrawn on the research.
+* **Creation**: [One drawing grammar](/engineering/ux/one-drawing-grammar.md), [One look, several builds](/domain/construction/builds-for-one-look.md), [How leotard designers work](/domain/garment/how-leotard-designers-work.md), [The ideas the construction model needs](/product/requirements/construction-ideas-the-app-needs.md), [How does a designer decide what a line becomes?](/product/questions/how-designers-choose-a-build.md) and six reference mirrors under [/references/research/](/references/research/about.md): the research of 2026-10-31.
+* **Update**: corrections from that research: crossover backs are not unusual, a lining is often not a copy of the shell, the crotch is not always closed last, crystals on mesh are a warning and not a ban, bound edges keep their allowance, and a new figure for CLO's learning time.
 * **Update**: [The construction model](/engineering/architecture/construction-model.md): an overlay can be drawn from one existing line to another and fill the side chosen; where it runs along those lines it is caught in them, with no stitched edge and a seam allowance in the pattern.
 * **Decision**: [The design model mirrors how a leotard is really cut and sewn](/decisions/2026-10-31-construction-mirrors-real-sewing.md): named materials, overlay pieces and real finishes, because a later export must match what is cut and sewn.
 * **Creation**: [The construction model](/engineering/architecture/construction-model.md): materials and their synchronised looks, overlay pieces, finish widths, the curvature-continuous line, pairing, what the pattern reads, and the known gaps (jagged flat outlines first).

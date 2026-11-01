@@ -4,17 +4,23 @@
 
 # Reference
 
+* [Research notes: adjacent costume trades](adjacent-costume-trades.md) - Techniques and working methods from figure skating, rhythmic gymnastics, dance and ballroom, circus, cheer and swimwear, and how far they apply to leotards.
+* [Research notes: designer practice](designer-practice.md) - Who designs leotards, with what tools, from what starting points, in what order; hand-off, iteration and friction, with evidence quality marked.
 * [Research notes: embellishments, crystals and sequins](embellishments-crystals-sequins.md) - Crystal and spangle types, stone sizes, grades, colours and coatings, heat-fix production, placement patterns and pricing tiers.
 * [Research notes: existing tools and UX mechanics](existing-tools-and-ux-mechanics.md) - Brand design studios, professional fashion CAD, rhinestone software, Dressmaker and brush/painting UX patterns.
 * [Research notes: fabrics and materials](fabrics-and-materials.md) - Leotard fabric families, compositions, weights, finishes, brand catalogues, combination and decoration restrictions.
 * [Research notes: garment geometry and placement](garment-geometry-and-placement.md) - Designing on the body surface, body models, surface curves, flattening to patterns, stone placement algorithms and size transfer.
+* [Research notes: leotard construction techniques](leotard-construction-techniques.md) - A graded catalogue of how the visible effects on competition leotards are built: bodice divisions, layers, windows, gathers, belts, edges, strap ends, surface and closures.
 * [Research notes: leotard styles and rules](leotard-styles-and-rules.md) - Design vocabulary (sleeves, necklines, backs, straps, leg cuts, zones), option frequencies, FIG/USAG/NCAA attire rules, sizing and market.
 * [Research notes: mannequins and leotard fit](mannequins-and-leotard-fit.md) - Retail mannequins and dress forms, child-to-adult body measurements, how leotards sit on the body, size charts and open 3D body references.
+* [Research notes: moodboard against the app](moodboard-vs-app-gap-map.md) - Each construction on the moodboard, how often it appears, whether the app can express it, the steps and friction, read from code at commit 2e72750.
 * [Research notes: native engine options](native-engine-options.md) - Unreal, Unity, Godot, Omniverse and native rendering libraries compared, with licensing and tablet support.
 * [Research notes: patternmaking and construction](patternmaking-and-construction.md) - Factory production order, negative ease, seams versus applique versus print, finishing, manufacturability checks and factory deliverables.
 * [Research notes: real-time fabric shading](realtime-fabric-shading.md) - Per-fabric shading recipes on PBR layers: sheen, anisotropy, clearcoat, foil dots, holographic diffraction, velvet, mesh, glitter.
 * [Research notes: real-time sparkle rendering](realtime-sparkle-rendering.md) - Glint models for glitter, spangles, crystal optics and level of detail, lighting for sparkle, observer effects and validation by sparkle statistics.
 * [Research report: Borrow the engine, build the sparkle](research-report.md) - Synthesis of the October 2026 research pass: domain catalogue, competing tools, rendering approach, engine choice and gaps.
+* [Research notes: software interaction precedents](software-interaction-precedents.md) - How fashion CAD, vector and direct-modelling tools let people divide shapes and pick regions, what fails, and what touch without hover implies.
+* [Research report: Draw first, decide how it sews](techniques-and-workflow-report.md) - How leotard designers work, what real techniques the app does not model, and how its drawing tools should behave; synthesised from five sets of notes.
 * [Research notes: web engine options](web-engine-options.md) - three.js, Babylon.js, PlayCanvas, Filament and hand-rolled WebGPU compared for the leotard renderer.
 
 # Section

@@ -81,5 +81,5 @@ its millimetres); overall `fabrics` and `finishes` with total lengths. Appliqué
 - **The flat outlines of some pieces have small jagged steps** (seen near the armhole of a mesh Front on a racer block, about 5 mm). The 3D lines there are clean, so the cause is in flattening or outline cleanup. This must be fixed before an outline is cut from. Close-ups also show fabric texture distortion in patches on a flattened overlay, possibly the same cause.
 - A free-drawn overlay that merely touches a seam is not treated as caught in it; only a piece drawn from line to line is.
 - A caught stretch uses the 6 mm seam allowance even along an elastic-finished opening such as the armhole, where a different catch may be right.
-- Seam allowance is the same on every pieced edge; an elastic-finished or bound edge needs a different one ([seams and allowances](/domain/construction/seams-stitches-and-allowances.md)).
+- Seam allowance is the same on every pieced edge. Bound edges really do keep about 6 mm, wrapped inside the binding; sleeve hems (about 2 cm), clasp folds (about 1.5 cm) and strap joins (1 cm) are the real errors ([2026-10-31 research](/references/research/techniques-and-workflow-report.md)).
 - Stones are not yet tied to overlay deletion.

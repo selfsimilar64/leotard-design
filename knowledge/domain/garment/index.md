@@ -23,6 +23,10 @@
 * [Straps](straps.md) - Strap options by count, width, path pattern, under-layer (skin, nude mesh, printed imitation) and material (binding, rouleau, elastic, mystique); the spaghetti-strap ban, the spotting hazard and the faux-strap workaround.
 * [Leotard trends by era](trends-by-era.md) - Historical timeline of leotard design motifs from the 1980s to the Paris 2024 cycle (colour, velvet, keyholes, swirls, mesh, rhinestones, unitards, crystal counts per Olympic leotard).
 
+# Process
+
+* [How leotard designers work](how-leotard-designers-work.md) (draft) - Public sources show designers starting from a reference photo, a client's drawing or a catalogue style, drawing in Illustrator and Photoshop, handing fit and cutting to a pattern department, and changing backs and stones late; no source supports a fixed order of decisions.
+
 # Section
 
 * [Garment styles and design vocabulary](about.md) - The named choices brands use to describe a leotard (garment type, sleeve, neckline, illusion layer, back, closure, straps, leg cut, fabric zones), how common each option is, how choices constrain each other, and what designers say makes a leotard work.

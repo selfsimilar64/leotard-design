@@ -4,6 +4,7 @@
 
 # Requirement
 
+* [The ideas the construction model needs](construction-ideas-the-app-needs.md) (draft) - About seven general properties (a layer stack with show-through, a join type on every line, lining as its own pieces, free-edged layers, fullness as a seam property, straps with real ends, thread and show-through) cover nearly every real technique the app cannot yet record, ranked here by moodboard reach.
 * [Tool space needed to build every moodboard design](tool-space-for-moodboard.md) (draft) - The complete set of designer tools (T1-T14) and supporting mechanisms (M1-M10) required for any leotard in the moodboard to be built in the app, each with the moodboard features it serves and its acceptance check.
 
 # Section

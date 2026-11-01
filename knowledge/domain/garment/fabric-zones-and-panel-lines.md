@@ -84,6 +84,8 @@ a skin tone; sleeves stay unlined.**[^sylviap-cat][^styles]
 
 # Design-line types
 
+Brand words name looks, not builds: `overlay`, `underlay` and `double layer` each cover several constructions ([one look, several builds](/domain/construction/builds-for-one-look.md)).
+
 - Sylvia P 2026-27: asymmetric body paneling with a waist seam; pointed panel lines wrapping body
   and waist; curved mesh paneling; a curved princess line followed by crystal lines; sweetheart V
   paneling; colour-block bodice with belt paneling; V-shaped belt line; twisting panel lines; mesh

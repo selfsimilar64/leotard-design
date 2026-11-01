@@ -79,7 +79,7 @@ All via the research note.[^pc-notes]
 
 # Pattern consequence **[INFERRED]**
 
-A lining is a copy of the shell piece (or of the unaltered block when the shell is colour-blocked),
+Corrected by the [2026-10-31 research](/references/research/techniques-and-workflow-report.md): a lining is often not a copy of the outer fabric (it stops at the yoke seam on one Jalie pattern and is cut in fewer pieces on another). Otherwise, a lining is a copy of the shell piece (or of the unaltered block when the shell is colour-blocked),
 cut in lining fabric and treated as one layer with the shell; export it as its own piece with its own
 fabric code in the BOM rather than drafting it independently.
 

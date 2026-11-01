@@ -82,6 +82,7 @@ Other cut-and-sew sublimation makers reverse steps 1 and 3 (print the roll, then
 
 - **[INFERRED]** Export must be organised per piece: cut contour, print image, appliqué placements
   and stone template for each piece, in one shared coordinate frame.
+- Pattern sheets sew the crotch before the shoulders and sides, while factory reporting lists it among the last seams, which looks like a difference in practice ([2026-10-31 research](/references/research/techniques-and-workflow-report.md)).
 - **[INFERRED]** Side, shoulder and crotch seams are "closing seams" with special status: they are
   the last operations, so no machine-applied decoration may cross them.
 - **[INFERRED]** The atelier sequence (bond lining to shell, sew as one layer) means a lined panel

@@ -15,6 +15,7 @@
 # Requirement
 
 * [Frictionless design flow for the designer tool](frictionless-design-flow.md) (draft) - How a designer gets from a blank or a reference photo to a finished leotard with the fewest decisions: start from a block, draw in 3D or on a synced 2D flat, smart context actions on whatever is clicked, generators that stay editable, mirror and snapping on by default, trace-over-photo, live counts and side-by-side compare.
+* [One drawing grammar](one-drawing-grammar.md) (draft) - How every line tool behaves: a press shows where a point will land and lifting places it, lines snap visibly to seams and the centre, a line that touches the centre meets its mirror image, the areas lines enclose tint, a tap picks one, and existing seams count as edges without tracing.
 
 # Section
 
