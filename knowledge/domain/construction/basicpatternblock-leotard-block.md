@@ -38,8 +38,10 @@ Keep the files out of git: the licence bars redistributing them.[^terms] Only me
 | `Booklet_WOMENS_BODYSUIT_SEWING_PATTERN_BLOCK.pdf` | Size chart, fabric advice, sketches, seam allowance link |
 
 All PDFs open without a password. Each drawn line is a separate path on its size's layer; A0 sizes
-XS to 2XL and 4XL to 6XL are dashed strokes split into 21 usable paths. **XXS and 3XL are stored
-differently** (7 long paths) and the first script could not read them; extraction must handle them.
+XS to 2XL and 4XL to 6XL draw each edge alone, stopping about 3 mm short of its corners, while XXS and
+3XL draw each piece as one outline. `pipeline/extract_block.py` reads all eleven sizes the same way into
+`assets/patterns/basicpatternblock-leotard-0005/derived/` (git-ignored), with corners placed within
+about 1.5 mm. Short marks (under 3 mm) on the edges are notches: side and armhole on the back, for example.
 
 # Pieces
 
@@ -63,8 +65,10 @@ differently** (7 long paths) and the first script could not read them; extractio
 | `THIGH` leg | 196.8 | 224.2 | Whole opening 421 |
 | `HIGH HIPS` leg | 276.2 | 305.7 | Whole opening 582 |
 
-Sleeve: underarm 449, wrist 171, short-sleeve hem 282. An unexplained 190 mm level line crosses the
-Front at the underarm height on the M layer, with no match on the Back.
+Sleeve: underarm 449 and 450, wrist 171, short-sleeve hem 282. The two sides of the sleeve differ by
+about 1 mm at M and grow apart with size, to about 7 mm at 6XL, so a maker eases them together. A 190 mm
+level line crosses the Front at the same height in every size, with no match on the Back; its purpose
+is not stated.
 
 # Ease against the size chart
 

@@ -52,6 +52,10 @@ own tab, because dev scripts open their own design and overwrite the autosave.
 - Clean up dashed strokes and the Bezier joins, and identify the stray 190 mm line.
 - **Gate:** every length in [the block page](/domain/construction/basicpatternblock-leotard-block.md)
   reproduced within 0.5 mm; drawn back to scale and laid over the PDF, no visible difference.
+- **Done 2026-11-01** (`pipeline/extract_block.py`), with the gate adjusted: edges follow the drawn paths
+  exactly, but each edge is about 3.3 mm longer than its path because corners are filled, and corners are
+  placed within about 1.5 mm, so extracted seams agree within about 1.5 mm rather than 0.5. Sizes were drawn
+  back to scale and inspected, not laid over the PDF. Refine corners if stage 3 needs better.
 
 ## 2. Measure the gap to today's app
 
@@ -61,6 +65,8 @@ own tab, because dev scripts open their own design and overwrite the autosave.
   block. Report differences per edge length, piece area and shape, and per-region ease.
 - **Gate:** a table showing where the current flat differs most, and why (body, ease, flattening).
   The stage can end the exploration if the gap proves small and a block-informed ease is enough.
+- **Done 2026-11-01:** [the results](/engineering/app/flat-pattern-against-a-real-block.md). The gap is not small;
+  go to stage 3 with block XS on the `young` body.
 
 ## 3. Wrap the block onto the body (the spike)
 

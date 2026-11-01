@@ -22,3 +22,7 @@
 # Section
 
 * [Designer app](about.md) - What the designer app in app/ implements, module by module: build status per roadmap phase, the interface (stage, task tabs, design library, tile pictures), the scripting surface (app.exec), garment cutting from curves, pattern pieces and flattening, studio lighting and fabric looks, poses and shading, the benchmark rehearsal and coverage audit.
+
+# Technique
+
+* [The app's flat pattern against a real block](flat-pattern-against-a-real-block.md) - Measured on 2026-11-01: the young body is nearest block size XS. Total trunk length matches, but the app's flattened pieces follow body bumps, shift the shoulder seam, have a much shorter sleeve with a lower sleeve head, and one uniform ease that is too tight at the waist and too loose at bust and hip.
