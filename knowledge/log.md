@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-11-01
+* **Creation**: [Sources of leotard pattern blocks](/domain/construction/sources-of-leotard-pattern-blocks.md): where a flat pattern can come from as ground truth, with what each source's terms allow.
+
 ## 2026-10-31
 * **Update**: [The construction model](/engineering/architecture/construction-model.md): pattern outlines are clean: the flattening runs until a piece settles and caps the weight of thin triangles (a leg line folded over near the crotch is gone, inverted triangles nearly gone), and each stretch of outline between true corners is smoothed with its ends held.
 * **Update**: [One drawing grammar](/engineering/ux/one-drawing-grammar.md) built for the seam, strap and overlay tools; [the construction model](/engineering/architecture/construction-model.md), [the Mirror toggle](/engineering/architecture/mirror-toggle.md) and [the studio interface](/engineering/app/studio-interface.md) follow: an overlay takes several drawn lines and an area picked from the tints, any area with fabric can be picked, a pair comes from the area and not the click, a line touching the centre meets its mirror image, attached ends slide along their line, a new piece has its own material.
