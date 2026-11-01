@@ -1,6 +1,8 @@
 # Bundle update log
 
 ## 2026-11-01
+* **Creation**: [The purchased leotard block](/domain/construction/basicpatternblock-leotard-block.md): contents and measurements of the block, with the files kept in git-ignored `assets/patterns/`.
+* **Creation**: [Flat and 3D exploration plan](/product/roadmap/flat-and-3d-exploration-plan.md): staged test of the flat block as the garment's source geometry.
 * **Creation**: [Sources of leotard pattern blocks](/domain/construction/sources-of-leotard-pattern-blocks.md): where a flat pattern can come from as ground truth, with what each source's terms allow.
 
 ## 2026-10-31
