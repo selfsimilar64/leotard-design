@@ -26,3 +26,4 @@
 # Technique
 
 * [The app's flat pattern against a real block](flat-pattern-against-a-real-block.md) - Measured on 2026-11-01: the young body is nearest block size XS. Total trunk length matches, but the app's flattened pieces follow body bumps, shift the shoulder seam, have a much shorter sleeve with a lower sleeve head, and one uniform ease that is too tight at the waist and too loose at bust and hip.
+* [Wrapping a flat block onto the body](wrapping-a-flat-block-onto-the-body.md) (draft) - Stage 3 spike, 2026-11-01: a purchased block's flat pieces, seams welded, solved onto the garment surface in about four minutes for five solves. Under 0.1% inside out, zero seam gap, stretch close to the block's intended ease; a neckline cut can reuse the fit, a large leg cut should not. The map is host triangles the app's own renderer can use.

@@ -81,6 +81,10 @@ own tab, because dev scripts open their own design and overwrite the autosave.
 - **Gate:** owner judges it looks at least as right as today's, and reused-map error is below about
   3 mm on the body. If reuse fails, keep the flat as source only with a re-bake per silhouette change.
 
+- **Solved 2026-11-01:** [results](/engineering/app/wrapping-a-flat-block-onto-the-body.md). The approach used is as-rigid-as-possible
+  on the surface, not cloth simulation. Reuse meets the 3 mm gate for necklines and not for a large leg change, so one solve per leg cut.
+  **The owner's visual verdict is still to come.**
+
 ## 4. Two-way link and print
 
 - Prototype: a flat and a 3D panel; hovering or drawing a line in either shows it in the other through

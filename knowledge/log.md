@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-01
+* **Creation**: [Wrapping a flat block onto the body](/engineering/app/wrapping-a-flat-block-onto-the-body.md): stage 3 of the [exploration](/product/roadmap/flat-and-3d-exploration-plan.md), with `pipeline/wrap_block.py` and `app/src/dev/wrap-eval.js`.
 * **Creation**: [The app's flat pattern against a real block](/engineering/app/flat-pattern-against-a-real-block.md): stages 1 and 2 of the [exploration](/product/roadmap/flat-and-3d-exploration-plan.md), with `pipeline/extract_block.py` and `pipeline/compare_block.py`.
 * **Creation**: [The purchased leotard block](/domain/construction/basicpatternblock-leotard-block.md): contents and measurements of the block, with the files kept in git-ignored `assets/patterns/`.
 * **Creation**: [Flat and 3D exploration plan](/product/roadmap/flat-and-3d-exploration-plan.md): staged test of the flat block as the garment's source geometry.
