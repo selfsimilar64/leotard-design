@@ -535,7 +535,9 @@ def main():
 	wrist = se['wrist'] if se['wrist'][0, 0] > se['wrist'][-1, 0] else se['wrist'][::-1]  # front side to back
 	n_u = count(float(arclen(under_f)[-1]), float(arclen(under_b)[-1]))
 	sr = {'cap': np.vstack([resample(cap_b, n_ab)[:-1], resample(cap_f, n_af)]), 'under_f': resample(under_f, n_u), 'wrist': resample(wrist, count(float(arclen(wrist)[-1]))), 'under_b': resample(under_b[::-1], n_u)}
-	sleeve = Piece('sleeve', sr)
+	# a shorter sleeve: a straight line this far above the wrist, which is about where this body's wrist is
+	cuff = np.column_stack([np.arange(-300.0, 300.0, STEP), np.full(len(np.arange(-300.0, 300.0, STEP)), wrist[:, 1].mean() + 45.0)])
+	sleeve = Piece('sleeve', sr, [('cuff', cuff)])
 
 	# weld: union-find over all pieces' points
 	pieces = {'front': front, 'back': back, 'sleeve': sleeve}
@@ -601,7 +603,9 @@ def main():
 		'block': None,
 		'high': {'front': below(front, front.line['high']), 'back': below(back, back.line['high'])},
 		'scoop': {'front': below(front, front.line['scoop'], False), 'back': below(back, back.line['scoop'], False)},
+		'cuff': {'sleeve': below(sleeve, sleeve.line['cuff'])},
 	}
+	cuts['high-cuff'] = {**cuts['high'], **cuts['cuff']}
 	results = {}
 	tris, rest, tag, facing = assemble()
 	sleeve_points = np.zeros(nw, bool)
@@ -650,7 +654,7 @@ def main():
 	p = part_solve(sleeve_points, np.ones(len(tris), bool), iters=60, label='all', start=p)
 	results['block'] = p
 	base = p
-	for cut in ('high', 'scoop'):
+	for cut in ('high', 'scoop', 'cuff', 'high-cuff'):
 		tr, re, ta, fa = assemble(cuts[cut])
 		used = np.unique(tr)
 		print('solving', cut)
@@ -704,7 +708,7 @@ def main():
 
 	export('block', base, None)
 	full = base.copy()
-	for cut in ('high', 'scoop'):
+	for cut in ('high', 'scoop', 'cuff', 'high-cuff'):
 		used, pos = results[cut]
 		mix = full.copy()
 		mix[used] = pos

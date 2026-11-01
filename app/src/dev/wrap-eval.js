@@ -11,12 +11,12 @@ import * as THREE from 'three';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const post = (file, body) => fetch('/__fs/captures/' + file, { method: 'POST', body });
 
-export async function start(leg = 'high', sleeves = 'long') {
+export async function start(leg = 'high', sleeves = 'long', colour = '#c9c6bd') {
 	const app = window.app;
 	app.new('Wrap eval');
 	app.exec({ op: 'body.set', size: 'young', pose: 'a-pose' });
 	await wait(2500);
-	app.exec({ op: 'block.apply', neck: 'crew', back: 'crew', sleeves, leg, armhole: 'set-in', yoke: 'none', waist: 'none', colour: '#c9c6bd' });
+	app.exec({ op: 'block.apply', neck: 'crew', back: 'crew', sleeves, leg, armhole: 'set-in', yoke: 'none', waist: 'none', colour });
 	await wait(2500);
 	await app.engine.whenFlat();
 }
@@ -41,7 +41,23 @@ export async function exportSeed() {
 	await post('wrap-body.json', JSON.stringify({ P: [...surf.P].map((x) => +x.toFixed(5)), idx: [...surf.idx], wArm: [...man.wArm].map((x) => +x.toFixed(3)), crotchY: man.crotchY, refLm: man.refLm }));
 }
 
-let added = [], flat = null;
+let added = [], flat = null, hook = null;
+
+// The body lifts and slides its surface where fabric is: tell it where this block's fabric is, or skin shows through past
+// the app's own pieces (the engine's cover hooks are how straps do the same).
+function cover(engine, cells) {
+	uncover(engine);
+	const on = new Set(cells.flatMap((c) => c.hostI));
+	hook = (C) => { for (const v of on) C[v] = 1; };
+	(engine.coverHooks ??= []).push(hook);
+	engine.updateCover(window.app.doc);
+}
+function uncover(engine) {
+	if (!hook) return;
+	engine.coverHooks.splice(engine.coverHooks.indexOf(hook), 1);
+	hook = null;
+	engine.updateCover(window.app.doc);
+}
 
 export function hide() {
 	const view = window.app.engine.views[0];
@@ -49,6 +65,7 @@ export function hide() {
 	added = [];
 	for (const c of view.cells) c.mesh.visible = true;
 	hideRims(window.app.engine, false);
+	uncover(window.app.engine);
 	window.app.engine.viewport.frame();
 }
 
@@ -92,12 +109,15 @@ function stretchColours(geo) {
 
 // mode: 'fabric' (the block on the app's own material), 'grid' (a 10 cm square grid drawn on the flat piece, red at its
 // origin) or 'stretch' (area stretch). The block's pieces take the place of the app's own, which stay in the document.
-export async function show(file, mode = 'fabric') {
+// opts.onSkin: place the block by the body's own current arrays, as the app's pieces are, so it follows the pose; it then
+// sits on the skin wherever the app's own pieces don't cover.
+export async function show(file, mode = 'fabric', opts = {}) {
 	const app = window.app, view = app.engine.views[0];
 	hide();
 	const data = await (await fetch('/__fs/captures/' + file + '.json')).json();
 	const panels = new Map(app.doc.panels.map((p) => [p.name, p.id]));
 	flat ??= grid();
+	if (opts.onSkin) cover(app.engine, data.cells);
 	const area = { pieces: {} };
 	for (const c of data.cells) {
 		const n = c.hostW.length / 3, geo = new THREE.BufferGeometry();
@@ -115,13 +135,14 @@ export async function show(file, mode = 'fabric') {
 				: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
 		const mesh = new THREE.Mesh(geo, material);
 		mesh.frustumCulled = false;
+		mesh.userData.name = c.name;
 		view.interpolate({ mesh, hosts: { i: Uint32Array.from(c.hostI), w: Float32Array.from(c.hostW) } });
 		// on the garment surface, clear of the skin: this block covers more than the app's own pieces, whose
 		// cover is all the body has lifted for (standing body only; a pose would need the lift solved for this block)
 		const Pos = geo.attributes.position.array, Nrm = geo.attributes.normal.array, G = app.engine.surf.P, hi = c.hostI, hw = c.hostW;
 		for (let l = 0; l < n; l++) for (let k = 0; k < 3; k++) {
-			let v = 0;
-			for (let j = 0; j < 3; j++) v += hw[l * 3 + j] * G[hi[l * 3 + j] * 3 + k];
+			let v = Pos[l * 3 + k];
+			if (!opts.onSkin) { v = 0; for (let j = 0; j < 3; j++) v += hw[l * 3 + j] * G[hi[l * 3 + j] * 3 + k]; }
 			Pos[l * 3 + k] = v + Nrm[l * 3 + k] * 0.0012;
 		}
 		if (mode === 'stretch') stretchColours(geo);
@@ -135,3 +156,25 @@ export async function show(file, mode = 'fabric') {
 }
 
 export async function shoot(name, view = 'front', opts = {}) { return window.app.capture(name, { view, width: 900, height: 1100, ...opts }); }
+
+// How far the wrapped cloth is from its flat size where it now lies, per piece: across and along the flat piece's axes
+// (1 = its flat size), and the share of triangles turned over. Reads what show() last placed.
+export function strain() {
+	const out = {};
+	for (const m of added) {
+		const P = m.geometry.attributes.position.array, U = m.geometry.attributes.aUV.array, I = m.geometry.index.array, across = [], along = [];
+		for (let t = 0; t < I.length; t += 3) {
+			const [a, b, c] = [I[t], I[t + 1], I[t + 2]];
+			const du1 = U[b * 2] - U[a * 2], dv1 = U[b * 2 + 1] - U[a * 2 + 1], du2 = U[c * 2] - U[a * 2], dv2 = U[c * 2 + 1] - U[a * 2 + 1], det = du1 * dv2 - du2 * dv1;
+			if (Math.abs(det) < 1e-10) continue;
+			const e1 = [0, 1, 2].map((k) => P[b * 3 + k] - P[a * 3 + k]), e2 = [0, 1, 2].map((k) => P[c * 3 + k] - P[a * 3 + k]);
+			const fu = e1.map((v, k) => (v * dv2 - e2[k] * dv1) / det), fv = e1.map((v, k) => (e2[k] * du1 - v * du2) / det);
+			across.push(Math.hypot(...fu)); along.push(Math.hypot(...fv));
+		}
+		const pc = (A, q) => { const s = [...A].sort((x, y) => x - y); return +s[Math.floor(q * (s.length - 1))].toFixed(2); };
+		const key = m.userData.name;
+		if (out[key]) continue; // the mirrored half reads the same
+		out[key] = { across: [pc(across, 0.02), pc(across, 0.5), pc(across, 0.98)], along: [pc(along, 0.02), pc(along, 0.5), pc(along, 0.98)] };
+	}
+	return out;
+}

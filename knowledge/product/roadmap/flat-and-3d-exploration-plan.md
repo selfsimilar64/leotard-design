@@ -83,7 +83,7 @@ own tab, because dev scripts open their own design and overwrite the autosave.
 
 - **Solved 2026-11-01:** [results](/engineering/app/wrapping-a-flat-block-onto-the-body.md). The approach used is as-rigid-as-possible
   on the surface, not cloth simulation. Reuse meets the 3 mm gate for necklines and not for a large leg change, so one solve per leg cut.
-  **The owner's visual verdict is still to come.**
+  **Gate passed: the owner judged the look good on 2026-11-01**, preferring the block's slightly more curved leg line, and noting the app's raised edge finishes are still missing from it.
 
 ## 4. Two-way link and print
 

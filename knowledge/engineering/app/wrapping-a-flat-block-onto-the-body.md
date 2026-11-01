@@ -21,7 +21,7 @@ sources:
 
 Solving from the flat pieces works: the block lands on the `young` body as a believable leotard with real seams and a
 grid drawn on the flat pattern staying legible.[^code] Every flat point now has a 3D place, which is the map the
-[plan](/product/roadmap/flat-and-3d-exploration-plan.md) needs. Standing body only so far.
+[plan](/product/roadmap/flat-and-3d-exploration-plan.md) needs. The owner passed the look on 2026-11-01, and one solve carries into every pose tried.
 
 # Method (`pipeline/wrap_block.py`)
 
@@ -48,9 +48,8 @@ Cost: about 255 s for five solves at this mesh on the owner's machine (CPU, Pyth
 # The map
 
 Output per piece: flat `uv` in metres, triangles, and for each point a **host triangle and weights on the shared body mesh**,
-exactly what `GarmentView` uses (`rec.hosts`). So `dev/wrap-eval.js` draws it with the real fabric materials. In principle it
-follows any body and pose; that is **untested**, because the viewer places points on the reference surface for now (the app's lift
-only covers its own pieces).
+exactly what `GarmentView` uses (`rec.hosts`). So `dev/wrap-eval.js` draws it with the real fabric materials, and it follows any
+body and pose.
 
 # Results, block XS with the `HIGH HIPS` leg's parent solve
 
@@ -85,10 +84,47 @@ Difference between the whole block's map and a re-solve with the cut, on the sam
 **[INFERRED]** The plan's 3 mm gate is met for necklines, not for a big leg change: removing the fabric across the hips releases
 tension there. So one solve per leg cut, then reuse for lines inside it. Panel seams, which remove no fabric, were not tested and should move less still.
 
+| Sleeve shortened 45 mm at a straight line | 2.1 mm | 7.7 mm | 13.7 mm | Sleeve 4.4 mm mean, 9.7 mm at 95%; torso under 1.7 mm below the waist, under 1.3 mm at 95% above it |
+
+A shorter sleeve can be treated as a mask for the torso, and nearly so for the sleeve, whose remaining length relaxes because the
+excess no longer compresses it.
+
+# Poses and other bodies
+
+One solve (block XS, `HIGH HIPS` leg, sleeve shortened 45 mm) placed by its host triangles, with **no re-solve** per pose or body.
+`wrap-eval.js` tells the engine where this block's fabric is through `coverHooks`, so the body lifts and slides under it; without that, skin
+showed through at the hip past the app's own cover. Run 2026-11-01; `app/captures/wrap-strain.json`, `wrap-sheet-poses.png`.
+
+Median [2nd to 98th percentile] stretch against the flat piece:
+
+| Pose | Front across | Front along | Back across | Back along | Sleeve along |
+|---|---|---|---|---|---|
+| Standing rest (`a-pose`) | 1.16 [1.00-1.40] | 1.00 [0.92-1.13] | 1.08 [0.92-1.23] | 0.99 [0.87-1.11] | 1.00 [0.92-1.11] |
+| `standing` | 1.22 [0.71-1.77] | 1.06 [0.84-1.37] | 1.02 [0.67-1.23] | 0.92 [0.79-1.37] | 0.90 [0.67-1.38] |
+| `passe` | 1.18 [0.57-1.69] | 1.08 [0.78-1.50] | 1.03 [0.44-1.39] | 0.95 [0.82-1.55] | 0.86 [0.48-1.66] |
+| `lunge-arms-up` | 1.16 [0.58-1.46] | 1.05 [0.85-1.40] | 1.09 [0.65-1.61] | 0.99 [0.82-1.37] | 0.92 [0.54-1.39] |
+| `stag-jump` | 1.19 [0.73-1.47] | 1.06 [0.84-1.30] | 1.06 [0.79-1.41] | 0.87 [0.67-1.12] | 0.90 [0.65-1.21] |
+| `back-arched` | 1.26 [0.59-1.95] | 1.20 [0.91-1.62] | 0.99 [0.66-1.25] | 0.82 [0.62-1.38] | 0.90 [0.63-1.46] |
+
+**[INFERRED]** It looks right in all five poses, and the medians are sensible. The ranges are the skin's own deformation carried onto the cloth, not cloth
+behaviour: values well below 1 would wrinkle or slide on a real garment. It follows the app's "appears correct" rule, but a printed motif in a strong pose is only approximate.
+
+The same map on other bodies, median stretch front across / front along / back across / back along:
+
+| Body | Stretch | Reading |
+|---|---|---|
+| `young` (solved on) | 1.16 / 1.00 / 1.08 / 0.99 | Designed fit |
+| `adult` | 1.13 / 1.03 / 1.07 / 1.00 | XS fits |
+| `older-teen` | 1.16 / 1.03 / 1.09 / 0.99 | XS fits |
+| `teen` | 1.12 / 0.99 / 1.04 / 0.96 | XS somewhat roomy; XXS likely |
+| `child` | 0.93 / 0.83 / 0.87 / 0.81 | Too big: below flat size, so loose |
+| `child-6` | 0.85 / 0.71 / 0.79 / 0.70 | Far too big |
+
+These only transfer the map; a true fit on another body would be its own solve at its own size. No size other than XS has been solved.
+
 # Known flaws
 
-- Standing only; poses untested.
-- Cut edges follow mesh triangles, so they are slightly rough; the back's crotch shows a notch. No finishes are drawn yet.
+- Cut edges follow mesh triangles, so they are slightly rough; the back's crotch shows a notch. No finishes are drawn yet: the owner noticed the block lacks the app's raised edge finishes, so a block design must drive `render/rims.js` from its own openings.
 - The bust stretch is a strong local maximum (area up to about +60%); the block has no bust shaping, and a real stretch fabric would flatten the bust somewhat, which the surface does only partly.
 - The block's `THIGH` leg is close to a boy-leg short on this body. The listing's "Brazilian" wording does not match.
 - No flat-to-3D-and-back round trip yet (stage 4); fabric and stretch behaviour is not modelled, only length.
