@@ -10,7 +10,7 @@ import { rcm, EnvelopeCholesky } from './sparse.js';
 
 // P: Float32Array xyz per vertex, I: Uint32Array triangle indices.
 // -> { uv: Float32Array(2n), iterations, residual, areaRatio, distortion }
-export function flatten(P, I, { maxIter = 0, tol = 1e-7, up = [0, 1, 0], arapIter = 30 } = {}) {
+export function flatten(P, I, { maxIter = 0, tol = 1e-7, up = [0, 1, 0], arapIter = 100 } = {}) {
 	const n = P.length / 3, nt = I.length / 3;
 	if (n < 3 || nt < 1) return { uv: new Float32Array(n * 2), iterations: 0 };
 
@@ -119,6 +119,7 @@ export function flatten(P, I, { maxIter = 0, tol = 1e-7, up = [0, 1, 0], arapIte
 	}
 
 	// --- ARAP: from the conformal layout towards an isometric one (lengths, not only angles) ------
+	let arapDone = 0;
 	if (arapIter > 0) {
 		let a2 = 0;
 		for (let t = 0; t < nt; t++) {
@@ -129,7 +130,7 @@ export function flatten(P, I, { maxIter = 0, tol = 1e-7, up = [0, 1, 0], arapIte
 		for (let i = 0; i < 2 * n; i++) x[i] *= s0;
 		// work in the orientation where triangles are counter-clockwise
 		if (a2 < 0) for (let i = 0; i < n; i++) x[i] = -x[i];
-		arap(I, n, nt, LX, LY, x, arapIter);
+		arapDone = arap(I, n, nt, LX, LY, x, arapIter);
 		if (a2 < 0) for (let i = 0; i < n; i++) x[i] = -x[i];
 	}
 
@@ -160,8 +161,16 @@ export function flatten(P, I, { maxIter = 0, tol = 1e-7, up = [0, 1, 0], arapIte
 	const cs = Math.cos(ang), sn = Math.sin(ang);
 	const uv = new Float32Array(2 * n);
 	for (let i = 0; i < n; i++) { uv[2 * i] = cs * U[i] - sn * W[i]; uv[2 * i + 1] = sn * U[i] + cs * W[i]; }
-	return { uv, iterations: it, residual: res, area3, distortion: distortionOf(P, I, uv), stretch: stretchOf(P, I, uv) };
+	return { uv, iterations: it, arapIterations: arapDone, residual: res, area3, distortion: distortionOf(P, I, uv), stretch: stretchOf(P, I, uv) };
 }
+
+// The most a triangle edge may weigh. Where a line crosses the mesh it leaves thin triangles, whose huge
+// cotangents act as stiff rods that pull the flat shape about: capped, a racer block's Front, Back and
+// Lower front went from 6.7, 5.4 and 2.0% mean stretch to 6.5, 4.7 and 1.7, with fewer inverted triangles.
+const COT_CAP = 3;
+// It stops when nothing moved this far in an iteration (metres). Thirty iterations, the old fixed count,
+// left the Back of that block with its leg line folded over near the crotch, 1.9 times its 3D length.
+const ARAP_STILL = 2e-5;
 
 // As-rigid-as-possible refinement (Liu et al. 2008 local/global, cotangent weights): each
 // triangle's best rotation onto its 3D shape (local), then the layout that best fits all of them
@@ -174,7 +183,7 @@ function arap(I, n, nt, LX, LY, x, iters) {
 		const a = t * 3 + k, b = t * 3 + (k + 1) % 3, c = t * 3 + (k + 2) % 3;
 		const ux = LX[b] - LX[a], uy = LY[b] - LY[a], vx = LX[c] - LX[a], vy = LY[c] - LY[a];
 		const cr = Math.abs(ux * vy - uy * vx), dt = ux * vx + uy * vy;
-		W[a] = Math.max(0.5 * dt / Math.max(cr, 1e-20), 1e-3); // clamp obtuse (negative) weights
+		W[a] = Math.min(Math.max(0.5 * dt / Math.max(cr, 1e-20), 1e-3), COT_CAP); // clamp obtuse (negative) weights, and the thin triangles'
 	}
 	const nb = Array.from({ length: n }, () => new Map()), diag = new Float64Array(n);
 	for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) {
@@ -189,7 +198,9 @@ function arap(I, n, nt, LX, LY, x, iters) {
 	const rows = nb.map((m, i) => [[i, diag[i] + eps], ...[...m].map(([j, w]) => [j, -w])]);
 	const chol = new EnvelopeCholesky(n, rows, rcm(nb.map((m) => [...m.keys()])));
 	const bu = new Float64Array(n), bv = new Float64Array(n), u = x.subarray(0, n), v = x.subarray(n, 2 * n);
+	const pu = new Float64Array(n), pv = new Float64Array(n);
 	for (let it = 0; it < iters; it++) {
+		pu.set(u); pv.set(v);
 		bu.fill(0); bv.fill(0);
 		for (let t = 0; t < nt; t++) {
 			// local step: rotation taking the triangle's 3D shape onto its current layout
@@ -211,7 +222,11 @@ function arap(I, n, nt, LX, LY, x, iters) {
 		// keep the layout where it was (eps * x pulls towards the previous position)
 		for (let i = 0; i < n; i++) { bu[i] += eps * u[i]; bv[i] += eps * v[i]; }
 		chol.solve(bu, u); chol.solve(bv, v);
+		let most = 0;
+		for (let i = 0; i < n; i++) most = Math.max(most, Math.abs(u[i] - pu[i]), Math.abs(v[i] - pv[i]));
+		if (most < ARAP_STILL) return it + 1;
 	}
+	return iters;
 }
 
 // Unroll about the best-fit cylinder whose axis is the piece's long direction (Kasa circle fit

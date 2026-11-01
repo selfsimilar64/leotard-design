@@ -77,9 +77,18 @@ inside one of two mirrored shapes. It then becomes the mirrored pair. New pieces
 `patternPieces` returns per piece `construction` (`pieced`, `appliqué` or `lining`), `material`, `sewnOn`, `placement` (polylines on the base piece's flat shape, in
 its millimetres); overall `fabrics` and `finishes` with total lengths. Appliqué has no allowance. `opts.surf` is needed for placements; `app.pattern` supplies it.
 
+# Clean outlines
+
+Owner's first cut pattern showed steps of about 5 mm on some flat outlines, though the 3D lines were smooth. Two causes, two fixes (2026-10-31):
+
+- **Flattening stopped too early.** At 30 ARAP iterations the Back of a racer block still had its leg line folded over near the crotch, at 1.9 times its 3D length; the outline ran out and back. `garment/flatten.js` now runs up to 100 and stops when nothing moves 0.02 mm: worst 5 mm stretch of edge 1.05, with inverted triangles from 0.06% to about 0.003% of the area. It costs up to about 1.4 s for a 10,000-vertex piece, in the worker, cached per piece.
+- **Thin triangles.** Where a line crosses the mesh it leaves thin triangles whose cotangent weights act as stiff rods, so weights are capped (`COT_CAP`). Mean stretch falls a little on every piece tried.
+- **What remains is smoothed, not hidden.** Stretch on a body that cannot lie flat still leaves bumps of a millimetre or so. `garment/pattern.js` splits an outline at its true corners (`outlineCorners`: where it passes from one line to another, or where it turns sharply **in 3D**, since the flat shape's own bumps turn as sharply) and runs a smoothing spline along each stretch with its ends held (`smoothRun`, `cleanOutline`). A bump 10 mm long keeps 1% of its height; a 15 mm radius curve moves under half a millimetre. Placement lines get the same.
+
 # Known gaps
 
-- **The flat outlines of some pieces have small jagged steps** (seen near the armhole of a mesh Front on a racer block, about 5 mm). The 3D lines there are clean, so the cause is in flattening or outline cleanup. This must be fixed before an outline is cut from. Close-ups also show fabric texture distortion in patches on a flattened overlay, possibly the same cause.
+- A piece's crotch edge flattens with a notch where the crotch seam bends on the body; a real pattern's is close to straight.
+
 - A free-drawn overlay that merely touches a seam is not treated as caught in it; only a piece drawn from line to line is.
 - A caught stretch uses the 6 mm seam allowance even along an elastic-finished opening such as the armhole, where a different catch may be right.
 - Seam allowance is the same on every pieced edge. Bound edges really do keep about 6 mm, wrapped inside the binding; sleeve hems (about 2 cm), clasp folds (about 1.5 cm) and strap joins (1 cm) are the real errors ([2026-10-31 research](/references/research/techniques-and-workflow-report.md)).

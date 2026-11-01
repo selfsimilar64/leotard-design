@@ -906,7 +906,8 @@ describe('on a garment', () => {
 
 	it('on a paired piece: the mirror image too, and one side when the pair is split', () => {
 		const paired = (id) => ({ ...ctx.cloth(id), paired: true });
-		const d = { ...doc, stones: [gen({ layout: 'hex', spacing: 0.02 }, { id: 'a' })], placed: [] };
+		// off the middle: this piece is really symmetric, so a lattice centred on it would land on itself
+		const d = { ...doc, stones: [gen({ layout: 'hex', spacing: 0.02, x: 0.005 }, { id: 'a' })], placed: [] };
 		const both = runStones(d, { ...ctx, doc: d, cloth: paired }).stones;
 		expect(both.some((s) => s.mirrored)).toBe(true);
 		for (const s of both.filter((x) => x.mirrored).slice(0, 40)) {

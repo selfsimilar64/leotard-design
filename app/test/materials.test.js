@@ -14,7 +14,7 @@ import { LOOK, lookHolders, usage, parseHex } from '../src/doc/materials.js';
 import { buildGarment, evaluateAll, inheritPanels, strokeId } from '../src/garment/build.js';
 import { locate } from '../src/garment/arrangement.js';
 import { TRIMS, trimAtWidth } from '../src/garment/trim.js';
-import { offsetEdges } from '../src/garment/pattern.js';
+import { cleanOutline, offsetEdges, outlineCorners, smoothRun } from '../src/garment/pattern.js';
 import { toSP, fromSP } from '../src/body/surface.js';
 import { loadBody } from './helpers.js';
 
@@ -230,6 +230,13 @@ describe('overlay pieces that use existing seams', () => {
 		expect(s.doc.curves.length).toBe(before);
 		expect(s.doc.layers.some((l) => l.id === p.layer)).toBe(false);
 	});
+	it('with Mirror off, one line and one side only', () => {
+		const s = open(), id = s.exec({ op: 'overlay.add', at: { sp: toSP(hit(0.1, 1.12)) }, strokes: [{ mirror: 'none', points: edge(s, 0.03, 0.11, 1.29) }] });
+		const p = s.doc.panels.find((q) => q.id === id), on = covers(s, id, XS, 1.12);
+		expect(p.mirror).toBe('none');
+		expect(on.some((v) => v > 0)).toBe(true);
+		expect(on.some((v) => v < 0)).toBe(false);
+	});
 	it('keeps only the drawn lines round the area; a line ending on a dropped one stays where it is', () => {
 		const s = open(), a = edge(s, 0.03, 0.11, 1.29), b = edge(s, 0.09, 0.132, 1.243), far = edge(s, 0.01, 0.101, 1.319);
 		const id = s.exec({ op: 'overlay.add', at: { sp: toSP(hit(0.07, 1.12)) }, strokes: [{ mirror: 'both', points: far }, { mirror: 'both', points: a }, { mirror: 'both', points: b }] });
@@ -308,6 +315,61 @@ describe('overlay pieces that use existing seams', () => {
 		const b = s.exec({ op: 'overlay.add', mirror: 'none', points: outline([[-0.03, 0.98], [0.03, 0.98], [0.03, 0.9], [-0.03, 0.9]]), name: 'Centre' });
 		const pb = s.doc.panels.find((x) => x.id === b), pa = s.doc.panels.find((x) => x.id === a);
 		expect(pb.layer).not.toBe(pa.layer); // the bounded piece's layer is its own
+	});
+});
+
+describe('clean pattern outlines', () => {
+	const line = (f, a, b, step = 0.7) => { const out = []; for (let x = a; x <= b; x += step) out.push([x, f(x)]); return out; };
+	const devFrom = (poly, f) => Math.max(...poly.map(([x, y]) => Math.abs(y - f(x))));
+	it('takes a flattening\'s bump out of a line and keeps its ends and its shape', () => {
+		const shape = (x) => 40 * Math.sin(x / 80), bump = (x) => 1.5 * Math.exp(-(((x - 120) / 3) ** 2));
+		const run = smoothRun(line((x) => shape(x) + bump(x), 0, 240));
+		expect(run[0][0]).toBeCloseTo(0, 6); expect(run[0][1]).toBeCloseTo(shape(0) + bump(0), 6);
+		expect(run[run.length - 1][1]).toBeCloseTo(shape(239.4) + bump(239.4), 3);
+		expect(devFrom(run, shape)).toBeLessThan(0.75); // from 1.5 mm, and no longer a kink:
+		const turn = (p, i, k = 5) => { const a = p[i - k], b = p[i], c = p[i + k]; return Math.abs(Math.atan2((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]), (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]))); };
+		const raw = line((x) => shape(x) + bump(x), 0, 240, 1), most = (p) => { let m = 0; for (let i = 5; i < p.length - 5; i++) m = Math.max(m, turn(p, i)); return m; };
+		expect(most(raw)).toBeGreaterThan(0.5);
+		expect(most(run)).toBeLessThan(0.2);
+	});
+	it('leaves a tight real curve within half a millimetre', () => {
+		const R = 15, arc = []; for (let t = 0; t <= Math.PI; t += 0.05) arc.push([R * Math.cos(t), R * Math.sin(t)]);
+		const run = smoothRun(arc);
+		expect(Math.max(...run.map(([x, y]) => Math.abs(Math.hypot(x, y) - R)))).toBeLessThan(0.5);
+	});
+	it('keeps corners exactly where they are, and smooths each side of them', () => {
+		// a square of 100 mm with a bump on its top edge
+		const sq = [...line((x) => 1.5 * Math.exp(-(((x - 50) / 3) ** 2)), 0, 100), ...line((y) => 100 - y, 0, 100).map(([y, x]) => [100 + 0 * x, y]).reverse()];
+		const n = sq.length, corners = [0, line((x) => 0, 0, 100).length - 1];
+		const out = cleanOutline(sq, corners);
+		for (const c of corners) expect(out.some((p) => Math.hypot(p[0] - sq[c][0], p[1] - sq[c][1]) < 1e-6)).toBe(true);
+		const top = out.filter((p) => p[1] < 50 && p[0] > 5 && p[0] < 95);
+		expect(Math.max(...top.map((p) => Math.abs(p[1])))).toBeLessThan(0.75);
+		expect(n).toBeGreaterThan(8);
+	});
+	it('smooths a loop with no corner, with no mark where it is opened', () => {
+		const R = 50, loop = []; for (let i = 0; i < 400; i++) { const t = (i / 400) * Math.PI * 2, r = R + (i === 7 ? 1.2 : 0); loop.push([r * Math.cos(t), r * Math.sin(t)]); }
+		const out = cleanOutline(loop, []);
+		const dev = out.map(([x, y]) => Math.abs(Math.hypot(x, y) - R));
+		expect(Math.max(...dev)).toBeLessThan(0.3);
+		const gap = Math.hypot(out[0][0] - out[out.length - 1][0], out[0][1] - out[out.length - 1][1]);
+		expect(gap).toBeLessThan(2);
+		expect(out.length).toBeGreaterThan(280);
+	});
+	it('finds a corner where the line changes and where the line itself turns, not at a bend', () => {
+		// on the body: a long gentle arc in metres, with a sharp corner, then another line
+		const P = [], loop = [], names = [];
+		const add = (x, y, z, name) => { loop.push([x, y, P.length / 3]); P.push(x, y, z); names.push(name); };
+		for (let i = 0; i < 100; i++) { const t = i / 100; add(Math.sin(t) * 0.1, Math.cos(t) * 0.1, 0, 'a'); }
+		const k = loop.length;
+		for (let i = 0; i < 100; i++) { const t = 1 + i / 100; add(Math.sin(t) * 0.1 - i * 0.0015, Math.cos(t) * 0.1 + i * 0.0015, 0, 'a'); }
+		const j = loop.length;
+		for (let i = 0; i < 50; i++) add(-0.1 - i * 0.001, 0.2 - i * 0.004, 0, 'b');
+		const c = outlineCorners(loop, (i) => names[i], Float32Array.from(P));
+		expect(c).toContain(j);
+		expect(c.filter((i) => i > 20 && i < 80)).toEqual([]); // the gentle arc
+		expect(c.filter((i) => Math.abs(i - k) < 6).length).toBe(1); // the sharp corner, once
+		expect(k).toBe(100);
 	});
 });
 

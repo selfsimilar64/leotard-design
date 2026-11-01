@@ -60,28 +60,94 @@ function distSeg(p, a, b) {
 	return Math.hypot(p[0] - a[0] - bx * t, p[1] - a[1] - by * t);
 }
 
-// Smooth the small steps of a flattened outline while keeping its real corners (junctions of
-// seams, where the outline turns by more than about 35 degrees over a few millimetres).
-export function smoothOutline(poly, passes = 4) {
+// A line on the body is smooth between its corners, but its flat shape is not: the body cannot lie
+// flat without stretch, and the stretch changes from triangle to triangle, leaving bumps of a millimetre
+// or two over a few millimetres of edge. Those are not the design, and a cut piece must not have them.
+//
+// A polyline with both ends held, smoothed: resampled every millimetre, then a smoothing spline (least
+// squares with a penalty on its second differences), then the same again on what that took away, which
+// gives back the real curves. A wave 10 mm long keeps 1% of its height, 20 mm 18%, 40 mm 86%, 50 mm 96%
+// (a curve of 8 mm radius loses 0.3 mm) and 100 mm almost all of it.
+const SPLINE = 1000;
+export function smoothRun(pts, lambda = SPLINE) {
+	const s = [0];
+	for (let i = 1; i < pts.length; i++) s.push(s[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+	const L = s[s.length - 1], n = Math.round(L) + 1;
+	if (n < 6) return pts;
+	const X = new Float64Array(n), Y = new Float64Array(n);
+	for (let i = 0, j = 0; i < n; i++) {
+		const d = (i / (n - 1)) * L;
+		while (j < pts.length - 2 && s[j + 1] < d) j++;
+		const t = (d - s[j]) / Math.max(s[j + 1] - s[j], 1e-9);
+		X[i] = pts[j][0] + (pts[j + 1][0] - pts[j][0]) * t; Y[i] = pts[j][1] + (pts[j + 1][1] - pts[j][1]) * t;
+	}
+	// (W + lambda D'D) q = W p, where W is 1 and very heavy at the two ends: LDL' of a five-band matrix
+	const hold = 1e6 * (1 + lambda), d = new Float64Array(n), e = new Float64Array(n), f = new Float64Array(n);
+	for (let i = 0; i < n; i++) {
+		const a0 = (i === 0 || i === n - 1 ? hold + lambda : 1 + lambda * (i === 1 || i === n - 2 ? 5 : 6));
+		const a1 = lambda * (i === 0 || i === n - 2 ? -2 : -4), a2 = lambda;
+		const e1 = i > 0 ? e[i - 1] : 0, d1 = i > 0 ? d[i - 1] : 0, f1 = i > 0 ? f[i - 1] : 0, f2 = i > 1 ? f[i - 2] : 0, d2 = i > 1 ? d[i - 2] : 0;
+		d[i] = a0 - e1 * e1 * d1 - f2 * f2 * d2;
+		e[i] = (a1 - f1 * e1 * d1) / d[i];
+		f[i] = a2 / d[i];
+	}
+	const solve = (A) => {
+		const y = new Float64Array(n), z = new Float64Array(n);
+		for (let i = 0; i < n; i++) y[i] = (i === 0 || i === n - 1 ? hold : 1) * A[i] - (i > 0 ? e[i - 1] * y[i - 1] : 0) - (i > 1 ? f[i - 2] * y[i - 2] : 0);
+		for (let i = n - 1; i >= 0; i--) z[i] = y[i] / d[i] - (i < n - 1 ? e[i] * z[i + 1] : 0) - (i < n - 2 ? f[i] * z[i + 2] : 0);
+		return z;
+	};
+	const twice = (A) => { const a = solve(A), b = solve(A.map((v, i) => v - a[i])); return a.map((v, i) => v + b[i]); };
+	const qx = twice(X), qy = twice(Y), out = [];
+	for (let i = 0; i < n; i++) out.push([qx[i], qy[i]]);
+	out[0] = [pts[0][0], pts[0][1]]; out[n - 1] = [pts[pts.length - 1][0], pts[pts.length - 1][1]];
+	return out;
+}
+
+// A closed outline smoothed between its corners (indices into poly, which stay exactly where they are).
+export function cleanOutline(poly, corners) {
 	const n = poly.length;
 	if (n < 8) return poly;
-	const turn = (i, k = 3) => {
-		const a = poly[(i - k + n) % n], b = poly[i], c = poly[(i + k) % n];
-		const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]];
-		return Math.abs(Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]));
-	};
-	const corner = poly.map((_, i) => turn(i) > 0.6);
-	let p = poly.map((q) => q.slice());
-	for (let it = 0; it < passes; it++) {
-		const q = p.map((x) => x.slice());
-		for (let i = 0; i < n; i++) {
-			if (corner[i]) continue;
-			const a = p[(i - 1 + n) % n], b = p[(i + 1) % n];
-			q[i] = [(a[0] + 2 * p[i][0] + b[0]) / 4, (a[1] + 2 * p[i][1] + b[1]) / 4];
-		}
-		p = q;
+	const piece = (a, count) => { const r = []; for (let k = 0; k <= count; k++) r.push(poly[(a + k) % n]); return r; };
+	if (!corners.length) {
+		// no corner at all: a third of it either side, so the place the loop is opened leaves no mark
+		const length = (r) => { let L = 0; for (let i = 1; i < r.length; i++) L += Math.hypot(r[i][0] - r[i - 1][0], r[i][1] - r[i - 1][1]); return L; };
+		const pad = Math.floor(n / 3), run = piece(n - pad, 2 * pad + n), smooth = smoothRun(run), step = length(run) / (smooth.length - 1);
+		return smooth.slice(Math.round(length(piece(n - pad, pad)) / step), Math.round(length(piece(n - pad, pad + n)) / step));
 	}
-	return p;
+	const out = [], list = [...corners].sort((a, b) => a - b);
+	list.forEach((c, i) => {
+		const to = list[(i + 1) % list.length], count = (to - c + n) % n || n;
+		out.push(...smoothRun(piece(c, count)).slice(0, -1));
+	});
+	return out;
+}
+
+// Where a flattened outline really has a corner: where it passes from one line to another, or where it
+// turns sharply on the body itself (the flat shape's own bumps turn as sharply, so it cannot say).
+// loop: [u, v, vertex]; lineOf(i): what edge i -> i + 1 lies on; P: the piece's 3D positions, metres.
+export function outlineCorners(loop, lineOf, P, reach = 0.004, sharp = 0.6) {
+	const n = loop.length, at = (i) => { const v = loop[i][2] * 3; return [P[v], P[v + 1], P[v + 2]]; };
+	const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+	const out = new Set(), turn = new Float64Array(n);
+	for (let i = 0; i < n; i++) {
+		if (lineOf(i) !== lineOf((i - 1 + n) % n)) out.add(i);
+		const c = at(i);
+		let a = (i - 1 + n) % n, b = (i + 1) % n;
+		for (let k = 0; k < n / 3 && dist(at(a), c) < reach; k++) a = (a - 1 + n) % n;
+		for (let k = 0; k < n / 3 && dist(at(b), c) < reach; k++) b = (b + 1) % n;
+		const p = at(a), q = at(b), u = [c[0] - p[0], c[1] - p[1], c[2] - p[2]], v = [q[0] - c[0], q[1] - c[1], q[2] - c[2]];
+		const dot = u[0] * v[0] + u[1] * v[1] + u[2] * v[2], lu = Math.hypot(...u), lv = Math.hypot(...v);
+		turn[i] = lu && lv ? Math.acos(Math.max(-1, Math.min(1, dot / (lu * lv)))) : 0;
+	}
+	// a sharp stretch counts once, at its sharpest
+	for (let i = 0; i < n; i++) {
+		if (turn[i] <= sharp || turn[(i - 1 + n) % n] > sharp) continue;
+		let best = i;
+		for (let j = i, k = 0; turn[j] > sharp && k < n; j = (j + 1) % n, k++) if (turn[j] > turn[best]) best = j;
+		out.add(best);
+	}
+	return [...out];
 }
 
 // Offset a counter-clockwise polygon outward by d (mitred, with a miter limit).
@@ -134,9 +200,10 @@ export function patternPieces(views, doc, opts = {}) {
 		const loops = pieceOutlines(c.piece.I, uv);
 		if (!loops.length) continue;
 		if (c.piece.P.length / 3 < 12) continue; // a speck, not a piece
-		let stitch = loops[0].map(([u, v]) => [u * 1000 * (1 + o.easeAcross), v * 1000 * (1 + o.easeAlong)]);
+		const arr = arrOf.get(c), loop = loops[0], verts = c.piece.verts, lineOf = (i) => { const cs = arr?.constraint.get(arr.ekey(verts[loop[i][2]], verts[loop[(i + 1) % loop.length][2]])); return cs ? [...cs].sort().join() : ''; };
+		let stitch = cleanOutline(loop.map(([u, v]) => [u * 1000 * (1 + o.easeAcross), v * 1000 * (1 + o.easeAlong)]), outlineCorners(loop, lineOf, c.piece.P));
 		if (signedArea(stitch) < 0) stitch.reverse();
-		stitch = simplify(smoothOutline(stitch), 0.3);
+		stitch = simplify(stitch, 0.3);
 		// a mirrored panel is one pattern piece cut twice (the second cell is its mirror image)
 		if (panel.mirror === 'both') { if (seenMirror.has(panel.id)) continue; seenMirror.add(panel.id); }
 		const applique = overlayLayers.has(panel.layer);
@@ -215,7 +282,7 @@ function placements(pieces, views, doc, surf) {
 		for (const e of lines) {
 			let run = null, at = null;
 			// (a sample or two where the line ends on a seam can land on the far side of it: not sewn there)
-			const stop = () => { if (run?.length > 3) { at.placement.push(run); if (!over.sewnOn.includes(at.name)) over.sewnOn.push(at.name); } run = null; };
+			const stop = () => { if (run?.length > 3) { at.placement.push(smoothRun(run)); if (!over.sewnOn.includes(at.name)) over.sewnOn.push(at.name); } run = null; };
 			for (const sp of [...e.sps, ...(e.closed ? [e.sps[0]] : [])]) {
 				const t = locate(arr, surf, sp), hit = t >= 0 ? triAt.get(t) : null, base = hit ? byPiece.get(hit[0]) : null;
 				if (!base?.rec.hasUV || base.construction !== 'pieced') { stop(); at = null; continue; }
