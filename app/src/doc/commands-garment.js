@@ -6,9 +6,9 @@ import { toSP } from '../body/surface.js';
 import { makeBlock, blockFabric, blockKeyOf, blockOf, fitToStrap, BLOCK_OPTIONS, DEFAULT_BLOCK, ELEMENT_CURVES, ELEMENT_PANELS } from '../garment/blocks.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { STARTS } from '../garment/starts.js';
-import { STROKE, buildGarment, cellLines, cellSeed, evaluateAll, panelAt, strokeRegions } from '../garment/build.js';
+import { buildGarment, cellSeed, evaluateAll, isStroke, overlayLines, panelAt, pickableRegions, strokeId, strokeRegions, whyNotPickable } from '../garment/build.js';
 import { locate } from '../garment/arrangement.js';
-import { LOOK, lookOf, setLook, assign, usage, freshName } from './materials.js';
+import { LOOK, lookOf, setLook, assign, usage, freshName, keepMaterial, dropAutoMaterial } from './materials.js';
 import { projectNear, evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
 import { fromSP } from '../body/surface.js';
@@ -32,7 +32,8 @@ function controlPoint(tx, pt) {
 	oneOf('point kind', kind, ['smooth', 'corner']);
 	const out = { sp: toSP(resolvePoint(spec, ctxOf(tx))), kind };
 	if (pt.on) {
-		if (!tx.doc.curves.some((c) => c.id === pt.on.curve)) throw new Error('Cannot attach to ' + pt.on.curve + ': no such line');
+		// (a line of the same overlay.add, still being drawn, is named by strokeId)
+		if (!isStroke(pt.on.curve) && !tx.doc.curves.some((c) => c.id === pt.on.curve)) throw new Error('Cannot attach to ' + pt.on.curve + ': no such line');
 		out.on = { curve: pt.on.curve, t: Math.min(Math.max(+pt.on.t || 0, 0), 1), ...(pt.on.mirror ? { mirror: true } : {}) };
 	}
 	return out;
@@ -132,7 +133,7 @@ function removeCurve(tx, c, impact, doomed = new Set([c.id])) {
 function dropOverlaysOn(tx, id, impact) {
 	for (const p of tx.doc.panels.slice()) {
 		if (!p.outline || !tx.doc.panels.includes(p)) continue;
-		if (p.outline !== id && !tx.doc.layers.find((l) => l.id === p.layer)?.bounds?.includes(id)) continue;
+		if (!overlayLines(tx.doc, p).includes(id) && !tx.doc.layers.find((l) => l.id === p.layer)?.bounds?.includes(id)) continue;
 		for (const g of tx.doc.stones.slice()) if (g.on?.panel === p.id) { impact?.stones.push(g.name || g.kind); tx.remove('stones', g.id); }
 		impact?.pieces.push(p.name || p.id);
 		tx.exec({ op: 'overlay.remove', id: p.id });
@@ -301,11 +302,17 @@ defineCommand('curve.points', {
 });
 
 defineCommand('curve.movePoint', {
-	label: 'Move point', args: '{ id, i, to: spec, gesture? }',
+	label: 'Move point', args: '{ id, i, to: spec, on?: { curve, t, mirror? } | null (the line it is attached to; an attached point follows its line, so moving one along needs this), gesture? }',
 	run(tx, a) {
 		const c = findCurve(tx, a.id);
 		if (!(a.i >= 0 && a.i < c.points.length)) throw new Error(`Point index ${a.i} out of range (0-${c.points.length - 1})`);
 		tx.set(['curves', a.id, 'points', String(a.i), 'sp'], toSP(resolvePoint(a.to, ctxOf(tx))));
+		if (a.on === undefined) return;
+		const target = a.on && findCurve(tx, a.on.curve);
+		tx.set(['curves', a.id, 'points', String(a.i), 'on'], a.on ? { curve: a.on.curve, t: Math.min(Math.max(+a.on.t || 0, 0), 1), ...(a.on.mirror ? { mirror: true } : {}) } : undefined);
+		// an overlay piece's edge moved to another seam: the piece now runs up to that one too
+		const layer = tx.doc.layers.find((l) => l.id === c.layer);
+		if (target && layer?.bounds && !layer.bounds.includes(target.id) && (target.layer ?? 'L0') === 'L0') tx.set(['layers', layer.id, 'bounds'], [...layer.bounds, target.id]);
 	},
 });
 
@@ -387,7 +394,7 @@ defineCommand('material.set', {
 		if (!tx.doc.materials.some((m) => m.id === a.id)) throw new Error('No material ' + a.id);
 		if (a.fabric !== undefined) oneOf('fabric', a.fabric, Object.keys(FABRICS));
 		if (a.second !== undefined) oneOf('second', a.second, SECOND);
-		if (a.name !== undefined) tx.set(['materials', a.id, 'name'], a.name);
+		if (a.name !== undefined) { keepMaterial(tx, a.id); tx.set(['materials', a.id, 'name'], a.name); }
 		setLook(tx, a.id, a);
 	},
 });
@@ -404,7 +411,12 @@ defineCommand('material.remove', {
 
 defineCommand('panel.material', {
 	label: 'Change material', args: '{ id, material }',
-	run(tx, a) { const p = findPanel(tx, a); assign(tx, ['panels', p.id, 'stack', '0'], a.material); return p.id; },
+	run(tx, a) {
+		const p = findPanel(tx, a), was = p.stack[0].material;
+		assign(tx, ['panels', p.id, 'stack', '0'], a.material);
+		dropAutoMaterial(tx, was);
+		return p.id;
+	},
 });
 
 defineCommand('panel.separate', {
@@ -494,14 +506,26 @@ defineCommand('trim.set', {
 // The export gives it its own cut piece with no seam allowance and a placement line on the piece
 // below (garment/pattern.js). panel.outline names its line.
 //
-// With `at`, points is a line from one existing line to another and `at` picks the side: the piece
-// fills that region, as a seam drawn there would have made it. Where its edge runs along those lines it
-// is caught in them when sewn, so it gets no stitched edge and the pattern adds an allowance to catch.
+// With `at`, strokes are lines each from one existing line to another (or to an earlier stroke) and `at`
+// picks an area they enclose: the piece fills it, as seams drawn there would have made it, and the
+// strokes that are among its edges become its own. Where its edge runs along existing lines it is
+// caught in them when sewn, so it gets no stitched edge and the pattern adds an allowance to catch.
 // Such a piece has a layer of its own, whose `bounds` are those lines: they would slice any other overlay
 // sharing the layer (garment/build.js buildGarment). It sits at the height of the other overlays.
 
+// A new overlay piece's look: the material named, or its own copy of the fabric under it, so choosing
+// its fabric cannot change the piece it is sewn on (doc/materials.js keepMaterial).
+function overlayLook(tx, a, under) {
+	const mat = a.material ? tx.doc.materials.find((m) => m.id === a.material) : null;
+	if (a.material && !mat) throw new Error('No material ' + a.material);
+	if (mat) return { ...lookOf(mat), material: mat.id };
+	const look = { fabric: 'matte', colour: '#888888', second: 'Tone-on-tone', ...lookOf(under?.stack?.[0]) }, id = tx.exec({ op: 'material.add', name: a.name ?? 'Overlay', ...look });
+	tx.set(['materials', id, 'auto'], true);
+	return { ...look, material: id };
+}
+
 defineCommand('overlay.add', {
-	label: 'Add overlay piece', args: '{ points: [spec | { at, kind, on }] (closed outline: 3 or more; with at: a line whose two ends lie on other lines), at?: spec (the side to fill), mirror?: none|both, material?, name?, edge?: finish kind (default zigzag), width? (m, default 2 mm) }',
+	label: 'Add overlay piece', args: '{ points: [spec | { at, kind, on }] (a closed outline: 3 or more), or at: spec (an area to fill) with strokes: [{ points: [{ at, kind, on }] (from one line to another; on.curve "__stroke<n>": an earlier stroke), mirror?: none|both }] or points (one stroke) and mirror; mirror?: none|both, material?, name?, edge?: finish kind (default zigzag), width? (m, default 2 mm) }',
 	run(tx, a) {
 		if (a.at) return addRegionOverlay(tx, a);
 		if (!Array.isArray(a.points) || a.points.length < 3) throw new Error('An overlay piece needs at least three points');
@@ -516,9 +540,7 @@ defineCommand('overlay.add', {
 		const seed = cellSeed(g.arr, surf, cell);
 		// it starts in the fabric of the piece it lies on; choose its own material afterwards
 		const L0 = ctxOf(tx).garment?.('L0') ?? buildGarment(tx.doc, surf, { layer: 'L0', evaluated }), under = tx.doc.panels.find((p) => p.id === panelAt(L0, tx.doc, surf, seed));
-		const mat = a.material ? tx.doc.materials.find((m) => m.id === a.material) : null;
-		if (a.material && !mat) throw new Error('No material ' + a.material);
-		const look = mat ? { ...lookOf(mat), material: mat.id } : { fabric: 'matte', colour: '#888888', second: 'Tone-on-tone', ...lookOf(under?.stack?.[0]), ...(under?.stack?.[0]?.material ? { material: under.stack[0].material } : {}) };
+		const look = overlayLook(tx, a, under);
 		const id = tx.newId('p');
 		tx.insert('panels', { id, layer, name: a.name ?? 'Overlay', seed: toSP(seed), mirror, outline: curve, stack: [look] });
 		tx.exec({ op: 'trim.set', on: curve, kind: a.edge ?? 'zigzag', ...(a.width !== undefined ? { width: a.width } : {}) });
@@ -528,42 +550,51 @@ defineCommand('overlay.add', {
 });
 
 function addRegionOverlay(tx, a) {
-	if (!Array.isArray(a.points) || a.points.length < 2) throw new Error('Draw a line from one seam or edge to another');
-	if (!a.points[0].on || !a.points[a.points.length - 1].on) throw new Error('An overlay line must start and end on an existing line');
-	const ctx = ctxOf(tx), surf = ctx.surf, mirror = a.mirror ?? 'both', at = resolvePoint(a.at, ctx);
-	const pts = a.points.map((p) => controlPoint(tx, p));
-	const g = strokeRegions(tx.doc, surf, pts, mirror, ctx.evaluated), t = locate(g.arr, surf, at), cell = t >= 0 ? g.arr.cellOf[t] : -1;
-	const under = cell >= 0 && g.cellPanel[cell] >= 0 ? tx.doc.panels[g.cellPanel[cell]] : null;
-	if (!under || under.removed) throw new Error('Choose a side that has fabric');
-	const lines = cellLines(g.arr, cell);
-	if (!lines.delete(STROKE)) throw new Error('This line does not divide the fabric: end it on a line that closes the shape');
+	const strokes = a.strokes ?? [{ points: a.points, mirror: a.mirror }];
+	for (const s of strokes) {
+		if (!Array.isArray(s.points) || s.points.length < 2) throw new Error('Draw a line from one seam or edge to another');
+		if (!s.points[0].on || !s.points[s.points.length - 1].on) throw new Error('An overlay line must start and end on an existing line');
+	}
+	const ctx = ctxOf(tx), surf = ctx.surf, at = resolvePoint(a.at, ctx);
+	const drawn = strokes.map((s) => ({ mirror: s.mirror ?? 'both', points: s.points.map((p) => controlPoint(tx, p)) }));
+	const g = strokeRegions(tx.doc, surf, drawn, ctx.evaluated), t = locate(g.arr, surf, at), cell = t >= 0 ? g.arr.cellOf[t] : -1;
+	const base = buildGarment(tx.doc, surf, { prev: ctx.garment?.('L0') ?? null, layer: 'L0' });
+	const pick = pickableRegions(g, base, tx.doc, surf, drawn).get(cell);
+	if (!pick) throw new Error(whyNotPickable(g, base, tx.doc, surf, cell));
+	const look = overlayLook(tx, a, tx.doc.panels.find((p) => p.id === pick.panel));
 	// only shell lines: a line of another layer does not divide the shell
-	const bounds = [...lines].filter((id) => (tx.doc.curves.find((c) => c.id === id)?.layer ?? 'L0') === 'L0');
-	const mat = a.material ? tx.doc.materials.find((m) => m.id === a.material) : null;
-	if (a.material && !mat) throw new Error('No material ' + a.material);
-	const look = mat ? { ...lookOf(mat), material: mat.id } : { ...lookOf(under.stack[0]), ...(under.stack[0].material ? { material: under.stack[0].material } : {}) };
+	const bounds = [...pick.lines].filter((id) => !isStroke(id) && (tx.doc.curves.find((c) => c.id === id)?.layer ?? 'L0') === 'L0');
 	const layer = tx.newId('L'), z = tx.doc.layers.find((l) => l.kind === 'overlay')?.z ?? 1;
 	tx.insert('layers', { id: layer, kind: 'overlay', z, name: 'Appliqué', bounds });
-	const curve = tx.newId('c');
-	tx.insert('curves', { id: curve, layer, role: 'edge', name: (a.name || 'Overlay') + ' edge', closed: false, mirror, shape: { mod: 'none', amp: 0, period: 0 }, points: pts });
-	const id = tx.newId('p');
-	tx.insert('panels', { id, layer, name: a.name ?? 'Overlay', seed: toSP(at), mirror, outline: curve, stack: [look] });
-	tx.exec({ op: 'trim.set', on: curve, kind: a.edge ?? 'zigzag', ...(a.width !== undefined ? { width: a.width } : {}) });
+	// the strokes among its edges become its own lines; one ending on a stroke that is not keeps its place
+	const own = new Map(drawn.map((_, i) => strokeId(i)).filter((id) => pick.lines.has(id)).map((id) => [id, tx.newId('c')]));
+	drawn.forEach((s, i) => {
+		const id = own.get(strokeId(i));
+		if (!id) return;
+		const points = s.points.map((p) => { if (!p.on || !isStroke(p.on.curve)) return p; const { on, ...rest } = p; return own.has(on.curve) ? { ...rest, on: { ...on, curve: own.get(on.curve) } } : rest; });
+		tx.insert('curves', { id, layer, role: 'edge', name: (a.name || 'Overlay') + ' edge', closed: false, mirror: s.mirror, shape: { mod: 'none', amp: 0, period: 0 }, points });
+	});
+	const lines = [...own.values()], id = tx.newId('p');
+	tx.insert('panels', { id, layer, name: a.name ?? 'Overlay', seed: toSP(pick.seed), mirror: pick.mirror >= 0 ? 'both' : 'none', outline: lines[0], stack: [look] });
+	tx.exec({ op: 'trim.set', on: lines, kind: a.edge ?? 'zigzag', ...(a.width !== undefined ? { width: a.width } : {}) });
 	tx.noInherit = true; // this command settled its own piece
 	return id;
 }
 
 defineCommand('overlay.remove', {
-	label: 'Delete overlay piece', args: '{ id } (the piece and its outline)',
+	label: 'Delete overlay piece', args: '{ id } (the piece, and its lines unless its other half still uses them)',
 	run(tx, a) {
 		const p = findPanel(tx, a);
 		if (!p.outline) throw new Error('Not an overlay piece');
-		for (const t of tx.doc.trims) if (t.on.includes(p.outline)) { const keep = t.on.filter((x) => x !== p.outline); if (keep.length) tx.set(['trims', t.id, 'on'], keep); else tx.remove('trims', t.id); }
-		const layer = tx.doc.layers.find((l) => l.id === p.layer);
+		const lines = overlayLines(tx.doc, p), layer = tx.doc.layers.find((l) => l.id === p.layer), was = p.stack[0]?.material;
+		const shared = tx.doc.panels.some((q) => q !== p && q.layer === p.layer && q.outline && (layer?.bounds || q.outline === p.outline));
 		tx.remove('panels', p.id);
-		if (tx.doc.curves.some((c) => c.id === p.outline)) tx.remove('curves', p.outline);
-		if (layer?.bounds) tx.exec({ op: 'layer.remove', id: layer.id });
+		dropAutoMaterial(tx, was);
 		tx.noInherit = true;
+		if (shared) return;
+		for (const t of tx.doc.trims) if (t.on.some((x) => lines.includes(x))) { const keep = t.on.filter((x) => !lines.includes(x)); if (keep.length) tx.set(['trims', t.id, 'on'], keep); else tx.remove('trims', t.id); }
+		for (const id of lines) if (tx.doc.curves.some((c) => c.id === id)) tx.remove('curves', id);
+		if (layer?.bounds) tx.exec({ op: 'layer.remove', id: layer.id });
 	},
 });
 

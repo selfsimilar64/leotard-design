@@ -132,11 +132,13 @@ export class Engine {
 	}
 
 	// Nearest curve (by screen distance) within `px` pixels of (x, y), not hidden behind the body.
-	curveAt(x, y, px = 7) {
-		if (!this.evaluated) return null;
+	// lines: the evaluated curves to look at (default all); only(e): which of them count.
+	curveAt(x, y, px = 7, { lines = this.evaluated, only = null } = {}) {
+		if (!lines) return null;
 		const surfHit = this.pickAt(x, y);
 		let best = null, bd = px;
-		for (const [key, e] of this.evaluated) {
+		for (const [key, e] of lines) {
+			if (only && !only(e)) continue;
 			for (let i = 0; i < e.sps.length; i += 2) {
 				const s = this.toScreen(e.sps[i]);
 				if (s.behind) continue;
@@ -494,13 +496,17 @@ export class Engine {
 		if (!g) return false;
 		const arr = g.arr, t = locate(arr, this.surf, sp);
 		if (t < 0) return false;
+		this.overlay.flashCell(this.cellSps(arr, arr.cellOf[t]));
+		return true;
+	}
+	// A cell as surface points, three per triangle.
+	cellSps(arr, cell) {
 		const sps = [];
-		for (const tri of arr.cells[arr.cellOf[t]].tris) {
+		for (const tri of arr.cells[cell].tris) {
 			const f = arr.triFace[tri];
 			for (let k = 0; k < 3; k++) { const b = baryOfVertexInFace(arr, this.surf, arr.tris[tri * 3 + k], f); sps.push({ f, b0: b[0], b1: b[1], b2: b[2] }); }
 		}
-		this.overlay.flashCell(sps);
-		return true;
+		return sps;
 	}
 	applyHidden() {
 		const s = this.shown ?? { skin: true, head: false, blob: true }, h = !!this.bodyHidden;

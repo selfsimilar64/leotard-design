@@ -48,7 +48,7 @@ Split lines and pieces keep `twin`. It is not a pair: it only says where the mir
 
 ## Decisions taken while building
 
-- **The centre stays one part.** With Mirror on, a line that reaches or crosses the centre (within 6 mm, or with points on both sides), a stone on the centre, a piece that spans it, and lettering overlapping it are all one part. The preview shows no copy, so the rule is visible.
+- **The centre stays one part.** With Mirror on, a line with points clearly on both sides of the centre or lying along it, a stone on the centre, a piece that spans it, and lettering overlapping it are all one part. The preview shows no copy, so the rule is visible. **Changed 2026-10-31 for lines being drawn:** a line that only touches the centre (within 6 mm or 8 pixels) snaps to it and meets its own mirror image there (`ToolController.penMirror`, `straddles`), because the old rule silently dropped a plate's second side ([decision](/decisions/2026-10-31-draw-first-decide-how-it-sews.md)). Dragging such a point keeps it on the centre (`mateOf`).
 - **Lines across the centre edit symmetrically.** Mirror on, dragging a neckline point moves the point that is its mirror image (within 8 mm); a centre point stays on the centre. Adding, deleting and corner/smooth do the same.
 - **Mirrored lettering stays readable.** Only its place and turn are mirrored: reversed text is never what a designer wants from a name or a logo.
 - **A stone group on a line that splits stays linked.** The group was not edited, so it becomes two linked halves (mirrored offset) and still changes together with Mirror on.

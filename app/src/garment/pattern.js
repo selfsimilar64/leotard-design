@@ -5,6 +5,7 @@
 // appliqué: cut with no seam allowance, with a placement line on the piece it is sewn onto
 // (knowledge/domain/construction/applique-and-overlays.md).
 import { locate } from './arrangement.js';
+import { overlayLines } from './build.js';
 import { fromSP } from '../body/surface.js';
 
 export const PATTERN_DEFAULTS = { easeAcross: -0.1, easeAlong: -0.05, seamAllowance: 0.006 };
@@ -210,7 +211,7 @@ function placements(pieces, views, doc, surf) {
 	for (const over of pieces) {
 		if (over.construction !== 'appliqué') continue;
 		const panel = doc.panels.find((p) => p.id === over.panelId);
-		const lines = [panel?.outline, panel?.mirror === 'both' ? panel.outline + '~m' : null].map((k) => k && shell.g.evaluated?.get(k)).filter(Boolean);
+		const lines = (panel ? overlayLines(doc, panel) : []).flatMap((id) => [id, id + '~m']).map((k) => shell.g.evaluated?.get(k)).filter(Boolean);
 		for (const e of lines) {
 			let run = null, at = null;
 			// (a sample or two where the line ends on a seam can land on the far side of it: not sewn there)

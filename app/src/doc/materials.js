@@ -78,10 +78,16 @@ export function setLook(tx, id, patch) {
 	for (const k of LOOK) {
 		if (patch[k] === undefined) continue;
 		const v = patch[k] === null ? undefined : patch[k];
+		keepMaterial(tx, id);
 		tx.set(['materials', id, k], v);
 		for (const [path, look] of lookHolders(tx.doc)) if (look.material === id) tx.set([...path, k], v);
 	}
 }
+
+// A material made automatically for a new overlay piece (auto: true, commands-garment.js overlayLook)
+// goes with its last user, until someone has changed it and so meant to keep it.
+export function keepMaterial(tx, id) { if (tx.doc.materials.find((m) => m.id === id)?.auto) tx.set(['materials', id, 'auto'], undefined); }
+export function dropAutoMaterial(tx, id) { if (tx.doc.materials.find((m) => m.id === id)?.auto && !usage(tx.doc).get(id).all) tx.remove('materials', id); }
 
 // Point a look at a material: it takes all the material's values.
 export function assign(tx, path, id) {

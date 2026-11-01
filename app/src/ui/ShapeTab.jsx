@@ -13,7 +13,7 @@ import { run, Section, Field, Tiles, Segmented, Slider, Switch, Stepper, Button,
 import { I, EDGE_ICONS, FINISH_ICONS } from './icons.jsx';
 import { LookControls, MaterialChoice, MaterialUse, fabricLabel } from './FabricTab.jsx';
 import { TRIMS } from '../garment/trim.js';
-import { panelAt } from '../garment/build.js';
+import { overlayLines, panelAt } from '../garment/build.js';
 import { focusOn } from './camera.js';
 import { BLOCK_OPTIONS, blockOf, blockAllows, blockKeyOf } from '../garment/blocks.js';
 
@@ -120,7 +120,7 @@ function Drawn({ doc }) {
 			<div class="btn-row">
 				<Button icon={<I.pen size={18} />} active={t === 'pen'} onClick={() => { tool.value = t === 'pen' ? 'move' : 'pen'; }}>Draw a seam</Button>
 				<Button icon={<I.strap size={18} />} active={t === 'strap'} onClick={() => { tool.value = t === 'strap' ? 'move' : 'strap'; }}>Draw a strap</Button>
-				<Button icon={<I.fill size={18} />} active={t === 'overlay'} title="A piece cut to shape and stitched on top of the fabric, which stays whole under it (appliqué)" onClick={() => { tool.value = t === 'overlay' ? 'move' : 'overlay'; }}>Add overlay piece</Button>
+				<Button icon={<I.fill size={18} />} active={t === 'overlay'} title="A piece cut to shape and stitched on top of the fabric, which stays whole under it (appliqué). Draw its new edges from seam to seam, then click the area" onClick={() => { tool.value = t === 'overlay' ? 'move' : 'overlay'; }}>Add overlay piece</Button>
 			</div>
 			{t === 'pen' ? <PenOptions /> : t === 'strap' ? <StrapToolOptions /> : null}
 			{lines.length || straps.length ? (
@@ -231,7 +231,7 @@ function FinishSection({ c, doc }) {
 				<Field label="Material" aside={<MaterialUse id={f.material} doc={doc} kind="finish" />}><MaterialChoice value={f.material} doc={doc} onPick={(m) => run({ op: 'trim.set', on: c.id, kind, width: t?.width, material: m })} /></Field>
 				<LookControls look={f} set={lookSet} />
 			</> : null}
-			{c.role === 'edge' && opening && !doc.panels.some((p) => p.outline === c.id) ? <div class="btn-row"><Button icon={<I.band size={18} />} title="A band of fabric along this edge: a mock-neck collar, a cuff" onClick={() => run({ op: 'band.add', on: c.id, ...toolOptions.value.swatch })}>Add a band on this edge</Button></div> : null}
+			{c.role === 'edge' && opening && !doc.panels.some((p) => overlayLines(doc, p).includes(c.id)) ? <div class="btn-row"><Button icon={<I.band size={18} />} title="A band of fabric along this edge: a mock-neck collar, a cuff" onClick={() => run({ op: 'band.add', on: c.id, ...toolOptions.value.swatch })}>Add a band on this edge</Button></div> : null}
 		</Section>
 	);
 }

@@ -11,7 +11,8 @@ import '../src/doc/commands-stones.js';
 import '../src/doc/commands-decals.js';
 import '../src/doc/symmetry.js';
 import { LOOK, lookHolders, usage, parseHex } from '../src/doc/materials.js';
-import { buildGarment, evaluateAll, inheritPanels } from '../src/garment/build.js';
+import { buildGarment, evaluateAll, inheritPanels, strokeId } from '../src/garment/build.js';
+import { locate } from '../src/garment/arrangement.js';
 import { TRIMS, trimAtWidth } from '../src/garment/trim.js';
 import { offsetEdges } from '../src/garment/pattern.js';
 import { toSP, fromSP } from '../src/body/surface.js';
@@ -170,6 +171,126 @@ describe('overlay pieces that use existing seams', () => {
 	it('refuses an opening, and a line that does not divide the fabric', () => {
 		const s = open();
 		expect(() => s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(surf.closest(new THREE.Vector3(0.0, 1.5, 0.05), {})) } })).toThrow();
+	});
+	// a line from the waist seam (nearest x) up to the armhole (nearest [xTop, yTop]), on either side
+	function edge(s, x, xTop, yTop, sign = 1) {
+		const ev = evaluateAll(s.doc, surf, null, null), named = (n) => s.doc.curves.find((c) => c.name === n);
+		const end = (c, px, py) => {
+			let best = null, bd = Infinity;
+			for (const key of [c.id, c.id + '~m']) { const e = ev.get(key); if (e) e.pts.forEach((p, i) => { const d = (p.x - px) ** 2 + (p.y - py) ** 2 + (p.z < 0 ? 1 : 0); if (d < bd) { bd = d; best = { at: { sp: toSP(e.sps[i]) }, kind: 'corner', on: { curve: c.id, t: e.s[i] / e.length, ...(key.endsWith('~m') ? { mirror: true } : {}) } }; } }); }
+			return best;
+		};
+		return [end(named('Waist seam'), sign * x, 1.065), end(named('Armhole'), sign * xTop, yTop)];
+	}
+	const covers = (s, id, xs, y) => { const p = s.doc.panels.find((q) => q.id === id), g = buildGarment(s.doc, surf, { layer: p.layer }), cells = new Set(g.seeds.filter((q) => q.panel === id).map((q) => q.cell)); return xs.filter((x) => { const h = hit(x, y), t = h ? locate(g.arr, surf, h) : -1; return t >= 0 && cells.has(g.arr.cellOf[t]); }); };
+	const XS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14].map((x) => x / 100);
+
+	it('takes any side with fabric, not only the side a piece\'s seed falls on', () => {
+		for (const x of [0.1, -0.1, 0]) {
+			const s = open(), id = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(x, 1.12)) } });
+			expect(id).toBeTruthy();
+			expect(buildGarment(s.doc, surf, { layer: s.doc.panels.find((p) => p.id === id).layer }).seeds.some((q) => q.cell >= 0)).toBe(true);
+		}
+	});
+	it('is a mirror image whatever the click: a click close to the line cannot land across it', () => {
+		for (const x of [0.042, 0.06, 0.1]) {
+			const s = open(), id = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(x, 1.12)) } });
+			const on = covers(s, id, XS, 1.12), other = on.filter((v) => !on.includes(-v));
+			expect(other.length).toBeLessThanOrEqual(1); // (a sample right on the line can fall either way)
+			expect(on.some((v) => v > 0) && on.some((v) => v < 0)).toBe(true);
+			expect(s.doc.panels.find((p) => p.id === id).mirror).toBe('both');
+		}
+	});
+	it('is one piece, not a pair, when the area lies across the centre', () => {
+		const s = open(), id = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0, 1.12)) } });
+		const p = s.doc.panels.find((q) => q.id === id);
+		expect(p.mirror).toBe('none');
+		expect(covers(s, id, XS, 1.12)).toContain(0);
+	});
+	it('makes a plate from two drawn lines and the seams between them, in one step', () => {
+		const s = open(), before = s.doc.curves.length;
+		const id = s.exec({ op: 'overlay.add', at: { sp: toSP(hit(0.07, 1.12)) }, strokes: [{ mirror: 'both', points: edge(s, 0.03, 0.11, 1.29) }, { mirror: 'both', points: edge(s, 0.09, 0.132, 1.243) }], name: 'Plate' });
+		const p = s.doc.panels.find((q) => q.id === id), layer = s.doc.layers.find((l) => l.id === p.layer), own = s.doc.curves.filter((c) => c.layer === p.layer);
+		expect(own.length).toBe(2);
+		expect(s.doc.curves.length).toBe(before + 2);
+		expect(layer.bounds).toContain(s.doc.curves.find((c) => c.name === 'Waist seam').id);
+		expect(layer.bounds).toContain(s.doc.curves.find((c) => c.name === 'Armhole').id);
+		expect(p.mirror).toBe('both');
+		const on = covers(s, id, XS, 1.12);
+		expect(on).toContain(0.06); expect(on).toContain(-0.06);
+		expect(on).not.toContain(0); expect(on).not.toContain(0.12);
+		// both drawn lines are stitched, by one finish; the seams are not
+		const t = s.doc.trims.find((x) => x.on.includes(own[0].id));
+		expect(t.kind).toBe('zigzag');
+		expect(t.on).toContain(own[1].id);
+		expectInSync(s.doc);
+		// it goes with either of its lines, and takes the other with it
+		s.exec({ op: 'curve.remove', id: own[1].id });
+		expect(s.doc.panels.some((q) => q.id === id)).toBe(false);
+		expect(s.doc.curves.length).toBe(before);
+		expect(s.doc.layers.some((l) => l.id === p.layer)).toBe(false);
+	});
+	it('keeps only the drawn lines round the area; a line ending on a dropped one stays where it is', () => {
+		const s = open(), a = edge(s, 0.03, 0.11, 1.29), b = edge(s, 0.09, 0.132, 1.243), far = edge(s, 0.01, 0.101, 1.319);
+		const id = s.exec({ op: 'overlay.add', at: { sp: toSP(hit(0.07, 1.12)) }, strokes: [{ mirror: 'both', points: far }, { mirror: 'both', points: a }, { mirror: 'both', points: b }] });
+		expect(s.doc.curves.filter((c) => c.layer === s.doc.panels.find((p) => p.id === id).layer).length).toBe(2);
+	});
+	it('lets a line end on an earlier one: three lines make a triangle', () => {
+		const s = open(), a = edge(s, 0.03, 0.11, 1.29);
+		// from the waist seam, up to the first line
+		const ev = evaluateAll({ ...s.doc, curves: [...s.doc.curves, { id: strokeId(0), layer: '__', role: 'edge', closed: false, mirror: 'both', shape: { mod: 'none', amp: 0, period: 0 }, points: a.map((p) => ({ sp: p.at.sp, kind: p.kind, on: p.on })) }] }, surf, null, null).get(strokeId(0));
+		const mid = Math.floor(ev.sps.length / 2), b = [edge(s, 0.09, 0.132, 1.243)[0], { at: { sp: toSP(ev.sps[mid]) }, kind: 'corner', on: { curve: strokeId(0), t: ev.s[mid] / ev.length } }];
+		const id = s.exec({ op: 'overlay.add', at: { sp: toSP(hit(0.06, 1.1)) }, strokes: [{ mirror: 'both', points: a }, { mirror: 'both', points: b }] });
+		const own = s.doc.curves.filter((c) => c.layer === s.doc.panels.find((p) => p.id === id).layer);
+		expect(own.length).toBe(2);
+		expect(own[1].points[1].on.curve).toBe(own[0].id);
+	});
+	it('a line touching the centre meets its mirror image there', () => {
+		const s = open(), line = edge(s, 0, 0.11, 1.28);
+		expect(Math.abs(surf.pos(fromSP(line[0].at.sp)).x)).toBeLessThan(0.002);
+		const id = s.exec({ op: 'overlay.add', mirror: 'both', points: line, at: { sp: toSP(hit(0, 1.15)) } });
+		const on = covers(s, id, XS, 1.15);
+		expect(on).toContain(0);
+		expect(on.filter((v) => !on.includes(-v)).length).toBeLessThanOrEqual(1);
+		// on each side of that V, one of a pair
+		const s2 = open(), id2 = s2.exec({ op: 'overlay.add', mirror: 'both', points: edge(s2, 0, 0.11, 1.28), at: { sp: toSP(hit(0.1, 1.08)) } });
+		expect(s2.doc.panels.find((p) => p.id === id2).mirror).toBe('both');
+		expect(covers(s2, id2, XS, 1.08)).not.toContain(0);
+	});
+	it('has its own material, so choosing its fabric cannot change the piece under it', () => {
+		const s = open(), front = s.doc.panels.find((p) => p.name === 'Front'), colour = front.stack[0].colour, id = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) } });
+		const p = s.doc.panels.find((q) => q.id === id);
+		expect(p.stack[0].material).not.toBe(front.stack[0].material);
+		expect(p.stack[0].fabric).toBe(front.stack[0].fabric);
+		s.exec({ op: 'panel.set', id, colour: '#00ff00' });
+		expect(s.doc.panels.find((q) => q.id === front.id).stack[0].colour).toBe(colour);
+		expectInSync(s.doc);
+	});
+	it('drops the material made for it if another is chosen, or it is deleted, unless it was changed', () => {
+		const s = open(), front = s.doc.panels.find((p) => p.name === 'Front'), n = s.doc.materials.length;
+		const a = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) } });
+		expect(s.doc.materials.length).toBe(n + 1);
+		s.exec({ op: 'panel.material', id: a, material: front.stack[0].material });
+		expect(s.doc.materials.length).toBe(n);
+		s.exec({ op: 'overlay.remove', id: a });
+		const b = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) } });
+		s.exec({ op: 'overlay.remove', id: b });
+		expect(s.doc.materials.length).toBe(n);
+		const c = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) } });
+		s.exec({ op: 'panel.set', id: c, colour: '#00ff00' });
+		s.exec({ op: 'overlay.remove', id: c });
+		expect(s.doc.materials.length).toBe(n + 1);
+	});
+	it('an attached end moves along its line, and to another line, which the piece then runs up to', () => {
+		const s = open(), id = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) } });
+		const p = s.doc.panels.find((q) => q.id === id), line = s.doc.curves.find((c) => c.id === p.outline), waist = s.doc.curves.find((c) => c.name === 'Waist seam'), ev = evaluateAll(s.doc, surf, null, null);
+		const at = (t) => { const e = ev.get(waist.id), i = Math.round(t * (e.sps.length - 1)); return { sp: e.sps[i], t: e.s[i] / e.length }; };
+		const next = at(line.points[0].on.t + 0.02);
+		s.exec({ op: 'curve.movePoint', id: line.id, i: 0, to: { sp: toSP(next.sp) }, on: { curve: waist.id, t: next.t } });
+		expect(s.doc.curves.find((c) => c.id === line.id).points[0].on.t).toBeCloseTo(next.t, 5);
+		const side = s.doc.curves.find((c) => c.name === 'Side seam');
+		s.exec({ op: 'curve.movePoint', id: line.id, i: 0, to: { sp: toSP(ev.get(side.id).sps[3]) }, on: { curve: side.id, t: 0.1 } });
+		expect(s.doc.layers.find((l) => l.id === p.layer).bounds).toContain(side.id);
 	});
 	it('goes with the seam it depends on, and when its own line is deleted', () => {
 		const s = open(), id = s.exec({ op: 'overlay.add', mirror: 'both', points: stroke(s), at: { sp: toSP(hit(0.1, 1.12)) } });

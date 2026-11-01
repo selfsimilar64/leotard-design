@@ -103,8 +103,9 @@ them, `blockKeyOf`) count as the silhouette's, not as drawn lines.
 # Tools as modes (`ui/toolbar.js`, `ui/tools.js`)
 
 There is no tool rail. Select (`move`) is the default; the others start from their tab or key
-(P seam, S strap, F patterns, G rows and fills, 1 single, D eraser, L lettering) and show the mode bar: what
-a click does, Finish (Enter) / Cancel or Done (Esc). On a touch screen one finger turns the view in
+(P seam, S strap, O overlay piece, F patterns, G rows and fills, 1 single, D eraser, L lettering) and show the mode bar: what
+a click does, Finish (Enter) / Cancel or Done (Esc); with overlay lines waiting, Undo line (Backspace). The line tools
+follow [one drawing grammar](/engineering/ux/one-drawing-grammar.md): a press shows, a lift acts. On a touch screen one finger turns the view in
 Select and draws or places in the other tools, two fingers turn and zoom (`controls.touches`). H
 hides the lines (not a pattern's handles, which have their own switch), M the mannequin; Esc ends a tool, then clears the selection; a double click (tap)
 in Select fits the leotard in view (with the mannequin hidden, Fit frames the leotard alone). A logo's page can

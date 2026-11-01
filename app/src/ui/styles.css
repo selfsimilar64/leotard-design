@@ -397,10 +397,10 @@ input.part-title:focus { outline: none; background: #fff; box-shadow: 0 0 0 1px 
 .icon-btn.vb:not(.active) { position: relative; }
 .icon-btn.vb:not(.active)::after { content: ''; position: absolute; width: 22px; height: 1.6px; border-radius: 1px; background: currentColor; transform: rotate(-45deg); }
 
-.modebar { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 28px); padding: 6px 6px 6px 16px; border-radius: 16px; background: var(--ink); color: var(--on-ink); box-shadow: var(--shadow-3); animation: drop-in 0.26s var(--ease); }
-.layout-split .modebar { left: 25%; max-width: calc(50% - 28px); }
-@keyframes drop-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
-.mb-text { display: flex; flex-direction: column; min-width: 0; font-size: 12px; line-height: 1.35; color: rgba(251, 250, 248, 0.72); }
+.modebar { position: absolute; top: 14px; left: 14px; right: 14px; width: fit-content; margin-inline: auto; z-index: 6; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px 12px; padding: 6px 6px 6px 16px; border-radius: 16px; background: var(--ink); color: var(--on-ink); box-shadow: var(--shadow-3); animation: drop-in 0.26s var(--ease); }
+.layout-split .modebar { right: calc(50% + 14px); }
+@keyframes drop-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.mb-text { flex: 1 1 240px; display: flex; flex-direction: column; min-width: 0; font-size: 12px; line-height: 1.35; color: rgba(251, 250, 248, 0.72); }
 .mb-text strong { color: var(--on-ink); font-size: 13px; font-weight: 600; }
 .mb-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 0; border-radius: 11px; background: rgba(255, 255, 255, 0.14); color: var(--on-ink); font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
 .mb-btn:hover { background: rgba(255, 255, 255, 0.24); }

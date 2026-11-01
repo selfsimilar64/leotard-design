@@ -38,17 +38,18 @@ shell. The pattern reports each piece's construction.** Why: [the decision](/dec
 - `overlay.add` draws a closed `edge` line on the overlay layer (created on first use), seeds a panel in the smallest
   unclaimed cell of that layer, records the line as `panel.outline`, and sets a `zigzag` finish. `overlay.remove` deletes all three.
 - The shell's arrangement is untouched: the base stays one piece.
-- The drawing tool (`ui/tools.js`, tool `overlay`) keeps going past a line it meets, where the seam tool ends on one.
+- A new piece gets its own material, a copy of the fabric under it (`overlayLook`, `auto: true`), so choosing its fabric cannot change its base. The copy goes if another material is chosen or the piece is deleted, unless it has been changed or renamed (`dropAutoMaterial`, `keepMaterial`).
 
 ## Using existing lines as edges
 
-Owner, 2026-10-31: drawing from one seam to another should work for an overlay as it does for a seam, without tracing the seams.
+Owner, 2026-10-31: each chest plate is a quad, two drawn lines and two stretches of existing seams, and only the two lines should need drawing. How it feels to use: [one drawing grammar](/engineering/ux/one-drawing-grammar.md).
 
-- With `at`, `overlay.add` takes a line whose two ends lie on other lines. `strokeRegions` cuts the shell by its own lines and this one, without changing the document, and `at` picks the region. The shell lines round that region become the new layer's `bounds`.
-- `buildGarment` cuts a layer by its own lines plus its `bounds`. Each such piece has a layer of its own, at the overlays' existing height, so its bounds slice no other overlay. Free-drawn overlays share a separate layer without bounds. Two pieces at one height would fight in the render if they overlapped.
-- The tool: an outline started on a line ends on the next line it meets, then the hovered region and its mirror image preview (`cellOutline`) until a click chooses. An outline started in the open works as before.
-- Along its `bounds` a piece is **caught in that seam**: `render/rims.js` draws its stitched edge only on its own line (`ownRuns`), and the pattern adds the seam allowance only there (`caughtEdges`, `offsetEdges`), dashed as a stitch line and listed as `caughtIn`.
-- An overlay goes with its own line or a line in its `bounds` (`dropOverlaysOn`), reported in the impact of a silhouette change. Splitting a bound line's pair with Mirror off adds the new line to `bounds`.
+- With `at`, `overlay.add` takes `strokes`, lines each from one existing line to another or to an earlier stroke (`on.curve: strokeId(i)`), or one stroke as `points` and `mirror`. `strokeRegions` cuts the shell by its own lines and the strokes, without changing the document, and `at` picks the area.
+- `pickableRegions` decides what can be picked, the same way for the tool's tints and for the command: an area with a stroke among its edges (`cellLines`, which ignores a line with the area on both sides) where the shell had fabric before the strokes (`panelAt` on the shell's own build). The piece's `seed` is a point well inside the area (`cellSeed`), not the click, and its pair is found from that seed, so a click close to a line cannot land across it. An area lying across the centre is one piece.
+- The strokes among its edges become the piece's own lines, on a layer of its own; the shell lines among its edges become the layer's `bounds`. `overlayLines` lists a piece's own lines; `panel.outline` is the first of them and marks the piece as an overlay. Strokes not among its edges are dropped.
+- `buildGarment` cuts a layer by its own lines plus its `bounds`. Free-drawn overlays share a separate layer without bounds. Two pieces at one height would fight in the render if they overlapped.
+- Along its `bounds` a piece is **caught in that seam**: `render/rims.js` draws its stitched edge only on its own lines (`ownRuns`), and the pattern adds the seam allowance only there (`caughtEdges`, `offsetEdges`), dashed as a stitch line and listed as `caughtIn`.
+- An overlay goes with any of its own lines or a line in its `bounds` (`dropOverlaysOn`), reported in the impact of a silhouette change. Splitting a bound line's pair with Mirror off adds the new line to `bounds`. Moving an end to another shell line (`curve.movePoint` with `on`) adds that line too.
 
 # Finishes
 

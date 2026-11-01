@@ -5,10 +5,13 @@
 //           be; over a control point of the selected line the drag moves that point instead (it
 //           slides on the body; one undo step); Alt-click a line to add a point; C toggles
 //           corner/smooth on the last point touched; Delete removes it (or the line)
-//   pen     click to place points (Shift = corner); click the first point to close; click on
-//           another line to end there (the end stays attached); Enter or double-click finishes;
-//           Esc cancels
+//   pen     click to place points (a press shows where, lifting places it; Shift = corner); click the
+//           first point to close; click on another line to end there (the end stays attached);
+//           Enter or double-click finishes; Esc cancels
 //   strap   like the pen, but the line becomes a strap
+//   overlay like the pen, but a line from one line to another waits, cutting nothing: the areas such
+//           lines enclose tint, and a click on one makes the overlay piece
+//           (knowledge/engineering/ux/one-drawing-grammar.md)
 //   stones, single, erase   stone generators, one stone, the eraser (options in the panel)
 //   pattern a click on a piece lays the pattern chosen in the panel; in Select, a chosen pattern's
 //           handles (render/gizmo.js, stones/handles.js) change it and its modifiers, live
@@ -20,7 +23,7 @@
 // touch screen).
 import * as THREE from 'three';
 import { signal } from '@preact/signals';
-import { choosingSide, tool, selection, notify, hideOverlay, showHandles, patternFocus, edit, stonesRun, prefs } from './state.js';
+import { drawnLines, tool, selection, notify, hideOverlay, showHandles, patternFocus, edit, stonesRun, prefs } from './state.js';
 import { fromSP, toSP } from '../body/surface.js';
 import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
@@ -54,6 +57,10 @@ export class ToolController {
 		this.app = app; this.engine = engine;
 		this.el = engine.viewport.renderer.domElement;
 		this.pen = null;      // { points: [{ sp, kind, on? }] }
+		this.penPress = null; // { id, corner }: a press that places a point when it lifts
+		this.fingers = new Set(); // touch pointers down: a second one turns the view, so it cancels the press
+		this.strokes = [];    // the overlay tool's finished lines: [{ raw: pen points, mirror }], waiting for an area to be picked
+		this.regions = null;  // what they enclose: { g, base, picks, focus } (refreshRegions)
 		this.drag = null;     // { curve, i, mirrored, gesture }
 		this.active = null;   // { curve, i } last control point touched
 		this.gestureN = 0;
@@ -61,9 +68,10 @@ export class ToolController {
 		el.addEventListener('pointerdown', (e) => this.down(e));
 		el.addEventListener('pointermove', (e) => this.move(e));
 		el.addEventListener('pointerup', (e) => this.up(e));
-		el.addEventListener('pointerleave', () => this.clearHover());
-		// a double click (or tap) finishes a line; in Select it fits the leotard in view
-		el.addEventListener('dblclick', (e) => { if (isDrawing()) { e.preventDefault(); this.finishPen(); } else if (tool.value === 'move') viewTo('fit'); });
+		el.addEventListener('pointercancel', (e) => { this.fingers.delete(e.pointerId); this.penPress = null; });
+		el.addEventListener('pointerleave', () => { this.clearHover(); this.leaveDrawing(); });
+		// a double click (or tap) finishes a line; in Select it fits the leotard in view (not the end of a double click that picked an area)
+		el.addEventListener('dblclick', (e) => { if (isDrawing()) { e.preventDefault(); this.finishPen(); } else if (tool.value === 'move' && performance.now() - (this.pickedAt ?? -1e9) > 700) viewTo('fit'); });
 		el.addEventListener('contextmenu', (e) => e.preventDefault());
 		window.addEventListener('keydown', (e) => this.key(e));
 		tool.subscribe((t) => this.onTool(t));
@@ -75,8 +83,13 @@ export class ToolController {
 		selection.subscribe((s) => { if (s?.kind === 'panels' && s.id !== last) this.flashPiece(s); last = s?.id ?? null; });
 		hideOverlay.subscribe(() => this.refreshOverlay());
 		app.onChange((touched) => {
-			if (touched.has('symmetry')) { this.refreshOverlay(); this.previewPen(null); }
+			if (touched.has('symmetry')) {
+				this.refreshOverlay(); this.previewPen(null);
+				for (const s of this.strokes) s.mirror = this.penMirror(s.raw);
+				this.refreshRegions();
+			}
 			if (touched.has('stones') || touched.has('curves') || touched.has('panels')) this.refreshHandles();
+			if ((touched.has('curves') || touched.has('panels')) && this.strokes.length && !this.picking) this.refreshRegions();
 		});
 		engine.onStones = () => { stonesRun.value++; this.refreshHandles(); }; // (also when a piece's flat shape arrives)
 		engine.gizmo.onGrab = (k, e) => this.startHandle(k, e);
@@ -107,6 +120,7 @@ export class ToolController {
 		c.touches = t === 'move' ? { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN } : { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE };
 		c.enabled = true;
 		if (!isDrawing()) this.cancelPen();
+		else if (t !== 'overlay' && this.strokes.length) { this.strokes = []; this.refreshRegions(); }
 		if (t === 'pattern' && selection.value?.kind === 'stones') selection.value = null;
 		this.clearHover();
 		if (t !== 'decal' && toolOptions.value.moveDecal) toolOptions.value = { ...toolOptions.value, moveDecal: null };
@@ -228,10 +242,11 @@ export class ToolController {
 	// Mirror on, a line that is not a pair (a neckline across the centre): the control point that is
 	// point i's mirror image, and whether point i sits on the centre.
 	mateOf(c, i) {
-		if (!this.mirrorOn || c.mirror === 'both' || c.twin) return { mate: -1, centre: false };
+		if (!this.mirrorOn || c.twin) return { mate: -1, centre: false };
 		const e = this.engine.g?.evaluated.get(c.id), surf = this.engine.surf;
 		if (!e) return { mate: -1, centre: false };
 		const at = (k) => surf.pos(e.sps[e.ctrlIndex[k]]), p = at(i);
+		if (c.mirror === 'both') return { mate: -1, centre: Math.abs(p.x) < CENTRE }; // where a line meets its mirror image, it stays
 		if (Math.abs(p.x) < MATE / 2) return { mate: -1, centre: this.crosses(c.points.map((q) => ({ sp: fromSP(q.sp) }))) };
 		const m = p.clone().setX(-p.x);
 		let mate = -1, bd = MATE;
@@ -265,6 +280,7 @@ export class ToolController {
 	}
 
 	down(e) {
+		if (e.pointerType === 'touch') { this.fingers.add(e.pointerId); if (this.fingers.size > 1) this.penPress = null; }
 		if (e.button !== 0) return;
 		const t = tool.value, [x, y] = this.xy(e);
 		if (t === 'move') {
@@ -280,7 +296,8 @@ export class ToolController {
 			} else this.press = { x, y, t: performance.now(), alt: e.altKey };
 			return;
 		}
-		if (isDrawing()) { this.penClick(x, y, e.shiftKey); return; }
+		// a press shows where the point will land or which area is meant, a slide adjusts it, lifting acts (up)
+		if (isDrawing()) { if (this.fingers.size <= 1) { this.penPress = { id: e.pointerId, corner: e.shiftKey }; this.drawHover(x, y); } return; }
 		if (t === 'eyedrop') { this.eyedrop(x, y); return; }
 		if (t === 'decal') {
 			const h = this.engine.pickAt(x, y);
@@ -370,31 +387,27 @@ export class ToolController {
 		const [x, y] = this.xy(e);
 		if (this.hdrag) { this.dragHandle(x, y, e); return; }
 		if (this.drag) {
-			const h = this.engine.pickAt(x, y);
-			if (!h?.sp) return;
 			const d = this.drag, g = d.gesture, surf = this.engine.surf;
-			const c = this.app.doc.curves.find((q) => q.id === d.curve);
+			const c = this.app.doc.curves.find((q) => q.id === d.curve), held = c.points[d.i]?.on ? this.slideEnd(c, d, x, y) : null;
+			const h = held ? null : this.engine.pickAt(x, y);
+			if (!held && !h?.sp) return;
 			if (!this.mirrorOn && c.mirror === 'both') {
 				// the first move splits the pair; the drag carries on with this side's own line
 				const before = selection.value?.id;
-				this.runEdit({ op: 'curve.movePoint', id: d.curve, i: d.i, to: { sp: toSP(h.sp) }, gesture: g }, d.mirrored ? 'm' : undefined);
+				this.runEdit({ op: 'curve.movePoint', id: d.curve, i: d.i, to: { sp: toSP(held?.sp ?? h.sp) }, ...(held ? { on: held.on } : {}), gesture: g }, d.mirrored ? 'm' : undefined);
 				const now = selection.value?.id;
 				if (now !== before) d.curve = now;
 				if (this.active) this.active.curve = d.curve;
 				d.mirrored = false;
 				return;
 			}
-			const sp = d.centre ? this.onCentre(h.sp) : d.mirrored ? mirrorSP(h.sp, surf) : h.sp;
-			const cmds = [{ op: 'curve.movePoint', id: d.curve, i: d.i, to: { sp: toSP(sp) }, gesture: g }];
+			const sp = held ? (d.mirrored ? mirrorSP(held.sp, surf) : held.sp) : d.centre ? this.onCentre(h.sp) : d.mirrored ? mirrorSP(h.sp, surf) : h.sp;
+			const cmds = [{ op: 'curve.movePoint', id: d.curve, i: d.i, to: { sp: toSP(sp) }, ...(held ? { on: d.mirrored ? this.mirrorOnLine(held) : held.on } : {}), gesture: g }];
 			if (d.mate >= 0) cmds.push({ op: 'curve.movePoint', id: d.curve, i: d.mate, to: { sp: toSP(mirrorSP(sp, surf)) }, gesture: g });
 			this.run(cmds.length > 1 ? cmds : cmds[0]);
 			return;
 		}
-		if (this.region) { this.previewRegion(this.engine.pickAt(x, y)?.sp ?? null); return; }
-		if (isDrawing() && this.pen) {
-			const h = this.engine.pickAt(x, y);
-			if (h?.sp) this.previewPen(h.sp);
-		}
+		if (isDrawing()) this.queueDraw(x, y);
 		if (['single', 'erase', 'decal'].includes(tool.value)) {
 			// where the mirrored copy will land
 			const h = this.mirrorOn ? this.engine.pickAt(x, y) : null;
@@ -428,6 +441,9 @@ export class ToolController {
 	}
 
 	up(e) {
+		this.fingers.delete(e.pointerId);
+		const pp = this.penPress;
+		if (pp?.id === e.pointerId) { this.penPress = null; const [x, y] = this.xy(e); this.penClick(x, y, pp.corner); return; }
 		if (this.hdrag) {
 			this.hdrag = null;
 			this.engine.gizmo.hold(null);
@@ -475,7 +491,7 @@ export class ToolController {
 		if (isDrawing()) {
 			if (k === 'Enter') { this.finishPen(); e.preventDefault(); }
 			else if (k === 'Escape') this.cancelPen();
-			else if (k === 'Backspace' && this.pen?.points.length) { this.pen.points.pop(); this.previewPen(null); e.preventDefault(); }
+			else if (k === 'Backspace') { this.undoLine(); e.preventDefault(); }
 			return;
 		}
 		const sel = selection.value;
@@ -525,28 +541,109 @@ export class ToolController {
 	}
 
 	// --- pen -----------------------------------------------------------------------------------
+	// A lift (see down). The overlay tool with lines drawn and none under way: on a line it starts
+	// another, in an area it picks that area. Anywhere else it adds a point.
 	penClick(x, y, corner) {
-		if (this.region) { this.chooseSide(x, y); return; }
-		const g = this.engine.g;
-		const onCurve = this.engine.curveAt(x, y, 8);
-		const h = this.engine.pickAt(x, y);
-		if (!h?.sp && !onCurve) return;
+		const overlay = tool.value === 'overlay', snap = this.snapAt(x, y);
+		if (!snap) return;
+		if (overlay && !this.pen && this.regions && !snap.on) { this.pickRegion(snap.sp); return; }
+		if (this.regions) this.previewRegion(null);
 		this.pen ??= { points: [] };
-		const pts = this.pen.points;
+		const pts = this.pen.points, last = pts[pts.length - 1];
+		if (last) {
+			// (the second click of a double click, which finishes the line)
+			const s = this.engine.toScreen(last.sp), n = this.engine.toScreen(snap.sp);
+			if (Math.hypot(s.x - n.x, s.y - n.y) < 3) return;
+		}
 		// close on the first point
 		if (pts.length >= 3) {
 			const s0 = this.engine.toScreen(pts[0].sp);
 			if (Math.hypot(s0.x - x, s0.y - y) < 10) { this.finishPen(true); return; }
 		}
-		if (onCurve) {
-			const e = g.evaluated.get(onCurve.key);
-			const sp = e.sps[onCurve.sample];
-			pts.push({ sp, kind: 'corner', on: { curve: onCurve.curve, t: onCurve.t, ...(onCurve.mirrored ? { mirror: true } : {}) } });
-			// an overlay's outline begun on a line ends on the next it meets, and then a side is chosen;
-			// one begun in the open goes on past lines it meets; any other line ends there
-			if (pts.length >= 2 && tool.value === 'overlay') { if (pts[0].on) { this.startChoosing(); return; } } else if (pts.length >= 2) { this.finishPen(); return; }
-		} else pts.push({ sp: h.sp, kind: corner ? 'corner' : 'smooth' });
+		if (snap.on) {
+			pts.push({ sp: snap.sp, kind: 'corner', on: snap.on });
+			// an overlay's line begun on a line ends on the next it meets, and waits for an area to be
+			// picked; one begun in the open goes on past lines it meets; any other line ends there
+			if (pts.length >= 2 && overlay) { if (pts[0].on) { this.addStroke(); return; } } else if (pts.length >= 2) { this.finishPen(); return; }
+		} else pts.push({ sp: snap.sp, kind: corner ? 'corner' : 'smooth' });
 		this.previewPen(null);
+	}
+
+	// Where a point placed at a screen position lands: { sp, on? (attached to a line), centre? }, or null
+	// off the body. Mirror on, one near the centre goes on it, so the line meets its mirror image there.
+	snapAt(x, y) {
+		const engine = this.engine, doc = this.app.doc, lines = this.regions?.g.evaluated ?? engine.evaluated;
+		// an overlay's lines enclose an area only with what cuts the shell, or with each other
+		const only = tool.value === 'overlay' ? (e) => CUTTING.has(e.role) && (isStroke(e.curve) || (doc.curves.find((c) => c.id === e.curve)?.layer ?? 'L0') === 'L0') : null;
+		const hit = engine.curveAt(x, y, 8, { lines, only });
+		if (hit) {
+			const e = lines.get(hit.key), i = this.mirrorOn ? this.centreSample(e, hit.sample, x, y) : hit.sample;
+			return { sp: e.sps[i], on: { curve: hit.curve, t: e.s[i] / Math.max(e.s[e.s.length - 1], 1e-9), ...(hit.mirrored ? { mirror: true } : {}) } };
+		}
+		const h = engine.pickAt(x, y);
+		if (!h?.sp) return null;
+		if (!this.mirrorOn) return { sp: h.sp };
+		const c = this.onCentre(h.sp), s = engine.toScreen(c);
+		return Math.abs(engine.surf.pos(h.sp).x) < CENTRE || Math.hypot(s.x - x, s.y - y) < 8 ? { sp: c, centre: true } : { sp: h.sp };
+	}
+	// The sample of a line at the centre of the body, if the pointer is that close to it.
+	centreSample(e, i, x, y) {
+		let best = i;
+		for (let k = Math.max(0, i - 16), n = Math.min(e.pts.length - 1, i + 16); k <= n; k++) if (Math.abs(e.pts[k].x) < Math.abs(e.pts[best].x)) best = k;
+		if (Math.abs(e.pts[best].x) > 0.0015) return i;
+		const s = this.engine.toScreen(e.sps[best]);
+		return Math.abs(e.pts[i].x) < CENTRE || Math.hypot(s.x - x, s.y - y) < 8 ? best : i;
+	}
+
+	// An attached end being dragged follows its line under the pointer, and moves to another line it
+	// comes near. It never lets go. -> { sp, on }, on the side being dragged.
+	slideEnd(c, d, x, y) {
+		const engine = this.engine, lines = engine.evaluated, on0 = c.points[d.i].on;
+		const other = engine.curveAt(x, y, 8, { only: (e) => e.curve !== c.id && CUTTING.has(e.role) });
+		let e, i = 0;
+		if (other) { e = lines.get(other.key); i = other.sample; }
+		else {
+			const flip = on0.mirror ? !d.mirrored : d.mirrored;
+			e = lines.get(on0.curve + (flip ? '~m' : '')) ?? lines.get(on0.curve);
+			if (!e) return null;
+			let bd = Infinity;
+			for (let k = 0; k < e.sps.length; k += 2) { const s = engine.toScreen(e.sps[k]); if (s.behind) continue; const q = Math.hypot(s.x - x, s.y - y); if (q < bd) { bd = q; i = k; } }
+		}
+		if (this.mirrorOn) i = this.centreSample(e, i, x, y);
+		return { sp: e.sps[i], on: { curve: e.curve, t: e.s[i] / Math.max(e.s[e.s.length - 1], 1e-9), ...(e.mirrored ? { mirror: true } : {}) } };
+	}
+	// The attachment of the mirror image of a point on a line (a line with no mirror image of its own
+	// is symmetric: the nearest place on it).
+	mirrorOnLine({ sp, on }) {
+		const lines = this.engine.evaluated, surf = this.engine.surf;
+		if (lines.has(on.curve + '~m')) return { curve: on.curve, t: on.t, ...(on.mirror ? {} : { mirror: true }) };
+		const e = lines.get(on.curve), p = surf.pos(mirrorSP(sp, surf));
+		let b = 0, bd = Infinity;
+		e.pts.forEach((q, i) => { const d = q.distanceToSquared(p); if (d < bd) { bd = d; b = i; } });
+		return { curve: on.curve, t: e.s[b] / Math.max(e.s[e.s.length - 1], 1e-9) };
+	}
+
+	// At most once a frame: the picks are not free.
+	queueDraw(x, y) {
+		this.drawAt = [x, y];
+		this.drawFrame ??= requestAnimationFrame(() => {
+			this.drawFrame = null;
+			if (this.drawAt && isDrawing()) this.drawHover(...this.drawAt);
+		});
+	}
+	// What a press or hover shows: the area a click would pick, or the line so far and a dot where the next point would attach.
+	drawHover(x, y) {
+		const snap = this.snapAt(x, y), overlay = this.engine.overlay;
+		if (this.regions && !this.pen && !snap?.on) { overlay.setCursor(null); this.previewRegion(snap?.sp ?? null); return; }
+		if (this.regions) this.previewRegion(null);
+		overlay.setCursor(snap?.on || snap?.centre ? snap.sp : null);
+		if (this.pen && snap) this.previewPen(snap.sp);
+	}
+	leaveDrawing() {
+		this.drawAt = null;
+		if (!isDrawing()) return;
+		this.engine.overlay.setCursor(null);
+		if (this.regions) this.previewRegion(null);
 	}
 
 	previewPen(cursorSp) {
@@ -561,47 +658,84 @@ export class ToolController {
 		this.engine.overlay.setPreview(evaluateCurve(curve, surf), both ? evaluateCurve(curve, surf, { mirror: (sp) => mirrorSP(sp, surf) }) : null);
 	}
 
-	// Mirror on: a line off to one side is drawn on both; a line reaching the centre stays one line.
-	penMirror(points) { return this.mirrorOn && !this.crosses(points) ? 'both' : 'none'; }
+	// Mirror on: a line is drawn on both sides unless it really is one part. A line that only touches the
+	// centre meets its own mirror image there.
+	penMirror(points) { return this.mirrorOn && !this.straddles(points) ? 'both' : 'none'; }
+	// has points clearly on both sides of the centre, or lies along it
+	straddles(points) {
+		const off = points.map((p) => this.engine.surf.pos(p.sp).x).filter((x) => Math.abs(x) >= CENTRE);
+		return !off.length || (off.some((x) => x > 0) && off.some((x) => x < 0));
+	}
 
-	// The overlay tool, with its line drawn from one line to another: the regions it makes, and a click
-	// to choose one. The hovered region and its mirror image show as they would be cut.
+	// The overlay tool: a line from one line to another waits here, cutting nothing, and the tool stays
+	// on. The areas the lines enclose tint, the one under the pointer and its mirror image more
+	// strongly, and a click on one makes the piece, with the existing seams round it as edges.
 	strokePoints(points) { return points.map((p) => (p.on ? { at: { sp: toSP(p.sp) }, kind: p.kind, on: p.on } : { at: { sp: toSP(p.sp) }, kind: p.kind })); }
-	startChoosing() {
-		const pen = this.pen, doc = this.app.doc, surf = this.engine.surf, mirror = this.penMirror(pen.points);
-		const points = pen.points.map((p) => ({ sp: toSP(p.sp), kind: p.kind, ...(p.on ? { on: p.on } : {}) }));
-		this.region = { pen, mirror, g: strokeRegions(doc, surf, points, mirror, this.engine.evaluated) };
-		this.pen = null; this.penCursor = null;
-		choosingSide.value = true;
-		this.previewRegion(null);
+	addStroke() {
+		const pen = this.pen;
+		this.clearLine();
+		this.strokes.push({ raw: pen.points, mirror: this.penMirror(pen.points) });
+		this.refreshRegions();
 	}
+	undoLine() {
+		if (this.pen?.points.length) {
+			this.pen.points.pop();
+			if (this.pen.points.length) this.previewPen(null); else this.clearLine();
+		} else if (this.strokes.pop()) this.refreshRegions();
+	}
+	refreshRegions() {
+		const engine = this.engine, overlay = engine.overlay, doc = this.app.doc, surf = engine.surf;
+		if (!this.strokes.length) {
+			this.regions = null;
+			drawnLines.value = null;
+			overlay.setDrawn(null); overlay.setRegions(null);
+			if (!this.pen) overlay.setPreview(null);
+			return;
+		}
+		const drawn = this.strokes.map((s) => ({ mirror: s.mirror, points: s.raw.map((p) => ({ sp: toSP(p.sp), kind: p.kind, ...(p.on ? { on: p.on } : {}) })) }));
+		const g = strokeRegions(doc, surf, drawn, engine.evaluated), base = buildGarment(doc, surf, { prev: engine.g, layer: 'L0' }), picks = pickableRegions(g, base, doc, surf, drawn);
+		this.regions = { g, base, picks, focus: -1 };
+		drawnLines.value = { lines: drawn.length, areas: picks.size };
+		overlay.setDrawn(drawn.flatMap((_, i) => [g.evaluated.get(strokeId(i)), g.evaluated.get(strokeId(i) + '~m')]).filter(Boolean));
+		overlay.setRegions([...picks].map(([cell, r]) => ({ cell, hue: r.hue, sps: engine.cellSps(g.arr, cell) })));
+	}
+	cellOfRegion(sp) { const { g } = this.regions, t = sp ? locate(g.arr, this.engine.surf, sp) : -1; return t >= 0 ? g.arr.cellOf[t] : -1; }
 	previewRegion(sp) {
-		const { g } = this.region, surf = this.engine.surf, cellAt = (q) => { const t = locate(g.arr, surf, q); return t >= 0 ? g.arr.cellOf[t] : -1; };
-		const c = sp ? cellAt(sp) : -1;
-		if (c < 0 || g.cellPanel[c] < 0) { this.engine.overlay.setPreview(this.region.pen.points.length ? { sps: this.region.pen.points.map((p) => p.sp) } : null); return; }
-		const m = this.region.mirror === 'both' ? cellAt(mirrorSP(sp, surf)) : -1;
-		this.engine.overlay.setPreview(cellOutline(g.arr, surf, c), m >= 0 && m !== c ? cellOutline(g.arr, surf, m) : null);
+		const r = this.regions, surf = this.engine.surf, overlay = this.engine.overlay, c = this.cellOfRegion(sp), pick = r.picks.get(c), focus = pick ? c : -1;
+		if (focus === r.focus) return;
+		r.focus = focus;
+		const m = pick?.mirror ?? -1;
+		overlay.focusRegions(pick ? [c, ...(m >= 0 ? [m] : [])] : []);
+		overlay.setPreview(pick ? cellOutline(r.g.arr, surf, c) : null, m >= 0 ? cellOutline(r.g.arr, surf, m) : null);
 	}
-	chooseSide(x, y) {
-		const h = this.engine.pickAt(x, y);
-		if (!h?.sp) return;
-		const { pen, mirror } = this.region;
-		const pid = this.run({ op: 'overlay.add', mirror, at: { sp: toSP(h.sp) }, points: this.strokePoints(pen.points) });
+	pickRegion(sp) {
+		const r = this.regions, c = this.cellOfRegion(sp), pick = r.picks.get(c);
+		if (!pick) { notify(whyNotPickable(r.g, r.base, this.app.doc, this.engine.surf, c), 'info'); return; }
+		this.picking = true;
+		const pid = this.run({ op: 'overlay.add', at: { sp: toSP(sp) }, strokes: this.strokes.map((s) => ({ mirror: s.mirror, points: this.strokePoints(s.raw) })) });
+		this.picking = false;
 		if (!pid) return; // refused, with its reason shown: choose again
 		this.cancelPen();
+		this.pickedAt = performance.now();
 		tool.value = 'move';
 		selection.value = { kind: 'panels', id: pid };
-		notify(mirror === 'both' ? 'Overlay piece added on both sides: choose its material' : 'Overlay piece added: choose its material');
+		notify(pick.mirror >= 0 ? 'Overlay piece added on both sides: choose its material' : 'Overlay piece added: choose its material');
 	}
 
 	finishPen(closed = false) {
-		if (this.region) return;
-		const pen = this.pen;
-		this.cancelPen();
+		const pen = this.pen, overlay = tool.value === 'overlay';
+		// among lines already drawn, this one too has to end on a line
+		if (overlay && this.regions && pen && !closed) {
+			if (pen.points.length < 2) this.clearLine();
+			else if (pen.points[pen.points.length - 1].on) this.addStroke();
+			else notify('End this line on a seam or edge', 'info');
+			return;
+		}
+		this.clearLine();
 		if (!pen || pen.points.length < 2) return;
 		const opt = toolOptions.value, mirror = this.penMirror(pen.points);
-		if (tool.value === 'overlay') {
-			if (pen.points[0].on && pen.points[pen.points.length - 1].on && !closed) { this.pen = pen; this.startChoosing(); return; }
+		if (overlay) {
+			if (pen.points[0].on && pen.points[pen.points.length - 1].on && !closed) { this.pen = pen; this.addStroke(); return; }
 			if (pen.points.length < 3) { notify('An overlay piece needs at least three points', 'error'); return; }
 			const pid = this.run({ op: 'overlay.add', mirror, points: this.strokePoints(pen.points) });
 			if (pid) { tool.value = 'move'; selection.value = { kind: 'panels', id: pid }; notify(mirror === 'both' ? 'Overlay piece added on both sides: choose its material' : 'Overlay piece added: choose its material'); }
@@ -621,10 +755,11 @@ export class ToolController {
 		if (id) { selection.value = { kind: 'curves', id }; notify(`Line drawn (${mirror === 'both' ? 'mirrored' : 'one side'})`); }
 	}
 
-	cancelPen() { this.pen = null; this.penCursor = null; this.region = null; choosingSide.value = false; this.engine.overlay.setPreview(null); }
+	clearLine() { this.pen = null; this.penCursor = null; this.engine.overlay.setPreview(null); }
+	cancelPen() { this.clearLine(); this.penPress = null; this.strokes = []; this.refreshRegions(); }
 }
 
-import { strokeRegions, cellOutline } from '../garment/build.js';
+import { CUTTING, buildGarment, cellOutline, isStroke, pickableRegions, strokeId, strokeRegions, whyNotPickable } from '../garment/build.js';
 
 const isDrawing = () => tool.value === 'pen' || tool.value === 'strap' || tool.value === 'overlay';
 

@@ -185,23 +185,70 @@ export function inheritPanels(g, prev, doc, surf) {
 	return out;
 }
 
-// The regions a line from one seam to another makes on the shell, as a seam would: the shell cut by
-// its own lines and this one. -> { g, surf, stroke: its id }. The drawn line is not in the document yet.
+// The regions lines from one line to another make on the shell, as seams would: the shell cut by its
+// own lines and these. strokes: [{ points, mirror }], not in the document yet; a line may end on one
+// drawn before it (on.curve: strokeId(i)).
 export const STROKE = '__stroke';
-export function strokeRegions(doc, surf, points, mirror, cache = null) {
-	const curve = { id: STROKE, layer: '__', role: 'edge', name: '', closed: false, mirror, shape: { mod: 'none', amp: 0, period: 0 }, points };
-	const d = { ...doc, curves: [...doc.curves, curve] };
-	return buildGarment(d, surf, { layer: 'L0', evaluated: evaluateAll(d, surf, null, cache), alsoCut: [STROKE] });
+export const strokeId = (i) => STROKE + i;
+export const isStroke = (id) => id.startsWith(STROKE);
+const strokeIndex = (id) => +id.slice(STROKE.length);
+export function strokeRegions(doc, surf, strokes, cache = null) {
+	const curves = strokes.map(({ points, mirror }, i) => ({ id: strokeId(i), layer: '__', role: 'edge', name: '', closed: false, mirror, shape: { mod: 'none', amp: 0, period: 0 }, points }));
+	const d = { ...doc, curves: [...doc.curves, ...curves] };
+	return buildGarment(d, surf, { layer: 'L0', evaluated: evaluateAll(d, surf, null, cache), alsoCut: curves.map((c) => c.id) });
 }
 
-// The lines round a cell (ids of the curves, without the mirror mark).
+// What can be picked among those regions: fabric the shell had there before the lines were drawn
+// (base: the shell's build; a new region holds no piece's seed, and must not need one), with a drawn
+// line among its edges. A region's pair is found from a point well inside it, so a click close to a
+// line cannot land on the wrong side, and only where every line drawn round it has its mirror image.
+// -> Map(cell -> { panel: the piece it was cut from, lines, seed, mirror: the pair's cell or -1, hue })
+export function pickableRegions(g, base, doc, surf, strokes) {
+	const arr = g.arr, out = new Map();
+	for (let c = 0; c < arr.cells.length; c++) {
+		if (arr.cells[c].area <= SLIVER) continue;
+		const lines = cellLines(arr, c);
+		if (![...lines].some(isStroke)) continue;
+		const seed = cellSeed(arr, surf, c), under = fabricAt(base, doc, surf, seed);
+		if (under) out.set(c, { panel: under.id, lines, seed, mirror: -1, hue: -1 });
+	}
+	for (const [c, r] of out) {
+		if ([...r.lines].some((id) => isStroke(id) && strokes[strokeIndex(id)].mirror !== 'both')) continue;
+		const t = locate(arr, surf, mirrorSP(r.seed, surf)), m = t >= 0 ? arr.cellOf[t] : -1;
+		if (m !== c && out.has(m)) r.mirror = m;
+	}
+	// neighbours differ, so the areas can be told apart; a pair matches
+	for (const [c, r] of out) {
+		if (r.hue >= 0) continue;
+		const near = new Set([...arr.cellAdj[c].keys()].map((n) => out.get(n)?.hue));
+		for (r.hue = 0; near.has(r.hue); r.hue++);
+		if (r.mirror >= 0) out.get(r.mirror).hue = r.hue;
+	}
+	return out;
+}
+const fabricAt = (base, doc, surf, sp) => { const p = doc.panels.find((x) => x.id === panelAt(base, doc, surf, sp)); return p && !p.removed ? p : null; };
+
+// Why a region cannot be picked, for the person clicking it.
+export function whyNotPickable(g, base, doc, surf, cell) {
+	if (cell < 0) return 'Click an area of the leotard';
+	return fabricAt(base, doc, surf, cellSeed(g.arr, surf, cell)) ? 'Click an area next to a line you drew' : 'There is no fabric here';
+}
+
+// The lines an overlay piece owns: its layer's where it has one of its own, else its outline.
+export function overlayLines(doc, p) {
+	if (doc.layers.find((l) => l.id === p.layer)?.bounds) return doc.curves.filter((c) => c.layer === p.layer).map((c) => c.id);
+	return p.outline ? [p.outline] : [];
+}
+
+// The lines round a cell (ids of the curves, without the mirror mark). An edge inside the cell, with
+// the cell on both sides (a line that stops short), is not one of them.
 export function cellLines(arr, cell) {
-	const out = new Set();
+	const seen = new Map(), out = new Set();
 	for (const t of arr.cells[cell].tris) for (let e = 0; e < 3; e++) {
 		const k = arr.ekey(arr.tris[t * 3 + e], arr.tris[t * 3 + (e + 1) % 3]);
-		if (arr.softEdges?.has(k)) continue;
-		for (const id of arr.constraint.get(k) ?? []) out.add(id.replace(/~m$/, ''));
+		if (!arr.softEdges?.has(k) && arr.constraint.has(k)) seen.set(k, (seen.get(k) ?? 0) + 1);
 	}
+	for (const [k, n] of seen) if (n === 1) for (const id of arr.constraint.get(k)) out.add(id.replace(/~m$/, ''));
 	return out;
 }
 

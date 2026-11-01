@@ -8,6 +8,8 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 
 export const ROLE_COLOURS = { seam: 0xffd166, edge: 0x4cc9f0, print: 0xf72585, guide: 0x9aa0ad, 'strap-path': 0xff9f1c, 'trim-path': 0x80ffdb };
 const LIFT = 0.0022; // above the garment surface (fabric sits at 1.2 mm)
+const TINTS = [0x4cc9f0, 0xffd166, 0xf78fb3, 0x7bed9f, 0xb79cff, 0xff9f6e];
+const TINT_ALPHA = 0.2, FOCUS_ALPHA = 0.45;
 
 export class Overlay {
 	constructor(scene, man) {
@@ -117,7 +119,65 @@ export class Overlay {
 		}
 	}
 
-	// Where a stone or lettering placed under the pointer gets its mirrored copy (Mirror on).
+	// Lines drawn with the overlay tool, waiting for an area to be picked (evaluated curves).
+	setDrawn(list) {
+		for (const l of this.drawn ?? []) { this.group.remove(l); l.geometry.dispose(); }
+		this.drawn = [];
+		const v = new THREE.Vector3();
+		for (const c of list ?? []) {
+			const pos = [];
+			for (const sp of c.sps) { this.place(sp, v); pos.push(v.x, v.y, v.z); }
+			const g = new LineGeometry();
+			g.setPositions(pos);
+			const l = new Line2(g, this.material(0xffffff, 2.2, true));
+			l.computeLineDistances();
+			l.renderOrder = 12;
+			this.group.add(l);
+			this.drawn.push(l);
+		}
+	}
+
+	// The areas the overlay tool can pick, each a faint tint: cells: [{ cell, hue, sps: surface points,
+	// three per triangle }]. focusRegions lights some of them (the one under the pointer and its pair).
+	setRegions(cells) {
+		if (this.regions) { this.group.remove(this.regions.mesh); this.regions.mesh.geometry.dispose(); this.regions.mesh.material.dispose(); this.regions = null; }
+		if (!cells?.length) return;
+		const n = cells.reduce((a, c) => a + c.sps.length, 0), pos = new Float32Array(n * 3), col = new Float32Array(n * 4), v = new THREE.Vector3(), tint = new THREE.Color(), ranges = new Map();
+		let o = 0;
+		for (const c of cells) {
+			tint.setHex(TINTS[c.hue % TINTS.length]);
+			ranges.set(c.cell, [o, o + c.sps.length, tint.r, tint.g, tint.b]);
+			for (const sp of c.sps) {
+				this.place(sp, v);
+				pos.set([v.x, v.y, v.z], o * 3);
+				col.set([tint.r, tint.g, tint.b, TINT_ALPHA], o * 4);
+				o++;
+			}
+		}
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+		g.setAttribute('color', new THREE.BufferAttribute(col, 4));
+		const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+		mesh.renderOrder = 9;
+		this.group.add(mesh);
+		this.regions = { mesh, ranges, lit: [] };
+	}
+	focusRegions(cells) {
+		const r = this.regions;
+		if (!r) return;
+		const col = r.mesh.geometry.attributes.color, paint = (cell, on) => {
+			const q = r.ranges.get(cell);
+			if (!q) return;
+			for (let i = q[0]; i < q[1]; i++) col.setXYZW(i, on ? 1 : q[2], on ? 1 : q[3], on ? 1 : q[4], on ? FOCUS_ALPHA : TINT_ALPHA);
+		};
+		for (const c of r.lit) paint(c, false);
+		for (const c of cells) paint(c, true);
+		r.lit = cells;
+		col.needsUpdate = true;
+	}
+
+	// A dot: where a point placed under the pointer will attach, or where a stone or lettering gets its
+	// mirrored copy (Mirror on).
 	setCursor(sp) {
 		if (this.cursor) { this.group.remove(this.cursor); this.cursor.geometry.dispose(); this.cursor = null; }
 		if (!sp) return;

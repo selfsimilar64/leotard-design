@@ -57,9 +57,13 @@ tap with Mirror on.[^owner] The grammar is **[INFERRED]** from precedents in 2D 
 - **Silent re-matching after an edit** (Onshape): a plate follows its seams when they move, and the app reports what it did when one goes.
 - **Lines that begin in the open** have a second meaning for a tap: they are allowed only while no line has been drawn yet.
 
-# Known limits
+# Built, and not yet
 
-See [the construction model](/engineering/architecture/construction-model.md). Not yet built: picking several areas into one piece, a single Draw command, changing how a line is made after drawing.
+Built 2026-10-31 for the seam, strap and overlay tools (`app/src/ui/tools.js`, `doc/commands-garment.js` `overlay.add`, `garment/build.js` `strokeRegions`, `pickableRegions`, `render/overlay.js` `setRegions`). Data: [the construction model](/engineering/architecture/construction-model.md).
+
+Tried by hand on the test server: the owner's plate, a line starting near the centre, a slide before lifting, a second finger, an attached end dragged on both sides of a pair, a mirrored V seam. Touch was simulated with pointer events; **it has not been tried on a real iPad**. Crystal and lettering tools still act on press.
+
+Not yet built: picking several areas into one piece, so an area stops at any seam crossing it; a single Draw command; changing how a line is made after drawing; lines that begin in the open once a line has been drawn (Esc first); a Draw control on the stage.
 
 [^owner]: Owner's message, 2026-10-31
 [^report]: Research report, Draw first, decide how it sews
