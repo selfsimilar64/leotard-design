@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: Fitting a block like the app
-description: "November 2026: why drafted blocks fitted badly at the seat and thighs. The drafter's leg cuts had left the purchased block; they are now its own lines scaled to each body, with named, tunable elastic in the fit, the crotch seam kept out of the inner thigh, and finished edges. An edit tuned to the app's look was rejected and removed."
+description: "November 2026: why drafted blocks fitted badly at the seat and thighs. The drafter's leg cuts had left the purchased block; they are now its own lines scaled to each body, with named, tunable elastic in the fit, fabric that gathers rather than resisting compression, and finished edges. An edit tuned to the app's look and a hard crotch pin were rejected and removed."
 tags: [pattern, block, fit, elastic, seat]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-02T22:00:00Z }
@@ -11,7 +11,7 @@ sources:
     title: "Purchased patterns are precious and pure; never assume what they ought to look like; give elastic a noted value that can be tuned"
     author: human:mattj
   - id: code
-    resource: "pipeline/draft_block.py purchased_leg, pipeline/check_pattern.py, pipeline/wrap_block.py ELASTIC, ELASTIC_K and crotch_floor, pipeline/compare_fit.py, app/src/dev/wrap-eval.js show and finish"
+    resource: "pipeline/draft_block.py purchased_leg, pipeline/check_pattern.py, pipeline/wrap_block.py ELASTIC, ELASTIC_K and GATHER, pipeline/compare_fit.py, app/src/dev/wrap-eval.js show and finish"
     title: Code and measurements
   - id: edges
     resource: /domain/construction/edge-finishing-elastic-and-binding.md
@@ -30,14 +30,14 @@ The owner saw fabric running down the thighs and a wrong seat on a drafted block
 |---|---|---|
 | Back cut too high | The drafter drew its own leg curves, leaving the block it was calibrated on: flat half width at 7 cm above the crotch on the high cut 34 mm, purchased XS 65 mm. It also shortened the side from a 435 mm drop to 412 mm | `purchased_leg` takes all four leg cuts from the purchased XS, stretched in width and height to each body; `REF` side 435 and side_high 278.5 are that block's |
 | Irregular back line | `BACK_LEG`, an edit that matched the app's line with a bend no designer would draw (turned back 36-38 degrees, radius 26-29 mm). Rejected by the owner | Removed |
-| Seam ends 16-20 mm down the inner thigh | The thighs nearly touch: gap about 20 mm, crotch seam 58 mm | `crotch_floor` in the fit only; the pattern keeps its width |
+| Seam ends 16-20 mm down the inner thigh | The thighs nearly touch (gap about 20 mm, crotch seam 58 mm), and the fit resisted compression as hard as stretch, so the surplus could only run down the thigh | `GATHER`: fabric below flat size, down to a limit, costs nothing. A hard pin, `crotch_floor`, was tried first and removed at the owner's direction: it bent the elastic to 34 degrees at the crotch |
 | No hold at openings | Free edges | `ELASTIC`, below |
 | No finished edge | The app's rims follow the app's own cut | `finish` in `wrap-eval.js` sweeps the app's elastic profile along exported loops |
 | Jagged edge in poses | A pose only slides and lifts the app's cover, and the purchased cut reaches past it | `show` always tells the body where the block's fabric is |
 
 # Trial: pattern against tension
 
-`young`, high cut, with the crotch floor; half width of the opening at 7 / 10 cm above the crotch, mm (the app is 108 / 120).
+`young`, high cut, with the since-removed pin; half width of the opening at 7 / 10 cm above the crotch, mm (the app is 108 / 120).
 
 | Pattern and elastic | 7 cm | 10 cm | Seat stretch, mean |
 |---|---|---|---|
@@ -48,7 +48,22 @@ The owner saw fabric running down the thighs and a wrong seat on a drafted block
 
 Tension moves the line a long way, so the owner's question was well founded, but the pattern was also wrong. The solver is geometric, not a cloth simulation: direction, not prediction.
 
-# Elastic: tunable values
+# Trial: the crotch without a pin
+
+The owner asked for realistic behaviour, with no hardcoded fixes unless necessary and specifically ordered.[^owner] All on `young`; the elastic's lowest point below the crotch, its sharpest turn near the crotch over 20 mm either side, mm and degrees.
+
+| Fit | Lowest | Turn | Reading |
+|---|---|---|---|
+| Hard pin | 10.8 | 34.2 | Rejected |
+| No pin | 20.5 | 18.1 | Elastic alone smooths the path but the seam runs down the thigh |
+| No pin, even 87% elastic | 23.0 | 17.5 | No better |
+| No pin, body pushes but cannot pull | 20.5 | 18.1 | No effect at all, so contact was not the cause; change reverted |
+| No pin, elastic three times as strong | 18.5 | 17.8 | Barely helps, and pulls the back opening to 134 mm at 7 cm |
+| `GATHER` 0.7 | 9.0 | 17.8 | |
+| `GATHER` 0.5, chosen | 5.2 | 19.2 | Back line to the app's improves from 13.0 to 7.6 mm untuned |
+| `GATHER` 0.3 | 4.9 | 20.3 | Little further change |
+
+# Tunable values
 
 These are named in `pipeline/wrap_block.py` so they can be tuned.
 
@@ -58,28 +73,31 @@ These are named in `pipeline/wrap_block.py` so they can be tuned.
 | `ELASTIC` back leg | 0.75 | Same rule; the whole opening comes to about 87%, near Treasurie's 85% start[^edges] |
 | `ELASTIC` neck, wrist | 0.95 | Chosen within the sourced 75-100% |
 | `ELASTIC_K` | 8 | **Estimate.** A rough force estimate gave about 10 but used remembered, unverified figures. A search on 2026-11-02 found no force data for 3/8 in swim elastic or nylon-spandex tricot. Patents give only methods (load at 40% on the second cycle). Measuring a sample of each is the way to replace it |
+| `GATHER` | 0.5 | **Chosen from the trial**, not measured: results barely change below it. Fabric's real gathering limit is unknown |
 
 # Results, high cut, each body's own block
 
 All 17 blocks pass their 38 rules. The rule set replaced leg-shape rules with `leg is the purchased line` (within 1 mm of the purchased shape); those leg-shape rules were our assumptions, and the purchased block itself fails them. Block line to the app's, mean mm, and half width at 7 cm, block / app:
 
-| Body | Front | Back | Back 7 cm | Inside out |
-|---|---|---|---|---|
-| `young` | 8.3 | 13.0 | 123 / 108 | 0.06% |
-| `adult` | 7.1 | 10.2 | 122 / 109 | 0.04% |
-| `older-teen` | 11.6 | 14.5 | 121 / 105 | 0.07% |
-| `teen` | 10.3 | 13.3 | 118 / 101 | 0.07% |
-| `child` | 7.9 | 11.3 | 104 / 88 | 0.14% |
-| `child-6` | 10.2 | 12.5 | 102 / 86 | 0.13% |
+| Body | Front | Back | Back 7 cm | Elastic lowest, mm | Turn at crotch, deg | Inside out |
+|---|---|---|---|---|---|---|
+| `young` | 7.9 | 7.6 | 116 / 108 | 5.2 | 19.2 | 0.03% |
+| `adult` | 5.8 | 7.3 | 110 / 109 | 4.4 | 20.4 | 0.04% |
+| `older-teen` | 12.0 | 12.0 | 120 / 105 | 9.5 | 19.3 | 0.07% |
+| `teen` | 11.1 | 11.8 | 117 / 101 | 11.6 | 20.1 | 0.06% |
+| `child` | 9.8 | 9.6 | 102 / 88 | 11.7 | 23.0 | 0.15% |
+| `child-6` | 10.6 | 10.8 | 102 / 86 | 12.6 | 29.3 | 0.15% |
 
-The block now covers about 13-17 mm more than the app each side at the back. This is expected, and not a fault to tune away. Seat area stretch by pose on `young` (2% / median / 98%): `a-pose` 0.35 / 1.04 / 1.18, `lunge-arms-up` 0.47 / 0.97 / 1.34, `stag-jump` 0.22 / 0.86 / 1.01, `passe` 0.30 / 0.91 / 1.09, `kneeling` 0.27 / 0.90 / 1.06, `one-knee` 0.26 / 0.87 / 1.12. A pose's median below 1 means the fabric is shown compressed, which real tensioned fabric would not do.
+The block covers more than the app at the back on most bodies. This is expected, and not a fault to tune away. Before `GATHER`, seat area stretch by pose on `young` had medians below 1 in most poses; it was not re-measured.
 
 # Known limits
 
 - **Licence:** the blocks now contain scaled purchased lines. The listing bars redistributing the files, and whether shapes built into a shipped app count is [still to be asked](/domain/construction/sources-of-leotard-pattern-blocks.md). Blocks stay git-ignored; ask the seller before shipping. Children's blocks are this adult shape scaled, not a children's pattern.
 - **Other drafted lines still depart from the purchased block**, not changed here: back armhole up to 16.6 mm (190 against 176 mm long), front armhole 5.8 mm, sleeve cap 392 against 373 mm, sleeve underarm 401 against 451 mm (from the body's arm, so partly intended).
-- **Crotch:** a small nub shows below the crotch in `a-pose`, `lunge-arms-up` and `passe`, from the seam tucked by `crotch_floor`. Artwork squeezes there too.
-- **Poses** place the standing fit on the app's slid surface; elastic is not re-solved per pose. `stag-jump` shows some cling into the cleft on the raised side.
+- **Crotch:** the nub is smaller, not gone: it still shows in `a-pose`, `lunge-arms-up`, `passe` and `one-knee`. `passe` still has a small tag with skin showing through, and `lunge-arms-up` dark marks on the fabric, both also in the pinned fit. The app's own fit shows a similar shape at the crotch, so the body surface may contribute; not tested.
+- **Small of the back:** on `young` the back's length gathers to 75% at the waist (`adult` 89%, `older-teen` 87%), where the fabric's surplus now collects. The render has no wrinkles there, and a printed design would look squeezed. Real leotards may wrinkle there, but that is not verified.
+- **Wrists** look puckered at the edge in `a-pose`; whether gathering made this worse was not compared.
+- **Poses** place the standing fit on the app's slid surface; elastic and gathering are not re-solved per pose. `stag-jump` shows some cling into the cleft on the raised side.
 - The garment surface is solved for the app's own cover when standing; the fit's starting surface is not re-solved for the block.
 - Finished edges are dev-only. Nothing is reviewed by a pattern maker or sewn.
 

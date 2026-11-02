@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-02
+* **Update**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): the hard crotch pin is replaced by fabric that gathers under compression; trials, limits and the new tunable value recorded.
 * **Update**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): purchased patterns are the authority; drafted leg cuts are now its lines, `BACK_LEG` removed, elastic given named tunable values, poses cover the block's own fabric.
 * **Update**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): the owner rejected the edited back leg; a trial separates elastic tension from pattern shape and finds the drafter's high cut far from the bought block's.
 * **Update**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): a before-and-after overlay showed the new back leg moved only that line and has a visible bend at its midpoint.

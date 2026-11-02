@@ -30,6 +30,7 @@ ITERS = 240
 FACING = {'front': 1, 'back': -1, 'sleeve': -1}  # on the +x side of the body; the block lays a sleeve out with its front at +x
 PLANE = 300.0  # how hard points keep to the surface's tangent plane, against the fabric's own shape
 DAMP = 0.05  # how much each step stays where it was
+GATHER = 0.5  # TUNABLE, not measured. How far fabric may be compressed at no cost, as its size over flat: fabric resists stretch but gathers when pushed. 1 resists both alike
 # TUNABLE, not measured. Elastic sewn into each opening, as its length over the edge it is sewn to. A loop shorter than the opening is what holds
 # a leg line up in the crease. Legs are the one explicit published rule, Spruce & Fjell's: front 1:1, back 3/4 (whole opening 87%; Treasurie starts at
 # 85%). Neck and wrist are chosen within the sourced 75-100%. Why: knowledge/engineering/app/fitting-a-block-like-the-app.md.
@@ -362,27 +363,13 @@ def closest_on_triangle(p, tri):
 	return bary, np.linalg.norm(q - p)
 
 
-def crotch_floor(P):
-	"""The crotch's height, and how far either side of the centre the gap between the legs stays closed. The thighs nearly touch, so a
-	crotch seam is wider than the body there: sewn across, its ends tuck into that gap; nothing else stops them running on down the inner thigh."""
-	centre = P[np.abs(P[:, 0]) < 0.002]
-	z = np.median(centre[:, 2])
-	near = P[np.abs(P[:, 2] - z) < 0.08]
-	y = near[np.abs(near[:, 0]) < 0.002, 1].min()
-	near = near[near[:, 1] > y - 0.2]
-	x = 0.002
-	while x < 0.05 and near[np.abs(np.abs(near[:, 0]) - x) < 0.002, 1].min() > y - 0.015:
-		x += 0.002
-	return y, x + 0.006  # the seam's ends lie on the gap's walls, which lean out a little
-
-
-def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=ITERS, label='', elastic=None, floor=None):
+def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=ITERS, label='', elastic=None):
 	"""ARAP against the flat rest shapes. Each point keeps to the surface's tangent plane, free to slide
 	along it, so the piece can settle (a pull towards the closest point holds it nearly still). Folds stay
 	on x = 0. tris: welded vertex ids; rest: [tri, corner, 2] flat coordinates in metres; facing: +1 where
 	the flat triangle's face looks outward from the body, -1 where a piece is laid out the other way up;
 	part: per point True on the sleeve; held: points that do not move; elastic: (i, j, length) of each
-	span of elastic along an opening; floor: (height, half width), see crotch_floor.
+	span of elastic along an opening.
 	"""
 	n = len(pos)
 	I, J, W, cots = [], [], [], []
@@ -420,6 +407,7 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 	hold_at = pos.copy()
 	# rest edges per triangle corner: e[k] runs opposite corner k
 	E = np.stack([rest[:, 2] - rest[:, 1], rest[:, 0] - rest[:, 2], rest[:, 1] - rest[:, 0]], axis=1)
+	flat_inv = np.linalg.inv(np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2))
 	ids = np.arange(n) * 3
 	rows = np.concatenate([ids + a for a in range(3) for _ in range(3)])
 	cols = np.concatenate([ids + b for _ in range(3) for b in range(3)])
@@ -435,6 +423,10 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 		wrong = (np.cross(R[:, :, 0], R[:, :, 1]) * tn).sum(1) * facing < 0
 		U[wrong, :, 1] *= -1
 		R[wrong] = U[wrong] @ Vt[wrong]
+		if GATHER < 1:
+			# a triangle already smaller than flat, down to GATHER, is left at that size: only stretch pulls back
+			keep = np.clip(np.linalg.svd(np.stack([p[tris[:, 1]] - p[tris[:, 0]], p[tris[:, 2]] - p[tris[:, 0]]], axis=2) @ flat_inv, compute_uv=False), GATHER, 1.0)
+			R = U * keep[:, None, :] @ Vt
 		rot = np.einsum('tij,tkj->tki', R, E)
 		b = np.zeros((n, 3))
 		for k in range(3):
@@ -456,12 +448,6 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 		for a_ in range(3):
 			nn[:, a_, a_] += holdw
 		b += np.einsum('tij,tj->ti', np.einsum('ti,tj->tij', normal, normal) * PLANE, target) + DAMP * p + holdw[:, None] * hold_at
-		if floor is not None:
-			low = (p[:, 1] < floor[0]) & (np.abs(p[:, 0]) < floor[1])
-			if part is not None:
-				low &= ~part
-			nn[low, 1, 1] += PLANE
-			b[low, 1] += PLANE * floor[0]
 		A = coo_matrix((np.concatenate([lv, nn.transpose(1, 2, 0).ravel()]), (np.concatenate([li, rows]), np.concatenate([lj, cols]))), shape=(3 * n, 3 * n)).tocsc()
 		next_p = splu(A).solve(b.ravel()).reshape(-1, 3)
 		move = np.linalg.norm(next_p - p, axis=1)
@@ -526,8 +512,6 @@ def main():
 	Gp = np.array(body['P'], float).reshape(-1, 3)
 	idx = np.array(body['idx'], int)
 	surface = Surface(Gp, idx, np.array(body['wArm'], float))
-	floor = crotch_floor(Gp)
-	print(f'crotch at {floor[0] * 1000:.1f} mm, gap closed to {floor[1] * 1000:.0f} mm either side')
 	fp = np.array(next(c for c in seed['pieces'] if c['panel'] == 'Front')['P']).reshape(-1, 3)
 	bp = np.array(next(c for c in seed['pieces'] if c['panel'] == 'Back')['P']).reshape(-1, 3)
 	zsign = np.sign(bp[:, 2].mean() - fp[:, 2].mean())  # +1: the back has the larger z
@@ -669,7 +653,7 @@ def main():
 		a, b = remap[G['elastic'][:, 0].astype(int)], remap[G['elastic'][:, 1].astype(int)]
 		on = (a >= 0) & (b >= 0)
 		elastic = np.column_stack([a[on], b[on], G['elastic'][on, 2]])
-		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label, elastic=elastic, floor=floor)
+		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label, elastic=elastic)
 		out = start.copy()
 		out[used] = q
 		return out
