@@ -62,7 +62,9 @@ The stretch report uses fixed heights set for adults, so child figures are not m
 
 # Known problems
 
-- **Crotch pucker**: the fabric gathers at the back of the crotch on every body, in the app's own build as well. The body surface there is the cause **[INFERRED]**; open.
+**Superseded for the leg and crotch:** the table above predates [fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md), which gave the back its own leg curve and added elastic. Stretch and reuse figures were not re-tabulated.
+
+- **Crotch pucker**: the hole at the back of the crotch was the seam running down the inner thigh, not the body surface as first inferred; fixed in that page.
 - **Bust is tight in front on teens** (1.45 local against about 1.20 intended): front and back share a side seam at equal width. A front share or body shaping is the likely fix.
 - XXS as above. Sleeve crowns on children sit off centre, since their armholes are unequal.
 - Limits and `REF` are unreviewed. Fit is geometric, in one fabric, with no stretch properties.

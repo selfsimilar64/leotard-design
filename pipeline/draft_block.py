@@ -31,6 +31,7 @@ REF = dict(
 )
 STEP = 0.5  # mm between stored points of a curve
 NECK_TURN = 18.0  # degrees either way from square, at the shoulder seam
+BACK_LEG = (0.26, 0.08)  # the back leg's handles at its ends and its middle, over its chord
 
 
 def norm(v):
@@ -126,7 +127,13 @@ def draft(m, base):
 			gap = np.linalg.norm(e - c)
 			# leaves the side square and arrives square to the crotch seam, with handles balanced so it sweeps in one bend
 			# (and it never climbs above the side seam on the way: a low leg has little height to work with)
-			return even(np.vstack([bezier(e, inward, 0.3 * gap, c, (0, -1), min(0.42 * gap, 0.9 * (e[1] - c[1]))) ])), c
+			if name == 'front':
+				return even(bezier(e, inward, 0.3 * gap, c, (0, -1), min(0.42 * gap, 0.9 * (e[1] - c[1])))), c
+			# A back leg runs nearly straight, to keep the cheek covered (sweeping it in like a front took 45 mm off the cover each side):
+			# two curves meeting on the chord, along it, each rounding one end so that it still leaves square
+			mid, along = (e + c) / 2, norm(c - e)
+			end, middle = BACK_LEG[0] * gap, BACK_LEG[1] * gap
+			return even(np.vstack([bezier(e, inward, end, mid, along, middle), bezier(mid, along, middle, c, (0, -1), min(end, 0.9 * (e[1] - c[1])))[1:]])), c
 		leg, c = leg_line(d_e)
 		crotch = even(np.vstack([c, [0.0, 0.0]]))
 		fold = even(np.vstack([[0.0, 0.0], start]))

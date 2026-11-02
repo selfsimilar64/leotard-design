@@ -7,6 +7,7 @@
 // Each point of the wrapped pieces is a host triangle and weights on the body's surface, the same coordinates
 // the app's own pieces use, so GarmentView places them and they follow the body and pose.
 import * as THREE from 'three';
+import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const post = (file, body) => fetch('/__fs/captures/' + file, { method: 'POST', body });
@@ -143,7 +144,7 @@ export async function show(file, mode = 'fabric', opts = {}) {
 		view.interpolate({ mesh, hosts: { i: Uint32Array.from(c.hostI), w: Float32Array.from(c.hostW) } });
 		// on the garment surface, clear of the skin: this block covers more than the app's own pieces, whose
 		// cover is all the body has lifted for (standing body only; a pose would need the lift solved for this block)
-		const Pos = geo.attributes.position.array, Nrm = geo.attributes.normal.array, G = app.engine.surf.P, hi = c.hostI, hw = c.hostW;
+		const Pos = geo.attributes.position.array, Nrm = geo.attributes.normal.array, G = app.engine.body.garmentPos, hi = c.hostI, hw = c.hostW;
 		for (let l = 0; l < n; l++) for (let k = 0; k < 3; k++) {
 			let v = Pos[l * 3 + k];
 			if (!opts.onSkin) { v = 0; for (let j = 0; j < 3; j++) v += hw[l * 3 + j] * G[hi[l * 3 + j] * 3 + k]; }
@@ -153,6 +154,7 @@ export async function show(file, mode = 'fabric', opts = {}) {
 		view.group.add(mesh);
 		added.push(mesh);
 	}
+	if (mode === 'fabric' && !opts.material && !opts.bare) finish(data, view);
 	for (const c of view.cells) c.mesh.visible = false;
 	hideRims(app.engine, true);
 	app.engine.viewport.frame();
@@ -166,6 +168,7 @@ export async function shoot(name, view = 'front', opts = {}) { return window.app
 export function strain() {
 	const out = {};
 	for (const m of added) {
+		if (!m.userData.cell) continue; // a finished edge, not a piece
 		const P = m.geometry.attributes.position.array, U = m.geometry.attributes.aUV.array, I = m.geometry.index.array, across = [], along = [];
 		for (let t = 0; t < I.length; t += 3) {
 			const [a, b, c] = [I[t], I[t + 1], I[t + 2]];
@@ -181,6 +184,40 @@ export function strain() {
 		out[key] = { across: [pc(across, 0.02), pc(across, 0.5), pc(across, 0.98)], along: [pc(along, 0.02), pc(along, 0.5), pc(along, 0.98)] };
 	}
 	return out;
+}
+
+// The block's openings finished as the app finishes its own (render/rims.js builds these from the app's cut): turned elastic in the
+// fabric's own look, along the loops pipeline/wrap_block.py exports, on the body's current garment surface (so in a pose too).
+function finish(data, view) {
+	const app = window.app, G = app.engine.body.garmentPos, L = app.engine.layers.values().next().value, prof = TRIMS.elastic.profile, built = [];
+	const at = (I, W, i, out) => { out.set(0, 0, 0); for (let j = 0; j < 3; j++) { const v = I[i * 3 + j] * 3, w = W[i * 3 + j]; out.x += w * G[v]; out.y += w * G[v + 1]; out.z += w * G[v + 2]; } return out; };
+	const man = app.engine.body, GN = man.aGNormal.array;
+	const nrm = (I, W, i) => { const o = new THREE.Vector3(); for (let j = 0; j < 3; j++) { const v = I[i * 3 + j] * 3, w = W[i * 3 + j]; o.x += w * GN[v]; o.y += w * GN[v + 1]; o.z += w * GN[v + 2]; } return o.normalize(); };
+	for (const o of data.openings ?? []) {
+		const n = o.hostW.length / 3, recs = [];
+		for (let i = 0; i < n; i++) {
+			const p = at(o.hostI, o.hostW, i, new THREE.Vector3()), q = at(o.inI, o.inW, i, new THREE.Vector3()), nn = nrm(o.hostI, o.hostW, i);
+			const inside = q.sub(p); inside.addScaledVector(nn, -inside.dot(nn)).normalize();
+			recs.push({ p, n: nn, inside, kappa: 0, ref: p.clone(), keep: 1, sleeve: 0 });
+		}
+		const { pts, length } = resample(recs), m = pts.length, P = pts.map((a) => a.p), Nn = pts.map((a) => a.n), In = pts.map((a) => a.inside);
+		smoothLoop(P, 3, 2, true); smoothLoop(Nn, 4, 2, true); smoothLoop(In, 4, 1, true);
+		const frames = [], scale = [];
+		for (let i = 0; i < m; i++) {
+			const nn = Nn[i].normalize(), t = P[(i + 1) % m].clone().sub(P[(i - 1 + m) % m]).normalize(), d = new THREE.Vector3().crossVectors(nn, t).normalize();
+			if (d.dot(In[i]) < 0) d.negate();
+			frames.push({ p: P[i].addScaledVector(nn, 0.0012), n: nn, d, kap: 0 });
+			scale.push(1);
+		}
+		built.push({ frames, scale, pts, length });
+	}
+	if (!built.length) return;
+	const panel = app.doc.panels.find((p) => p.name === 'Front'), s = panel.stack[0];
+	const mesh = new THREE.Mesh(buildGeometry(built, prof), L.rims.material({ kind: 'elastic', fabric: s.fabric, colour: s.colour, second: s.second ?? 'Tone-on-tone' }));
+	mesh.renderOrder = -4;
+	mesh.frustumCulled = false;
+	view.group.add(mesh);
+	added.push(mesh);
 }
 
 // What the side-by-side view (dev/wrap-link.js) needs of the app.

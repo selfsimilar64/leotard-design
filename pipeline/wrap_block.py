@@ -30,6 +30,10 @@ ITERS = 240
 FACING = {'front': 1, 'back': -1, 'sleeve': -1}  # on the +x side of the body; the block lays a sleeve out with its front at +x
 PLANE = 300.0  # how hard points keep to the surface's tangent plane, against the fabric's own shape
 DAMP = 0.05  # how much each step stays where it was
+# Elastic sewn into each opening, as its length over the edge it is sewn to. A loop shorter than the opening is what holds a leg
+# line up in the crease; sources give 75-100%, tighter at the back leg (knowledge/domain/construction/edge-finishing-elastic-and-binding.md).
+ELASTIC = {('front', 'leg'): 0.95, ('back', 'leg'): 0.85, ('front', 'neck'): 0.95, ('back', 'neck'): 0.95, ('sleeve', 'wrist'): 0.95}
+ELASTIC_K = 8.0  # how hard, against the fabric's own shape (an edge's triangle weights are about 1)
 
 
 def arclen(p):
@@ -357,12 +361,27 @@ def closest_on_triangle(p, tri):
 	return bary, np.linalg.norm(q - p)
 
 
-def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=ITERS, label=''):
+def crotch_floor(P):
+	"""The crotch's height, and how far either side of the centre the gap between the legs stays closed. The thighs nearly touch, so a
+	crotch seam is wider than the body there: sewn across, its ends tuck into that gap; nothing else stops them running on down the inner thigh."""
+	centre = P[np.abs(P[:, 0]) < 0.002]
+	z = np.median(centre[:, 2])
+	near = P[np.abs(P[:, 2] - z) < 0.08]
+	y = near[np.abs(near[:, 0]) < 0.002, 1].min()
+	near = near[near[:, 1] > y - 0.2]
+	x = 0.002
+	while x < 0.05 and near[np.abs(np.abs(near[:, 0]) - x) < 0.002, 1].min() > y - 0.015:
+		x += 0.002
+	return y, x + 0.006  # the seam's ends lie on the gap's walls, which lean out a little
+
+
+def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=ITERS, label='', elastic=None, floor=None):
 	"""ARAP against the flat rest shapes. Each point keeps to the surface's tangent plane, free to slide
 	along it, so the piece can settle (a pull towards the closest point holds it nearly still). Folds stay
 	on x = 0. tris: welded vertex ids; rest: [tri, corner, 2] flat coordinates in metres; facing: +1 where
 	the flat triangle's face looks outward from the body, -1 where a piece is laid out the other way up;
-	part: per point True on the sleeve; held: points that do not move.
+	part: per point True on the sleeve; held: points that do not move; elastic: (i, j, length) of each
+	span of elastic along an opening; floor: (height, half width), see crotch_floor.
 	"""
 	n = len(pos)
 	I, J, W, cots = [], [], [], []
@@ -379,6 +398,11 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 			I += [i, j, i, j]
 			J += [j, i, i, j]
 			W += [-w, -w, w, w]
+	if elastic is not None:
+		for i, j in elastic[:, :2].astype(int):
+			I += [i, j, i, j]
+			J += [j, i, i, j]
+			W += [-ELASTIC_K, -ELASTIC_K, ELASTIC_K, ELASTIC_K]
 	L = coo_matrix((W, (I, J)), shape=(n, n)).tocoo()
 	# the Laplacian on each of x, y, z
 	li = np.concatenate([L.row * 3 + k for k in range(3)])
@@ -417,6 +441,12 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 			w = (cots[:, k] / 2)[:, None] * rot[:, k]
 			np.add.at(b, j, w)
 			np.add.at(b, i, -w)
+		if elastic is not None:
+			si, sj = elastic[:, 0].astype(int), elastic[:, 1].astype(int)
+			span = p[sj] - p[si]
+			w = ELASTIC_K * elastic[:, 2:3] * span / (np.linalg.norm(span, axis=1, keepdims=True) + 1e-12)
+			np.add.at(b, sj, w)
+			np.add.at(b, si, -w)
 		# the plane through the closest point, as w n n' (p - q) = 0; a little damping towards where it was
 		nn = np.einsum('ti,tj->tij', normal, normal) * PLANE
 		nn[:, 0, 0] += foldw
@@ -425,6 +455,12 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 		for a_ in range(3):
 			nn[:, a_, a_] += holdw
 		b += np.einsum('tij,tj->ti', np.einsum('ti,tj->tij', normal, normal) * PLANE, target) + DAMP * p + holdw[:, None] * hold_at
+		if floor is not None:
+			low = (p[:, 1] < floor[0]) & (np.abs(p[:, 0]) < floor[1])
+			if part is not None:
+				low &= ~part
+			nn[low, 1, 1] += PLANE
+			b[low, 1] += PLANE * floor[0]
 		A = coo_matrix((np.concatenate([lv, nn.transpose(1, 2, 0).ravel()]), (np.concatenate([li, rows]), np.concatenate([lj, cols]))), shape=(3 * n, 3 * n)).tocsc()
 		next_p = splu(A).solve(b.ravel()).reshape(-1, 3)
 		move = np.linalg.norm(next_p - p, axis=1)
@@ -489,6 +525,8 @@ def main():
 	Gp = np.array(body['P'], float).reshape(-1, 3)
 	idx = np.array(body['idx'], int)
 	surface = Surface(Gp, idx, np.array(body['wArm'], float))
+	floor = crotch_floor(Gp)
+	print(f'crotch at {floor[0] * 1000:.1f} mm, gap closed to {floor[1] * 1000:.0f} mm either side')
 	fp = np.array(next(c for c in seed['pieces'] if c['panel'] == 'Front')['P']).reshape(-1, 3)
 	bp = np.array(next(c for c in seed['pieces'] if c['panel'] == 'Back')['P']).reshape(-1, 3)
 	zsign = np.sign(bp[:, 2].mean() - fp[:, 2].mean())  # +1: the back has the larger z
@@ -614,7 +652,12 @@ def main():
 		on_sleeve[welded[offs['sleeve']:offs['sleeve'] + len(sleeve.V)]] = True
 		ring = np.unique(welded[offs['sleeve'] + np.array(sleeve.edge['cap'])])
 		on_sleeve[ring] = False  # the armhole belongs to the torso
-		return dict(raw=raw, pieces=pieces, offs=offs, welded=welded, nw=nw, tris=np.vstack(tt), rest=np.vstack(rr), tag=np.array(tag), facing=np.concatenate(face), folds=folds, on_sleeve=on_sleeve, ring=ring)
+		spans = []
+		for (name, edge), ratio in ELASTIC.items():
+			ids = pieces[name].edge[edge]
+			for x, y in zip(ids[:-1], ids[1:]):
+				spans.append((welded[offs[name] + x], welded[offs[name] + y], ratio * np.linalg.norm(pieces[name].V[x] - pieces[name].V[y]) / 1000))
+		return dict(raw=raw, pieces=pieces, offs=offs, welded=welded, nw=nw, tris=np.vstack(tt), rest=np.vstack(rr), tag=np.array(tag), facing=np.concatenate(face), folds=folds, on_sleeve=on_sleeve, ring=ring, elastic=np.array(spans))
 
 	def part_solve(G, tr_mask, start, held_ids=None, iters=ITERS, label=''):
 		tris, nw = G['tris'], G['nw']
@@ -622,7 +665,10 @@ def main():
 		remap = -np.ones(nw, int)
 		remap[used] = np.arange(len(used))
 		held = remap[np.intersect1d(held_ids, used)] if held_ids is not None else None
-		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label)
+		a, b = remap[G['elastic'][:, 0].astype(int)], remap[G['elastic'][:, 1].astype(int)]
+		on = (a >= 0) & (b >= 0)
+		elastic = np.column_stack([a[on], b[on], G['elastic'][on, 2]])
+		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label, elastic=elastic, floor=floor)
 		out = start.copy()
 		out[used] = q
 		return out
@@ -713,8 +759,32 @@ def main():
 			else:
 				cells.append(make(q, uv, False, name.capitalize(), name, 0, line))
 				cells.append(make(q * np.array([-1, 1, 1]), uv * m, True, name.capitalize(), name, 1, line))
+		# each opening as a closed loop of points, and for each a point a little way into the fabric: what its finished edge follows
+		w_of = lambda name, edge: G['welded'][G['offs'][name] + np.array(G['pieces'][name].edge[edge])]
+		neighbours = [[] for _ in range(G['nw'])]
+		for t in G['tris']:
+			for k in range(3):
+				neighbours[t[k]] += [t[(k + 1) % 3], t[(k + 2) % 3]]
+
+		def loop_of(name, q, into, part):
+			into = q + 0.006 * into / (np.linalg.norm(into, axis=1, keepdims=True) + 1e-12)
+			f, w = surface.hosts(q, part=part)
+			fi, wi = surface.hosts(into, part=part)
+			return {'name': name, 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'inI': fi.ravel().tolist(), 'inW': wi.ravel().round(5).tolist()}
+		openings = []
+		mirror = np.array([-1, 1, 1])
+		leg = np.concatenate([w_of('front', 'leg'), w_of('back', 'leg')[::-1][1:-1]])
+		wrist = w_of('sleeve', 'wrist')[:-1]
+		neck = np.concatenate([w_of('front', 'neck'), w_of('back', 'neck')[::-1][1:]])
+		into_of = lambda ids: np.array([pts[neighbours[i]].mean(0) - pts[i] for i in ids])
+		for name, ids in (('leg', leg), ('wrist', wrist)):
+			openings.append(loop_of(name, pts[ids], into_of(ids), G['on_sleeve'][ids]))
+			openings.append(loop_of(name, pts[ids] * mirror, into_of(ids) * mirror, G['on_sleeve'][ids]))
+		# the neck is one loop across the body: one half, then the same points mirrored coming back
+		d = into_of(neck)
+		openings.append(loop_of('neck', np.vstack([pts[neck], (pts[neck] * mirror)[-2:0:-1]]), np.vstack([d, (d * mirror)[-2:0:-1]]), np.zeros(2 * len(neck) - 2, bool)))
 		with open(os.path.join(CAPTURES, f'wrap-{size}-{label}.json'), 'w', encoding='utf-8') as f:
-			json.dump({'size': size, 'cut': label, 'side': side, 'cells': cells}, f, separators=(',', ':'))
+			json.dump({'size': size, 'cut': label, 'side': side, 'cells': cells, 'openings': openings}, f, separators=(',', ':'))
 
 	def true_to_lines(G, label):
 		"""Every point of a mesh's outline lies on the design's exact lines."""
