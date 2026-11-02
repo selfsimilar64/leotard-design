@@ -492,8 +492,9 @@ def report(body, surface, base, tris, rest, tag, pieces, offs, welded):
 	print('side seam gap, mm', round(max(seam) * 1000, 3), '(the two sides share their points)')
 
 
-def main():
-	# python pipeline/wrap_block.py [size]                      a size of the bought block on the young body, and its trial cuts
+def main(after=None):
+	# after: called with the fit's own parts once it is done (pipeline/refit_bench.py)
+	# python pipeline/wrap_block.py [size]                    a size of the bought block on the young body, and its trial cuts
 	# python pipeline/wrap_block.py --drafted body-young young  a drafted block on a body
 	args = sys.argv[1:]
 	drafted = args[:1] == ['--drafted']
@@ -803,6 +804,8 @@ def main():
 		true_to_lines(G, label)
 		export(G, pos, label + '-resolved')
 		export(G, start, label + '-reused')
+		if after:
+			after(G=G, pos=pos, part_solve=part_solve)
 
 
 if __name__ == '__main__':
