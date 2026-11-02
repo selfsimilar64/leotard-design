@@ -97,6 +97,8 @@ own tab, because dev scripts open their own design and overwrite the autosave.
 
 ## 5. Check against the real thing
 
+**Set aside by the owner on 2026-11-01**: no printing and sewing is planned soon. Next: [keeping the options on the block](/product/roadmap/keeping-the-options-on-the-block.md).
+
 Owner or maker: print the A0 at a copy shop, sew size-matched garment from suitable fabric with the
 test grid printed if practical. Compare on a form or wearer with the 3D at matching views, and
 measure grid distortion at bust, waist and hip.
