@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-02
+* **Update**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): a before-and-after overlay showed the new back leg moved only that line and has a visible bend at its midpoint.
 * **Creation**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): the owner's thigh and seat faults measured against the app's lines and fixed: a back leg of its own, elastic in the fit, the crotch seam kept out of the inner thigh, finished edges on the block.
 * **Creation**: [Drafted blocks](/engineering/app/drafted-blocks.md): the project's own blocks from body measurements, `pipeline/draft_block.py`, for six bodies and eleven adult sizes.
 * **Creation**: [What makes a pattern true](/domain/construction/what-makes-a-pattern-true.md): rules with limits, `pipeline/check_pattern.py`; the owner's three visible defects were our processing and are fixed; the bought block's own faults listed.

@@ -50,6 +50,7 @@ Before, on `young`: 6.7 front, 22.1 back; lowest 16 / 1 and 18 / 10. Blocks: 16 
 
 # Known limits
 
+- `BACK_LEG` adds a visible bend at the line's midpoint, where its two curves meet: on `young` the line turns back 36-38 degrees, tightest radius 26-29 mm, against one sweep of 87-116 mm before. It passes the block rules, but a pattern maker should not be expected to accept it. It gives the wanted cover but is not a finished line. Only the back leg moved in the block: up to 35 mm on the fullest cut and 45 mm on the high cut, adding 32 cm2 to the half piece.
 - The app's line is the reference, not a verified truth; its back dips further under the cheek on teens and children (the app's line reaches 38-45 mm from the block's at worst there).
 - High on the front the block runs wider than the app at 14 cm above the crotch (148 against 135 mm on `young`).
 - Compressing 58 mm of seam into the gap squeezes artwork in the last centimetres near the crotch; it is out of sight, but a flat-to-3D map there is approximate.
