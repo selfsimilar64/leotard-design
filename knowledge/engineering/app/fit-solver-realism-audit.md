@@ -46,15 +46,18 @@ The free-compression force rule, the solving family, flat pieces as rest shape, 
 
 # Order of work
 
+Real fabric and sewn garments are ruled out for now.[^owner] So fit cannot be validated against a garment: it is checked against published data, a heavier simulator and photos, and unmeasured values are treated as ranges.
+
 1. Add measures with no physics change: force balance, a ten-times-iterations run, a map of where the surface pulls fabric in, a map of triangles at the gathering limit.
-2. Hang-weight tests of the real elastic, fabric and a seamed strip.
-3. Make elastic strength per unit length, apply the measured value, then test finer meshes.
-4. Run one garment in a heavier public solver as a reference, switching physics on and off.
-5. Add the physics that step shows matters.
-6. Re-solve two poses and compare with reuse.
-7. Drive wrinkles from the solved state.
-8. Printed-grid test on a sewn garment: the only reality check.
-9. Speed work, using `pipeline/refit_bench.py` as baseline.
+2. Make elastic strength per unit length, set from published and estimated ranges, then test finer meshes. Report how far the fit moves across each range.
+3. Run one garment in a heavier public solver as a reference, switching physics on and off.
+4. Add the physics that step shows matters.
+5. Re-solve two poses and compare with reuse.
+6. Drive wrinkles from the solved state.
+7. Compare with photos of real leotards, especially printed or striped ones, as a judgement of appearance.
+8. Speed work, using `pipeline/refit_bench.py` as baseline.
+
+Hang-weight tests and a printed-grid garment remain the way to replace estimates if physical testing becomes possible.
 
 [^owner]: Conversation with the product owner.
 [^report]: Full audit report and research notes, with sources.
