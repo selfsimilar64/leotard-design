@@ -130,12 +130,13 @@ export async function show(file, mode = 'fabric', opts = {}) {
 		const uv = new Float32Array(n * 2);
 		for (let i = 0; i < n * 2; i++) uv[i] = c.uv[i] * 2; // one tile of the grid is half a metre
 		geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-		const material = mode === 'fabric' ? view.material(panels.get(c.name) ?? panels.get('Front'))
+		const material = opts.material ? opts.material(c) : mode === 'fabric' ? view.material(panels.get(c.name) ?? panels.get('Front'))
 			: mode === 'grid' ? new THREE.MeshStandardMaterial({ map: flat, roughness: 0.7, side: THREE.DoubleSide })
 				: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
 		const mesh = new THREE.Mesh(geo, material);
 		mesh.frustumCulled = false;
 		mesh.userData.name = c.name;
+		mesh.userData.cell = c;
 		view.interpolate({ mesh, hosts: { i: Uint32Array.from(c.hostI), w: Float32Array.from(c.hostW) } });
 		// on the garment surface, clear of the skin: this block covers more than the app's own pieces, whose
 		// cover is all the body has lifted for (standing body only; a pose would need the lift solved for this block)
@@ -152,7 +153,7 @@ export async function show(file, mode = 'fabric', opts = {}) {
 	for (const c of view.cells) c.mesh.visible = false;
 	hideRims(app.engine, true);
 	app.engine.viewport.frame();
-	return { cells: data.cells.length, mode };
+	return { cells: data.cells, meshes: added, mode };
 }
 
 export async function shoot(name, view = 'front', opts = {}) { return window.app.capture(name, { view, width: 900, height: 1100, ...opts }); }
@@ -178,3 +179,10 @@ export function strain() {
 	}
 	return out;
 }
+
+// What the side-by-side view (dev/wrap-link.js) needs of the app.
+export const camera = () => window.app.engine.viewport.camera;
+export const canvas = () => window.app.engine.viewport.renderer.domElement;
+export const controls = () => window.app.engine.viewport.controls;
+export const container = () => window.app.engine.viewport.container;
+export const scene = () => window.app.engine.viewport.scene;

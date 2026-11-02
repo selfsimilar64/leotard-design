@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-01
+* **Creation**: [The flat and 3D link](/engineering/app/flat-and-3d-link.md): stage 4 of the [exploration](/product/roadmap/flat-and-3d-exploration-plan.md), at `/wrap.html`.
 * **Update**: [Wrapping a flat block onto the body](/engineering/app/wrapping-a-flat-block-onto-the-body.md): the owner passed the look; a shorter sleeve behaves almost as a mask; one fit carried into five poses and across bodies.
 * **Creation**: [Wrapping a flat block onto the body](/engineering/app/wrapping-a-flat-block-onto-the-body.md): stage 3 of the [exploration](/product/roadmap/flat-and-3d-exploration-plan.md), with `pipeline/wrap_block.py` and `app/src/dev/wrap-eval.js`.
 * **Creation**: [The app's flat pattern against a real block](/engineering/app/flat-pattern-against-a-real-block.md): stages 1 and 2 of the [exploration](/product/roadmap/flat-and-3d-exploration-plan.md), with `pipeline/extract_block.py` and `pipeline/compare_block.py`.

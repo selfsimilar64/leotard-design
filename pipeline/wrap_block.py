@@ -689,20 +689,20 @@ def main():
 			q = pts_all[ids]
 			uv = piece.V[used] / 1000
 			parts = sleeve_points[ids]
-			def make(q, uv, flip, label):
+			def make(q, uv, flip, label, piece_id, half):
 				f, w = surface.hosts(q, part=parts)
 				tri = remap[T]
 				if flip != (FACING[name] < 0):
 					tri = tri[:, [0, 2, 1]]
-				return {'name': label, 'uv': uv.ravel().round(5).tolist(), 'I': tri.ravel().tolist(), 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist()}
+				return {'name': label, 'uv': uv.ravel().round(5).tolist(), 'I': tri.ravel().tolist(), 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'piece': piece_id, 'half': half, 'wid': ids.tolist()}
 			mirrored = q * np.array([-1, 1, 1])
 			muv = uv * np.array([-1, 1])
 			if name == 'sleeve':
-				cells.append(make(q, uv, False, 'Sleeve'))
-				cells.append(make(mirrored, muv, True, 'Sleeve'))
+				cells.append(make(q, uv, False, 'Sleeve', 'sleeve-a', 0))
+				cells.append(make(mirrored, muv, True, 'Sleeve', 'sleeve-b', 1))
 			else:
-				cells.append(make(q, uv, False, name.capitalize()))
-				cells.append(make(mirrored, muv, True, name.capitalize()))
+				cells.append(make(q, uv, False, name.capitalize(), name, 0))
+				cells.append(make(mirrored, muv, True, name.capitalize(), name, 1))
 		with open(os.path.join(CAPTURES, f'wrap-{size}-{cut}.json'), 'w', encoding='utf-8') as f:
 			json.dump({'size': size, 'cut': cut, 'side': side, 'cells': cells}, f, separators=(',', ':'))
 

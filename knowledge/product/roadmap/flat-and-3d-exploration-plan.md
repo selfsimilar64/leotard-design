@@ -93,6 +93,8 @@ own tab, because dev scripts open their own design and overwrite the autosave.
 - **Gate:** tested round trip flat to 3D to flat under 0.5 mm; a line crossing a seam stays continuous
   in 3D; printed artwork exports at true size from the same data shown on screen.
 
+- **Done 2026-11-01:** [the link](/engineering/app/flat-and-3d-link.md). All three gates met in software; the owner has not yet tried it by hand.
+
 ## 5. Check against the real thing
 
 Owner or maker: print the A0 at a copy shop, sew size-matched garment from suitable fabric with the
