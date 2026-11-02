@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-02
+* **Creation**: [Drafted blocks](/engineering/app/drafted-blocks.md): the project's own blocks from body measurements, `pipeline/draft_block.py`, for six bodies and eleven adult sizes.
 * **Creation**: [What makes a pattern true](/domain/construction/what-makes-a-pattern-true.md): rules with limits, `pipeline/check_pattern.py`; the owner's three visible defects were our processing and are fixed; the bought block's own faults listed.
 * **Update**: `pipeline/extract_block.py` keeps the PDF's true corners; `pipeline/wrap_block.py` gives each cut its own exact outline and mesh.
 

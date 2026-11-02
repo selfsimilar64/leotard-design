@@ -11,18 +11,18 @@ import * as THREE from 'three';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const post = (file, body) => fetch('/__fs/captures/' + file, { method: 'POST', body });
 
-export async function start(leg = 'high', sleeves = 'long', colour = '#c9c6bd') {
+export async function start(leg = 'high', sleeves = 'long', colour = '#c9c6bd', size = 'young') {
 	const app = window.app;
 	app.new('Wrap eval');
-	app.exec({ op: 'body.set', size: 'young', pose: 'a-pose' });
+	app.exec({ op: 'body.set', size, pose: 'a-pose' });
 	await wait(2500);
 	app.exec({ op: 'block.apply', neck: 'crew', back: 'crew', sleeves, leg, armhole: 'set-in', yoke: 'none', waist: 'none', colour });
 	await wait(2500);
 	await app.engine.whenFlat();
 }
 
-export async function exportSeed() {
-	await start();
+export async function exportSeed(size = 'young', suffix = '') {
+	await start('high', 'long', '#c9c6bd', size);
 	const app = window.app, e = app.engine, surf = e.surf, man = e.body;
 	const name = (id) => { const b = id.replace(/~m$/, ''); return (app.doc.curves.find((c) => c.id === b)?.name ?? b) + (id.endsWith('~m') ? '~m' : ''); };
 	const pieces = [];
@@ -35,10 +35,13 @@ export async function exportSeed() {
 		const s = next.keys().next().value, loop = [];
 		let u = s;
 		do { const w = next.get(u), cs = arr.constraint.get(arr.ekey(verts[u], verts[w])); loop.push([u, cs ? [...cs].map(name).sort().join('+') : '']); u = w; } while (u !== s);
-		pieces.push({ panel: panel.name, mirror: panel.mirror, I: [...I], P: [...c.piece.P].map((x) => +x.toFixed(5)), uv: [...uv].map((x) => +x.toFixed(5)), loop });
+		pieces.push({ panel: panel.name, mirror: panel.mirror, I: [...I], P: [...c.mesh.geometry.attributes.position.array].map((x) => +x.toFixed(5)), uv: [...uv].map((x) => +x.toFixed(5)), loop });
 	}
-	await post('wrap-seed.json', JSON.stringify({ pieces }));
-	await post('wrap-body.json', JSON.stringify({ P: [...surf.P].map((x) => +x.toFixed(5)), idx: [...surf.idx], wArm: [...man.wArm].map((x) => +x.toFixed(3)), crotchY: man.crotchY, refLm: man.refLm }));
+	// the surface of this body: the garment's own, where one is on, so that fabric still bridges its hollows
+	const G = man.garmentPos ?? surf.P, lm = man.bodies[size].landmarks;
+	await post(`wrap-seed${suffix}.json`, JSON.stringify({ pieces }));
+	await post(`wrap-body${suffix}.json`, JSON.stringify({ P: [...G].map((x) => +x.toFixed(5)), idx: [...surf.idx], wArm: [...man.wArm].map((x) => +x.toFixed(3)), refLm: lm }));
+	return measureBody(G, man, lm);
 }
 
 let added = [], flat = null, hook = null;
@@ -186,3 +189,92 @@ export const canvas = () => window.app.engine.viewport.renderer.domElement;
 export const controls = () => window.app.engine.viewport.controls;
 export const container = () => window.app.engine.viewport.container;
 export const scene = () => window.app.engine.viewport.scene;
+
+
+// Tape measures of a body's garment surface, millimetres, for pipeline/draft_block.py: girths as a tape lies (the hull of a
+// level slice of the torso), lengths along the centre lines and the side.
+export function measureBody(G, man, lm) {
+	const idx = man.idx, wArm = man.wArm, wHead = man.wHead, N = man.vertices;
+	const slicePts = (axis, value, keep) => {
+		const out = [];
+		for (let t = 0; t < idx.length; t += 3) {
+			const v = [idx[t], idx[t + 1], idx[t + 2]];
+			if (!keep(v)) continue;
+			const hits = [];
+			for (let k = 0; k < 3; k++) {
+				const a = v[k] * 3, b = v[(k + 1) % 3] * 3, da = G[a + axis] - value, db = G[b + axis] - value;
+				if ((da < 0) !== (db < 0)) { const u = da / (da - db); hits.push([G[a] + (G[b] - G[a]) * u, G[a + 1] + (G[b + 1] - G[a + 1]) * u, G[a + 2] + (G[b + 2] - G[a + 2]) * u]); }
+			}
+			if (hits.length === 2) out.push(hits);
+		}
+		return out;
+	};
+	const hull = (pts) => {
+		const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), L = [], U = [];
+		for (const q of p) { while (L.length > 1 && cr(L[L.length - 2], L[L.length - 1], q) <= 0) L.pop(); L.push(q); }
+		for (const q of p.reverse()) { while (U.length > 1 && cr(U[U.length - 2], U[U.length - 1], q) <= 0) U.pop(); U.push(q); }
+		const h = L.slice(0, -1).concat(U.slice(0, -1));
+		return h.reduce((s, a, i) => s + Math.hypot(a[0] - h[(i + 1) % h.length][0], a[1] - h[(i + 1) % h.length][1]), 0);
+	};
+	const torso = (v) => v.every((i) => wArm[i] < 0.3 && wHead[i] < 0.5);
+	const girth = (y) => { const s = slicePts(1, y, torso).flat().map((q) => [q[0], q[2]]); return s.length > 8 ? hull(s) : 0; };
+	const widthAt = (y) => { const s = slicePts(1, y, torso).flat(); return s.length ? Math.max(...s.map((q) => q[0])) : 0; };
+	// the centre line: x = 0, walked by height on each side
+	const centre = slicePts(0, 0, (v) => v.every((i) => wHead[i] < 0.5 && wArm[i] < 0.3)).flat().map((q) => [q[1], q[2]]);
+	const crotch = Math.min(...centre.map((q) => q[0]));
+	const zMid = (a) => a.reduce((s, q) => s + q[1], 0) / a.length;
+	const mid = zMid(centre);
+	const line = (front) => centre.filter((q) => (q[1] > mid) === front || q[0] < crotch + 0.012).sort((a, b) => a[0] - b[0]);
+	const smoothArc = (pts, top) => {
+		// a running arc over height bands, so the mesh's own zigzag adds nothing
+		let s = 0, last = null;
+		for (let y = crotch; y <= top; y += 0.008) {
+			const band = pts.filter((q) => Math.abs(q[0] - y) < 0.006);
+			if (!band.length) continue;
+			const c = [y, band.reduce((a, q) => a + q[1], 0) / band.length];
+			if (last) s += Math.hypot(c[0] - last[0], c[1] - last[1]);
+			last = c;
+		}
+		return s;
+	};
+	const F = line(true), B = line(false), neck = lm.neck_base[1], sh = lm.shoulder_l;
+	const waistY = (() => { let best = lm.waist[1], least = 1e9; for (let y = lm.pelvis[1] + 0.03; y < lm.chest[1]; y += 0.004) { const g = girth(y); if (g && g < least) { least = g; best = y; } } return best; })();
+	const hipY = (() => { let best = crotch + 0.045 * lm.head_top[1], most = 0; for (let y = crotch + 0.045 * lm.head_top[1]; y < waistY - 0.03; y += 0.004) { const g = girth(y); if (g > most) { most = g; best = y; } } return best; })();
+	let armpit = sh[1], pts = [];
+	for (let i = 0; i < N; i++) if (wArm[i] > 0.4 && wArm[i] < 0.6 && G[i * 3] > 0.03) { armpit = Math.min(armpit, G[i * 3 + 1]); }
+	const bustY = (() => { let best = lm.chest[1], most = 0; for (let i = 0; i < N; i++) { const y = G[i * 3 + 1]; if (y > waistY + 0.45 * (armpit - waistY) && y < armpit && wArm[i] < 0.2 && G[i * 3 + 2] > most) { most = G[i * 3 + 2]; best = y; } } return best; })();
+	const neckGirth = (() => { const s = slicePts(1, neck + 0.012, (v) => v.every((i) => wArm[i] < 0.1)).flat().map((q) => [q[0], q[2]]); return hull(s); })();
+	const neckW = (() => { const s = slicePts(1, neck + 0.012, (v) => v.every((i) => wArm[i] < 0.1)).flat(); return Math.max(...s.map((q) => q[0])); })();
+	const highAt = (x) => { let y = -1; for (let i = 0; i < N; i++) if (Math.abs(G[i * 3] - x) < 0.006 && Math.abs(G[i * 3 + 2] - sh[2]) < 0.02 && wHead[i] < 0.3) y = Math.max(y, G[i * 3 + 1]); return y; };
+	const tip = sh[0] * 1.08;
+	// round the arm: slices square to it are done on a point cloud between two planes
+	const arm = [lm.wrist_l[0] - sh[0], lm.wrist_l[1] - sh[1], lm.wrist_l[2] - sh[2]], armLen = Math.hypot(...arm), ax = arm.map((v) => v / armLen);
+	const uAxis = [ax[1], -ax[0], 0], uL = Math.hypot(...uAxis), u = uAxis.map((v) => v / uL), w = [ax[1] * u[2] - ax[2] * u[1], ax[2] * u[0] - ax[0] * u[2], ax[0] * u[1] - ax[1] * u[0]];
+	const armGirth = (t) => {
+		const q = [];
+		for (let i = 0; i < N; i++) {
+			if (wArm[i] < 0.6 || G[i * 3] < 0) continue;
+			const d = [G[i * 3] - sh[0], G[i * 3 + 1] - sh[1], G[i * 3 + 2] - sh[2]], along = d[0] * ax[0] + d[1] * ax[1] + d[2] * ax[2];
+			if (Math.abs(along - t * armLen) < 0.006) q.push([d[0] * u[0] + d[1] * u[1] + d[2] * u[2], d[0] * w[0] + d[1] * w[1] + d[2] * w[2]]);
+		}
+		return q.length > 6 ? hull(q) : 0;
+	};
+	const mm = (v) => +(v * 1000).toFixed(1);
+	const elbow = lm.elbow_l, dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+	return {
+		height: mm(lm.head_top[1]), bust: mm(girth(bustY)), waist: mm(girth(waistY)), hip: mm(girth(hipY)), neck: mm(neckGirth), neckHalfWidth: mm(neckW), shoulderX: mm(tip),
+		shoulderDrop: mm(highAt(neckW) - highAt(tip)), bustHalfWidth: mm(widthAt(bustY)),
+		front: { neck: mm(smoothArc(F, neck)), armpit: mm(smoothArc(F, armpit)) }, back: { neck: mm(smoothArc(B, neck)), armpit: mm(smoothArc(B, armpit)) },
+		side: { bust: mm(armpit - bustY), waist: mm(armpit - waistY), hip: mm(armpit - hipY), crotch: mm(armpit - crotch) },
+		armLength: mm(dist(sh, elbow) + dist(elbow, lm.wrist_l)), bicep: mm(armGirth(0.28)), forearm: mm(armGirth(0.62)), wrist: mm(armGirth(0.97)),
+		levels: { crotch: +crotch.toFixed(4), hip: +hipY.toFixed(4), waist: +waistY.toFixed(4), bust: +bustY.toFixed(4), armpit: +armpit.toFixed(4), neck: +neck.toFixed(4) },
+	};
+}
+
+// Export every body's surface, seed and measurements.
+export async function exportBodies(keys = ['young', 'adult', 'older-teen', 'teen', 'child', 'child-6']) {
+	const out = {};
+	for (const k of keys) out[k] = await exportSeed(k, '-' + k);
+	await post('wrap-measures.json', JSON.stringify(out, null, 1));
+	return out;
+}

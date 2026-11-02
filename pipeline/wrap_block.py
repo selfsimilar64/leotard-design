@@ -470,12 +470,21 @@ def report(body, surface, base, tris, rest, tag, pieces, offs, welded):
 
 
 def main():
-	size = sys.argv[1] if len(sys.argv) > 1 else 'XS'
-	with open(os.path.join(DERIVED, size + '.json'), encoding='utf-8') as f:
+	# python pipeline/wrap_block.py [size]                      a size of the bought block on the young body, and its trial cuts
+	# python pipeline/wrap_block.py --drafted body-young young  a drafted block on a body
+	args = sys.argv[1:]
+	drafted = args[:1] == ['--drafted']
+	if drafted:
+		size, who = args[1], '-' + args[2]
+		path = os.path.join(HERE, '..', 'assets', 'blocks', size + '.json')
+	else:
+		size, who = (args[0] if args else 'XS'), ''
+		path = os.path.join(DERIVED, size + '.json')
+	with open(path, encoding='utf-8') as f:
 		block = json.load(f)
-	with open(os.path.join(CAPTURES, 'wrap-seed.json'), encoding='utf-8') as f:
+	with open(os.path.join(CAPTURES, f'wrap-seed{who}.json'), encoding='utf-8') as f:
 		seed = json.load(f)
-	with open(os.path.join(CAPTURES, 'wrap-body.json'), encoding='utf-8') as f:
+	with open(os.path.join(CAPTURES, f'wrap-body{who}.json'), encoding='utf-8') as f:
 		body = json.load(f)
 	Gp = np.array(body['P'], float).reshape(-1, 3)
 	idx = np.array(body['idx'], int)
@@ -567,7 +576,7 @@ def main():
 		front = Piece('front', runs_of(f, n_af), high('front') if seed_lines else ())
 		back = Piece('back', runs_of(b, n_ab), high('back') if seed_lines else ())
 		cap = s['cap']
-		top = int(np.argmin(np.abs(cap[:, 0])))
+		top = int(np.argmax(cap[:, 1]))  # the crown
 		n_u = count(ln(s['under_f']), ln(s['under_b']))
 		sr = {'cap': np.vstack([resample(cap[:top + 1], n_ab)[:-1], resample(cap[top:], n_af)]), 'under_f': resample(s['under_f'], n_u), 'wrist': resample(s['wrist'], count(ln(s['wrist']))), 'under_b': resample(s['under_b'], n_u)}
 		sleeve = Piece('sleeve', sr)
@@ -711,7 +720,7 @@ def main():
 		"""Every point of a mesh's outline lies on the design's exact lines."""
 		worst = 0.0
 		for name, piece in G['pieces'].items():
-			raw = np.vstack(list(G['raw'][name].values()))
+			raw = np.vstack([resample(e, max(2, int(float(arclen(e)[-1])))) for e in G['raw'][name].values()])
 			d, _ = cKDTree(raw).query(piece.V[:piece.n_boundary])
 			worst = max(worst, float(d.max()))
 		from check_pattern import wobble
@@ -720,10 +729,11 @@ def main():
 
 	true_to_lines(B, 'block')
 	export(B, base, 'block')
-	np.savez(os.path.join(DERIVED, f'wrap-{size}.npz'), base=base, tris=B['tris'], rest=B['rest'], tag=B['tag'])
+	if not drafted:
+		np.savez(os.path.join(DERIVED, f'wrap-{size}.npz'), base=base, tris=B['tris'], rest=B['rest'], tag=B['tag'])
 	report(body, surface, base, B['tris'], B['rest'], B['tag'], B['pieces'], B['offs'], B['welded'])
 
-	for label, cut in (('high', ('high',)), ('scoop', ('scoop',)), ('cuff', ('cuff',)), ('high-cuff', ('high', 'cuff'))):
+	for label, cut in (('high', ('high',)),) if drafted else (('high', ('high',)), ('scoop', ('scoop',)), ('cuff', ('cuff',)), ('high-cuff', ('high', 'cuff'))):
 		G = build(design(cut))
 		start = from_block(G)
 		print('solving', label)

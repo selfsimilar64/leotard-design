@@ -86,6 +86,19 @@ def check(block):
 		a2 = math.degrees(math.atan2(t2[0] * u2[1] - t2[1] * u2[0], t2 @ u2))
 		add('smooth across a seam', name, abs(abs(a1) + abs(a2) - 180), JOIN_DEG, 'deg')
 
+	# a neck rises from the fold all the way to the shoulder, and a leg sweeps without swinging back: no dip, no S
+	for piece in ('front', 'back'):
+		r = P[piece]['neck']
+		q = r if abs(r[0, 0]) < abs(r[-1, 0]) else r[::-1]
+		add('neck never dips', f'{piece}.neck', float(max(0.0, q[0, 1] - q[:, 1].min())), 0.1, 'mm')
+		for leg_name in ('leg', 'leg_high'):
+			l = P[piece][leg_name]
+			d = np.diff(l, axis=0)
+			d = d[np.linalg.norm(d, axis=1) > 1e-6]
+			cross = d[:-1, 0] * d[1:, 1] - d[:-1, 1] * d[1:, 0]
+			rough = cross[np.abs(cross) > 1e-4]
+			# turning one way throughout: a share of the other way is an S
+			add('leg bends one way', f'{piece}.{leg_name}', 100 * float(min((rough > 0).mean(), (rough < 0).mean())) if len(rough) else 0.0, 25.0, '% against')
 	F, B, S = P['front'], P['back'], P['sleeve']
 	def end_near(r, q):
 		return 0 if np.linalg.norm(r[0] - q) < np.linalg.norm(r[-1] - q) else -1
@@ -98,6 +111,8 @@ def check(block):
 	join('neck over the shoulder', pair('front', 'neck', 'shoulder'), pair('back', 'neck', 'shoulder'))
 	join('leg over the side (thigh)', pair('front', 'leg', 'side'), pair('back', 'leg', 'side'))
 	join('leg over the crotch (thigh)', pair('front', 'leg', 'crotch'), pair('back', 'leg', 'crotch'))
+	join('armhole under the arm', pair('front', 'armhole', 'side'), pair('back', 'armhole', 'side'))
+	join('wrist over the underarm', pair('sleeve', 'wrist', 'underarm_f'), pair('sleeve', 'wrist', 'underarm_b'))
 	join('high leg over the crotch', pair('front', 'leg_high', 'crotch'), pair('back', 'leg_high', 'crotch'))
 	# a high leg meets the side part way down: both pieces must arrive at the same place on it
 	hf, hb = block['pieces']['front']['variants']['high_hips'], block['pieces']['back']['variants']['high_hips']
@@ -189,10 +204,14 @@ def check_design(path):
 
 
 def main():
-	sizes = sys.argv[1:] or ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL']
+	args = sys.argv[1:]
+	folder = DERIVED
+	if args[:1] == ['--dir']:
+		folder, args = args[1], args[2:]
+	sizes = args or sorted(f[:-5] for f in os.listdir(folder) if f.endswith('.json'))
 	bad = 0
 	for size in sizes:
-		with open(os.path.join(DERIVED, size + '.json'), encoding='utf-8') as f:
+		with open(os.path.join(folder, size + '.json'), encoding='utf-8') as f:
 			rows = check(json.load(f))
 		fails = [r for r in rows if not r[5]]
 		bad += len(fails)
@@ -201,7 +220,7 @@ def main():
 			print(f'   FAIL {rule:28} {name:32} {value:7.2f} {unit} (limit {limit})')
 	captures = os.path.join(HERE, '..', 'app', 'captures')
 	for name in sorted(os.listdir(captures)):
-		if name.startswith('wrap-') and name.endswith('.json') and ('resolved' in name or name.endswith('-block.json')):
+		if name.startswith('wrap-') and name.endswith('.json') and ('resolved' in name or name.endswith('-block.json')) and 'outline' in open(os.path.join(captures, name), encoding='utf-8').read(4_000_000):
 			rows = check_design(os.path.join(captures, name))
 			fails = [r for r in rows if not r[5]]
 			bad += len(fails)
