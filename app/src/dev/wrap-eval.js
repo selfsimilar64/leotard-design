@@ -70,6 +70,9 @@ export function hide() {
 	for (const c of view.cells) c.mesh.visible = true;
 	hideRims(window.app.engine, false);
 	uncover(window.app.engine);
+	const zones = window.app.engine.wrinkleZones().N;
+	zones[0].w = 1;
+	window.app.engine.setWrinklePose(window.app.doc.body.pose);
 	window.app.engine.viewport.frame();
 }
 
@@ -126,7 +129,7 @@ export async function show(file, mode = 'fabric', opts = {}) {
 	for (const c of data.cells) {
 		const n = c.hostW.length / 3, geo = new THREE.BufferGeometry();
 		const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
-		A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
+		A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aFold', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
 		geo.setAttribute('aSeam', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
 		geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
 		geo.setIndex(new THREE.BufferAttribute(Uint32Array.from(c.I), 1));
@@ -150,16 +153,30 @@ export async function show(file, mode = 'fabric', opts = {}) {
 			Pos[l * 3 + k] = v + Nrm[l * 3 + k] * 0.0012;
 		}
 		// the garment surface already holds the lift: the fabric shader would add it again (materials/fabric.js)
-		if (mode === 'fabric' && !opts.material) geo.attributes.aLift.array.fill(0);
+		if (mode === 'fabric' && !opts.material) {
+			geo.attributes.aLift.array.fill(0);
+			if (c.fold) geo.attributes.aFold.array.set(c.fold); // the settled standing fit's (pipeline/wrap_block.py folds): a carried-over fit's strain in a pose is not fit to draw folds from
+		}
 		if (mode === 'stretch') stretchColours(geo);
 		view.group.add(mesh);
 		added.push(mesh);
 	}
 	if (mode === 'fabric' && !opts.material && !opts.bare) finish(data, view);
+	// its folds come from the fit (aFold), not the app's fixed zones
+	for (const n of app.engine.wrinkleZones().N) n.w = 0;
 	for (const c of view.cells) c.mesh.visible = false;
 	hideRims(app.engine, true);
 	app.engine.viewport.frame();
 	return { cells: data.cells, meshes: added, mode };
+}
+
+// A pose's garment surface, solved for this block's own cover, for pipeline/pose_resolve.py.
+export async function exportPose(file, pose, key = 'young') {
+	window.app.exec({ op: 'body.set', size: key, pose });
+	await wait(3000);
+	await show(file, 'fabric');
+	await wait(3000);
+	await post(`wrap-pose-${key}-${pose}.json`, JSON.stringify({ P: [...window.app.engine.body.garmentPos].map((x) => +x.toFixed(5)) }));
 }
 
 export async function shoot(name, view = 'front', opts = {}) { return window.app.capture(name, { view, width: 900, height: 1100, ...opts }); }

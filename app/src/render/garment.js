@@ -77,7 +77,7 @@ export class GarmentView {
 			}
 			const geo = new THREE.BufferGeometry();
 			const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
-			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
+			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aFold', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
 			geo.setAttribute('aSeam', new THREE.BufferAttribute(seamDistance(arr, man, c, verts, seams), 1));
 			geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
 			geo.setIndex(new THREE.BufferAttribute(piece.I, 1));

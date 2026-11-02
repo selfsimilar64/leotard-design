@@ -16,6 +16,8 @@ attribute float aCover;
 attribute vec2 aZone;
 attribute float aAO;
 attribute vec3 aLift;      // skin (or slid fabric) to the garment surface (body/mannequin.js updateGarment)
+attribute vec3 aFold;      // folds where a fit leaves fabric gathered: height as twice-the-angle x, y and height, metres (pipeline/wrap_block.py folds); zero elsewhere
+varying vec3 vFold;
 attribute vec3 aGNormal;
 attribute vec3 aRef;
 attribute float aKeep;
@@ -42,6 +44,7 @@ varying float vAO;
 
 const BEGIN_VERTEX = /* glsl */`
 transformed += normal * uOffset + aLift * uGarment;
+vFold = aFold;
 vObjPos = position;
 vObjNormal = normal;
 vCover = aCover;
@@ -73,8 +76,9 @@ varying vec3 vObjNormal;
 varying float vCover;
 varying vec2 vZone;
 varying float vAO;
+varying vec3 vFold;
 
-uniform int uZone;         // 0-2 POC zones, 3 skin, 4 finished edge, 5 panel (exact geometry, cloth-space UVs)
+uniform int uZone;        // 0-2 POC zones, 3 skin, 4 finished edge, 5 panel (exact geometry, cloth-space UVs)
 varying vec2 vUV;          // cloth-space coordinates of a panel, metres (garment/flatten.js)
 uniform float uUV;         // 1 = pattern space is vUV rotated by uGrain, 0 = tri-planar object space
 uniform float uGrain;      // grain angle on the panel, radians
@@ -559,6 +563,20 @@ const FABRIC_FRAGMENT = /* glsl */`
 		float h = sin( an * 11. + sin( rr * 60. ) * .6 ) * env * ZN.w;
 		bumpH += h * .00035;
 		gTrimAO *= 1. - .1 * env * ZN.w * clamp( - h, 0., 1. );
+	}
+
+	// --- folds a fit leaves: soft waves across the direction the fabric is squeezed, shorter than the garment and uneven, deeper where more length is spare.
+	// 314 is 2 pi over the 20 mm wavelength in pipeline/wrap_block.py FOLD_WAVELENGTH. A bump can only shade a fold, and full height shades as hard stripes: .25 is by eye (TUNABLE)
+	if ( uZone == 5 && vFold.z > .00005 ) {
+		float fa = .5 * atan( vFold.y, vFold.x ); // fd has no true sign and flips where this wraps: every wave below is a cosine of an odd phase, so a flip changes nothing
+		vec2 fd = vec2( cos( fa ), sin( fa ) ), fs = vec2( - fd.y, fd.x );
+		float fu = dot( vUV, fd ), fv = dot( vUV, fs );
+		float wave = cos( fu * 314. + sin( fv * 31. ) * 2.2 + sin( fv * 83. + fu * 40. ) * .7 );
+		float runs = .55 + .45 * cos( fv * 47. + fu * 120. + sin( fu * 70. ) * 1.5 );
+		float h = wave * wave * sign( wave ) * runs;
+		float depth = smoothstep( .0002, .002, vFold.z ) * vFold.z;
+		bumpH += h * depth * .25;
+		gTrimAO *= 1. - clamp( depth * 45., 0., .16 ) * clamp( - h, 0., 1. );
 	}
 
 	// --- seams: a groove where the stitches pull the panels together, a soft ridge over the

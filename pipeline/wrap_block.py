@@ -27,6 +27,7 @@ DERIVED = os.path.join(HERE, '..', 'assets', 'patterns', 'basicpatternblock-leot
 CAPTURES = os.path.join(HERE, '..', 'app', 'captures')
 STEP = 7.0  # mm between mesh points
 ITERS = 240
+CUT_ITERS = 360  # re-solving a cut from the whole block's fit: 120 left it 1.7 mm mean, 7 mm at most, from settled (pipeline/fit_checks.py)
 FACING = {'front': 1, 'back': -1, 'sleeve': -1}  # on the +x side of the body; the block lays a sleeve out with its front at +x
 PLANE = 300.0  # how hard points keep to the surface's tangent plane, against the fabric's own shape
 DAMP = 0.05  # how much each step stays where it was
@@ -35,7 +36,15 @@ GATHER = 0.5  # TUNABLE, not measured. How far fabric may be compressed at no co
 # a leg line up in the crease. Legs are the one explicit published rule, Spruce & Fjell's: front 1:1, back 3/4 (whole opening 87%; Treasurie starts at
 # 85%). Neck and wrist are chosen within the sourced 75-100%. Why: knowledge/engineering/app/fitting-a-block-like-the-app.md.
 ELASTIC = {('front', 'leg'): 1.0, ('back', 'leg'): 0.75, ('front', 'neck'): 0.95, ('back', 'neck'): 0.95, ('sleeve', 'wrist'): 0.95}
-ELASTIC_K = 8.0  # how hard, against the fabric's own shape (an edge's triangle weights are about 1). An estimate: no force data for this elastic or fabric was found
+# TUNABLE, not measured. How stiff the elastic is, as the width of fabric that would stretch as hard, in metres, so it does not depend on the mesh. No force data for this
+# elastic was found: an estimated 3-10 N per unit strain against fabric's 100-400 N/m (research_notes/Tight garment fit solver audit/fabric_mechanics.md) gives 10-50 mm, most likely 10-30.
+ELASTIC_WIDTH = 0.020
+# TUNABLE. How far apart folds form in tight fabric: wavelength = 2 sqrt(pi) (B/T)^(1/4) sqrt(L) (Cerda and Mahadevan 2003), with bending B about 5 uN m, tension T about 50 N/m,
+# length L about 0.1 m (research_notes/Tight garment fit solver audit/fabric_mechanics.md). Twin: 314 in app/src/materials/fabric.js.
+FOLD_WAVELENGTH = 0.02
+FOLD_MAX = 0.006  # a fold no higher than this, however much fabric the fit has gathered
+FOLD_SMOOTH = 12  # passes over the mesh: about 25 mm at 7 mm. Folds run coherently over several wavelengths; triangle-to-triangle squeeze is mesh noise (TUNABLE)
+LAST = {}  # what the last solve's fabric and elastic pulled each point with, against the surface it was held to (pipeline/fit_checks.py)
 
 
 def arclen(p):
@@ -363,12 +372,42 @@ def closest_on_triangle(p, tri):
 	return bary, np.linalg.norm(q - p)
 
 
+def folds_of(q, uv, tri):
+	"""Where fabric lies smaller than flat, the folds its spare length goes into: per point, as twice the angle of the squeezed direction on the flat piece, x and y scaled
+	by height, then height, from height = wavelength / pi * sqrt(flat / now - 1). Smoothed over the mesh."""
+	a, b = uv[tri], q[tri]
+	Dm = np.stack([a[:, 1] - a[:, 0], a[:, 2] - a[:, 0]], axis=2)
+	det = Dm[:, 0, 0] * Dm[:, 1, 1] - Dm[:, 0, 1] * Dm[:, 1, 0]
+	ok = np.abs(det) > 1e-9
+	F = np.stack([b[:, 1] - b[:, 0], b[:, 2] - b[:, 0]], axis=2)[ok] @ np.linalg.inv(Dm[ok])
+	uu, vv, cross_ = (F[:, :, 0] ** 2).sum(1), (F[:, :, 1] ** 2).sum(1), (F[:, :, 0] * F[:, :, 1]).sum(1)
+	least = np.sqrt(np.maximum((uu + vv) / 2 - np.hypot((uu - vv) / 2, cross_), 1e-6))
+	height = np.minimum(FOLD_WAVELENGTH / math.pi * np.sqrt(np.maximum(1 / least - 1, 0)), FOLD_MAX)
+	angle = np.arctan2(cross_, (uu - vv) / 2) + math.pi  # the larger direction's doubled angle, turned to the smaller's
+	area = np.abs(det[ok]) / 2
+	values = np.column_stack([height * np.cos(angle), height * np.sin(angle), height]) * area[:, None]
+	total, weight = np.zeros((len(q), 3)), np.zeros(len(q))
+	for k in range(3):
+		np.add.at(total, tri[ok][:, k], values)
+		np.add.at(weight, tri[ok][:, k], area)
+	folds = total / np.maximum(weight, 1e-12)[:, None]
+	edges = np.vstack([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]])
+	count = np.maximum(np.bincount(edges.ravel(), minlength=len(q)), 1)[:, None]
+	for _ in range(FOLD_SMOOTH):
+		around = np.zeros_like(folds)
+		np.add.at(around, edges[:, 0], folds[edges[:, 1]])
+		np.add.at(around, edges[:, 1], folds[edges[:, 0]])
+		folds = .5 * folds + .5 * around / count
+	folds[:, 2] = np.hypot(folds[:, 0], folds[:, 1])  # squeeze with no common direction cancels here, and forms no fold
+	return folds
+
+
 def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=ITERS, label='', elastic=None):
 	"""ARAP against the flat rest shapes. Each point keeps to the surface's tangent plane, free to slide
 	along it, so the piece can settle (a pull towards the closest point holds it nearly still). Folds stay
 	on x = 0. tris: welded vertex ids; rest: [tri, corner, 2] flat coordinates in metres; facing: +1 where
 	the flat triangle's face looks outward from the body, -1 where a piece is laid out the other way up;
-	part: per point True on the sleeve; held: points that do not move; elastic: (i, j, length) of each
+	part: per point True on the sleeve; held: points that do not move; elastic: (i, j, length, stiffness) of each
 	span of elastic along an opening.
 	"""
 	n = len(pos)
@@ -387,10 +426,10 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 			J += [j, i, i, j]
 			W += [-w, -w, w, w]
 	if elastic is not None:
-		for i, j in elastic[:, :2].astype(int):
+		for (i, j), k in zip(elastic[:, :2].astype(int), elastic[:, 3]):
 			I += [i, j, i, j]
 			J += [j, i, i, j]
-			W += [-ELASTIC_K, -ELASTIC_K, ELASTIC_K, ELASTIC_K]
+			W += [-k, -k, k, k]
 	L = coo_matrix((W, (I, J)), shape=(n, n)).tocoo()
 	# the Laplacian on each of x, y, z
 	li = np.concatenate([L.row * 3 + k for k in range(3)])
@@ -437,9 +476,13 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 		if elastic is not None:
 			si, sj = elastic[:, 0].astype(int), elastic[:, 1].astype(int)
 			span = p[sj] - p[si]
-			w = ELASTIC_K * elastic[:, 2:3] * span / (np.linalg.norm(span, axis=1, keepdims=True) + 1e-12)
+			now = np.linalg.norm(span, axis=1, keepdims=True) + 1e-12
+			# elastic pulls but cannot push: slack, it is left at the length it has
+			w = elastic[:, 3:4] * np.minimum(elastic[:, 2:3], now) * span / now
 			np.add.at(b, sj, w)
 			np.add.at(b, si, -w)
+		if it == iters - 1:
+			LAST.update(force=b - np.column_stack([L.tocsr() @ p[:, a] for a in range(3)]), normal=normal.copy(), at=p.copy())
 		# the plane through the closest point, as w n n' (p - q) = 0; a little damping towards where it was
 		nn = np.einsum('ti,tj->tij', normal, normal) * PLANE
 		nn[:, 0, 0] += foldw
@@ -642,10 +685,11 @@ def main(after=None):
 		for (name, edge), ratio in ELASTIC.items():
 			ids = pieces[name].edge[edge]
 			for x, y in zip(ids[:-1], ids[1:]):
-				spans.append((welded[offs[name] + x], welded[offs[name] + y], ratio * np.linalg.norm(pieces[name].V[x] - pieces[name].V[y]) / 1000))
+				length = ratio * np.linalg.norm(pieces[name].V[x] - pieces[name].V[y]) / 1000
+				spans.append((welded[offs[name] + x], welded[offs[name] + y], length, ELASTIC_WIDTH / length))
 		return dict(raw=raw, pieces=pieces, offs=offs, welded=welded, nw=nw, tris=np.vstack(tt), rest=np.vstack(rr), tag=np.array(tag), facing=np.concatenate(face), folds=folds, on_sleeve=on_sleeve, ring=ring, elastic=np.array(spans))
 
-	def part_solve(G, tr_mask, start, held_ids=None, iters=ITERS, label=''):
+	def part_solve(G, tr_mask, start, held_ids=None, iters=ITERS, label='', over=None):
 		tris, nw = G['tris'], G['nw']
 		used = np.unique(tris[tr_mask])
 		remap = -np.ones(nw, int)
@@ -653,8 +697,8 @@ def main(after=None):
 		held = remap[np.intersect1d(held_ids, used)] if held_ids is not None else None
 		a, b = remap[G['elastic'][:, 0].astype(int)], remap[G['elastic'][:, 1].astype(int)]
 		on = (a >= 0) & (b >= 0)
-		elastic = np.column_stack([a[on], b[on], G['elastic'][on, 2]])
-		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label, elastic=elastic)
+		elastic = np.column_stack([a[on], b[on], G['elastic'][on, 2], G['elastic'][on, 3]])
+		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], over or surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label, elastic=elastic)
 		out = start.copy()
 		out[used] = q
 		return out
@@ -688,7 +732,8 @@ def main(after=None):
 		ahead = -ahead  # towards the front of the body
 	sleeve = B['pieces']['sleeve']
 	sv = sleeve.V
-	half = np.interp(sv[:, 1], *zip(*sorted((float(y), float(abs(x))) for x, y in sv[:sleeve.n_boundary])))
+	# (its width from the seams and cap: the wrist's curve crosses the centre, and would fold the cuff over before the solve began)
+	half = np.interp(sv[:, 1], *zip(*sorted((float(y), float(abs(x))) for x, y in sv[sleeve.edge['cap'] + sleeve.edge['under_f'] + sleeve.edge['under_b']])))
 	top_y = sv[:, 1].max()
 	rolled = shoulder + axis[None] * ((top_y - sv[:, 1])[:, None] / 1000 * 0.9) - axis[None] * 0.01
 	angle = np.clip(sv[:, 0] / np.maximum(half, 1), -1, 1) * np.pi * 0.98
@@ -737,7 +782,7 @@ def main(after=None):
 				tri = remap[piece.T]
 				if flip != (FACING[name] < 0):
 					tri = tri[:, [0, 2, 1]]
-				return {'name': label_, 'uv': uv.ravel().round(6).tolist(), 'I': tri.ravel().tolist(), 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'piece': piece_id, 'half': half_, 'wid': ids.tolist(), 'outline': outline.round(6).tolist()}
+				return {'name': label_, 'uv': uv.ravel().round(6).tolist(), 'I': tri.ravel().tolist(), 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'piece': piece_id, 'half': half_, 'wid': ids.tolist(), 'outline': outline.round(6).tolist(), 'fold': folds_of(q, uv, tri).ravel().round(6).tolist()}
 			m = np.array([-1, 1])
 			if name == 'sleeve':
 				cells.append(make(q, uv, False, 'Sleeve', 'sleeve-a', 0, line))
@@ -794,7 +839,7 @@ def main(after=None):
 		start = from_block(G)
 		print('solving', label)
 		all_tris = np.ones(len(G['tris']), bool)
-		pos = part_solve(G, all_tris, start, iters=120, label=label)
+		pos = part_solve(G, all_tris, start, iters=CUT_ITERS, label=label)
 		d = np.linalg.norm(pos - start, axis=1) * 1000
 		print(f'  reuse error, {label}: mean {d.mean():.1f} mm, 95% {np.percentile(d, 95):.1f} mm, max {d.max():.1f} mm')
 		y, s_ = start[:, 1], G['on_sleeve']
