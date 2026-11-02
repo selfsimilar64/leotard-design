@@ -74,6 +74,8 @@ bust about 18%, which correspond to 1.09, 1.16 and 1.22 stretch), these are simi
 
 ## Reusing the fit for a cut
 
+**Superseded 2026-11-02:** cuts now have their own exact lines and mesh ([why](/domain/construction/what-makes-a-pattern-true.md)). With those, reuse at 95% of points is: scoop 3.5 mm (just over the 3 mm gate), `HIGH HIPS` 9.1 mm, cuff 7.7 mm (4.2 mm mean on the sleeve, under 2.7 mm at 95% below the waist). The table below is the earlier method.
+
 Difference between the whole block's map and a re-solve with the cut, on the same points:
 
 | Cut | Mean | 95% | Max | Where |

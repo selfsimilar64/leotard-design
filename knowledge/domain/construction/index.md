@@ -16,6 +16,7 @@
 * [Rule: mesh use](rule-mesh-use.md) - Mesh panels need a lining or self-backing decision, colour-matched elastic and thread, a 1 in overlap where they back a cut-out, and warnings in contact and abrasion zones; mesh carries no durability guarantee at GK.
 * [Rule: openings and straps](rule-openings-and-straps.md) - Checks for necklines, keyholes, cut-outs and strap layouts: Porter's spacing and width formulas, step-in size and closure, elastic or binding on every opening, and dress-code limits.
 * [Rule: pieced seam geometry](rule-pieced-seam-geometry.md) - Lines realised as pieced seams must be straight or gently curved with no inside corners or L-insets, panels must be wider than their allowances, and seam count and seam placement in strain zones are limited; thresholds are factory-set defaults.
+* [What makes a pattern true](what-makes-a-pattern-true.md) - The checks every block and design must pass before its flat pieces are trusted, why the mesh may never be the source of an outline, and what the first run found: the owner's three visible defects were our processing, while the bought block has faults of its own at the high leg, crotch, sleeve and curve resolution.
 
 # Domain Concept
 

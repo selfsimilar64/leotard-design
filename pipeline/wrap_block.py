@@ -2,8 +2,8 @@
 
 Half a garment is solved (front, back, one sleeve) with its seams welded and its folds held on the
 centre plane: as-rigid-as-possible against the flat pieces, pulled onto the garment surface. Each cut
-tried is the same mesh with triangles removed, so a re-solve can be compared point for point with the
-map of the whole block.
+tried has its own exact lines and its own mesh; placing that mesh by the whole block's fit, and re-solving it,
+shows what masking alone would get wrong.
 
 Inputs, POSTed from the browser to app/captures/ (dev/wrap-eval.js, exportSeed):
   wrap-seed.json: the app's own pieces, used only to start the solve near the answer
@@ -490,142 +490,148 @@ def main():
 
 	P = block['pieces']
 	count = lambda *lens: max(2, round(sum(lens) / len(lens) / STEP))
-	L = {(p, k): float(arclen(np.array(P[p]['edges'][k]))[-1]) for p in P for k in P[p]['edges']}
-	n_sh = count(L['front', 'shoulder'], L['back', 'shoulder'])
-	n_si = count(L['front', 'side'], L['back', 'side'])
-	n_cr = count(L['front', 'crotch'], L['back', 'crotch'])
-	n_af, n_ab = count(L['front', 'armhole']), count(L['back', 'armhole'])
 
-	fw = walk(P['front']['edges'], ['neck', 'shoulder', 'armhole', 'side', 'leg', 'crotch', 'centre'])
-	bw = walk(P['back']['edges'], ['neck', 'shoulder', 'armhole', 'side', 'leg', 'crotch', 'centre'])
-	nums = {'shoulder': n_sh, 'side': n_si, 'crotch': n_cr}
+	# ---- what is cut: exact lines, and a mesh made from them ------------------------------------------------------------
+	# The lines of a design are the authority; the mesh only follows them. So a cut piece has its own outline and its own mesh:
+	# taking triangles out of a bigger mesh is what left a jagged crotch and spikes where a leg met the side seam.
+	EDGE_ORDER = ['neck', 'shoulder', 'armhole', 'side', 'leg', 'crotch', 'centre']
 
-	def runs_of(w, n_arm):
-		out = {}
-		for k, e in w.items():
-			m = nums.get(k, n_arm if k == 'armhole' else count(float(arclen(e)[-1])))
-			out[k] = resample(e, m)
-		return out
+	def trim(poly, a, b):
+		"""The stretch of a polyline between two distances along it, its ends exactly there."""
+		s = arclen(poly)
+		keep = (s > a) & (s < b)
+		ends = [np.array([np.interp(d, s, poly[:, i]) for i in range(2)]) for d in (a, b)]
+		return np.vstack([ends[0], poly[keep], ends[1]])
 
-	# the extra lines the cuts follow, so a cut lands on mesh points
-	def high_leg(name):
-		leg = np.array(P[name]['variants']['high_hips']['leg'], float)
-		return resample(leg, max(4, round(float(arclen(leg)[-1]) / STEP)))
+	def scoop(neck, shoulder, depth, along=15.0):
+		"""A neck from the fold, square to it, to a point on the shoulder seam."""
+		end = trim(shoulder, 0, along)[-1]
+		start = np.array([0.0, neck[0, 1] - depth])
+		t = np.linspace(0, math.pi / 2, 200)
+		return np.column_stack([end[0] * np.sin(t), start[1] + (end[1] - start[1]) * (1 - np.cos(t))])
 
-	def scoop(w, depth):
-		neck = w['neck']
-		end = neck[-1]
-		c = np.array([0.0, neck[0, 1] - depth])
-		pts = [c + np.array([end[0] * 0.98 * math.sin(t), (end[1] - 3 - c[1]) * (1 - math.cos(t))]) for t in np.linspace(0, math.pi / 2, 40)]
-		return resample(np.array(pts), max(4, round(float(arclen(np.array(pts))[-1]) / STEP)))
+	def design(cut=()):
+		"""A design's exact lines, in the block's frame: a dict per piece, each in order round the piece."""
+		raw = {}
+		for name, depth in (('front', 90), ('back', 160)):
+			w = walk(P[name]['edges'], EDGE_ORDER)
+			w = {k: v.copy() for k, v in w.items()}
+			# the fold is the fold: x = 0 exactly, and the lines that end on it end there
+			w['centre'][:, 0] = 0
+			w['neck'][0, 0] = 0
+			w['crotch'][-1, 0] = 0
+			if 'high' in cut:
+				H = P[name]['variants']['high_hips']
+				w['side'] = trim(w['side'], 0, H['side_to'])
+				w['leg'] = np.array(H['leg'], float)
+				w['leg'][0] = w['side'][-1]
+			if 'scoop' in cut:
+				w['neck'] = scoop(w['neck'], w['shoulder'], depth)
+				w['shoulder'] = trim(w['shoulder'], 15.0, float(arclen(w['shoulder'])[-1]))
+				w['centre'] = trim(w['centre'], 0, float(arclen(w['centre'])[-1]) - depth)
+			raw[name] = w
+		se = {k: np.array(v, float) for k, v in P['sleeve']['edges'].items()}
+		cap = se['cap'] if se['cap'][0, 0] < se['cap'][-1, 0] else se['cap'][::-1]
+		sides_u = [se['underarm_b'], se['underarm_f']]
+		under_f = max(sides_u, key=lambda e: e[:, 0].mean())
+		under_b = min(sides_u, key=lambda e: e[:, 0].mean())
+		under_f = under_f if under_f[0, 1] > under_f[-1, 1] else under_f[::-1]  # cap end to wrist
+		under_b = under_b if under_b[0, 1] > under_b[-1, 1] else under_b[::-1]
+		wrist = se['wrist'] if se['wrist'][0, 0] > se['wrist'][-1, 0] else se['wrist'][::-1]  # front side to back
+		if 'cuff' in cut:
+			# a straight line, a set height above the wrist, which is about where this body's wrist is
+			level = wrist[:, 1].mean() + 45.0
+			def to_level(e):
+				s = arclen(e)
+				i = int(np.argmax(e[:, 1] < level))
+				t = (e[i - 1, 1] - level) / (e[i - 1, 1] - e[i, 1])
+				return trim(e, 0, s[i - 1] + (s[i] - s[i - 1]) * t)
+			under_f, under_b = to_level(under_f), to_level(under_b)
+			wrist = np.vstack([under_f[-1], under_b[-1]])
+		raw['sleeve'] = {'cap': cap, 'under_f': under_f, 'wrist': wrist, 'under_b': under_b[::-1]}
+		return raw
 
-	front = Piece('front', runs_of(fw, n_af), [('high', high_leg('front')), ('scoop', scoop(fw, 90))])
-	back = Piece('back', runs_of(bw, n_ab), [('high', high_leg('back')), ('scoop', scoop(bw, 160))])
+	def build(raw, seed_lines=False):
+		"""Mesh a design and weld its seams: every sewn pair of edges gets the same number of points."""
+		f, b, s = raw['front'], raw['back'], raw['sleeve']
+		ln = lambda e: float(arclen(e)[-1])
+		nums = {'shoulder': count(ln(f['shoulder']), ln(b['shoulder'])), 'side': count(ln(f['side']), ln(b['side'])), 'crotch': count(ln(f['crotch']), ln(b['crotch']))}
 
-	# sleeve: back end of the cap (x < 0) -> top -> front end
-	se = {k: np.array(v, float) for k, v in P['sleeve']['edges'].items()}
-	cap = se['cap'] if se['cap'][0, 0] < se['cap'][-1, 0] else se['cap'][::-1]
-	top = int(np.argmin(np.abs(cap[:, 0])))
-	cap_b, cap_f = cap[:top + 1], cap[top:]
-	sides_u = [se['underarm_b'], se['underarm_f']]
-	under_f = max(sides_u, key=lambda e: e[:, 0].mean())
-	under_b = min(sides_u, key=lambda e: e[:, 0].mean())
-	under_f = under_f if under_f[0, 1] > under_f[-1, 1] else under_f[::-1]  # cap end to wrist
-	under_b = under_b if under_b[0, 1] > under_b[-1, 1] else under_b[::-1]
-	wrist = se['wrist'] if se['wrist'][0, 0] > se['wrist'][-1, 0] else se['wrist'][::-1]  # front side to back
-	n_u = count(float(arclen(under_f)[-1]), float(arclen(under_b)[-1]))
-	sr = {'cap': np.vstack([resample(cap_b, n_ab)[:-1], resample(cap_f, n_af)]), 'under_f': resample(under_f, n_u), 'wrist': resample(wrist, count(float(arclen(wrist)[-1]))), 'under_b': resample(under_b[::-1], n_u)}
-	# a shorter sleeve: a straight line this far above the wrist, which is about where this body's wrist is
-	cuff = np.column_stack([np.arange(-300.0, 300.0, STEP), np.full(len(np.arange(-300.0, 300.0, STEP)), wrist[:, 1].mean() + 45.0)])
-	sleeve = Piece('sleeve', sr, [('cuff', cuff)])
+		def runs_of(w, n_arm):
+			return {k: resample(e, nums.get(k, n_arm if k == 'armhole' else count(ln(e)))) for k, e in w.items()}
 
-	# weld: union-find over all pieces' points
-	pieces = {'front': front, 'back': back, 'sleeve': sleeve}
-	offs, total = {}, 0
-	for k, q in pieces.items():
-		offs[k] = total
-		total += len(q.V)
-	find, join = union_find(total)
-	g = lambda name, i: offs[name] + i
-	pair = lambda a, ea, b, eb, flip=False: [join(g(a, x), g(b, y)) for x, y in zip(pieces[a].edge[ea], (pieces[b].edge[eb][::-1] if flip else pieces[b].edge[eb]))]
-	pair('front', 'shoulder', 'back', 'shoulder')
-	pair('front', 'side', 'back', 'side')
-	pair('front', 'crotch', 'back', 'crotch')
-	cap_ids = sleeve.edge['cap']
-	back_cap, front_cap = cap_ids[:n_ab + 1], cap_ids[n_ab:]
-	for x, y in zip(back.edge['armhole'], back_cap[::-1]):  # back armhole runs shoulder to side; the cap's back half runs side to top
-		join(g('back', x), g('sleeve', y))
-	for x, y in zip(front.edge['armhole'], front_cap):
-		join(g('front', x), g('sleeve', y))
-	# the sleeve's two sides, cap end to wrist
-	for x, y in zip(sleeve.edge['under_f'], sleeve.edge['under_b'][::-1]):
-		join(g('sleeve', x), g('sleeve', y))
-	roots = {}
-	welded = np.zeros(total, int)
-	for i in range(total):
-		welded[i] = roots.setdefault(find(i), len(roots))
-	nw = len(roots)
-	print(f'welded {total} points to {nw}')
-
-	starts = np.zeros((nw, 3))
-	counts = np.zeros(nw)
-	for name, piece in pieces.items():
-		q = seed_piece(piece, name, seed, zsign, side)
-		ids = welded[offs[name]:offs[name] + len(piece.V)]
-		np.add.at(starts, ids, q)
-		np.add.at(counts, ids, 1)
-	starts /= counts[:, None]
-
-	folds = np.unique(np.concatenate([welded[offs['front'] + np.array(front.edge['centre'])], welded[offs['back'] + np.array(back.edge['centre'])]]))
-
-	def assemble(selectors=None):
+		n_af, n_ab = count(ln(f['armhole'])), count(ln(b['armhole']))
+		def high(name):
+			leg = np.array(P[name]['variants']['high_hips']['leg'], float)
+			return [('high', resample(leg, max(4, round(float(arclen(leg)[-1]) / STEP))))]
+		front = Piece('front', runs_of(f, n_af), high('front') if seed_lines else ())
+		back = Piece('back', runs_of(b, n_ab), high('back') if seed_lines else ())
+		cap = s['cap']
+		top = int(np.argmin(np.abs(cap[:, 0])))
+		n_u = count(ln(s['under_f']), ln(s['under_b']))
+		sr = {'cap': np.vstack([resample(cap[:top + 1], n_ab)[:-1], resample(cap[top:], n_af)]), 'under_f': resample(s['under_f'], n_u), 'wrist': resample(s['wrist'], count(ln(s['wrist']))), 'under_b': resample(s['under_b'], n_u)}
+		sleeve = Piece('sleeve', sr)
+		pieces = {'front': front, 'back': back, 'sleeve': sleeve}
+		offs, total = {}, 0
+		for k, q in pieces.items():
+			offs[k] = total
+			total += len(q.V)
+		find, join = union_find(total)
+		g = lambda name, i: offs[name] + i
+		for e in ('shoulder', 'side', 'crotch'):
+			for x, y in zip(front.edge[e], back.edge[e]):
+				join(g('front', x), g('back', y))
+		cap_ids = sleeve.edge['cap']
+		back_cap, front_cap = cap_ids[:n_ab + 1], cap_ids[n_ab:]
+		for x, y in zip(back.edge['armhole'], back_cap[::-1]):  # back armhole runs shoulder to side; the cap's back half runs side to top
+			join(g('back', x), g('sleeve', y))
+		for x, y in zip(front.edge['armhole'], front_cap):
+			join(g('front', x), g('sleeve', y))
+		for x, y in zip(sleeve.edge['under_f'], sleeve.edge['under_b'][::-1]):  # the sleeve's two sides, cap end to wrist
+			join(g('sleeve', x), g('sleeve', y))
+		roots = {}
+		welded = np.zeros(total, int)
+		for i in range(total):
+			welded[i] = roots.setdefault(find(i), len(roots))
+		nw = len(roots)
 		tt, rr, tag, face = [], [], [], []
 		for name, piece in pieces.items():
-			T = piece.T if not selectors or name not in selectors else piece.T[selectors[name]]
-			tt.append(welded[offs[name] + T])
-			rr.append(piece.V[T] / 1000)
-			tag += [name] * len(T)
-			face.append(np.full(len(T), FACING[name]))
-		return np.vstack(tt), np.vstack(rr), np.array(tag), np.concatenate(face)
+			tt.append(welded[offs[name] + piece.T])
+			rr.append(piece.V[piece.T] / 1000)
+			tag += [name] * len(piece.T)
+			face.append(np.full(len(piece.T), FACING[name]))
+		folds = np.unique(np.concatenate([welded[offs[n] + np.array(pieces[n].edge['centre'])] for n in ('front', 'back')]))
+		on_sleeve = np.zeros(nw, bool)
+		on_sleeve[welded[offs['sleeve']:offs['sleeve'] + len(sleeve.V)]] = True
+		ring = np.unique(welded[offs['sleeve'] + np.array(sleeve.edge['cap'])])
+		on_sleeve[ring] = False  # the armhole belongs to the torso
+		return dict(raw=raw, pieces=pieces, offs=offs, welded=welded, nw=nw, tris=np.vstack(tt), rest=np.vstack(rr), tag=np.array(tag), facing=np.concatenate(face), folds=folds, on_sleeve=on_sleeve, ring=ring)
 
-	def below(piece, line_ids, above=True):
-		"""Triangles on the kept side of a cut line: above it (a leg) or below it (a neck)."""
-		line = piece.V[line_ids]
-		c = piece.V[piece.T].mean(1)
-		xs = np.clip(c[:, 0], line[:, 0].min(), line[:, 0].max())
-		order = np.argsort(line[:, 0])
-		y = np.interp(xs, line[order, 0], line[order, 1])
-		# beyond the line's outer end its height carries on: a leg line ends on the side seam, and what is below
-		# that goes with the rest of the leg. A neck line ends on the shoulder seam, and what is beyond stays.
-		return c[:, 1] > y if above else (c[:, 1] < y) | (c[:, 0] > line[:, 0].max())
-
-	cuts = {
-		'block': None,
-		'high': {'front': below(front, front.line['high']), 'back': below(back, back.line['high'])},
-		'scoop': {'front': below(front, front.line['scoop'], False), 'back': below(back, back.line['scoop'], False)},
-		'cuff': {'sleeve': below(sleeve, sleeve.line['cuff'])},
-	}
-	cuts['high-cuff'] = {**cuts['high'], **cuts['cuff']}
-	results = {}
-	tris, rest, tag, facing = assemble()
-	sleeve_points = np.zeros(nw, bool)
-	sleeve_points[welded[offs['sleeve']:offs['sleeve'] + len(sleeve.V)]] = True
-	ring = np.unique(welded[offs['sleeve'] + np.array(sleeve.edge['cap'])])
-	sleeve_points[ring] = False  # the armhole belongs to the torso
-
-	def part_solve(mask, tr_mask, held_ids=None, iters=ITERS, label='', start=None):
+	def part_solve(G, tr_mask, start, held_ids=None, iters=ITERS, label=''):
+		tris, nw = G['tris'], G['nw']
 		used = np.unique(tris[tr_mask])
 		remap = -np.ones(nw, int)
 		remap[used] = np.arange(len(used))
-		held_local = remap[np.intersect1d(held_ids, used)] if held_ids is not None else None
-		q, _ = solve(remap[tris[tr_mask]], rest[tr_mask], start[used], remap[np.intersect1d(folds, used)], surface, facing[tr_mask], part=mask[used], held=held_local, iters=iters, label=label)
+		held = remap[np.intersect1d(held_ids, used)] if held_ids is not None else None
+		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label)
 		out = start.copy()
 		out[used] = q
 		return out
 
-	torso = tag != 'sleeve'
+	# ---- the whole block ----------------------------------------------------------------------------------------------------
+	B = build(design(), seed_lines=True)
+	starts = np.zeros((B['nw'], 3))
+	counts = np.zeros(B['nw'])
+	for name, piece in B['pieces'].items():
+		q = seed_piece(piece, name, seed, zsign, side)
+		ids = B['welded'][B['offs'][name]:B['offs'][name] + len(piece.V)]
+		np.add.at(starts, ids, q)
+		np.add.at(counts, ids, 1)
+	starts /= counts[:, None]
+	print(f"welded to {B['nw']} points")
+	torso = B['tag'] != 'sleeve'
 	print('solving the torso')
-	p = part_solve(sleeve_points, torso, label='torso', start=starts)
+	p = part_solve(B, torso, starts, label='torso')
 	print('solving the sleeve onto that armhole')
 	# the sleeve starts rolled round the arm: down its length from the shoulder, across it by angle. The
 	# app's own sleeve is a poor start here: the block's head stands much taller and folds when squeezed into it.
@@ -639,91 +645,99 @@ def main():
 	ahead = np.cross(out, axis)
 	if ahead[2] * -zsign < 0:
 		ahead = -ahead  # towards the front of the body
+	sleeve = B['pieces']['sleeve']
 	sv = sleeve.V
 	half = np.interp(sv[:, 1], *zip(*sorted((float(y), float(abs(x))) for x, y in sv[:sleeve.n_boundary])))
-	top = sv[:, 1].max()
-	rolled = shoulder + axis[None] * ((top - sv[:, 1])[:, None] / 1000 * 0.9) - axis[None] * 0.01
+	top_y = sv[:, 1].max()
+	rolled = shoulder + axis[None] * ((top_y - sv[:, 1])[:, None] / 1000 * 0.9) - axis[None] * 0.01
 	angle = np.clip(sv[:, 0] / np.maximum(half, 1), -1, 1) * np.pi * 0.98
 	rolled = rolled + (out[None] * np.cos(angle)[:, None] + ahead[None] * np.sin(angle)[:, None]) * 0.09
 	rolled, _ = surface.project(rolled, None, np.ones(len(rolled), bool))
-	own = welded[offs['sleeve']:offs['sleeve'] + len(sv)]
-	loose = ~np.isin(own, ring)
+	own = B['welded'][B['offs']['sleeve']:B['offs']['sleeve'] + len(sv)]
+	loose = ~np.isin(own, B['ring'])
 	p[own[loose]] = rolled[loose]
-	p = part_solve(sleeve_points, ~torso, held_ids=ring, label='sleeve', start=p)
+	p = part_solve(B, ~torso, p, held_ids=B['ring'], label='sleeve')
 	print('settling them together')
-	p = part_solve(sleeve_points, np.ones(len(tris), bool), iters=60, label='all', start=p)
-	results['block'] = p
-	base = p
-	for cut in ('high', 'scoop', 'cuff', 'high-cuff'):
-		tr, re, ta, fa = assemble(cuts[cut])
-		used = np.unique(tr)
-		print('solving', cut)
-		q = base.copy()
-		remap = -np.ones(nw, int)
-		remap[used] = np.arange(len(used))
-		pos, nn = solve(remap[tr], re, q[used], remap[np.intersect1d(folds, used)], surface, fa, part=sleeve_points[used], iters=120, label=cut)
-		results[cut] = (used, pos)
-		d = np.linalg.norm(pos - base[used], axis=1) * 1000
-		print(f'  reuse error, {cut}: mean {d.mean():.1f} mm, 95% {np.percentile(d, 95):.1f} mm, max {d.max():.1f} mm')
-		y, on_sleeve = base[used, 1], sleeve_points[used]
-		for name, m in (('sleeve', on_sleeve), ('above waist', ~on_sleeve & (y >= 1.03)), ('waist to hip', ~on_sleeve & (y < 1.03) & (y >= 0.88)), ('below hip', ~on_sleeve & (y < 0.88))):
-			if m.any():
-				print(f'    {name}: mean {d[m].mean():.1f} mm, 95% {np.percentile(d[m], 95):.1f} mm, max {d[m].max():.1f} mm')
+	base = part_solve(B, np.ones(len(B['tris']), bool), p, iters=60, label='all')
 
-	tag_all = tag
-	along_all, across_all = stretch(tris, rest, base)[1], stretch(tris, rest, base)[0]
-	for name in pieces:
-		m = tag_all == name
-		print(f'{name}: across mean {across_all[m].mean():.3f} [{np.percentile(across_all[m], 5):.2f}-{np.percentile(across_all[m], 95):.2f}], along mean {along_all[m].mean():.3f} [{np.percentile(along_all[m], 5):.2f}-{np.percentile(along_all[m], 95):.2f}]')
+	def from_block(G):
+		"""A design's points placed by the whole block's fit: what masking would show."""
+		out = np.zeros((G['nw'], 3))
+		seen = np.zeros(G['nw'])
+		for name, piece in G['pieces'].items():
+			bp_ = B['pieces'][name]
+			at3d = base[B['welded'][B['offs'][name]:B['offs'][name] + len(bp_.V)]]
+			q = locate(bp_.V, bp_.T.ravel(), piece.V, at3d)
+			ids = G['welded'][G['offs'][name]:G['offs'][name] + len(piece.V)]
+			np.add.at(out, ids, q)
+			np.add.at(seen, ids, 1)
+		return out / seen[:, None]
 
-	# output: whole garment, each half mirrored, as host triangles the app can place on any body
-	def export(cut, pts_all, selectors):
+	def export(G, pts, label):
+		"""The whole garment, each half mirrored: host triangles the app can place on any body, and each piece's exact outline."""
 		cells = []
-		normal_was = None
-		for name, piece in pieces.items():
-			T = piece.T if not selectors or name not in selectors else piece.T[selectors[name]]
-			used = np.unique(T)
+		for name, piece in G['pieces'].items():
+			used = np.unique(piece.T)
 			remap = -np.ones(len(piece.V), int)
 			remap[used] = np.arange(len(used))
-			ids = welded[offs[name] + used]
-			q = pts_all[ids]
+			ids = G['welded'][G['offs'][name] + used]
+			q = pts[ids]
 			uv = piece.V[used] / 1000
-			parts = sleeve_points[ids]
-			def make(q, uv, flip, label, piece_id, half):
+			parts = G['on_sleeve'][ids]
+			raw = G['raw'][name]
+			if name == 'sleeve':
+				line = np.vstack([raw[k][:-1] for k in raw]) / 1000
+			else:
+				half_line = np.vstack([raw[k][:-1] for k in EDGE_ORDER[:-1]] + [raw['crotch'][-1:]]) / 1000
+				line = np.vstack([half_line, (half_line * np.array([-1, 1]))[-2:0:-1]])
+
+			def make(q, uv, flip, label_, piece_id, half_, outline):
 				f, w = surface.hosts(q, part=parts)
-				tri = remap[T]
+				tri = remap[piece.T]
 				if flip != (FACING[name] < 0):
 					tri = tri[:, [0, 2, 1]]
-				return {'name': label, 'uv': uv.ravel().round(5).tolist(), 'I': tri.ravel().tolist(), 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'piece': piece_id, 'half': half, 'wid': ids.tolist()}
-			mirrored = q * np.array([-1, 1, 1])
-			muv = uv * np.array([-1, 1])
+				return {'name': label_, 'uv': uv.ravel().round(6).tolist(), 'I': tri.ravel().tolist(), 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'piece': piece_id, 'half': half_, 'wid': ids.tolist(), 'outline': outline.round(6).tolist()}
+			m = np.array([-1, 1])
 			if name == 'sleeve':
-				cells.append(make(q, uv, False, 'Sleeve', 'sleeve-a', 0))
-				cells.append(make(mirrored, muv, True, 'Sleeve', 'sleeve-b', 1))
+				cells.append(make(q, uv, False, 'Sleeve', 'sleeve-a', 0, line))
+				cells.append(make(q * np.array([-1, 1, 1]), uv * m, True, 'Sleeve', 'sleeve-b', 1, line * m))
 			else:
-				cells.append(make(q, uv, False, name.capitalize(), name, 0))
-				cells.append(make(mirrored, muv, True, name.capitalize(), name, 1))
-		with open(os.path.join(CAPTURES, f'wrap-{size}-{cut}.json'), 'w', encoding='utf-8') as f:
-			json.dump({'size': size, 'cut': cut, 'side': side, 'cells': cells}, f, separators=(',', ':'))
+				cells.append(make(q, uv, False, name.capitalize(), name, 0, line))
+				cells.append(make(q * np.array([-1, 1, 1]), uv * m, True, name.capitalize(), name, 1, line))
+		with open(os.path.join(CAPTURES, f'wrap-{size}-{label}.json'), 'w', encoding='utf-8') as f:
+			json.dump({'size': size, 'cut': label, 'side': side, 'cells': cells}, f, separators=(',', ':'))
 
-	export('block', base, None)
-	full = base.copy()
-	for cut in ('high', 'scoop', 'cuff', 'high-cuff'):
-		used, pos = results[cut]
-		mix = full.copy()
-		mix[used] = pos
-		export(cut + '-resolved', mix, cuts[cut])
-		export(cut + '-reused', full, cuts[cut])
-	np.savez(os.path.join(DERIVED, f'wrap-{size}.npz'), base=base, tris=tris, rest=rest, tag=tag)
-	report(body, surface, base, tris, rest, tag, pieces, offs, welded)
-	# where the lines land, in the surface's metres
-	info = {}
-	for name, piece in pieces.items():
-		for k, e in piece.edge.items():
-			pts = base[welded[offs[name] + np.array(e)]]
-			info[f'{name}.{k}'] = {'length3d': round(float(arclen(pts)[-1]) * 1000, 1), 'flat': round(float(arclen(piece.V[e])[-1]), 1), 'start': pts[0].round(3).tolist(), 'end': pts[-1].round(3).tolist(), 'mid': pts[len(pts) // 2].round(3).tolist()}
-	print(json.dumps(info, indent=0)[:6000])
-	print('landmarks', {k: [round(v, 3) for v in body['refLm'][k]] for k in list(body['refLm'])[:8]})
+	def true_to_lines(G, label):
+		"""Every point of a mesh's outline lies on the design's exact lines."""
+		worst = 0.0
+		for name, piece in G['pieces'].items():
+			raw = np.vstack(list(G['raw'][name].values()))
+			d, _ = cKDTree(raw).query(piece.V[:piece.n_boundary])
+			worst = max(worst, float(d.max()))
+		from check_pattern import wobble
+		w = max((wobble(e), f'{n}.{k}') for n, ed in G['raw'].items() for k, e in ed.items())
+		print(f'  {label}: mesh outline within {worst:.2f} mm of the exact lines (0.5 mm source spacing); worst wobble {w[0]:.3f} mm on {w[1]}')
+
+	true_to_lines(B, 'block')
+	export(B, base, 'block')
+	np.savez(os.path.join(DERIVED, f'wrap-{size}.npz'), base=base, tris=B['tris'], rest=B['rest'], tag=B['tag'])
+	report(body, surface, base, B['tris'], B['rest'], B['tag'], B['pieces'], B['offs'], B['welded'])
+
+	for label, cut in (('high', ('high',)), ('scoop', ('scoop',)), ('cuff', ('cuff',)), ('high-cuff', ('high', 'cuff'))):
+		G = build(design(cut))
+		start = from_block(G)
+		print('solving', label)
+		all_tris = np.ones(len(G['tris']), bool)
+		pos = part_solve(G, all_tris, start, iters=120, label=label)
+		d = np.linalg.norm(pos - start, axis=1) * 1000
+		print(f'  reuse error, {label}: mean {d.mean():.1f} mm, 95% {np.percentile(d, 95):.1f} mm, max {d.max():.1f} mm')
+		y, s_ = start[:, 1], G['on_sleeve']
+		for name, m in (('sleeve', s_), ('above waist', ~s_ & (y >= 1.03)), ('waist to hip', ~s_ & (y < 1.03) & (y >= 0.88)), ('below hip', ~s_ & (y < 0.88))):
+			if m.any():
+				print(f'    {name}: mean {d[m].mean():.1f} mm, 95% {np.percentile(d[m], 95):.1f} mm, max {d[m].max():.1f} mm')
+		true_to_lines(G, label)
+		export(G, pos, label + '-resolved')
+		export(G, start, label + '-reused')
 
 
 if __name__ == '__main__':

@@ -1,5 +1,9 @@
 # Bundle update log
 
+## 2026-11-02
+* **Creation**: [What makes a pattern true](/domain/construction/what-makes-a-pattern-true.md): rules with limits, `pipeline/check_pattern.py`; the owner's three visible defects were our processing and are fixed; the bought block's own faults listed.
+* **Update**: `pipeline/extract_block.py` keeps the PDF's true corners; `pipeline/wrap_block.py` gives each cut its own exact outline and mesh.
+
 ## 2026-11-01
 * **Creation**: [Keeping the app's options on a real block](/product/roadmap/keeping-the-options-on-the-block.md): proposal and option audit; the physical check is set aside.
 * **Creation**: [The flat and 3D link](/engineering/app/flat-and-3d-link.md): stage 4 of the [exploration](/product/roadmap/flat-and-3d-exploration-plan.md), at `/wrap.html`.

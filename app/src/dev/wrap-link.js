@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { jsPDF } from 'jspdf';
 import * as wrap from './wrap-eval.js';
 import { FlatLink } from './flat-link.js';
-import { pieceOutlines, offsetPolygon, signedArea } from '../garment/pattern.js';
+import { offsetPolygon, signedArea } from '../garment/pattern.js';
 
 const FILE = 'wrap-XS-high-cuff-resolved';
 const PX_PER_MM = 2.5, MARGIN = 0.012, CLOTH = '#e9e6dd', STONE_GAP = 0.008, STONE = 0.0033;
@@ -17,7 +17,7 @@ let flat, sheets = new Map(), meshes = [], tool = 'look', hoverDot, stones, ston
 
 // ---- pieces -----------------------------------------------------------------------------------------------------------
 
-// A cut piece: its canvas, and its flat outline (a front's two halves joined at the fold, so one piece).
+// A cut piece: its canvas, and its flat outline: the design's exact lines as the solve wrote them, never read back from the mesh.
 function buildSheets(cells) {
 	sheets = new Map();
 	for (const piece of [...new Set(cells.map((c) => c.piece))]) {
@@ -33,22 +33,9 @@ function buildSheets(cells) {
 		const texture = new THREE.CanvasTexture(cv);
 		texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8;
 		const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.62, metalness: 0, side: THREE.DoubleSide });
-		sheets.set(piece, { piece, cv, x, texture, material, u0, v0, u1, v1, outline: outlineOf(own), w: u1 - u0, h: v1 - v0 });
+		sheets.set(piece, { piece, cv, x, texture, material, u0, v0, u1, v1, outline: own[0].outline, w: u1 - u0, h: v1 - v0 });
 	}
 	clearArt();
-}
-function outlineOf(own) {
-	// a mirrored half has the same ids as its partner, so only points on the fold become one; a sleeve is one cell and keeps its slit
-	const index = new Map(), uv = [], I = [];
-	for (const c of own) {
-		const local = c.wid.map((w, v) => {
-			const key = own.length > 1 && Math.abs(c.uv[v * 2]) < 0.0015 ? `${w}` : `${c.half}:${v}`;
-			if (!index.has(key)) { index.set(key, uv.length / 2); uv.push(c.uv[v * 2], c.uv[v * 2 + 1]); }
-			return index.get(key);
-		});
-		for (const v of c.I) I.push(local[v]);
-	}
-	return pieceOutlines(I, uv)[0].map(([u, v]) => [u, v]);
 }
 const toPx = (s, u, v) => [(u - s.u0) * 1000 * PX_PER_MM, (s.v1 - v) * 1000 * PX_PER_MM];
 const refresh = () => { for (const s of sheets.values()) s.texture.needsUpdate = true; drawFlat(); };

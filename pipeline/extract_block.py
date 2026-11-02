@@ -92,13 +92,20 @@ def read_layer(doc, size):
 	return out
 
 
+def turn_at(p):
+	(ax, ay), (bx, by), (cx, cy) = p[0], p[1], p[2]
+	ux, uy, vx, vy = bx - ax, by - ay, cx - bx, cy - by
+	return math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)
+
+
 def classify(paths):
 	"""Sort a size's paths into the loops' lines and the extra lines marked on the pieces."""
 	lines, high, level, hem, marks = [], [], [], [], []
 	for p in paths:
 		L, (x0, y0, x1, y1) = length(p), bbox(p)
 		if L < 5:
-			marks.append(p)
+			# a two-legged mark is a corner, drawn because the edges stop short of it: its middle is the true corner
+			(lines if len(p) == 3 and abs(turn_at(p)) > 0.35 else marks).append(p)
 		elif L < 8:
 			continue
 		elif 555 < y0 < 600 and y1 - y0 > 150 and x1 < 640:
@@ -194,10 +201,21 @@ def signed_area(p):
 def piece_from(loop, name):
 	"""Name a loop's edges by walking round from a known corner. Sheet y runs down."""
 	count = len(EDGES[name])
+	source = loop
 	loop = resample(loop)
 	if signed_area(loop) < 0:
 		loop.reverse()
 	at, _ = corners(loop, count)
+	# the sampled corner is put exactly on the drawn one: the source point within 2 mm that turns most
+	def sharpness(i):
+		a, b, c = source[i - 1], source[i], source[(i + 1) % len(source)]
+		if math.dist(a, b) < 1e-6 or math.dist(b, c) < 1e-6:
+			return 0
+		return abs(math.atan2((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]), (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])))
+	for i in at:
+		near = [j for j in range(len(source)) if math.dist(source[j], loop[i]) < 2.0]
+		if near:
+			loop[i] = source[max(near, key=sharpness)]
 	runs = split(loop, at)
 	if name == 'sleeve':
 		# the wrist is the lowest, straightest edge; the cap is opposite it. On the sheet (y down) a
@@ -275,10 +293,28 @@ def extract(doc, size):
 				raise ValueError(f'{size} {name}: {len(own)} high leg lines')
 			leg = own[0]
 			hit = max((leg[0], leg[-1]), key=lambda q: -q[1])
-			at, away = point_along(edges['side'], hit)
 			if leg[0] != hit:
 				leg = leg[::-1]
-			extra['high_hips'] = {'leg': [frame(q) for q in leg], 'length': round(length(leg), 1), 'side_to': round(at, 1), 'gap_to_side': round(away, 2)}
+			# the drawn line stops short at both ends: carry it on, straight, to the side seam, and start it at the crotch's corner
+			(ax, ay), (bx, by) = leg[1], leg[0]
+			dx, dy = bx - ax, by - ay
+			norm = math.hypot(dx, dy) or 1
+			dx, dy = dx / norm, dy / norm
+			best, side_hit = 12.0, None
+			for (cx, cy), (ex, ey) in zip(edges['side'], edges['side'][1:]):
+				den = dx * (ey - cy) - dy * (ex - cx)
+				if abs(den) < 1e-9:
+					continue
+				t = ((cx - bx) * (ey - cy) - (cy - by) * (ex - cx)) / den
+				u = ((cx - bx) * dy - (cy - by) * dx) / den
+				if -0.01 <= u <= 1.01 and abs(t) < best:  # (a line drawn as one outline can run a little past the seam)
+					best, side_hit = abs(t), (bx + dx * t, by + dy * t)
+			if side_hit is None:
+				raise ValueError(f'{size} {name}: high leg does not reach the side seam')
+			corner = edges['leg'][-1] if math.dist(edges['leg'][-1], edges['crotch'][0]) < 1 else edges['leg'][0]
+			leg = [side_hit] + leg + [corner]
+			at, _ = point_along(edges['side'], side_hit)
+			extra['high_hips'] = {'leg': [frame(q) for q in leg], 'length': round(length(leg), 1), 'side_to': round(at, 1), 'extended': round(best, 2)}
 		if name == 'front' and level:
 			extra['level_line'] = {'y': frame(level[0][0])[1], 'length': round(length(level[0]), 1)}
 		if name == 'sleeve' and hem:
@@ -295,7 +331,7 @@ M_EXPECT = {('front', 'centre'): 629.8, ('back', 'centre'): 749.6, ('front', 'si
 def check(all_sizes):
 	worst = 0.0
 	m = all_sizes['M']['pieces']
-	print('M against its drawn paths (the corner gaps add up to about 3.5 mm per edge):')
+	print('M against its drawn paths (an edge now includes about 1.76 mm of corner leg at each end, so about +3.5):')
 	for (p, e), want in M_EXPECT.items():
 		got = m[p]['lengths'][e]
 		worst = max(worst, abs(got - want))
