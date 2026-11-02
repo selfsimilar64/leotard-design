@@ -48,6 +48,19 @@ Block line to the app's line, mean; lowest point below the crotch, block against
 
 Before, on `young`: 6.7 front, 22.1 back; lowest 16 / 1 and 18 / 10. Blocks: 16 of 17 pass all 42 rules; XXS still misses the front leg S-bend at 26.1%. Inside out 0.04-0.12%.
 
+# Owner's objection and a controlled trial
+
+The owner rejected `BACK_LEG`: no designer would draw that irregular line, and the flat shapes are the link to reality, so ask first whether the pattern is the cause or whether real fabric would stretch and cling.[^owner] It is still in the code, pending the owner's decision. Trial on `young`, high cut, with the crotch floor (`wrap-trial-*`, git-ignored; half width of the opening at 7 / 10 cm above the crotch, mm; the app is 108 / 120):
+
+| Pattern and elastic in the fit | 7 cm | 10 cm | Line to app, mean | Seat stretch, mean |
+|---|---|---|---|---|
+| Original drafted, no elastic | 65 | 81 | 22.3 | 1.12 |
+| Original drafted, K 8, back leg 85% | 71 | 94 | 17.4 | 1.17 |
+| Original drafted, K 40, back leg 75% | 111 | 143 | 14.9 | 1.37 |
+| Bought XS, K 8, back leg 85% | 125 | 139 | 16.0 | 1.12 |
+
+Flat half width of the back at 7 cm: original drafted high cut 34 mm, bought XS 65 mm. The bought high cut is a nearly straight diagonal; the drafter's is a deep scoop, a departure from the block it was calibrated on. **Reading:** tension moves the line a long way, so the owner's question is well founded, but matching needed the sourced limit of elastic, a stiffness picked for the trial, and overshot at 10 cm. The solver is not a cloth simulation and has no measured fabric properties, so these show direction, not a prediction. Bought XS is a chart size, not fitted to `young`.
+
 # Known limits
 
 - `BACK_LEG` adds a visible bend at the line's midpoint, where its two curves meet: on `young` the line turns back 36-38 degrees, tightest radius 26-29 mm, against one sweep of 87-116 mm before. It passes the block rules, but a pattern maker should not be expected to accept it. It gives the wanted cover but is not a finished line. Only the back leg moved in the block: up to 35 mm on the fullest cut and 45 mm on the high cut, adding 32 cm2 to the half piece.
