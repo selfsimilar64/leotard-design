@@ -149,6 +149,8 @@ export async function show(file, mode = 'fabric', opts = {}) {
 			for (let j = 0; j < 3; j++) v += hw[l * 3 + j] * G[hi[l * 3 + j] * 3 + k];
 			Pos[l * 3 + k] = v + Nrm[l * 3 + k] * 0.0012;
 		}
+		// the garment surface already holds the lift: the fabric shader would add it again (materials/fabric.js)
+		if (mode === 'fabric' && !opts.material) geo.attributes.aLift.array.fill(0);
 		if (mode === 'stretch') stretchColours(geo);
 		view.group.add(mesh);
 		added.push(mesh);

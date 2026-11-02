@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-02
+* **Creation**: [Fit solver realism audit](/engineering/app/fit-solver-realism-audit.md): the solver against public simulators and research, before speed work; the viewer's double lift found and fixed.
 * **Creation**: [Refitting after an edit](/engineering/app/refitting-after-an-edit.md): first timing and accuracy of a re-fit after a cutout, started from the existing fit, `pipeline/refit_bench.py`.
 * **Update**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): the hard crotch pin is replaced by fabric that gathers under compression; trials, limits and the new tunable value recorded.
 * **Update**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): purchased patterns are the authority; drafted leg cuts are now its lines, `BACK_LEG` removed, elastic given named tunable values, poses cover the block's own fabric.
