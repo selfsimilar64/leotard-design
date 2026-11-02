@@ -1,6 +1,6 @@
 """How far a wrapped block's openings land from where the app's own build puts the same lines, on one body.
 
-The app's build is the fit the owner accepts, so it is the reference for where a leg line belongs.
+A comparison only: the purchased block decides a leg line's shape, and no flat line is tuned to match the app's.
     python pipeline/compare_fit.py <wrap file, no extension> <body key>
 Reads app/captures/<file>.json, wrap-seed-<key>.json, wrap-body-<key>.json. Spec: knowledge/engineering/app/fitting-a-block-like-the-app.md.
 """

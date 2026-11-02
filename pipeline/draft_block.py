@@ -3,7 +3,8 @@
 Every line is a smooth curve, and every place two lines meet across a seam is decided before the curve is drawn: each
 leaves the seam square to it, so sewn together they run straight on. Sewn edges are the same curve or the same length, by
 construction. Proportions and reductions are calibrated against one reference block at XS on the `young` body; the figures in
-REF are measurements of it, and everything scales from a body's own tape measures. No outline is copied.
+REF are measurements of it, and everything scales from a body's own tape measures. The leg cuts are the exception: they are the
+purchased block's own lines, scaled to each body, never redrawn (knowledge/engineering/app/fitting-a-block-like-the-app.md).
 
     python pipeline/draft_block.py      writes assets/blocks/body-<key>.json and size-<name>.json (git-ignored)
 Needs app/captures/wrap-measures.json (dev/wrap-eval.js exportBodies). Check with pipeline/check_pattern.py --dir assets/blocks.
@@ -18,6 +19,7 @@ from scipy.interpolate import CubicSpline
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'assets', 'blocks')
 MEASURES = os.path.join(HERE, '..', 'app', 'captures', 'wrap-measures.json')
+PURCHASED = os.path.join(HERE, '..', 'assets', 'patterns', 'basicpatternblock-leotard-0005', 'derived', 'XS.json')
 
 # Reference proportions, mm, for the `young` body. Girth reductions are the share taken out of the body's girth.
 REF = dict(
@@ -25,13 +27,12 @@ REF = dict(
 	neck_x=59.0, drop_f=75.0, drop_b=16.0,      # the neck's width on the piece, how far it falls below the shoulder
 	shoulder_x=169.0, shoulder_drop=43.0,
 	arm_y_f=481.0, arm_y_b=539.0,               # height of the armpit on each piece
-	side=412.0, side_waist=220.0, side_hip=370.0, side_high=282.0,
+	side=435.0, side_waist=220.0, side_hip=370.0, side_high=278.5,  # height from the armpit down to where each purchased leg cut meets the side
 	crotch_x=29.0, sleeve_over=1.123, cap_ease=0.025, bicep_k=1.055, wrist_k=1.035,
 	r_bust=0.166, r_waist=0.082, r_hip=0.165, end_flare=11.0,
 )
 STEP = 0.5  # mm between stored points of a curve
 NECK_TURN = 18.0  # degrees either way from square, at the shoulder seam
-BACK_LEG = (0.26, 0.08)  # the back leg's handles at its ends and its middle, over its chord
 
 
 def norm(v):
@@ -69,8 +70,22 @@ def fit_length(make, target, lo=0.05, hi=2.0):
 	return make((lo + hi) / 2)
 
 
+def purchased_leg(line, e, c):
+	"""A purchased leg cut, side end to crotch, stretched in width and height to run from e to c. A curve through its own points,
+	since the PDF draws the high cut in few: its shape is kept, never redrawn."""
+	q = np.asarray(line, float)
+	scale = (e - c) / (q[0] - q[-1])
+	q = c + (q - q[-1]) * scale
+	s = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(q, axis=0), axis=1))])
+	keep = np.concatenate([[True], np.diff(s) > 1e-6])
+	t = np.linspace(0, s[-1], max(2, int(s[-1] / STEP) + 1))
+	return CubicSpline(s[keep], q[keep])(t)
+
+
 def draft(m, base):
 	"""m: tape measures; base: the same for the reference body."""
+	with open(PURCHASED, encoding='utf-8') as f:
+		bought = json.load(f)['pieces']
 	v = (m['front']['neck'] + m['back']['neck']) / (base['front']['neck'] + base['back']['neck'])  # length of the trunk
 	shoulder_k = m['shoulderX'] / base['shoulderX']
 	neck_k = m['neckHalfWidth'] / base['neckHalfWidth']
@@ -117,27 +132,14 @@ def draft(m, base):
 		arm = bezier(tip, -up, (0.38 if name == 'front' else 0.34) * chord, armpit, out, 0.4 * chord)
 		side = np.column_stack([side_x, arm_y - ds])
 
-		def leg_line(end_d):
+		def leg_line(end_d, line):
 			e = np.array([curve(end_d), arm_y - end_d])
-			t = norm((curve(end_d + STEP) - curve(end_d), -STEP))
-			inward = np.array([t[1], -t[0]])
-			if inward[0] > 0:
-				inward = -inward
 			c = np.array([REF['crotch_x'] * (m['hip'] / base['hip']) ** 0.5, 0.0])
-			gap = np.linalg.norm(e - c)
-			# leaves the side square and arrives square to the crotch seam, with handles balanced so it sweeps in one bend
-			# (and it never climbs above the side seam on the way: a low leg has little height to work with)
-			if name == 'front':
-				return even(bezier(e, inward, 0.3 * gap, c, (0, -1), min(0.42 * gap, 0.9 * (e[1] - c[1])))), c
-			# A back leg runs nearly straight, to keep the cheek covered (sweeping it in like a front took 45 mm off the cover each side):
-			# two curves meeting on the chord, along it, each rounding one end so that it still leaves square
-			mid, along = (e + c) / 2, norm(c - e)
-			end, middle = BACK_LEG[0] * gap, BACK_LEG[1] * gap
-			return even(np.vstack([bezier(e, inward, end, mid, along, middle), bezier(mid, along, middle, c, (0, -1), min(end, 0.9 * (e[1] - c[1])))[1:]])), c
-		leg, c = leg_line(d_e)
+			return purchased_leg(line, e, c), c
+		leg, c = leg_line(d_e, bought[name]['edges']['leg'])
 		crotch = even(np.vstack([c, [0.0, 0.0]]))
 		fold = even(np.vstack([[0.0, 0.0], start]))
-		high, _ = leg_line(high_d)
+		high, _ = leg_line(high_d, bought[name]['variants']['high_hips']['leg'])
 		e = {'neck': neck, 'shoulder': shoulder, 'armhole': arm, 'side': side, 'leg': leg, 'crotch': crotch, 'centre': fold}
 		pieces[name] = {'edges': e, 'variants': {'high_hips': {'leg': high, 'side_to': float(np.interp(high_d, ds, np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(side, axis=0), axis=1))]))), 'length': length(high)}}}
 
@@ -191,7 +193,7 @@ def draft(m, base):
 	wrist = bezier((ww, 0.0), wrist_in, gap / 3, (-ww, 0.0), wrist_in * mirror * np.array([-1, -1]), gap / 3)
 	cap = np.vstack([cap_b[::-1], cap_f[1:]])
 	pieces['sleeve'] = {'edges': {'cap': cap, 'underarm_f': under_f, 'wrist': wrist, 'underarm_b': under_b[::-1]}, 'variants': {}}
-	result = {'source': 'draft_block.py', 'units': 'mm', 'seam_allowance': 0, 'grain': 'vertical', 'cut': {'front': 'fold', 'back': 'fold', 'sleeve': 'two mirrored'},
+	result = {'source': 'draft_block.py', 'legs': 'purchased', 'units': 'mm', 'seam_allowance': 0, 'grain': 'vertical', 'cut': {'front': 'fold', 'back': 'fold', 'sleeve': 'two mirrored'},
 		'seams': [['front', 'shoulder', 'back', 'shoulder'], ['front', 'side', 'back', 'side'], ['front', 'crotch', 'back', 'crotch'], ['sleeve', 'underarm_f', 'sleeve', 'underarm_b']], 'pieces': {}}
 	for name, p in pieces.items():
 		E = {k: np.round(v, 3).tolist() for k, v in p['edges'].items()}

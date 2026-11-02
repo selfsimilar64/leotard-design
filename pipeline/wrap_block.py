@@ -30,10 +30,11 @@ ITERS = 240
 FACING = {'front': 1, 'back': -1, 'sleeve': -1}  # on the +x side of the body; the block lays a sleeve out with its front at +x
 PLANE = 300.0  # how hard points keep to the surface's tangent plane, against the fabric's own shape
 DAMP = 0.05  # how much each step stays where it was
-# Elastic sewn into each opening, as its length over the edge it is sewn to. A loop shorter than the opening is what holds a leg
-# line up in the crease; sources give 75-100%, tighter at the back leg (knowledge/domain/construction/edge-finishing-elastic-and-binding.md).
-ELASTIC = {('front', 'leg'): 0.95, ('back', 'leg'): 0.85, ('front', 'neck'): 0.95, ('back', 'neck'): 0.95, ('sleeve', 'wrist'): 0.95}
-ELASTIC_K = 8.0  # how hard, against the fabric's own shape (an edge's triangle weights are about 1)
+# TUNABLE, not measured. Elastic sewn into each opening, as its length over the edge it is sewn to. A loop shorter than the opening is what holds
+# a leg line up in the crease. Legs are the one explicit published rule, Spruce & Fjell's: front 1:1, back 3/4 (whole opening 87%; Treasurie starts at
+# 85%). Neck and wrist are chosen within the sourced 75-100%. Why: knowledge/engineering/app/fitting-a-block-like-the-app.md.
+ELASTIC = {('front', 'leg'): 1.0, ('back', 'leg'): 0.75, ('front', 'neck'): 0.95, ('back', 'neck'): 0.95, ('sleeve', 'wrist'): 0.95}
+ELASTIC_K = 8.0  # how hard, against the fabric's own shape (an edge's triangle weights are about 1). An estimate: no force data for this elastic or fabric was found
 
 
 def arclen(p):

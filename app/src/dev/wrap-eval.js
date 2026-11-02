@@ -113,15 +113,15 @@ function stretchColours(geo) {
 
 // mode: 'fabric' (the block on the app's own material), 'grid' (a 10 cm square grid drawn on the flat piece, red at its
 // origin) or 'stretch' (area stretch). The block's pieces take the place of the app's own, which stay in the document.
-// opts.onSkin: place the block by the body's own current arrays, as the app's pieces are, so it follows the pose; it then
-// sits on the skin wherever the app's own pieces don't cover.
+// The block is placed by the body's own current arrays, as the app's pieces are, so it follows the pose, with the body told where the
+// block's fabric is: a pose only slides and lifts what is covered, so a block reaching past the app's own cut went jagged at its edge.
 export async function show(file, mode = 'fabric', opts = {}) {
 	const app = window.app, view = app.engine.views[0];
 	hide();
 	const data = await (await fetch('/__fs/captures/' + file + '.json')).json();
 	const panels = new Map(app.doc.panels.map((p) => [p.name, p.id]));
 	flat ??= grid();
-	if (opts.onSkin) cover(app.engine, data.cells);
+	cover(app.engine, data.cells);
 	const area = { pieces: {} };
 	for (const c of data.cells) {
 		const n = c.hostW.length / 3, geo = new THREE.BufferGeometry();
@@ -142,12 +142,11 @@ export async function show(file, mode = 'fabric', opts = {}) {
 		mesh.userData.name = c.name;
 		mesh.userData.cell = c;
 		view.interpolate({ mesh, hosts: { i: Uint32Array.from(c.hostI), w: Float32Array.from(c.hostW) } });
-		// on the garment surface, clear of the skin: this block covers more than the app's own pieces, whose
-		// cover is all the body has lifted for (standing body only; a pose would need the lift solved for this block)
+		// on the garment surface, clear of the skin
 		const Pos = geo.attributes.position.array, Nrm = geo.attributes.normal.array, G = app.engine.body.garmentPos, hi = c.hostI, hw = c.hostW;
 		for (let l = 0; l < n; l++) for (let k = 0; k < 3; k++) {
-			let v = Pos[l * 3 + k];
-			if (!opts.onSkin) { v = 0; for (let j = 0; j < 3; j++) v += hw[l * 3 + j] * G[hi[l * 3 + j] * 3 + k]; }
+			let v = 0;
+			for (let j = 0; j < 3; j++) v += hw[l * 3 + j] * G[hi[l * 3 + j] * 3 + k];
 			Pos[l * 3 + k] = v + Nrm[l * 3 + k] * 0.0012;
 		}
 		if (mode === 'stretch') stretchColours(geo);

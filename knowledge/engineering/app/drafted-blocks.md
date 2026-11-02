@@ -29,12 +29,12 @@ sewn edges share a curve or a length. It covers child bodies, which the bought b
 # How a block is drawn
 
 - **Measures** come from a body's garment surface (`measureBody`): bust, waist, hip by a tape's hull; centre front and back; side levels; neck, shoulder; arm length, bicep, wrist. Adult chart sizes take the chart's four and scale the rest from the `young` body **[INFERRED]**.
-- **`REF`** holds proportions and reductions measured from the bought block at XS against `young`: centre lengths, armpit heights, shoulder, reductions of 16.6% bust, 8.2% waist, 16.5% hip. Everything scales from there. No outline is copied, though proportions derive from that block; whether that matters under its terms has not been reviewed.
+- **`REF`** holds proportions and reductions measured from the bought block at XS against `young`: centre lengths, armpit heights, shoulder, reductions of 16.6% bust, 8.2% waist, 16.5% hip. Everything scales from there. Proportions derive from that block and its leg cuts are its own lines, scaled; whether that is allowed under its terms has not been reviewed.
 - **Side seam** is one spline, shared by front and back.
 - **Joins**: neck turned 18 degrees either way from square at the shoulder, armhole and leg square to the seam they leave.
 - **Sleeve cap**: height solved for total length, crown position for sharing it between armholes. Cap is 2.5% longer than the armhole.
 - **Shoulder** stops at 94% of the armpit's width, since a child's chest is narrow for its shoulders.
-- Low leg shortened to 412 mm of side at `young`, or there is too little height for a clean curve.
+- **Leg cuts** are the purchased block's, stretched to each body; [never redrawn](/engineering/app/fitting-a-block-like-the-app.md).
 
 # Results
 
@@ -62,7 +62,7 @@ The stretch report uses fixed heights set for adults, so child figures are not m
 
 # Known problems
 
-**Superseded for the leg and crotch:** the table above predates [fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md), which gave the back its own leg curve and added elastic. Stretch and reuse figures were not re-tabulated.
+**Superseded for the leg and crotch:** the results above predate [fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md), which took the leg cuts from the purchased block and added elastic; all 17 blocks now pass 38 rules, XXS included. Stretch and reuse figures here were not re-tabulated.
 
 - **Crotch pucker**: the hole at the back of the crotch was the seam running down the inner thigh, not the body surface as first inferred; fixed in that page.
 - **Bust is tight in front on teens** (1.45 local against about 1.20 intended): front and back share a side seam at equal width. A front share or body shaping is the likely fix.

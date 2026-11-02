@@ -151,7 +151,7 @@ function project(design = motif(), size = 0.8) {
 // ---- the 3D side --------------------------------------------------------------------------------------------------------
 
 async function showOn3D() {
-	const r = await wrap.show(FILE, 'print', { onSkin: true, material: (c) => sheets.get(c.piece)?.material ?? new THREE.MeshBasicMaterial() });
+	const r = await wrap.show(FILE, 'print', { material: (c) => sheets.get(c.piece)?.material ?? new THREE.MeshBasicMaterial() });
 	meshes = r.meshes;
 	return r;
 }

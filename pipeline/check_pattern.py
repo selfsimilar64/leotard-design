@@ -60,9 +60,25 @@ def check(block):
 	P = {k: {e: np.array(r, float) for e, r in v['edges'].items()} for k, v in block['pieces'].items()}
 	L = {(k, e): float(arc(r)[-1]) for k, v in P.items() for e, r in v.items()}
 	rows = []
+	# Legs taken from the purchased block answer to it, not to our rules for a line we draw ourselves: it fails some of those, and it is the authority
+	own_legs = block.get('legs') != 'purchased'
 
 	def add(rule, name, value, limit, unit):
 		rows.append((rule, name, value, limit, unit, value <= limit))
+
+	if not own_legs:
+		with open(os.path.join(DERIVED, 'XS.json'), encoding='utf-8') as f:
+			bought = json.load(f)['pieces']
+
+		def box(r):
+			r = np.asarray(r, float)
+			return (r - r[-1]) / (r[0] - r[-1])
+		for piece in ('front', 'back'):
+			B = block['pieces'][piece]
+			for name, ours, theirs in (('leg', B['edges']['leg'], bought[piece]['edges']['leg']), ('leg_high', B['variants']['high_hips']['leg'], bought[piece]['variants']['high_hips']['leg'])):
+				size = np.abs(np.asarray(ours)[0] - np.asarray(ours)[-1])
+				D = np.linalg.norm((box(theirs)[:, None] - box(ours)[None]) * size, axis=2)
+				add('leg is the purchased line', f'{piece}.{name}', float(D.min(axis=1).max()), 1.0, 'mm')
 
 	for a, x, b, y in block['seams']:
 		add('seam lengths', f'{a}.{x} / {b}.{y}', abs(L[a, x] - L[b, y]), SEAM_MM, 'mm')
@@ -91,7 +107,7 @@ def check(block):
 		r = P[piece]['neck']
 		q = r if abs(r[0, 0]) < abs(r[-1, 0]) else r[::-1]
 		add('neck never dips', f'{piece}.neck', float(max(0.0, q[0, 1] - q[:, 1].min())), 0.1, 'mm')
-		for leg_name in ('leg', 'leg_high'):
+		for leg_name in ('leg', 'leg_high') if own_legs else ():
 			l = P[piece][leg_name]
 			d = np.diff(l, axis=0)
 			d = d[np.linalg.norm(d, axis=1) > 1e-6]
@@ -109,11 +125,13 @@ def check(block):
 		_, i, j = min(d)
 		return (l, i, s, j)
 	join('neck over the shoulder', pair('front', 'neck', 'shoulder'), pair('back', 'neck', 'shoulder'))
-	join('leg over the side (thigh)', pair('front', 'leg', 'side'), pair('back', 'leg', 'side'))
-	join('leg over the crotch (thigh)', pair('front', 'leg', 'crotch'), pair('back', 'leg', 'crotch'))
+	if own_legs:
+		join('leg over the side (thigh)', pair('front', 'leg', 'side'), pair('back', 'leg', 'side'))
+		join('leg over the crotch (thigh)', pair('front', 'leg', 'crotch'), pair('back', 'leg', 'crotch'))
 	join('armhole under the arm', pair('front', 'armhole', 'side'), pair('back', 'armhole', 'side'))
 	join('wrist over the underarm', pair('sleeve', 'wrist', 'underarm_f'), pair('sleeve', 'wrist', 'underarm_b'))
-	join('high leg over the crotch', pair('front', 'leg_high', 'crotch'), pair('back', 'leg_high', 'crotch'))
+	if own_legs:
+		join('high leg over the crotch', pair('front', 'leg_high', 'crotch'), pair('back', 'leg_high', 'crotch'))
 	# a high leg meets the side part way down: both pieces must arrive at the same place on it
 	hf, hb = block['pieces']['front']['variants']['high_hips'], block['pieces']['back']['variants']['high_hips']
 	add('high leg meets the side level', 'front / back', abs(hf['side_to'] - hb['side_to']), SEAM_MM, 'mm')
@@ -126,7 +144,8 @@ def check(block):
 		t = (b_ - a_) / np.linalg.norm(b_ - a_)
 		u = direction(leg, 0)
 		angles.append(abs(math.degrees(math.atan2(t[0] * u[1] - t[1] * u[0], t @ u))))
-	add('smooth across a seam', 'high leg over the side', abs(sum(angles) - 180), JOIN_DEG, 'deg')
+	if own_legs:
+		add('smooth across a seam', 'high leg over the side', abs(sum(angles) - 180), JOIN_DEG, 'deg')
 	for name, E in P.items():
 		for e, r in E.items():
 			add('no wobble', f'{name}.{e}', wobble(r), WOBBLE_MM, 'mm')
