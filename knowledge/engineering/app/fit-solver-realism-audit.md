@@ -44,7 +44,7 @@ The ranking is a judgement: no paper tests these one at a time on one garment.
 
 Checks: `pipeline/fit_checks.py`, `pipeline/pose_resolve.py`, `pipeline/reference/` (results in `research_notes/Tight garment fit solver audit/reference_simulator_results.md`).
 
-**1. Settling and forcing.** 120 iterations were too few (240 more moved 1.7 mm mean, 7 mm at most), so `CUT_ITERS` is 360: 240 more move 0.22 mm mean, 3.15 at most; 720 more 0.14 mean. Along-surface force is about 1000 times smaller than the force holding fabric to the surface. Pressure, mmHg, median: crotch 2.5, seat 2.5, back waist 3.5, belly 2.6, bust 1.1, upper back 0.25, sleeve 1.25, about the published 1-6. The surface holds fabric in by suction, not contact, on 47% of the small of the back, 30% of the cleft, 27% of the bust, 11% of the upper back. 4.7% of triangles sit at the gathering limit.
+**1. Settling and forcing.** 120 iterations were too few (240 more moved 1.7 mm mean, 7 mm at most), so `CUT_ITERS` is 360: 240 more move 0.22 mm mean, 3.15 at most; 720 more 0.14 mean. Along-surface force is about 1000 times smaller than the force holding fabric to the surface. Pressure, mmHg, median: crotch 2.5, seat 2.5, back waist 3.5, belly 2.6, bust 1.1, upper back 0.25, sleeve 1.2, about the published 1-6. The surface holds fabric in by suction, not contact, on 47% of the small of the back, 30% of the cleft, 27% of the bust, 11% of the upper back. 3.7% of triangles sit at the gathering limit.
 
 **2. Elastic and mesh.** Elastic now pulls only and has strength per unit length (`ELASTIC_WIDTH`, default 20 mm, range 10-50).
 
