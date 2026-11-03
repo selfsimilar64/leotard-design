@@ -4,6 +4,7 @@
 
 # Roadmap
 
+* [Bringing the block-first garment into the app](block-first-app-plan.md) (draft) - Plan and capability map of 2026-11-03: the app's design options re-made as cuts, splits and redrafts of one fitted block, fitted by the GPU re-fit; a flat view beside the 3D view, each switchable, with a focus on one piece; what studios are known to do. For deciding direction, not yet started.
 * [Flat and 3D exploration plan](flat-and-3d-exploration-plan.md) (draft) - Staged plan, each stage with a gate, for testing whether a real flat pattern can be the garment's source geometry, wrapped once onto the body so that flat and 3D always agree and print maps directly to the cut piece.
 * [Keeping the app's options on a real block](keeping-the-options-on-the-block.md) (draft) - Proposal of 2026-11-01: every shape option becomes a way of cutting one fitted block, rather than being dropped. An audit found all options lie on block XS except for up to 1.9% at a high neck; options are sorted by how much they disturb the fit.
 * [Roadmap - from POC to a tool that can build the whole moodboard](moodboard-coverage-roadmap.md) (draft) - Nine phases (P0-P8), each ending in a measurable gate, that take the three.js POC to a designer tool able to rebuild any moodboard leotard from a photo at 60 fps; with the benchmark set, the rehearsal protocol for the owner's recreation test and the frame budget per phase.

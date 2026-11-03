@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-03
+* **Creation**: [Bringing the block-first garment into the app](/product/roadmap/block-first-app-plan.md): every design option as a cut, split or redraft of the bought block; flat and 3D views switchable with a focus on one piece; one block altered, plus bought sleeveless and raglan variants, rather than a block per design. Not started.
 * **Update**: [The re-fit in the app](/engineering/app/refit-in-the-app.md): the step count is the lever (owner); default 150 steps (about 0.33 s), early stop off; accuracy measured at 10-750 steps on all seven cases.
 * **Update**: [The re-fit in the app](/engineering/app/refit-in-the-app.md): stop rule default 2 mm per 10-step window for every point (owner's proposal); all seven cases stop within 340 steps, poses within 0.3-0.85 mm mean of a full run.
 * **Update**: [The re-fit in the app](/engineering/app/refit-in-the-app.md): the owner's first look. Skin showing through was the tuning page drawing the fabric unlifted (fixed there); folds come from no bending, free compression and no fabric-on-fabric contact; arms up the underarm seams line up as in photos but the armhole dips into a U that friction keeps from the carried-over standing fit.
