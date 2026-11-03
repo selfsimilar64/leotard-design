@@ -35,6 +35,26 @@ class Keep(S.Recorder):
 		return self.it < max(self.its)
 
 
+def seam_edges(tris, rest):
+	"""Edges where the garment is sewn: the two triangles beside the edge sit apart in the flat pattern (a fold, where the halves join
+	mirrored, keeps the same flat place and is not a seam). Pairs of point indices."""
+	where = {}
+	seams = []
+	for t in range(len(tris)):
+		for k in range(3):
+			a, b = tris[t, k], tris[t, (k + 1) % 3]
+			ra, rb = rest[t, k], rest[t, (k + 1) % 3]
+			key = (min(a, b), max(a, b))
+			flat = (ra, rb) if a < b else (rb, ra)
+			if key in where:
+				fa, fb = where.pop(key)
+				if np.abs(fa - flat[0]).max() > 1e-6 or np.abs(fb - flat[1]).max() > 1e-6:
+					seams.append(key)
+			else:
+				where[key] = flat
+	return np.array(seams, np.int32).reshape(-1, 2)
+
+
 def main():
 	key = sys.argv[1] if len(sys.argv) > 1 else 'young'
 	os.makedirs(OUT, exist_ok=True)
@@ -73,6 +93,8 @@ def main():
 		put('rest_len', el[:, 2], np.float32)
 		put('k', el[:, 3], np.float32)
 		put('sleeve', pb.sleeve_np, np.int32)
+		put('piece', np.searchsorted(['back', 'front', 'sleeve'], case['tag']), np.int32)  # per triangle: 0 back, 1 front, 2 sleeve
+		put('seams', seam_edges(tris, case['rest']), np.int32)
 		put('start', start, np.float32)
 		put('reference', ref, np.float32)
 		put('python_1', keep.xs[1], np.float32)

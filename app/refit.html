@@ -55,7 +55,10 @@
 		<div class="row"><label>Grip change per step<small>1 = all at once</small></label><input id="grip" type="number" min="0.01" max="1" step="0.05"></div>
 		<h2>Show</h2>
 		<div class="row"><label>Garment</label><select id="show"><option value="avg">last window's average</option><option value="raw">last step</option><option value="start">the start</option></select></div>
-		<div class="row"><label>Colour</label><select id="colour"><option value="error">distance from the settled fit</option><option value="drift">drift in the last window</option><option value="none">plain</option></select></div>
+		<div class="row"><label>Colour</label><select id="colour"><option value="error">distance from the settled fit</option><option value="drift">drift in the last window</option><option value="piece">by panel (front, back, sleeve)</option><option value="none">plain</option></select></div>
+		<div class="row"><label>Drawn off the skin by<small>mm, display only (the app's viewer lifts too)</small></label><input id="lift" type="number" min="0" step="0.5" value="1"></div>
+		<div class="row"><label>Seams</label><input id="seams" type="checkbox" checked style="width:auto"></div>
+		<div class="buttons"><button id="underarm">Look at an underarm</button></div>
 		<div class="buttons"><button id="run" class="primary">Run</button><button id="reset">Reset</button><button id="check">Check against Python</button><button id="defaults">Defaults</button></div>
 		<div id="status"></div>
 		<div id="out"></div>

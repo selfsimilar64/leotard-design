@@ -14,7 +14,7 @@ const lab = window.lab = {};
 let device, refit, data, log = [], last = null;
 
 // ---- view -------------------------------------------------------------------------------------------------------------
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 $('view').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
@@ -29,7 +29,10 @@ sun.position.set(1.5, 3, 2.5);
 scene.add(sun);
 const bodyMesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: '#c9b9a8', roughness: 0.8 }));
 const garment = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1 }));
-scene.add(bodyMesh, garment);
+const seamLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#1d1d1b', depthTest: true }));
+seamLines.renderOrder = 2;
+scene.add(bodyMesh, garment, seamLines);
+let junctions = [], junctionAt = 0;
 function resize() {
 	const r = $('view').getBoundingClientRect();
 	renderer.setSize(r.width, r.height, false);
@@ -63,6 +66,27 @@ function showBody() {
 	gg.setIndex(Array.from(A.tris));
 	garment.geometry.dispose();
 	garment.geometry = gg;
+	const sg = new THREE.BufferGeometry();
+	sg.setAttribute('position', gg.attributes.position);
+	sg.setIndex(Array.from(A.seams));
+	seamLines.geometry.dispose();
+	seamLines.geometry = sg;
+	// underarms: where front, back and sleeve meet at the end of the sleeve's own seam (the shoulder point is the other such place)
+	const touch = new Map(), tri = new Map();
+	for (let t = 0; t < A.piece.length; t++) {
+		for (let k = 0; k < 3; k++) {
+			const v = A.tris[3 * t + k], w = A.tris[3 * t + (k + 1) % 3];
+			touch.set(v, (touch.get(v) || 0) | (1 << A.piece[t]));
+			const key = Math.min(v, w) + ',' + Math.max(v, w);
+			tri.set(key, (tri.get(key) || []).concat(A.piece[t]));
+		}
+	}
+	const sleeveSeam = new Set();
+	for (let e = 0; e < A.seams.length; e += 2) {
+		const ps = tri.get(Math.min(A.seams[e], A.seams[e + 1]) + ',' + Math.max(A.seams[e], A.seams[e + 1])) || [];
+		if (ps.length === 2 && ps[0] === 2 && ps[1] === 2) { sleeveSeam.add(A.seams[e]); sleeveSeam.add(A.seams[e + 1]); }
+	}
+	junctions = [...touch].filter(([v, m]) => m === 7 && sleeveSeam.has(v)).map(([v]) => v);
 }
 
 const RAMP = ['#3b6fd8', '#4cc38a', '#f2d14b', '#e2533b'].map((c) => new THREE.Color(c));
@@ -78,8 +102,24 @@ async function paint() {
 	const x = how === 'start' ? data.arrays.start : await refit.positions(how === 'avg' && refit.steps > 0);
 	const g = garment.geometry;
 	g.attributes.position.array.set(x);
-	g.attributes.position.needsUpdate = true;
 	g.computeVertexNormals();
+	const lift = Number($('lift').value) / 1000, pos = g.attributes.position.array;
+	if (lift) {
+		// away from the body: each triangle's normal turned by its facing sign (+1 when its winding faces out), summed per point
+		const A = data.arrays, out = new Float32Array(pos.length);
+		for (let t = 0; t < A.facing.length; t++) {
+			const [a, b, c] = [A.tris[3 * t], A.tris[3 * t + 1], A.tris[3 * t + 2]];
+			const u = [0, 1, 2].map((k) => x[3 * b + k] - x[3 * a + k]), v = [0, 1, 2].map((k) => x[3 * c + k] - x[3 * a + k]);
+			const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]].map((q) => q * A.facing[t]);
+			for (const p of [a, b, c]) for (let k = 0; k < 3; k++) out[3 * p + k] += n[k];
+		}
+		for (let i = 0; i < pos.length; i += 3) {
+			const l = Math.hypot(out[i], out[i + 1], out[i + 2]) || 1;
+			for (let k = 0; k < 3; k++) pos[i + k] += lift * out[i + k] / l;
+		}
+	}
+	g.attributes.position.needsUpdate = true;
+	seamLines.visible = $('seams').checked;
 	const col = g.attributes.color.array, mode = $('colour').value;
 	let values = null, top = 5;
 	if (mode === 'error') values = distances(x, data.arrays.reference);
@@ -87,8 +127,11 @@ async function paint() {
 	$('legend').style.display = values ? '' : 'none';
 	$('legendTitle').textContent = mode === 'drift' ? 'how far each point\'s average moved in the last window' : 'distance from the settled fit';
 	$('legendMax').textContent = `${top} mm`;
+	const PIECE = ['#b9d3ea', '#f1efe9', '#cfc2ea'].map((c) => new THREE.Color(c));  // back, front, sleeve
+	const piece = new Int8Array(refit.n);
+	if (mode === 'piece') for (let t = 0; t < data.arrays.piece.length; t++) for (let k = 0; k < 3; k++) piece[data.arrays.tris[3 * t + k]] = data.arrays.piece[t];
 	for (let i = 0; i < refit.n; i++) {
-		const c = values ? ramp(values[i] / top) : new THREE.Color('#f1efe9');
+		const c = values ? ramp(values[i] / top) : mode === 'piece' ? PIECE[piece[i]] : new THREE.Color('#f1efe9');
 		col[3 * i] = c.r; col[3 * i + 1] = c.g; col[3 * i + 2] = c.b;
 	}
 	g.attributes.color.needsUpdate = true;
@@ -227,6 +270,7 @@ lab.check = async function check() {
 	busy(false, '');
 };
 
+lab.view = { camera, controls };
 lab.open = (name) => { $('case').value = name; return open(name); };
 lab.set = (s) => { fill({ ...settings(), ...s }); physicsNote(); };
 $('run').onclick = () => lab.run();
@@ -236,6 +280,22 @@ $('defaults').onclick = () => { fill(DEFAULTS); physicsNote(); };
 $('case').onchange = () => open($('case').value);
 $('show').onchange = paint;
 $('colour').onchange = paint;
+$('seams').onchange = paint;
+$('lift').onchange = paint;
+// the camera close on one underarm, then the other
+$('underarm').onclick = () => {
+	if (!junctions.length) return;
+	const x = garment.geometry.attributes.position.array;
+	const side = junctions.filter((v) => (junctionAt % 2 ? x[3 * v] < 0 : x[3 * v] > 0));
+	const pick = side.length ? side : junctions;
+	const c = new THREE.Vector3();
+	for (const v of pick) c.add(new THREE.Vector3(x[3 * v], x[3 * v + 1], x[3 * v + 2]));
+	c.multiplyScalar(1 / pick.length);
+	const out = new THREE.Vector3(c.x, 0, c.z + 0.05).normalize();
+	controls.target.copy(c);
+	camera.position.copy(c).addScaledVector(out, 0.35).add(new THREE.Vector3(0, -0.05, 0));
+	junctionAt++;
+};
 for (const k of FIELDS) $(k).addEventListener('change', physicsNote);
 
 resize();

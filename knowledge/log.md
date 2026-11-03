@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-03
+* **Update**: [The re-fit in the app](/engineering/app/refit-in-the-app.md): the owner's first look. Skin showing through was the tuning page drawing the fabric unlifted (fixed there); folds come from no bending, free compression and no fabric-on-fabric contact; arms up the underarm seams line up as in photos but the armhole dips into a U that friction keeps from the carried-over standing fit.
 * **Creation**: [The re-fit in the app](/engineering/app/refit-in-the-app.md): today's method with friction on WebGPU (2 ms per step), a tuning page at `/refit.html`, a stop rule by window-averaged drift, determinism checked.
 * **Update**: [Solver race plan](/engineering/app/solver-race-plan.md): correction. Points resting on the body had a random normal, which gave friction extra grip; fixed (`SNAP`), poses now end 1.2-2.2 mm mean from the reference, not 0.3-0.6. The posed cutout now starts from the standing cutout.
 * **Update**: [Re-fits carry friction](/decisions/2026-11-03-friction-on-refits.md): corrected numbers; the owner's determinism rule (every pose from the standing fit of the same design).
