@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-02
+* **Update**: [Refitting after an edit](/engineering/app/refitting-after-an-edit.md): speed baseline, `pipeline/speed_probe.py`. Factorising is three quarters of each iteration, a pose needs about 480 iterations to settle, and a stale factor, Anderson acceleration and a coarse start were tried and rejected.
 * **Update**: [Fit solver realism audit](/engineering/app/fit-solver-realism-audit.md): steps 1-5 done. The fit settles and holds on finer meshes and in a heavier simulator, no physics added, poses are the largest error, wrinkles come from the fit in the preview.
 * **Update**: [Fitting a block like the app](/engineering/app/fitting-a-block-like-the-app.md): elastic is per unit length, 360 iterations, wrists fixed, all six bodies refit.
 * **Creation**: [Fit solver realism audit](/engineering/app/fit-solver-realism-audit.md): the solver against public simulators and research, before speed work; the viewer's double lift found and fixed.

@@ -37,6 +37,21 @@ Mean / max displacement from the reference near the hole, mm (within 12 cm of it
 
 A local re-fit improves at first and then stalls, since fabric beyond its limit stays wrong (elsewhere mean 1.9-2.8 mm, max 9-22 mm, unchanged). A cutout's effect reaches well beyond the hole.
 
+# Where a re-solve's time goes
+
+`pipeline/speed_probe.py`, `young`, high cut, whole garment (13,602 points) re-solved on the back-arched pose from the reused standing fit, against 720 iterations taken as settled. A standing fit from nothing takes 260 s at 7 mm, 58 s at 14 mm.
+
+Per iteration, 0.82 s of about 1.1 s is factorising the linear system, which the code redoes every step because the surface normals in it change. SVDs 0.12 s, closest points 0.05 s, assembly 0.05 s, the right side 0.03 s, the solve itself 0.02 s. A symmetric ordering (`MMD_AT_PLUS_A`) cuts factorising by about a fifth with the same answer.
+
+Iterations, not each iteration's cost, are the larger problem: mean / 95% from settled is 18.8 / 33.4 mm at 20 iterations, 9.5 / 17.4 at 80, 4.6 / 11.5 at 160, 1.5 / 5.9 at 320, 0.5 / 2.7 at 480 (394 s). Reuse with no solve is 26.6 / 48.7. The error falls slowly and evenly: the slow part is fabric sliding a long way over the body.
+
+Tried and rejected:
+- Factorising every 10 or 40 steps and conjugate gradients between: 150-190 inner iterations per step, three to four times slower. The normals change too much between steps for an old factor to precondition well.
+- Anderson acceleration (window 5 or 10): better early (12.6 mm at 20 iterations against 18.8) but stalls (6-7 mm at 160 against 4.6).
+- A 14 mm solve first, lifted onto the 7 mm mesh: 40 coarse iterations reach 6.2 mm mean in 13 s, which the 7 mm mesh needs about 130 iterations for, but fine iterations after it barely improve the mean and the worst point stays 19-33 mm. The coarse mesh settles to a different answer (about 4.6 mm mean apart) and the lift leaves local errors the fine solve then crawls out of.
+
+Not yet tried: a factorisation that keeps the fixed sparsity pattern and only redoes the numbers (sparse Cholesky with a reused symbolic analysis; no such library is installed), a closed-form 3x2 SVD, a stop rule in place of fixed counts, and solvers that converge in fewer iterations (Newton-type, or multigrid with repeated coarse corrections rather than a coarse start).
+
 # Known limits
 
 - One body, one cut style. Holes are removed triangles with rough edges and no elastic; a finished cutout with elastic will differ.
