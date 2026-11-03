@@ -185,13 +185,13 @@ def run(pr, start, iters, how='mmd', stale=1, tol=1e-8, aa=0, checks=(), label='
 		clock = sum(T.values())
 		if it + 1 in checks:
 			q, _ = surface.project(p, normal, part)
-			snaps[it + 1] = (q.copy(), clock)
+			snaps[it + 1] = (q.copy(), clock, p.copy())  # on the surface, as solve returns; and the iterate itself
 	q, _ = surface.project(p, normal, part)
 	return q, snaps, T, cg
 
 
 def versus(snaps, ref, label, extra=0.):
-	for k, (q, c) in sorted(snaps.items()):
+	for k, (q, c, _) in sorted(snaps.items()):
 		d = np.linalg.norm(q - ref, axis=1) * 1000
 		print(f'  {label:26} {k:4} iters {c + extra:7.1f} s: from settled mean {d.mean():6.2f}, 95% {np.percentile(d, 95):6.2f}, max {d.max():6.2f} mm', flush=True)
 

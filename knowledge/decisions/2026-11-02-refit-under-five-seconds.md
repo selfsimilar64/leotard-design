@@ -27,7 +27,8 @@ The fit solver's realism audit ended with no physics added, and found that carry
 
 - Speed work is judged against 5 s on the target hardware (desktop and iPad), not against the development machine's Python.
 - Cheaper steps alone will not reach it: the baseline's larger cost is the number of iterations, so a solver that settles in fewer iterations, starting from the nearest fit already known, is needed as well.[^baseline]
-- Not yet decided: whether "a re-fit" means one pose or every pose a design shows; what accuracy a 5-second re-fit must reach against a settled one.
+- A re-fit means one pose: 5 s per pose, not for every pose a design shows.[^owner]
+- Accuracy against a settled fit: mean 1 mm, 95% 3 mm, max 5 mm is accepted as the bar, and the owner would accept somewhat less if it is much faster: "I don't want to rule out techniques that are slightly less accurate but potentially much faster if they get the job done well enough."[^owner] So report time against accuracy as a curve, not only time to the bar.
 
 # Revisit if
 

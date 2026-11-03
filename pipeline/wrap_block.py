@@ -409,7 +409,8 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 	the flat triangle's face looks outward from the body, -1 where a piece is laid out the other way up;
 	part: per point True on the sleeve; held: points that do not move; elastic: (i, j, length, stiffness) of each
 	span of elastic along an opening.
-	Twin: pipeline/speed_probe.py run() copies this loop with timers, for speed work.
+	Twin: pipeline/speed_probe.py run() copies this loop with timers, for speed work; pipeline/race/energy.py writes out the energy it minimises
+	and alternating_residual repeats its balance. Change the physics here and there together.
 	"""
 	n = len(pos)
 	I, J, W, cots = [], [], [], []

@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-02
+* **Update**: [Solver race plan](/engineering/app/solver-race-plan.md): stage 1 results. The energy is written and matches today's physics; today's solver settles 99% of the garment but 86 points in three inside-out spots never settle; the surface term jumps and depends on history, which stops direct minimisers, so it needs a smooth definition first. One re-fit is one pose; accuracy bar accepted, judged as a curve.
 * **Creation**: [Solver race plan](/engineering/app/solver-race-plan.md): one explicit energy, several solvers as GPU kernels in Warp, raced on the same re-fit cases against one reference.
 * **Decision**: [No friction in the fit for now](/decisions/2026-11-02-no-friction-for-now.md): a pose shows the garment settled in it.
 * **Decision**: [A re-fit takes under five seconds](/decisions/2026-11-02-refit-under-five-seconds.md): the owner's target for the fit solver's speed work.
