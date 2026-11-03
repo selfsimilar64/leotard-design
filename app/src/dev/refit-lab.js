@@ -200,6 +200,7 @@ async function report(extra = '') {
 	const stopped = end && end.steps < s.maxSteps && end.drift < s.tol;
 	const py = data.head.python_ms_per_iteration;
 	$('out').innerHTML = `<table>
+		${refit.steps === 0 ? `<tr><td colspan="2" style="color:#a3512b;padding-bottom:6px">Not fitted yet: this is the start, ${/placed/.test(data.head.start) ? 'the standing fit carried onto this pose' : data.head.case === 'standing' ? "today's standing fit" : 'the standing fit from before this edit'}. Press Run to fit.</td></tr>` : ''}
 		<tr><td>Steps</td><td>${refit.steps}${end ? (stopped ? ' (settled)' : ' (step limit)') : ''}</td></tr>
 		<tr><td>Time</td><td>${last ? f(last.seconds, 3) + ' s' : '-'}</td></tr>
 		<tr><td>Per step</td><td>${last ? f(1000 * last.seconds / Math.max(last.steps, 1), 2) + ' ms' : '-'}${py ? ` <small>(Python ${f(py, 1)})</small>` : ''}</td></tr>
