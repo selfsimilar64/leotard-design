@@ -7,7 +7,10 @@ E = membrane + surface + elastic, frictionless, no gravity, metres.
   phi(s) = (s - 1)^2 above 1, 0 from GATHER to 1, (GATHER - s)^2 below: stretch costs, gathering down to GATHER is free. s2 counts negative
   where the triangle has turned inside out against the surface under it (the role of `wrong` in solve).
   The local step's clamped rotation minimises |F - R|^2 over the allowed R, and solve's cot-weighted edge form is area * |F - R|^2.
-- surface, per point: PLANE / 2 * d^2, d the distance to the tangent plane at the nearest surface vertex on its own part (solve's target).
+- surface, per point: PLANE / 2 * d^2. surface='field' (the race's): d the signed distance to the garment surface on the point's own part,
+  interpolated from a grid (surface_field.py), a smooth function of the point alone. surface='nearest' (today's): d the distance to the
+  tangent plane at the nearest surface vertex, filtered by the last normals; it jumps where the nearest vertex changes and depends on history,
+  which stops line-search methods (stage 1 results).
 - elastic, per span: k / 2 * max(length - rest, 0)^2, tension only.
 Not in it: DAMP, which only slows each step and is gone once nothing moves; fold pins (a race case is the whole garment).
 Twin: wrap_block.solve (see its docstring). Spec: knowledge/engineering/app/solver-race-plan.md.
@@ -22,7 +25,7 @@ import wrap_block as W  # noqa: E402
 
 
 class Energy:
-	def __init__(self, case):
+	def __init__(self, case, surface='nearest'):
 		self.tris = case['tris']
 		rest = case['rest']
 		Dm = np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2)
@@ -35,6 +38,10 @@ class Energy:
 		self.part = case['sleeve'].astype(bool)
 		self.surface = W.Surface(case['surface_P'], case['surface_idx'], case['surface_arm'])
 		self.was = None  # the last normals, so a point is not matched across to a surface facing the other way (as solve)
+		self.field = None
+		if surface == 'field':
+			from surface_field import PartFields
+			self.field = PartFields(case['surface_P'], case['surface_idx'], case['surface_arm'])
 
 	def phi(self, s):
 		g = self.gather
@@ -45,17 +52,24 @@ class Energy:
 		return np.where(s > 1, 2 * (s - 1), np.where(s < g, -2 * (g - s), 0.0))
 
 	def __call__(self, x, keep_normals=True):
-		"""Energy, gradient (n, 3) and the parts {membrane, stretch, squeeze, surface, elastic, inside_out}."""
+		"""Energy, gradient (n, 3) and the parts {membrane, stretch, squeeze, surface, elastic, inside_out, off_field}."""
 		tris = self.tris
 		grad = np.zeros_like(x)
 		# surface
-		v = self.surface.nearest(x, self.was, part=self.part)
-		n = self.surface.N[v]
-		d = ((x - self.surface.P[v]) * n).sum(1)
+		off = 0
+		if self.field is not None:
+			d, gd, ok = self.field(x, self.part)
+			off = int((~ok).sum())  # beyond the field's band: no pull back, so a solver must not go there
+			n = gd / (np.linalg.norm(gd, axis=1, keepdims=True) + 1e-12)
+			grad += self.plane * d[:, None] * gd
+		else:
+			v = self.surface.nearest(x, self.was, part=self.part)
+			n = self.surface.N[v]
+			d = ((x - self.surface.P[v]) * n).sum(1)
+			grad += self.plane * d[:, None] * n
+			if keep_normals:
+				self.was = n
 		e_surface = 0.5 * self.plane * (d ** 2).sum()
-		grad += self.plane * d[:, None] * n
-		if keep_normals:
-			self.was = n
 		# membrane
 		Ds = np.stack([x[tris[:, 1]] - x[tris[:, 0]], x[tris[:, 2]] - x[tris[:, 0]]], axis=2)
 		F = Ds @ self.Dm_inv
@@ -79,7 +93,7 @@ class Energy:
 		f = (self.k * ext / now)[:, None] * span
 		np.add.at(grad, self.sj, f)
 		np.add.at(grad, self.si, -f)
-		parts = dict(membrane=e_membrane, stretch=e_stretch, squeeze=e_membrane - e_stretch, surface=e_surface, elastic=e_elastic, inside_out=int(flip.sum()))
+		parts = dict(membrane=e_membrane, stretch=e_stretch, squeeze=e_membrane - e_stretch, surface=e_surface, elastic=e_elastic, inside_out=int(flip.sum()), off_field=off)
 		return e_membrane + e_surface + e_elastic, grad, parts
 
 
