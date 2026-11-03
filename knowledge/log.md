@@ -1,5 +1,10 @@
 # Bundle update log
 
+## 2026-11-03
+* **Update**: [Refitting after an edit](/engineering/app/refitting-after-an-edit.md): today's method on the GPU, 5 ms per step.
+* **Update**: [Solver race plan](/engineering/app/solver-race-plan.md): stages 2-5 run on the GTX 1650. Today's local/global method on the GPU wins (5 ms per step; cutouts to the bar in 2-4 s; pose shapes settled in 1-2 s); Newton, L-BFGS, VBD and a V-cycle lost. Frictionless, the garment's placement along the body is nearly free, so no solver pins it on poses within 5 s; friction or a stand-in is put back to the owner. The inside-out rule was made continuous (it stopped every solver settling).
+* **Decision**: [The body only pushes; slack fabric is held weakly](/decisions/2026-11-03-contact-only-pushes.md) (HOLD = 1e-4).
+
 ## 2026-11-02
 * **Update**: [Solver race plan](/engineering/app/solver-race-plan.md): a smooth distance field for the surface term is accurate and keeps today's answer, except where today's rule lets fabric bridge hollows; how contact should behave is put to the owner. Plain L-BFGS fails on the energy's stiffness.
 * **Update**: [Solver race plan](/engineering/app/solver-race-plan.md): stage 1 results. The energy is written and matches today's physics; today's solver settles 99% of the garment but 86 points in three inside-out spots never settle; the surface term jumps and depends on history, which stops direct minimisers, so it needs a smooth definition first. One re-fit is one pose; accuracy bar accepted, judged as a curve.

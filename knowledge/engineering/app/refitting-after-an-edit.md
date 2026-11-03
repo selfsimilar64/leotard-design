@@ -50,13 +50,15 @@ Tried and rejected:
 - Anderson acceleration (window 5 or 10): better early (12.6 mm at 20 iterations against 18.8) but stalls (6-7 mm at 160 against 4.6).
 - A 14 mm solve first, lifted onto the 7 mm mesh: 40 coarse iterations reach 6.2 mm mean in 13 s, which the 7 mm mesh needs about 130 iterations for, but fine iterations after it barely improve the mean and the worst point stays 19-33 mm. The coarse mesh settles to a different answer (about 4.6 mm mean apart) and the lift leaves local errors the fine solve then crawls out of.
 
-Not yet tried: a factorisation that keeps the fixed sparsity pattern and only redoes the numbers (sparse Cholesky with a reused symbolic analysis; no such library is installed), a closed-form 3x2 SVD, a stop rule in place of fixed counts, and solvers that converge in fewer iterations (Newton-type, or multigrid with repeated coarse corrections rather than a coarse start).
+Not yet tried here: a factorisation that keeps the fixed sparsity pattern and only redoes the numbers (sparse Cholesky with a reused symbolic analysis; no such library is installed), a closed-form 3x2 SVD, a stop rule in place of fixed counts.
+
+On the GPU (2026-11-03, [solver race](/engineering/app/solver-race-plan.md), push-only contact): the same method with a few conjugate-gradient iterations per step in place of the factorisation takes 5 ms per step on the GTX 1650. Cutouts reach 1 / 3 / 5 mm from settled in 2-4 s; a pose's shape settles in 1-2 s but its placement along the body keeps sliding, since frictionless sliding is nearly free. Newton-type, L-BFGS, VBD and multigrid were slower.
 
 # Known limits
 
 - One body, one cut style. Holes are removed triangles with rough edges and no elastic; a finished cutout with elastic will differ.
 - The reference is this solver's own answer, not reality.
-- Timings are Python on the development machine, and include the fit's rebuild of its equations every iteration. Nothing has been optimised or ported into the app, so these are not the app's speed.
+- CPU timings are Python on the development machine, and include the fit's rebuild of its equations every iteration. Nothing has been ported into the app; the GPU numbers are Warp on the GTX 1650, not the app's speed either.
 - The owner's target is under 5 s per re-fit ([decision](/decisions/2026-11-02-refit-under-five-seconds.md)); whether to run automatically, and what error a designer would notice, are undecided.
 
 [^owner]: Conversation with the product owner.

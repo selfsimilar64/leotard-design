@@ -18,7 +18,7 @@
 # Roadmap
 
 * [Designer app build status](build-status.md) (draft) - Where the build of the designer app stands against the roadmap phases P0-P8: what each phase delivered, measured numbers, known gaps, how to run and test, and what comes next. Updated at the end of every phase.
-* [Solver race plan](solver-race-plan.md) (draft) - Plan, 2026-11-02, for choosing the fit solver that meets the owner's 5-second re-fit target: one explicit energy (today's physics, frictionless), several solvers written as GPU kernels in NVIDIA Warp on the GTX 1650, raced on the same re-fit cases against one settled reference, scored on time to a fixed accuracy. The winner is then ported into the app.
+* [Solver race plan](solver-race-plan.md) - Plan (2026-11-02) and results (2026-11-03) for choosing the fit solver that meets the owner's 5-second re-fit target. Raced on the GTX 1650 in NVIDIA Warp: today's local/global method on the GPU won (5 ms per step against 820 ms on the CPU; cutouts to the accuracy bar in 2-4 s, pose shapes settled in 1-2 s); Newton, L-BFGS, VBD and a multi-level V-cycle lost. Frictionless, the garment's placement along the body is nearly free and no solver pins it within 5 s: a physics question for the owner.
 
 # Section
 

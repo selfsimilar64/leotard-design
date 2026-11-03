@@ -27,9 +27,12 @@ REF_ITERS = 720
 CHECKS = (10, 20, 40, 80, 160)
 
 
-def fit(step):
+def fit(step, key='young'):
+	for f in (f'wrap-seed-{key}.json', f'wrap-body-{key}.json'):
+		if not os.path.exists(os.path.join(CAP, f)):
+			shutil.copy(os.path.join(PR.CAPTURES, f), CAP)
 	W.STEP = step
-	sys.argv = ['wrap_block.py', '--drafted', 'body-young', 'young']
+	sys.argv = ['wrap_block.py', '--drafted', f'body-{key}', key]
 	got = {}
 	t = time.perf_counter()
 	stdout = sys.stdout

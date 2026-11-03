@@ -11,6 +11,13 @@ E = membrane + surface + elastic, frictionless, no gravity, metres.
   interpolated from a grid (surface_field.py), a smooth function of the point alone. surface='nearest' (today's): d the distance to the
   tangent plane at the nearest surface vertex, filtered by the last normals; it jumps where the nearest vertex changes and depends on history,
   which stops line-search methods (stage 1 results).
+  contact='push' (the race's physics, owner's choice 2026-11-03): the body only pushes. PLANE / 2 * d^2 inside it (d < 0); outside it a weak
+  HOLD / 2 * d^2, standing in for the gravity and cling the model leaves out, so slack fabric still settles onto the body while fabric
+  under tension bridges hollows as real fabric does. contact='both' is stage 1's: PLANE either side, which pulls fabric into hollows.
+  HOLD = 1e-4: with the fabric's stretch modulus 300-1000 N/m (spandex jersey) as the energy's unit, 1 cm off the body it pulls a point with
+  about 4-12 times the weight of the fabric it carries (0.2 kg/m^2 over 42 mm^2 at 7 mm). A span across a 6 cm hollow at 10% stretch resists
+  being pulled in about 90 times harder (8 T A / (HOLD L^2)), so taut fabric bridges, sagging about 1% of the hollow's depth; only slack fabric
+  follows the hold. A modelling stand-in, not measured: sensitivity in the race record.
 - elastic, per span: k / 2 * max(length - rest, 0)^2, tension only.
 Not in it: DAMP, which only slows each step and is gone once nothing moves; fold pins (a race case is the whole garment).
 Twin: wrap_block.solve (see its docstring). Spec: knowledge/engineering/app/solver-race-plan.md.
@@ -24,8 +31,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import wrap_block as W  # noqa: E402
 
 
+HOLD = 1.0e-4  # twin: gpu.HOLD
+
+
 class Energy:
-	def __init__(self, case, surface='nearest'):
+	def __init__(self, case, surface='nearest', contact='both', hold=HOLD):
+		self.contact, self.hold = contact, hold
 		self.tris = case['tris']
 		rest = case['rest']
 		Dm = np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2)
@@ -61,15 +72,16 @@ class Energy:
 			d, gd, ok = self.field(x, self.part)
 			off = int((~ok).sum())  # beyond the field's band: no pull back, so a solver must not go there
 			n = gd / (np.linalg.norm(gd, axis=1, keepdims=True) + 1e-12)
-			grad += self.plane * d[:, None] * gd
 		else:
 			v = self.surface.nearest(x, self.was, part=self.part)
 			n = self.surface.N[v]
+			gd = n
 			d = ((x - self.surface.P[v]) * n).sum(1)
-			grad += self.plane * d[:, None] * n
 			if keep_normals:
 				self.was = n
-		e_surface = 0.5 * self.plane * (d ** 2).sum()
+		kd = np.where(d < 0, self.plane, self.hold) if self.contact == 'push' else np.full(len(d), self.plane)
+		grad += (kd * d)[:, None] * gd
+		e_surface = 0.5 * (kd * d ** 2).sum()
 		# membrane
 		Ds = np.stack([x[tris[:, 1]] - x[tris[:, 0]], x[tris[:, 2]] - x[tris[:, 0]]], axis=2)
 		F = Ds @ self.Dm_inv

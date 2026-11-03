@@ -1,10 +1,10 @@
 ---
 type: Roadmap
 title: Solver race plan
-description: "Plan, 2026-11-02, for choosing the fit solver that meets the owner's 5-second re-fit target: one explicit energy (today's physics, frictionless), several solvers written as GPU kernels in NVIDIA Warp on the GTX 1650, raced on the same re-fit cases against one settled reference, scored on time to a fixed accuracy. The winner is then ported into the app."
+description: "Plan (2026-11-02) and results (2026-11-03) for choosing the fit solver that meets the owner's 5-second re-fit target. Raced on the GTX 1650 in NVIDIA Warp: today's local/global method on the GPU won (5 ms per step against 820 ms on the CPU; cutouts to the accuracy bar in 2-4 s, pose shapes settled in 1-2 s); Newton, L-BFGS, VBD and a multi-level V-cycle lost. Frictionless, the garment's placement along the body is nearly free and no solver pins it within 5 s: a physics question for the owner."
 tags: [roadmap, fit, performance, gpu, solver]
-status: draft
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-02T23:59:00Z }
+status: stable
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-03T12:00:00Z }
 sources:
   - id: owner
     resource: conversation with the product owner, 2026-11-02 (Claude Code session)
@@ -64,7 +64,59 @@ Code: `pipeline/race/energy.py` (the energy, its gradient, and `alternating_resi
 - **L-BFGS from the start barely moves** (26.8 to 26.6 mm mean from the settled answer in 160 iterations, against 4.6 mm for today's solver in 160): the surface term per point (PLANE 300) is about 10^6 times stiffer than a triangle's membrane term (area about 2e-5 m^2), so a method without the system's curvature is hopeless here. For the race: unpreconditioned first-order methods are out; quasi-Newton needs a preconditioner (e.g. today's global matrix, as Liu, Bouaziz and Kavan 2017), and VBD and Newton use the curvature directly.
 - **The unsettled spots, seen in 3D** (`spots_page.py`, a three.js page in app/captures/race/): both underarms, where the sleeve meets the front and back, and one leg opening, where the stretched band at the elastic edge rolls over (inside-out strip along the edge). Whether they are real folds was not settled from the pictures.
 
-# Stage 2: problem files and the reference
+## Contact chosen (owner, 2026-11-03)
+
+Option 1: the body only pushes; outside it a weak hold, HOLD = 1e-4 ([decision](/decisions/2026-11-03-contact-only-pushes.md)). `energy.py` contact='push', `gpu.py`.
+
+# Stages 2-5 as run (2026-11-03)
+
+Code, all in `pipeline/race/`: `make_case.py` (cases), `gpu.py` (the energy in Warp), `solvers.py` (candidates), `multilevel.py` (V-cycle), `race.py` (runner), `report.py` (chart `app/captures/race/race-young.png`, table), `check_gpu.py`, `hold_sensitivity.py`, `sliding.py`. Run with the reference venv's Python (Warp 1.19, GTX 1650).
+
+## Stage 2: cases and references
+
+- **Cases (young, high cut, whole garment, 7 mm mesh, 13,096-13,602 points):** `standing` (today's standing fit carried into the race physics: the parent, not itself scored as a re-fit), poses `back-arched`, `passe`, `lunge-arms-up` (start: the standing reference placed by surface coordinates), `standing-back-keyhole`, `standing-front-side-cutout` (start: the standing reference, triangles cut as `refit_bench.CUTS`), `back-arched-back-keyhole` (start: the back-arched reference). Each case also carries the 14 and 28 mm meshes' prolongations (P14, P28, P14to28) for multi-level. Case (e), a standing fit from the seed, was not built: it is not a re-fit and `wrap_block.main` does not expose that start.
+- **Reference:** projected Newton (below), 120 s on the GPU, float32. It is not a clean minimum: on passe it kept moving (1.0 mm mean, 18 mm max in its last quarter) and other candidates found lower energies (by up to 13%); on the other cases it stopped moving. Today's CPU answer is no longer comparable (different contact physics).
+
+## Stage 3: what the GPU energy needed
+
+Each item was found by a solver stalling, and each is in the code's comments.
+
+- **Distance by BVH closest point** (`wp.Mesh`), not the grid field: exact, no band. Inside or outside by the closest feature's angle-weighted pseudo-normal; past an open edge of a part (the wrist end, the torso/arm part boundary) the height over that face's plane. The interpolated vertex normal (stage 1's field) swapped side for 28 points of the settled back-arched fit under 0.03 mm nudges; the barycentric edge test needs a 1e-3 tolerance in float32.
+- **Contact held through a step** (`Problem.freeze`): the closest point and normal fixed per step, the surface term the height over that tangent plane. Exact contact still jumps where the posed surface folds into itself (one point at the back-arched wrist). As today's solver re-matches each step. At a fixed point the gradient is the true one.
+- **Inside-out rule made continuous** (`TURN` = 0.3, `gpu.tri_state`): today's charge phi(-s2) for a triangle turned against the body jumps where the triangle stands square to the body. Newton with the hard rule never settled (4,176 points still moving over 0.5 mm after 2,400 iterations, 915 triangles toggling). Without the rule it settled but 912 triangles (196 cm2, mostly back and sleeve) ended inside out. The charge now blends phi(s2) to phi(-s2) by smoothstep over 0 to -0.3 in the facing cosine: today's rule except within 17 degrees past square. A physics refinement made without asking the owner, on today's intent.
+- **float32 energy noise:** positions near 1 m carry 6e-8 m, which the stiff surface term turns into about 2e-6 of energy over the garment; line searches accept a step whose energy change is below that if the slope (from the gradient, accurate) is still downhill.
+- **Step limit:** the held tangent plane is good for a few mm on a curved body; Newton with 10 mm steps bounced (true energy 0.018-0.031). 3 mm per step, cut per point, not the whole step in proportion.
+- **Checks:** membrane and elastic gradient against numpy to 2e-6 median; the inside-out blend against float64 differences to 1e-6; projected Hessian exact where nothing is clamped (1e-6 median per point), positive semi-definite. Float32 finite differences of the GPU energy are useless at this scale (position rounding); check against numpy in float64.
+- **Port notes:** our kernels gather (no float atomics). Warp's `array_sum`, `bsr_mm`, `bsr_mv` and `cg` are used as they are and a WebGPU port must supply them. Block inverses by `wp.inverse` in float32 came back indefinite (blocks span 0.01 to 300); use an eigen-decomposition.
+
+## Stage 4: race results (young, 20 s per candidate)
+
+Milliseconds per iteration, and what each reached. Position: mean / max mm from the reference. Shape: each point's height off the body against the reference's (mean mm). Energy gap: % above the reference.
+
+| candidate | ms/it | standing cutouts and standing | poses (back-arched, passe, lunge) and pose cutout |
+|---|---|---|---|
+| local/global (today's method), 10 CG per step | 5 | bar (1/3/5 mm) in 2-4 s; shape 0.03 | best at 1-2 s: 1.8-11 mm mean; shape 0.2-0.4; energy 5-15% above; then drifts along the body |
+| local/global, 30 CG | 7 | bar in 3-4 s | as 10 CG |
+| local/global, 3 CG with V-cycle | 23-29 | bar in 15-20 s | slower than plain |
+| Newton, block-Jacobi CG, step cut per point | 10 | not in 20 s (1.4-2.7 mm mean) | 13-20 mm mean at 5 s; 3-8 mm at 20 s |
+| Newton with V-cycle | 66-71 | not in 20 s | slower than plain |
+| L-BFGS (block-diagonal start) | 10-12 | barely moves | barely moves (stiffness) |
+| VBD (6 colours) | 1 | position close (0.3-0.9 mm mean at 5 s) but energy 100-200% above: fabric left inside the body | same |
+
+- **Sliding is the slow, ill-defined part.** On back-arched, 97% of the squared difference between today's method at 10 s and the reference lies along the body, in coherent regions (neighbouring points' differences have cosine 0.997); off the body they agree to 0.64 mm mean. Frictionless, the garment slides almost freely; solvers pass the reference's placement and keep going (the V-shaped curves in the chart), and good solvers settle 5-10 mm apart with energies within 5-10%. The 1/3/5 mm position bar is not met on any pose case by any candidate within 20 s, and is partly not well-defined.
+- **The hold does not decide it.** Back-arched with HOLD 1e-4, 1e-3, 1e-2, 1e-1: today's method still ends 7-10 mm (mean) from Newton's answer at 10 s with energies 4-10% apart; HOLD only changes how much fabric lifts (748 points over 2 mm at 1e-4, 185 at 1e-1) and moves the answer 0.8-6.7 mm mean.
+- **Why each lost:** Newton is held to a few mm per step by the tangent-plane contact, so it needs hundreds of steps to slide 30 mm into a pose; L-BFGS and the block-diagonal start cannot bridge the surface term's stiffness (PLANE per point against the membrane's soft sliding modes); VBD is fast per sweep but leaves points inside the body against a stiff, one-sided contact; the V-cycle as built (Galerkin, damped block Jacobi) makes each CG solve 4-6 times shorter in iterations but costs 3-6 times more per step in rebuilding the coarse operators, and sliding is limited by the contact linearisation, not the linear solve.
+- **Another body (adult, standing, two cutouts; leaders only, 10 s):** the same order. Today's method gets the shape (height off the body) to the bar in 0.05-0.5 s and positions to 0.4-1.2 mm mean at 1-2 s (standing to the full bar in 0.75 s), then slides on to 2-4 mm by 20 s; Newton 2-4.5 mm and not improving in 10 s; VBD's energy 165-255% above.
+- **Not measured:** float32 against float64 (no float64 run); GPU memory.
+
+## Stage 5: recommendation
+
+- **Port today's local/global method to the GPU** (WebGPU/Metal): 5 ms per step on the GTX 1650 against 820 ms on the CPU (about 160x), the simplest kernels (one per triangle, one per point, a few CG iterations on a fixed sparse pattern), and the fastest of the race at every time up to 5 s on every case. Cutouts reach the accuracy bar in 2-4 s; on poses the shape is settled in 1-2 s and the placement along the body is not.
+- **What is left for 5 s on poses is a physics question, not a solver one:** without friction the garment's placement along the body is nearly free. Owner's options: accept placement settling over a few more seconds (or never exactly); add static friction or its cheap stand-in (a weak pull toward where each point was, which is what friction does for a garment already on); or judge the bar by shape and energy, not position. The [no-friction decision](/decisions/2026-11-02-no-friction-for-now.md) was made before this was known.
+- **iPad (estimate only):** recent iPad GPUs are within about 1-2x of a GTX 1650 in raw throughput; WebGPU adds per-dispatch cost. Expect 1-3x the GTX 1650 times. The real number comes after the port.
+- Newton, L-BFGS, VBD and the V-cycle stay in `solvers.py` for later physics (friction, bending); none is worth porting now.
+
+# Stage 2: problem files and the reference (plan as written)
 
 - Export from Python to `.npz` per case: rest triangles, welded ids, elastic spans, the garment surface (points, triangles, arm weights), start positions, and a CPU answer. Reuse `pose_resolve.whole` and `refit_bench.CUTS`.
 - **Cases:** (a) back-arched from the reused standing fit, the hard one; (b) passe and lunge-arms-up likewise; (c) standing re-fit after a back keyhole and after a front side cutout, from the uncut fit; (d) a pose re-fit after a cutout, from that pose's previous fit (the warm start the app would have); (e) standing fit from the seed, secondary, not held to 5 s. young first; one other body at the end.

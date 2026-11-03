@@ -33,6 +33,7 @@
 * [Draw first, decide how it sews](2026-10-31-draw-first-decide-how-it-sews.md) - Owner direction of 2026-10-31: create the conditions for effortless, arbitrary designs that reflect real leotard technique. The drawing tools share one grammar (lines land, the areas they enclose light up, a tap picks one), a line can use existing seams without tracing them, and how a thing is made stays a separate choice.
 * [No friction in the fit for now](2026-11-02-no-friction-for-now.md) - Owner decision of 2026-11-02: the fit stays frictionless. A pose's fit is the garment settled in that pose (a fresh solve), not the garment just after moving into it, so the solver race runs without friction. Revisit later if needed.
 * [A re-fit takes under five seconds](2026-11-02-refit-under-five-seconds.md) - Owner target of 2026-11-02: any given re-fit of the garment, after a structural edit or on a pose, comes in under 5 seconds, so it can happen several times in a design session without interrupting the design flow. The target for the fit solver's speed work.
+* [The body only pushes; slack fabric is held weakly](2026-11-03-contact-only-pushes.md) - Owner decision of 2026-11-03 for the fit's contact: the body pushes fabric out but never pulls it in, so taut fabric bridges hollows (underarm, small of the back) as real fabric does; a weak hold (HOLD = 1e-4), standing in for the gravity and cling the model leaves out, keeps slack fabric settling onto the body. Replaces today's two-sided pull in the solver race's energy.
 
 # Section
 
