@@ -17,11 +17,12 @@ export const DEFAULTS = {
 	stick: 0.001,  // m of give before sliding (gpu.STICK)
 	grip: 1.0,  // how far each step moves friction's held contact force to the new one (gpu.Problem.grip)
 	window: 10,  // steps per averaging window
-	tol: 2.0e-3,  // m: window-average drift under which a point counts as settled. Owner's working default (2026-11-03): just above the
-	// shoulder chatter's floor (1.5 mm never stops three of the seven race cases); every case then stops in 30-340 steps, within 0.1 mm
-	// mean of a 750-step run standing and cut, 0.3-0.85 mm on poses (knowledge/engineering/app/refit-in-the-app.md)
+	tol: 0,  // m: stop early once the window-average drift is under this (0: off). Off by default (owner, 2026-11-03): some poses or designs
+	// may never get under any threshold (the shoulder chatter), so the step count is the lever; 2 mm stopped all seven race cases in 30-340
+	// steps (knowledge/engineering/app/refit-in-the-app.md)
 	stat: 'max',  // 'max', or a percentile such as 99.9
-	maxSteps: 750,  // never more than this many steps
+	maxSteps: 150,  // the run's length: the lever between speed and accuracy (about 2.2 ms per step on the GTX 1650). 150: standing and
+	// cutouts done, poses within 0.3-0.8 mm mean of 750 steps
 };
 const { SUM, PREV, DRIFT } = BLOCK, NBLOCK = 10;
 

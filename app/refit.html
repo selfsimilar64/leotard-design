@@ -42,10 +42,10 @@
 		<h2>Test case</h2>
 		<div class="row"><label>Case</label><select id="case"></select></div>
 		<h2>When to stop</h2>
+		<div class="row"><label>Steps<small>the speed and accuracy lever (about 2.2 ms each)</small></label><input id="maxSteps" type="number" min="1" step="10"></div>
 		<div class="row"><label>Window<small>steps averaged together</small></label><input id="window" type="number" min="1" step="1"></div>
-		<div class="row"><label>Settled when drift under<small>mm the averages move per window</small></label><input id="tol" type="number" min="0" step="0.01"></div>
+		<div class="row"><label>Stop early when drift under<small>mm the averages move per window; 0 = off</small></label><input id="tol" type="number" min="0" step="0.01"></div>
 		<div class="row"><label>Measured over<small>which points must be under it</small></label><select id="stat"><option value="max">every point</option><option value="99.9">99.9% of points</option><option value="99.5">99.5% of points</option><option value="99">99% of points</option></select></div>
-		<div class="row"><label>Step limit</label><input id="maxSteps" type="number" min="1" step="10"></div>
 		<h2>Solver</h2>
 		<div class="row"><label>Solve effort per step<small>conjugate-gradient iterations</small></label><input id="cgIters" type="number" min="1" step="1"></div>
 		<div class="row"><label>Damping</label><input id="damp" type="number" min="0" step="0.01"></div>

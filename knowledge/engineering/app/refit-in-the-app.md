@@ -79,6 +79,23 @@ The owner found every point under 1.75 mm per 10-step window stopping passe in 0
 - The rule really means "stop once the worst chattering point calms under the threshold", so it is tuned to these cases' chatter. A design, body or mesh size with louder chatter runs to the step limit (slower, still bounded); the stop step also varies with noise (back-arched 340 at 1.75 mm, 190 at 2 mm). It allows up to 0.2 mm per step of real travel. The threshold is per window: changing the window changes its meaning.
 - Percentile rules (99% under 0.3-0.5 mm) did no better: cutouts in 20-30 steps, but back-arched never stops and passe and the posed cutout take 240-530.
 
+# The step count is the lever (owner, 2026-11-03)
+
+The owner then dropped the threshold as the rule: some poses or designs may never get under any threshold, even averaged, while a step count always ends and trades accuracy for time.[^owner] Defaults now: 150 steps, early stop off (`tol` 0; it stays available). Distance from a 750-step run at each step count (last window's average, mm mean / 95%; about 2.2 ms per step):
+
+| steps | time | standing | standing cutouts | lunge-arms-up | back-arched (and with keyhole) | passe |
+|---|---|---|---|---|---|---|
+| 30 | 0.07 s | 0.13 / 0.74 | 0.04 / 0.16-0.19 | 0.74 / 2.98 | 0.77-0.79 / 3.8-3.9 | 1.72 / 8.16 |
+| 50 | 0.11 s | 0.09 / 0.46 | 0.03-0.04 / 0.14-0.16 | 0.54 / 2.22 | 0.62 / 2.9-3.0 | 1.37 / 7.20 |
+| 100 | 0.22 s | 0.05 / 0.24 | 0.03 / 0.13-0.14 | 0.38 / 1.68 | 0.48-0.49 / 2.1-2.2 | 0.98 / 5.53 |
+| 150 | 0.33 s | 0.04 / 0.20 | 0.03 / 0.11-0.13 | 0.32 / 1.39 | 0.40-0.42 / 1.7-1.8 | 0.77 / 4.31 |
+| 300 | 0.66 s | 0.03 / 0.12 | 0.02-0.03 / 0.09-0.11 | 0.23 / 0.94 | 0.30-0.31 / 1.2 | 0.48 / 2.61 |
+| 500 | 1.1 s | 0.02 / 0.07 | 0.02-0.03 / 0.08-0.10 | 0.15 / 0.51 | 0.19-0.20 / 0.7 | 0.28 / 1.12 |
+
+- Standing and cutouts are done by 30-50 steps; poses keep closing on the 750-step run, passe slowest.
+- The 750-step run is not an end point either (slow sliding goes on), and against the race's reference the best step count differs by pose: lunge is closest at 20-30 steps (0.61 mm mean, 0.98 at 750), back-arched at 30 (1.16, 1.33 at 750), passe keeps improving (3.68 at 10, 2.11 at 750).
+- The window still sets how often drift is read back for the chart (each read is a short wait).
+
 # Owner's first look (2026-11-03): skin through, folds, underarm seams
 
 The owner saw skin showing through, fabric that seemed folded over itself, and underarm seams that curve where photographed leotards show a near-square cross of straight seams (side seam running on into the sleeve seam, the armhole crossing it).[^owner] `pipeline/race/look_fit.py` measures each; the page gained seams, colour by panel, a display lift and an underarm camera.
