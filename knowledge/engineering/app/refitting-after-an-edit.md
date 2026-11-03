@@ -57,7 +57,7 @@ Not yet tried: a factorisation that keeps the fixed sparsity pattern and only re
 - One body, one cut style. Holes are removed triangles with rough edges and no elastic; a finished cutout with elastic will differ.
 - The reference is this solver's own answer, not reality.
 - Timings are Python on the development machine, and include the fit's rebuild of its equations every iteration. Nothing has been optimised or ported into the app, so these are not the app's speed.
-- Whether to run automatically, and what error a designer would notice, are undecided.
+- The owner's target is under 5 s per re-fit ([decision](/decisions/2026-11-02-refit-under-five-seconds.md)); whether to run automatically, and what error a designer would notice, are undecided.
 
 [^owner]: Conversation with the product owner.
 [^code]: Benchmark and fit.
