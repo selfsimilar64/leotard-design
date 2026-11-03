@@ -2,7 +2,9 @@
 scored on how far it is from the reference against wall time: by position (mean / 95% / max), and by shape, each point's
 height off the body against the reference's, which sliding along the body hardly changes (frictionless, the garment slides almost
 freely; 97% of two solvers' disagreement on back-arched was such sliding, sliding.py).
-    <venv python> pipeline/race/race.py [body] [--ref SECONDS] [--budget SECONDS] [--only 'name|name'] [--cases name,name]
+    <venv python> pipeline/race/race.py [body] [--ref SECONDS] [--budget SECONDS] [--only 'name|name'] [--cases name,name] [--mu MU]
+--mu: friction on the re-fit (gpu.MU by default, the owner's choice 2026-11-03; 0 for the frictionless race). With friction the files carry
+-friction, with stick distance other than gpu.STICK also -stick<mm>.
 Starts chain as the app's would (make_case.py): the standing case's reference becomes the standing fit; a pose starts from it placed by
 surface coordinates; a cutout starts from its uncut parent's reference.
 Writes app/captures/race/ref-<body>-<case>.npy and results-<body>.json (git-ignored, derived from licensed data).
@@ -21,6 +23,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 import solvers as S  # noqa: E402
 import wrap_block as W  # noqa: E402
+import gpu as G  # noqa: E402
 from gpu import Problem  # noqa: E402
 from multilevel import Hierarchy  # noqa: E402
 
@@ -114,7 +117,9 @@ def main():
 	ref_s, budget = float(opt('--ref', 120)), float(opt('--budget', 30))
 	only = opt('--only', None)
 	names = [c for c in opt('--cases', ','.join(ORDER)).split(',')]
-	path = os.path.join(CAP, f'results-{key}.json')
+	mu, stick = float(opt('--mu', G.MU)), float(opt('--stick', G.STICK * 1000)) / 1000
+	tag = ('-friction' if mu > 0 else '') + (f'-stick{stick * 1000:g}' if mu > 0 and stick != G.STICK else '') + ('' if mu in (0, G.MU) else f'-mu{mu:g}')
+	path = os.path.join(CAP, f'results-{key}{tag}.json')
 	results = json.load(open(path)) if os.path.exists(path) else {}
 	refs = {}
 	for name in ORDER:
@@ -122,17 +127,18 @@ def main():
 		if not os.path.exists(f):
 			continue
 		case = dict(np.load(f))
-		rf = os.path.join(CAP, f'ref-{key}-{name}.npy')
+		rf = os.path.join(CAP, f'ref-{key}-{name}{tag}.npy')
 		if name not in names:
 			if os.path.exists(rf):
 				refs[name] = (np.load(rf), case)
 			continue
 		start, came = start_of(case, refs, key)
 		t = time.perf_counter()
-		pb = Problem(case)
+		pb = Problem(case, mu=mu, stick=stick)
 		wp.synchronize()
 		setup = time.perf_counter() - t
 		x0 = pb.array(start)
+		pb.set_anchor(x0)  # friction holds each point to where the re-fit found it
 		print(f'\n== {name}: {pb.n} points, {pb.nt} triangles; start: {came}; problem set-up {setup:.2f} s', flush=True)
 		res = results.get(name, {})
 		res.update(points=pb.n, start=came, setup=setup)
@@ -145,6 +151,7 @@ def main():
 			xr = S.newton(pb, x0, clock, **REFERENCE)
 			clock.finish(xr)
 			ref = xr.numpy().astype(np.float64)
+			pb.set_anchor(x0)
 			late = [m for m in clock.marks if m[0] >= 0.75 * clock.marks[-1][0]][0]
 			res['reference'] = dict(seconds=clock.marks[-1][0], iterations=clock.it, jitter=errors(late[2].numpy(), ref), parts=pb.parts(xr), **REFERENCE)
 			res['start_hash'] = float(np.abs(start).sum())

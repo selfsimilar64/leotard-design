@@ -3,7 +3,8 @@ type: Decision
 title: "No friction in the fit for now"
 description: "Owner decision of 2026-11-02: the fit stays frictionless. A pose's fit is the garment settled in that pose (a fresh solve), not the garment just after moving into it, so the solver race runs without friction. Revisit later if needed."
 tags: [decision, fit, friction, poses]
-status: stable
+status: deprecated
+superseded_by: /decisions/2026-11-03-friction-on-refits.md
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-02T23:59:00Z }
 sources:
   - id: owner
@@ -16,6 +17,8 @@ sources:
 ---
 
 # Decision
+
+**Superseded** by [re-fits carry friction](/decisions/2026-11-03-friction-on-refits.md) (2026-11-03): frictionless, a pose's placement never settled within 5 s.
 
 The fit stays frictionless for now.[^owner] What a pose shows is the garment settled in that pose: a fresh solve that depends only on the design, the body and the pose.
 

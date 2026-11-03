@@ -18,6 +18,8 @@ wp.config.quiet = True
 HOLD = 1.0e-4  # race physics (owner, 2026-11-03): contact only pushes; slack fabric is held to the body this weakly. See energy.py.
 TURN = 0.3  # inside-out charge fully on once a triangle has turned over by asin(0.3), 17 degrees past square to the body (tri_state)
 DAMP = 0.05  # today's step regulariser (wrap_block.DAMP); only the local/global candidate uses it
+MU = 0.4  # friction on re-fits (owner, 2026-11-03): fabric on dry skin, about 0.5 in Derler and Gerhardt's review (Tribol. Lett. 2012), polyamide lowest. Twin: energy.MU
+STICK = 1.0e-3  # m a point gives before it slides: friction's spring part, the smoothing a lagged friction needs (friction_k). Twin: energy.STICK
 
 
 @wp.func
@@ -378,6 +380,63 @@ def surface_hess_k(d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), plane:
 
 
 @wp.kernel
+def friction_k(x: wp.array(dtype=wp.vec3), anchor: wp.array(dtype=wp.vec3), fn: wp.array(dtype=wp.vec3), lam: wp.array(dtype=float),
+		mu: float, stick: float, mode: int, e_out: wp.array(dtype=float), e_off: int, grad: wp.array(dtype=wp.vec3), H: wp.array(dtype=wp.mat33), off: int):
+	"""Lagged friction (Problem.freeze): per point, mu * lam * f(r), r the slide along the body since the re-fit began (x - anchor in the
+	tangent plane of fn), f(r) = r^2 / (2 stick) up to stick, r - stick / 2 beyond. Its force is Coulomb's mu * lam once the point has slid
+	stick, a spring before. Twin: energy.friction. Its energy in its own slot per point; added onto the point's gradient and Hessian block (projected: (mu lam / r)(P - u u^T) once sliding)."""
+	i = wp.tid()
+	L = mu * lam[i]
+	e_out[e_off + i] = 0.0
+	if L <= 0.0:
+		return
+	n = fn[i]
+	P = wp.identity(n=3, dtype=float) - wp.outer(n, n)
+	u = P * (x[i] - anchor[i])
+	r = wp.length(u)
+	if r <= stick:
+		e_out[e_off + i] = L * r * r / (2.0 * stick)
+		if mode >= 1:
+			grad[i] += u * (L / stick)
+		if mode >= 2:
+			H[off + i] += P * (L / stick)
+	else:
+		e_out[e_off + i] = L * (r - 0.5 * stick)
+		if mode >= 1:
+			grad[i] += u * (L / r)
+		if mode >= 2:
+			uh = u / r
+			H[off + i] += (P - wp.outer(uh, uh)) * (L / r)
+
+
+@wp.kernel
+def friction_lam_k(d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), plane: float, lam: wp.array(dtype=float), fn: wp.array(dtype=wp.vec3)):
+	"""The contact force each point presses on the body with (the push-only surface term's, PLANE * depth) and its normal, held for a step."""
+	i = wp.tid()
+	lam[i] = plane * wp.max(-d[i], 0.0)
+	fn[i] = gn[i]
+
+
+@wp.kernel
+def pd_friction_k(x: wp.array(dtype=wp.vec3), anchor: wp.array(dtype=wp.vec3), fn: wp.array(dtype=wp.vec3), lam: wp.array(dtype=float),
+		mu: float, stick: float, rhs: wp.array(dtype=wp.vec3), H: wp.array(dtype=wp.mat33), off: int):
+	"""friction_k as a local/global constraint: a spring of mu lam / stick along the body towards the anchor, whose target slides with the
+	point once it is stick away (the same energy: the Huber function is min over s of (|u - s|^2 / stick + 2|s|) mu lam / 2)."""
+	i = wp.tid()
+	L = mu * lam[i]
+	if L <= 0.0:
+		return
+	n = fn[i]
+	P = wp.identity(n=3, dtype=float) - wp.outer(n, n)
+	u = P * (x[i] - anchor[i])
+	r = wp.length(u)
+	s = u * wp.max(0.0, 1.0 - stick / wp.max(r, 1.0e-12))
+	w = L / stick
+	rhs[i] += (P * anchor[i] + s) * w
+	H[off + i] += P * w
+
+
+@wp.kernel
 def fill_bsr_k(start: wp.array(dtype=wp.int32), src: wp.array(dtype=wp.int32), H: wp.array(dtype=wp.mat33), values: wp.array(dtype=wp.mat33)):
 	e = wp.tid()
 	acc = wp.mat33(0.0)
@@ -440,7 +499,7 @@ def csr(keys, n):
 class Problem:
 	"""One case on the GPU: the garment, the body surface, and the shared evaluation (energy, gradient, projected Hessian)."""
 
-	def __init__(self, case, hold=HOLD, turn=TURN, device='cuda:0'):
+	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, device='cuda:0'):
 		wp.init()
 		self.device = device
 		dev = device
@@ -450,6 +509,7 @@ class Problem:
 		n, nt = self.n, self.nt
 		Dm = np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2)
 		self.plane, self.gather, self.hold, self.turn = float(case['plane']), float(case['gather']), float(hold), float(turn)
+		self.mu, self.stick = float(mu), float(stick)  # mu 0: frictionless, the race's first physics; a re-fit's is MU (set_anchor)
 		el = case['elastic']
 		si, sj = el[:, 0].astype(np.int32), el[:, 1].astype(np.int32)
 		self.ns = ns = len(si)
@@ -514,8 +574,9 @@ class Problem:
 		got = self.A.offsets.numpy()[:n + 1], self.A.columns.numpy()[:self.nnz]
 		assert self.A.nnz == self.nnz and (got[1] == cols).all() and (np.diff(got[0]) == np.bincount(rows, minlength=n)).all(), 'BSR block order differs'
 		# work arrays
-		self.ne = nt + ns + n
-		self.e = wp.zeros(self.ne, dtype=float, device=dev)  # per element: triangles, then spans, then points
+		self.ne = nt + ns + 2 * n
+		self.e = wp.zeros(self.ne, dtype=float, device=dev)  # per element: triangles, then spans, then points' surface, then points' friction
+		self.off_f = nt + ns + n
 		self.e_base = wp.zeros(self.ne, dtype=float, device=dev)
 		self.e_tmp = wp.zeros(self.ne, dtype=float, device=dev)
 		self.d = wp.zeros(n, dtype=float, device=dev)
@@ -527,6 +588,9 @@ class Problem:
 		self.flip = wp.zeros(nt, dtype=wp.int32, device=dev)
 		self.grad = wp.zeros(n, dtype=wp.vec3, device=dev)
 		self.tmp_n = wp.zeros(n, dtype=float, device=dev)
+		self.anchor = wp.zeros(n, dtype=wp.vec3, device=dev)  # where each point was when the re-fit began
+		self.lam = wp.zeros(n, dtype=float, device=dev)  # its contact force at the last freeze
+		self.fn = wp.zeros(n, dtype=wp.vec3, device=dev)  # and the body's normal there
 
 	def array(self, x):
 		return wp.array(np.ascontiguousarray(x, dtype=np.float32), dtype=wp.vec3, device=self.device)
@@ -534,13 +598,20 @@ class Problem:
 	def query(self, x):
 		wp.launch(query_k, self.n, [x, self.sleeve, self.torso_part, self.arm_part, self.plane, self.hold, self.d, self.gn, self.q, self.e, self.nt + self.ns], device=self.device)
 
+	def set_anchor(self, x):
+		"""Friction holds each point to where it is now: call with the re-fit's start, before the solve."""
+		wp.copy(self.anchor, x)
+
 	def freeze(self, x):
 		"""Hold the contact at x through the step that follows (evaluate(held=True)): the closest point and its normal, so the surface term
 		is the height over that tangent plane, and the body normal the inside-out blend measures against. Exact, inside or outside is
 		ambiguous where the posed surface folds into itself (one point at the back-arched wrist swapped side for a 0.03 mm move), and
 		a jump stops any line search. Held, the energy is smooth through the step; the next step looks again. Today's solver works the
-		same way (each local step re-matches). At a fixed point the held energy's gradient is the true one."""
+		same way (each local step re-matches). At a fixed point the held energy's gradient is the true one.
+		Friction's contact force is held the same way, from the depth here (lagged friction, as IPC's; Li et al. 2020)."""
 		self.query(x)
+		if self.mu > 0:
+			wp.launch(friction_lam_k, self.n, [self.d, self.gn, self.plane, self.lam, self.fn], device=self.device)
 
 	def evaluate(self, x, mode=1, reg=0.0, held=False):
 		"""mode 0: per-element energies into self.e; 1: and the gradient into self.grad; 2: and the projected Hessian into self.A.
@@ -555,6 +626,9 @@ class Problem:
 			wp.launch(gather_grad_k, self.n, [self.vt_start, self.vt_src, self.gt, self.vs_start, self.vs_src, self.gs, self.d, self.gn, self.plane, self.hold, self.grad], device=self.device)
 		if mode >= 2:
 			wp.launch(surface_hess_k, self.n, [self.d, self.gn, self.plane, self.hold, reg, self.H, self.off_v], device=self.device)
+		if self.mu > 0:
+			wp.launch(friction_k, self.n, [x, self.anchor, self.fn, self.lam, self.mu, self.stick, mode, self.e, self.off_f, self.grad, self.H, self.off_v], device=self.device)
+		if mode >= 2:
 			wp.launch(fill_bsr_k, self.nnz, [self.blk_start, self.blk_src, self.H, self.A.values], device=self.device)
 
 	def energy(self):
@@ -577,9 +651,10 @@ class Problem:
 
 	def parts(self, x):
 		"""Energy split as energy.Energy's parts, on the host (for reports, not inside a timed loop)."""
-		self.evaluate(x, 0)
+		self.freeze(x)
+		self.evaluate(x, 0, held=True)
 		e = self.e.numpy().astype(np.float64)
-		tri, spr, pt = e[:self.nt], e[self.nt:self.nt + self.ns], e[self.nt + self.ns:]
+		tri, spr, pt, fr = e[:self.nt], e[self.nt:self.nt + self.ns], e[self.nt + self.ns:self.off_f], e[self.off_f:]
 		d = self.d.numpy()
-		return dict(total=e.sum(), membrane=tri.sum(), surface=pt.sum(), elastic=spr.sum(), inside_out=int(self.flip.numpy().sum()),
+		return dict(total=e.sum(), membrane=tri.sum(), surface=pt.sum(), elastic=spr.sum(), friction=fr.sum(), inside_out=int(self.flip.numpy().sum()),
 			inside_body=int((d < -0.0005).sum()), off_body=int((d > 0.002).sum()), max_inside=float(-d.min()), max_off=float(d.max()))

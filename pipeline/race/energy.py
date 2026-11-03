@@ -2,7 +2,7 @@
 Today's solver (wrap_block.solve, alternating local and global steps) minimises it only implicitly; this is the same physics as one function of
 the points alone, so any method can be pointed at it. CPU reference in numpy; the GPU kernels are to match it.
 
-E = membrane + surface + elastic, frictionless, no gravity, metres.
+E = membrane + surface + elastic (+ friction on a re-fit), no gravity, metres.
 - membrane, per triangle: area / 2 * (phi(s1) + phi(s2)), s the two singular values of the 3x2 deformation gradient F from the flat triangle,
   phi(s) = (s - 1)^2 above 1, 0 from GATHER to 1, (GATHER - s)^2 below: stretch costs, gathering down to GATHER is free. s2 counts negative
   where the triangle has turned inside out against the surface under it (the role of `wrong` in solve).
@@ -19,6 +19,10 @@ E = membrane + surface + elastic, frictionless, no gravity, metres.
   being pulled in about 90 times harder (8 T A / (HOLD L^2)), so taut fabric bridges, sagging about 1% of the hollow's depth; only slack fabric
   follows the hold. A modelling stand-in, not measured: sensitivity in the race record.
 - elastic, per span: k / 2 * max(length - rest, 0)^2, tension only.
+- friction, on re-fits only (owner, 2026-11-03), per point (friction below): mu * lam * f(r), r how far the point has slid along the body
+  since the re-fit began, lam its contact force PLANE * depth, held through each step with the normal (lagged friction, as IPC, Li et al.
+  2020), f(r) = r^2 / (2 STICK) up to STICK, r - STICK / 2 beyond: Coulomb's force mu * lam once sliding, a spring before. Without it the
+  garment slides along the body almost freely and a re-fit's placement never settles (race record, stages 2-5).
 Not in it: DAMP, which only slows each step and is gone once nothing moves; fold pins (a race case is the whole garment).
 Twin: wrap_block.solve (see its docstring). Spec: knowledge/engineering/app/solver-race-plan.md.
 """
@@ -32,6 +36,8 @@ import wrap_block as W  # noqa: E402
 
 
 HOLD = 1.0e-4  # twin: gpu.HOLD
+MU = 0.4  # twin: gpu.MU (the source there)
+STICK = 1.0e-3  # twin: gpu.STICK
 
 
 class Energy:
@@ -107,6 +113,18 @@ class Energy:
 		np.add.at(grad, self.si, -f)
 		parts = dict(membrane=e_membrane, stretch=e_stretch, squeeze=e_membrane - e_stretch, surface=e_surface, elastic=e_elastic, inside_out=int(flip.sum()), off_field=off)
 		return e_membrane + e_surface + e_elastic, grad, parts
+
+
+def friction(x, anchor, n, lam, mu=MU, stick=STICK):
+	"""Friction's energy and gradient (n, 3), with the contact force lam and normals n held (twin: gpu.friction_k)."""
+	u = x - anchor
+	u = u - (u * n).sum(1, keepdims=True) * n
+	r = np.linalg.norm(u, axis=1)
+	L = mu * np.maximum(lam, 0)
+	slid = r > stick
+	e = np.where(slid, L * (r - 0.5 * stick), L * r ** 2 / (2 * stick))
+	g = u * np.where(slid, L / np.maximum(r, 1e-30), L / stick)[:, None]
+	return e.sum(), g
 
 
 def alternating_residual(case, x, was):

@@ -256,7 +256,8 @@ def pd_rhs_k(x: wp.array(dtype=wp.vec3), vt_start: wp.array(dtype=wp.int32), vt_
 def local_global(pb, x0, rec, cg_iters=20, damp=G.DAMP, precond=None):
 	"""Today's alternating method (wrap_block.solve) on the GPU, on the race's energy: local step per triangle (pd_tri_k), per span and
 	per point (the body's tangent plane, push only), then the global solve, by cg_iters of preconditioned conjugate gradients
-	warm-started from the last positions, where today's solver factorises. Its matrix changes only in the points' own blocks."""
+	warm-started from the last positions, where today's solver factorises. Its matrix changes only in the points' own blocks.
+	With pb.mu, friction is one more per-point constraint (gpu.pd_friction_k)."""
 	x = wp.clone(x0)
 	A = ws.bsr_copy(pb.A)
 	H = wp.zeros_like(pb.H)
@@ -269,6 +270,8 @@ def local_global(pb, x0, rec, cg_iters=20, damp=G.DAMP, precond=None):
 		wp.launch(pd_spring_k, pb.ns, [x, pb.si, pb.sj, pb.rest_len, pb.k, pb.gs, H[pb.off_s:]], device=pb.device)
 		wp.launch(pd_rhs_k, pb.n, [x, pb.vt_start, pb.vt_src, pb.gt, pb.vs_start, pb.vs_src, pb.gs, pb.d, pb.gn, pb.q, pb.plane, pb.hold, damp, rhs], device=pb.device)
 		wp.launch(G.surface_hess_k, pb.n, [pb.d, pb.gn, pb.plane, pb.hold, damp, H, pb.off_v], device=pb.device)
+		if pb.mu > 0:
+			wp.launch(G.pd_friction_k, pb.n, [x, pb.anchor, pb.fn, pb.lam, pb.mu, pb.stick, rhs, H, pb.off_v], device=pb.device)
 		wp.launch(G.fill_bsr_k, pb.nnz, [pb.blk_start, pb.blk_src, H, A.values], device=pb.device)
 		M = precond(A) if precond else wl.preconditioner(A, 'block_jacobi_direct')
 		wl.cg(A, rhs, x, tol=1e-12, maxiter=cg_iters, M=M, check_every=cg_iters, use_cuda_graph=precond is None)

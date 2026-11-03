@@ -12,8 +12,9 @@ import warp.sparse as ws
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import energy as EN  # noqa: E402
 from energy import Energy  # noqa: E402
-from gpu import Problem  # noqa: E402
+from gpu import MU, Problem  # noqa: E402
 
 CAP = os.path.join(HERE, '..', '..', 'app', 'captures', 'race')
 
@@ -88,6 +89,47 @@ def main():
 		worst.append(np.linalg.norm(Av - fd) / np.linalg.norm(fd))
 	print(f'  blown up 1.25x, surface off ({tri_s["inside_out"]} inside out): |Hv - FD| / |FD| worst over 4 directions {max(worst):.2e}', flush=True)
 	pb.plane, pb.hold = plane, hold
+
+	print('\n== friction (re-fits): GPU against energy.friction, and against its own finite differences, held at a freeze', flush=True)
+	x0 = case['start']
+	for slide in (0.0003, 0.003):  # inside the stick distance, and sliding
+		v = rng.normal(size=x0.shape)
+		x = x0 + slide * v / np.linalg.norm(v, axis=1, keepdims=True)
+		X = pb.array(x)
+		pb.set_anchor(pb.array(x0))
+		pb.mu = MU
+		pb.freeze(X)
+		lam, fn = pb.lam.numpy().astype(np.float64), pb.fn.numpy().astype(np.float64)
+		e_np, g_np = EN.friction(x, x0, fn, lam)
+		pb.evaluate(X, 2, held=True)
+		e_gpu = float(pb.e.numpy()[pb.off_f:].astype(np.float64).sum())
+		g_all = pb.grad.numpy().astype(np.float64)
+		pb.mu = 0.0
+		pb.evaluate(X, 1, held=True)
+		g_gpu = g_all - pb.grad.numpy().astype(np.float64)
+		pb.mu = MU
+		on = lam > 0
+		rel = np.linalg.norm(g_np - g_gpu, axis=1)[on] / (np.linalg.norm(g_np, axis=1)[on].mean() + 1e-30)
+		print(f'  slid {slide * 1000:.1f} mm, {on.sum()} points in contact: energy {e_np:.6e} / {e_gpu:.6e}; gradient per point relative to the mean: 99% {np.percentile(rel, 99):.2e}, max {rel.max():.2e}', flush=True)
+		pb.evaluate(X, 2, held=True)
+		g0 = pb.grad.numpy().astype(np.float64)
+		pb.save_energy()
+		worst = 0
+		for _ in range(6):
+			w = rng.normal(size=x.shape)
+			h = 1e-5
+			pb.evaluate(pb.array(x + h * w), 0, held=True)
+			ep = pb.delta()
+			pb.evaluate(pb.array(x - h * w), 0, held=True)
+			em = pb.delta()
+			worst = max(worst, abs((ep - em) / (2 * h) - (g0 * w).sum()) / (np.abs(g0 * w).sum() + 1e-30))
+		pb.evaluate(X, 2, held=True)
+		psd = []
+		for _ in range(4):
+			w = rng.normal(size=x.shape)
+			psd.append((w * ws.bsr_mv(pb.A, pb.array(w)).numpy().astype(np.float64)).sum() / (w * w).sum())
+		print(f'    held, all terms: gradient against finite differences, worst over 6 directions {worst:.2e}; v.Hv / v.v min {min(psd):.3e}', flush=True)
+	pb.mu = 0.0
 
 
 if __name__ == '__main__':

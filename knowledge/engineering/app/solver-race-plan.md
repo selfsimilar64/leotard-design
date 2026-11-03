@@ -1,7 +1,7 @@
 ---
 type: Roadmap
 title: Solver race plan
-description: "Plan (2026-11-02) and results (2026-11-03) for choosing the fit solver that meets the owner's 5-second re-fit target. Raced on the GTX 1650 in NVIDIA Warp: today's local/global method on the GPU won (5 ms per step against 820 ms on the CPU; cutouts to the accuracy bar in 2-4 s, pose shapes settled in 1-2 s); Newton, L-BFGS, VBD and a multi-level V-cycle lost. Frictionless, the garment's placement along the body is nearly free and no solver pins it within 5 s: a physics question for the owner."
+description: "Plan (2026-11-02) and results (2026-11-03) for choosing the fit solver that meets the owner's 5-second re-fit target. Raced on the GTX 1650 in NVIDIA Warp: today's local/global method on the GPU won (5 ms per step against 820 ms on the CPU; cutouts to the accuracy bar in 2-4 s, pose shapes settled in 1-2 s); Newton, L-BFGS, VBD and a multi-level V-cycle lost. Frictionless, the garment's placement along the body is nearly free and no solver pins it within 5 s; with friction on re-fits (owner, same day) poses settle in about 1 s to 0.3-0.6 mm mean, the worst few dozen points 7-15 mm off where the reference itself is unsettled."
 tags: [roadmap, fit, performance, gpu, solver]
 status: stable
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-03T12:00:00Z }
@@ -15,7 +15,10 @@ sources:
     title: A re-fit takes under five seconds
   - id: friction
     resource: /decisions/2026-11-02-no-friction-for-now.md
-    title: No friction in the fit for now
+    title: No friction in the fit for now (superseded)
+  - id: friction-on
+    resource: /decisions/2026-11-03-friction-on-refits.md
+    title: Re-fits carry friction
   - id: baseline
     resource: /engineering/app/refitting-after-an-edit.md
     title: Refitting after an edit (speed baseline)
@@ -70,7 +73,7 @@ Option 1: the body only pushes; outside it a weak hold, HOLD = 1e-4 ([decision](
 
 # Stages 2-5 as run (2026-11-03)
 
-Code, all in `pipeline/race/`: `make_case.py` (cases), `gpu.py` (the energy in Warp), `solvers.py` (candidates), `multilevel.py` (V-cycle), `race.py` (runner), `report.py` (chart `app/captures/race/race-young.png`, table), `check_gpu.py`, `hold_sensitivity.py`, `sliding.py`. Run with the reference venv's Python (Warp 1.19, GTX 1650).
+Code, all in `pipeline/race/`: `make_case.py` (cases), `gpu.py` (the energy in Warp), `solvers.py` (candidates), `multilevel.py` (V-cycle), `race.py` (runner), `report.py` (chart `app/captures/race/race-young.png`, table), `check_gpu.py`, `hold_sensitivity.py`, `sliding.py`, `worst_points.py`. Run with the reference venv's Python (Warp 1.19, GTX 1650).
 
 ## Stage 2: cases and references
 
@@ -115,6 +118,27 @@ Milliseconds per iteration, and what each reached. Position: mean / max mm from 
 - **What is left for 5 s on poses is a physics question, not a solver one:** without friction the garment's placement along the body is nearly free. Owner's options: accept placement settling over a few more seconds (or never exactly); add static friction or its cheap stand-in (a weak pull toward where each point was, which is what friction does for a garment already on); or judge the bar by shape and energy, not position. The [no-friction decision](/decisions/2026-11-02-no-friction-for-now.md) was made before this was known.
 - **iPad (estimate only):** recent iPad GPUs are within about 1-2x of a GTX 1650 in raw throughput; WebGPU adds per-dispatch cost. Expect 1-3x the GTX 1650 times. The real number comes after the port.
 - Newton, L-BFGS, VBD and the V-cycle stay in `solvers.py` for later physics (friction, bending); none is worth porting now.
+
+## Friction added (owner, 2026-11-03)
+
+The owner took the stand-in ([decision](/decisions/2026-11-03-friction-on-refits.md)). Built as lagged, smoothed Coulomb friction rather than a plain spring, at the same cost: per point pressing on the body, energy mu * lam * f(r), r the slide along the body's tangent plane since the re-fit's start (`Problem.set_anchor`), lam = PLANE * depth, held with the normal from each step's `freeze`, f the Huber function with 1 mm of give (`STICK`). Local/global takes it as one more per-point constraint whose target slides once the point is 1 mm away (`pd_friction_k`); Newton through the energy, gradient and projected Hessian (`friction_k`). mu 0.4. Its energy sits in its own slots (`Problem.off_f`); `parts()` reports it as `friction`. Checked: GPU against `energy.friction` in float64 to 1e-4 per point, inside the give and sliding; held gradient against finite differences 8e-5; Hessian positive.
+
+`race.py --mu` (default `gpu.MU`; files `results-young-friction.json`, `ref-young-<case>-friction.npy`, chart `race-young-friction.png`). Young, 20 s per candidate, references 120 s Newton:
+
+| case | local/global 10 CG | at 1 s (mean / max mm; shape mean) | at 5 s |
+|---|---|---|---|
+| standing | bar in 0.20 s (was 3-4 s) | 0.1 / 4.0; 0.03 | 0.0 / 4.2 |
+| back-arched | 95% under 2.3 mm from 0.5 s; max not met | 0.5 / 14.2; 0.12 | 0.5 / 14.2 |
+| passe | max not met | 0.5 / 8.7; 0.17 | 0.6 / 8.0 |
+| lunge-arms-up | max not met | 0.3 / 7.2; 0.05 | 0.4 / 7.9 |
+| standing-back-keyhole | bar in 0.06 s | 0.0 / 5.3; 0.01 | 0.0 / 4.5 |
+| standing-front-side-cutout | bar in 7.5 s (max only; mean 0.1 from the start) | 0.1 / 7.3; 0.02 | 0.1 / 5.7 |
+| back-arched-back-keyhole | max not met | 0.4 / 5.6; 0.07 | 0.4 / 7.1 |
+
+- **Placement now settles.** Poses reach 0.3-0.6 mm mean and 95% within 1.3-2.5 mm in about 1 s and stay there (frictionless: 1.8-11 mm mean, drifting); the curves are flat after 1 s, with a slow creep of about 0.1 mm mean by 20 s on lunge. 30 CG is no better. Newton is now clearly worse (1.1-1.3 mm mean on poses, energy 130-300% above: held to 3 mm per step, it cannot slide fabric that friction lets slide).
+- **The max is what fails, and mostly the reference's fault.** `worst_points.py`: on back-arched 84 points are over 5 mm off, and at 73 of them the reference itself moves over 1 mm when Newton is restarted from it for 20 s (max 17.8 mm); passe 70 and 33. The worst sit at the wrist ends and around the neckline. Fabric not pressing on the body (no friction: 3,430 of 13,602 points on back-arched) is off 1.0 mm mean against 0.4 for fabric pressing. Energy gaps (15-35% on poses) are not comparable: with friction the energy depends on the path, and fixed points differ.
+- **Settings hardly matter.** Back-arched with mu 0.25, or with 2 mm of give: the same picture (0.62-0.65 mm mean, 95% 2.3-2.6, max 8-10 at 10 s); the settled references move 0.43-0.46 mm mean from mu 0.4 / 1 mm.
+- **It changes what a pose shows.** The back-arched reference with friction sits 1.5 mm mean from its start (the standing fit placed by surface coordinates) and 27 mm mean (max 66) from the frictionless reference.
 
 # Stage 2: problem files and the reference (plan as written)
 
