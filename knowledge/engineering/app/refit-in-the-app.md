@@ -61,6 +61,24 @@ Distance from the race's reference, mm mean / 95% / worst, the last window's ave
 - **Across devices:** not identical. From starts with no point within rounding of the body, the app and Python agree to 0.002 mm mean after one step but 0.2 mm mean (1 mm at 99%, 3-4 mm worst) after 20: rounding differences grow wherever a point switches between touching and not. A desktop and an iPad will show slightly different fits of the same design and pose.
 - **Order of edits and poses** (owner[^owner]): every pose starts from the standing fit of the same design placed by surface coordinates, and a posed edit from the standing fit of the edited design, never from another pose (`make_case.py` parent `standing-<cut>`), so the fit does not depend on what was shown before. A fixed step count, not wall time, ends a run, so a slower device does not stop earlier.
 
+# Stop rule setting (owner, 2026-11-03)
+
+The owner found every point under 1.75 mm per 10-step window stopping passe in 0.2 s, and 1.5 mm never stopping (its chatter sits above 1.5 mm), and proposed 1.75-2 mm globally.[^owner] Default set to 2 mm, every point, window 10, limit 750 kept as the backstop. On the seven young cases (last window's average; distance mean / 95% / worst, mm):
+
+| case | steps at 1.5 / 1.75 / 2 mm | at 2 mm against 750 steps | at 2 mm against the reference (750 steps) |
+|---|---|---|---|
+| standing | 50 / 50 / 30 | 0.13 / 0.74 / 6.4 | 0.13 (0.05) |
+| back-arched | 750 / 340 / 190 | 0.36 / 1.49 / 6.0 | 1.24 (1.33) |
+| passe | 750 / 130 / 130 | 0.85 / 4.82 / 8.9 | 2.34 (2.11) |
+| lunge-arms-up | 90 / 50 / 50 | 0.54 / 2.22 / 6.0 | 0.67 (0.98) |
+| standing-back-keyhole | 170 / 130 / 70 | 0.03 / 0.14 / 2.2 | 0.07 (0.07) |
+| standing-front-side-cutout | 30 / 30 / 30 | 0.04 / 0.16 / 4.8 | 0.10 (0.10) |
+| back-arched-back-keyhole | 750 / 90 / 60 | 0.60 / 2.75 / 7.2 | 1.00 (1.18) |
+
+- Every case stops by 340 steps (about 0.75 s on the GTX 1650), most by 130 (0.3 s). Standing and cutouts end within 0.13 mm mean of a full run; poses 0.3-0.85 mm, passe leaving 5% of the garment about 5 mm short of where 750 steps take it. Against the reference an early stop is as close as a full run, or closer (the slow late sliding does not head for it).
+- The rule really means "stop once the worst chattering point calms under the threshold", so it is tuned to these cases' chatter. A design, body or mesh size with louder chatter runs to the step limit (slower, still bounded); the stop step also varies with noise (back-arched 340 at 1.75 mm, 190 at 2 mm). It allows up to 0.2 mm per step of real travel. The threshold is per window: changing the window changes its meaning.
+- Percentile rules (99% under 0.3-0.5 mm) did no better: cutouts in 20-30 steps, but back-arched never stops and passe and the posed cutout take 240-530.
+
 # Owner's first look (2026-11-03): skin through, folds, underarm seams
 
 The owner saw skin showing through, fabric that seemed folded over itself, and underarm seams that curve where photographed leotards show a near-square cross of straight seams (side seam running on into the sleeve seam, the armhole crossing it).[^owner] `pipeline/race/look_fit.py` measures each; the page gained seams, colour by panel, a display lift and an underarm camera.

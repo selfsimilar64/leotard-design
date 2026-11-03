@@ -17,7 +17,9 @@ export const DEFAULTS = {
 	stick: 0.001,  // m of give before sliding (gpu.STICK)
 	grip: 1.0,  // how far each step moves friction's held contact force to the new one (gpu.Problem.grip)
 	window: 10,  // steps per averaging window
-	tol: 0.05e-3,  // m: window-average drift under which a point counts as settled
+	tol: 2.0e-3,  // m: window-average drift under which a point counts as settled. Owner's working default (2026-11-03): just above the
+	// shoulder chatter's floor (1.5 mm never stops three of the seven race cases); every case then stops in 30-340 steps, within 0.1 mm
+	// mean of a 750-step run standing and cut, 0.3-0.85 mm on poses (knowledge/engineering/app/refit-in-the-app.md)
 	stat: 'max',  // 'max', or a percentile such as 99.9
 	maxSteps: 750,  // never more than this many steps
 };
