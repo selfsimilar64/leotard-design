@@ -100,7 +100,7 @@ def start_of(case, refs, key):
 	start = case['start'].copy()
 	remap, premap = case['remap'], pcase['remap']
 	both = (remap >= 0) & (premap >= 0)
-	if parent == 'standing' and not np.array_equal(case['surface_P'], pcase['surface_P']):
+	if not np.array_equal(case['surface_P'], pcase['surface_P']):  # a pose: placed from the standing fit by surface coordinates
 		standing = W.Surface(pcase['surface_P'], pcase['surface_idx'], pcase['surface_arm'])
 		face, weight = standing.hosts(pref, part=pcase['sleeve'].astype(bool))
 		placed = (case['surface_P'][face] * weight[:, :, None]).sum(1)
@@ -147,6 +147,7 @@ def main():
 			ref = np.load(rf)
 		else:
 			S.newton(pb, x0, Clock(0.0), **REFERENCE)
+			pb.set_anchor(x0)
 			clock = Clock(ref_s)
 			xr = S.newton(pb, x0, clock, **REFERENCE)
 			clock.finish(xr)
@@ -171,7 +172,9 @@ def main():
 			run = make()
 			wp.synchronize()
 			cset = time.perf_counter() - t
+			pb.set_anchor(x0)
 			run(x0, Clock(0.0))  # compile and warm up
+			pb.set_anchor(x0)  # each run starts afresh (friction's held contact force)
 			clock = Clock(budget)
 			x = run(x0, clock)
 			clock.finish(x)

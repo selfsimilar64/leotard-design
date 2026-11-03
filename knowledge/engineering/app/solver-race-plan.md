@@ -1,7 +1,7 @@
 ---
 type: Roadmap
 title: Solver race plan
-description: "Plan (2026-11-02) and results (2026-11-03) for choosing the fit solver that meets the owner's 5-second re-fit target. Raced on the GTX 1650 in NVIDIA Warp: today's local/global method on the GPU won (5 ms per step against 820 ms on the CPU; cutouts to the accuracy bar in 2-4 s, pose shapes settled in 1-2 s); Newton, L-BFGS, VBD and a multi-level V-cycle lost. Frictionless, the garment's placement along the body is nearly free and no solver pins it within 5 s; with friction on re-fits (owner, same day) poses settle in about 1 s to 0.3-0.6 mm mean, the worst few dozen points 7-15 mm off where the reference itself is unsettled."
+description: "Plan (2026-11-02) and results (2026-11-03) for choosing the fit solver that meets the owner's 5-second re-fit target. Raced on the GTX 1650 in NVIDIA Warp: today's local/global method on the GPU won (5 ms per step against 820 ms on the CPU; cutouts to the accuracy bar in 2-4 s, pose shapes settled in 1-2 s); Newton, L-BFGS, VBD and a multi-level V-cycle lost. Frictionless, the garment's placement along the body is nearly free and no solver pins it within 5 s; with friction on re-fits (owner, same day) poses still end 1.2-2.2 mm mean from the reference, the sleeve turning round the arm most; an early result of 0.3-0.6 mm was a bug (random normals on points resting on the body)."
 tags: [roadmap, fit, performance, gpu, solver]
 status: stable
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-03T12:00:00Z }
@@ -123,7 +123,7 @@ Milliseconds per iteration, and what each reached. Position: mean / max mm from 
 
 The owner took the stand-in ([decision](/decisions/2026-11-03-friction-on-refits.md)). Built as lagged, smoothed Coulomb friction rather than a plain spring, at the same cost: per point pressing on the body, energy mu * lam * f(r), r the slide along the body's tangent plane since the re-fit's start (`Problem.set_anchor`), lam = PLANE * depth, held with the normal from each step's `freeze`, f the Huber function with 1 mm of give (`STICK`). Local/global takes it as one more per-point constraint whose target slides once the point is 1 mm away (`pd_friction_k`); Newton through the energy, gradient and projected Hessian (`friction_k`). mu 0.4. Its energy sits in its own slots (`Problem.off_f`); `parts()` reports it as `friction`. Checked: GPU against `energy.friction` in float64 to 1e-4 per point, inside the give and sliding; held gradient against finite differences 8e-5; Hessian positive.
 
-`race.py --mu` (default `gpu.MU`; files `results-young-friction.json`, `ref-young-<case>-friction.npy`, chart `race-young-friction.png`). Young, 20 s per candidate, references 120 s Newton:
+`race.py --mu` (default `gpu.MU`; files `results-young-friction.json`, `ref-young-<case>-friction.npy`, chart `race-young-friction.png`). Young, 20 s per candidate, references 120 s Newton. **Superseded: these first numbers were flattered by a bug (next section).**
 
 | case | local/global 10 CG | at 1 s (mean / max mm; shape mean) | at 5 s |
 |---|---|---|---|
@@ -139,6 +139,25 @@ The owner took the stand-in ([decision](/decisions/2026-11-03-friction-on-refits
 - **The max is what fails, and mostly the reference's fault.** `worst_points.py`: on back-arched 84 points are over 5 mm off, and at 73 of them the reference itself moves over 1 mm when Newton is restarted from it for 20 s (max 17.8 mm); passe 70 and 33. The worst sit at the wrist ends and around the neckline. Fabric not pressing on the body (no friction: 3,430 of 13,602 points on back-arched) is off 1.0 mm mean against 0.4 for fabric pressing. Energy gaps (15-35% on poses) are not comparable: with friction the energy depends on the path, and fixed points differ.
 - **Settings hardly matter.** Back-arched with mu 0.25, or with 2 mm of give: the same picture (0.62-0.65 mm mean, 95% 2.3-2.6, max 8-10 at 10 s); the settled references move 0.43-0.46 mm mean from mu 0.4 / 1 mm.
 - **It changes what a pose shows.** The back-arched reference with friction sits 1.5 mm mean from its start (the standing fit placed by surface coordinates) and 27 mm mean (max 66) from the frictionless reference.
+
+## Correction: points on the body had a random normal (2026-11-03)
+
+Porting to WebGPU showed that for a point within rounding of the body (every point of a start placed by surface coordinates sits there, d about 1e-9 m) `surface_at`'s normal was the direction to the closest point, which at that distance is float32 noise: 42 points of the back-arched start pointed the wrong way, and a flipped normal pushes into the body. Now within `SNAP` = 0.01 mm the normal is the closest feature's pseudo-normal (`gpu.SNAP`, twin in `app/src/fit/refit-wgsl.js`). It did not stop the shoulder chatter (about as many points still jump over 0.1 mm per step), but it had been acting as grip: a random normal each step pinned a resting point along a random direction. References and the race re-run with it (local/global only; times not comparable, the GPU was shared):
+
+| case | start (mean / 95% / max mm) | local/global 10 CG after 20 s | reference moved in its last quarter (mean / max) |
+|---|---|---|---|
+| standing | 0.30 / 1.77 / 15.7 | bar in 0.21 s; 0.07 / 0.29 / 6.1 | 0.00 / 0.00 |
+| back-arched | 2.49 / 9.39 / 54.6 | 1.32 / 4.74 / 17.2; shape bar 2.0 s | 0.00 / 0.00 |
+| passe | 4.81 / 18.8 / 56.0 | 2.15 / 6.93 / 15.5; shape not | 1.85 / 16.1 |
+| lunge-arms-up | 2.12 / 8.71 / 53.1 | 1.17 / 4.29 / 11.8; shape 0.2 s | 0.48 / 17.8 |
+| standing-back-keyhole | 0.13 / 0.58 / 5.4 | bar in 1.0 s; 0.10 / 0.49 / 8.1 | 0.06 / 7.1 |
+| standing-front-side-cutout | 0.18 / 0.73 / 9.8 | 0.13 / 0.59 / 8.0 (max not met) | 0.07 / 4.3 |
+| back-arched-back-keyhole | 2.41 / 8.61 / 56.6 | 1.22 / 4.90 / 12.5; shape 1.0 s | 0.72 / 17.4 |
+
+- **Friction helps but does not pin a pose.** Poses end 1.2-2.2 mm mean from the reference (frictionless 1.8-11), and some references themselves keep moving. The largest difference is the sleeve turning round the upper arm. The earlier "settles in about 1 s at 0.3-0.6 mm" was the bug.
+- **The pose-with-cutout case now starts from the standing cutout placed into the pose** (owner: a fit must not depend on the order of edits and poses; `make_case.py` parent `standing-<cut>`, `race.start_of` places from any parent on another surface).
+- **Chatter** at the shoulder (where sleeve meets bodice): about 100 points flip between pressing and not each step and jump 1-3 mm without going anywhere. Moving friction's held contact force only part of the way each step (`Problem.grip`, 0.05-0.5) cut the number of moving points up to tenfold but not the jumps; default left at 1. The app's stop rule averages over a window instead ([re-fit in the app](/engineering/app/refit-in-the-app.md)).
+- **Determinism:** two runs from the same start are bit-identical (Warp, GTX 1650).
 
 # Stage 2: problem files and the reference (plan as written)
 

@@ -20,6 +20,7 @@ TURN = 0.3  # inside-out charge fully on once a triangle has turned over by asin
 DAMP = 0.05  # today's step regulariser (wrap_block.DAMP); only the local/global candidate uses it
 MU = 0.4  # friction on re-fits (owner, 2026-11-03): fabric on dry skin, about 0.5 in Derler and Gerhardt's review (Tribol. Lett. 2012), polyamide lowest. Twin: energy.MU
 STICK = 1.0e-3  # m a point gives before it slides: friction's spring part, the smoothing a lagged friction needs (friction_k). Twin: energy.STICK
+SNAP = 1.0e-5  # m: closer to the body than this, a point's surface normal is the feature's pseudo-normal, not the direction to it (surface_at). Twin: refit-wgsl.js
 
 
 @wp.func
@@ -107,10 +108,10 @@ def surface_at(p: wp.vec3, mid: wp.uint64, fn: wp.array(dtype=wp.vec3), en: wp.a
 			if wp.dot(v, n) < 0.0:
 				s = -1.0
 			h.d = s * dist
-			if dist > 1.0e-7:
+			if dist > SNAP:
 				h.g = v * (s / dist)
 			else:
-				h.g = fn[f]
+				h.g = n  # on the surface: v is float32 rounding, its direction noise (it flipped 42 points of a placed pose start)
 	return h
 
 
@@ -410,10 +411,11 @@ def friction_k(x: wp.array(dtype=wp.vec3), anchor: wp.array(dtype=wp.vec3), fn: 
 
 
 @wp.kernel
-def friction_lam_k(d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), plane: float, lam: wp.array(dtype=float), fn: wp.array(dtype=wp.vec3)):
-	"""The contact force each point presses on the body with (the push-only surface term's, PLANE * depth) and its normal, held for a step."""
+def friction_lam_k(d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), plane: float, blend: float, lam: wp.array(dtype=float), fn: wp.array(dtype=wp.vec3)):
+	"""The contact force each point presses on the body with (the push-only surface term's, PLANE * depth) and its normal, held for a step.
+	blend < 1 moves the held force only that far toward the new one each step (Problem.grip)."""
 	i = wp.tid()
-	lam[i] = plane * wp.max(-d[i], 0.0)
+	lam[i] = (1.0 - blend) * lam[i] + blend * plane * wp.max(-d[i], 0.0)
 	fn[i] = gn[i]
 
 
@@ -499,7 +501,7 @@ def csr(keys, n):
 class Problem:
 	"""One case on the GPU: the garment, the body surface, and the shared evaluation (energy, gradient, projected Hessian)."""
 
-	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, device='cuda:0'):
+	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, device='cuda:0'):
 		wp.init()
 		self.device = device
 		dev = device
@@ -510,6 +512,8 @@ class Problem:
 		Dm = np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2)
 		self.plane, self.gather, self.hold, self.turn = float(case['plane']), float(case['gather']), float(hold), float(turn)
 		self.mu, self.stick = float(mu), float(stick)  # mu 0: frictionless, the race's first physics; a re-fit's is MU (set_anchor)
+		self.grip = float(grip)  # how far each freeze moves friction's held contact force to the new one (1: all the way)
+		self.fresh = True
 		el = case['elastic']
 		si, sj = el[:, 0].astype(np.int32), el[:, 1].astype(np.int32)
 		self.ns = ns = len(si)
@@ -601,6 +605,7 @@ class Problem:
 	def set_anchor(self, x):
 		"""Friction holds each point to where it is now: call with the re-fit's start, before the solve."""
 		wp.copy(self.anchor, x)
+		self.fresh = True
 
 	def freeze(self, x):
 		"""Hold the contact at x through the step that follows (evaluate(held=True)): the closest point and its normal, so the surface term
@@ -611,7 +616,8 @@ class Problem:
 		Friction's contact force is held the same way, from the depth here (lagged friction, as IPC's; Li et al. 2020)."""
 		self.query(x)
 		if self.mu > 0:
-			wp.launch(friction_lam_k, self.n, [self.d, self.gn, self.plane, self.lam, self.fn], device=self.device)
+			wp.launch(friction_lam_k, self.n, [self.d, self.gn, self.plane, 1.0 if self.fresh else self.grip, self.lam, self.fn], device=self.device)
+			self.fresh = False
 
 	def evaluate(self, x, mode=1, reg=0.0, held=False):
 		"""mode 0: per-element energies into self.e; 1: and the gradient into self.grad; 2: and the projected Hessian into self.A.
@@ -651,7 +657,9 @@ class Problem:
 
 	def parts(self, x):
 		"""Energy split as energy.Energy's parts, on the host (for reports, not inside a timed loop)."""
+		self.fresh = True  # the contact force at x itself; and the next solve starts afresh
 		self.freeze(x)
+		self.fresh = True
 		self.evaluate(x, 0, held=True)
 		e = self.e.numpy().astype(np.float64)
 		tri, spr, pt, fr = e[:self.nt], e[self.nt:self.nt + self.ns], e[self.nt + self.ns:self.off_f], e[self.off_f:]

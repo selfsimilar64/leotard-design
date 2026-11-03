@@ -4,7 +4,8 @@ Writes app/captures/race/case-<body>-<name>.npz (git-ignored, derived from licen
   standing                    the standing fit, carried into the race's physics: the parent of the others, not itself a re-fit
   back-arched, passe, lunge-arms-up    a pose, from the standing fit placed by surface coordinates (what the app shows)
   standing-back-keyhole, standing-front-side-cutout    a cutout, from the uncut standing fit
-  back-arched-back-keyhole    a cutout in a pose, from that pose's fit (the warm start the app would have)
+  back-arched-back-keyhole    a cutout in a pose, from the standing cutout's fit placed by surface coordinates: every pose starts from
+                              the standing fit of the same design, so the fit does not depend on the order of edits and poses
 Poses exist for young only; another body gets the standing cases.
 Each start here comes from today's solver. The race replaces it by its parent case's settled answer in the race's own physics
 (`parent`, `remap`: race.py), since that is what the app would hold when the edit is made.
@@ -114,7 +115,7 @@ def main():
 		Gk, keep = cut(G, cut_name) if cut_name else (G, np.ones(len(G['tris']), bool))
 		pr = SP.prepare(Gk, pos, standing, Q, idx, arm)
 		name = surface_name + ('-' + cut_name.replace(' ', '-') if cut_name else '')
-		parent = '' if name == 'standing' else (surface_name if cut_name else 'standing')
+		parent = '' if name == 'standing' else ('standing-' + cut_name.replace(' ', '-') if cut_name and surface_name != 'standing' else 'standing')  # a posed cut starts from the standing cut, so a fit never depends on the order of edits and poses (owner, 2026-11-03)
 		case = dict(tris=pr['tris'], rest=pr['rest'], facing=pr['facing'], elastic=pr['elastic'], sleeve=pr['sleeve'], tag=np.concatenate([Gk['tag'], Gk['tag']]),
 			surface_P=Q, surface_idx=idx, surface_arm=arm, start=pr['reused'], plane=W.PLANE, gather=W.GATHER, damp=W.DAMP,
 			remap=pr['remap'], parent=parent, body=key)

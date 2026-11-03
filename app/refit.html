@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Re-fit tuning</title>
+	<style>
+		:root { --bg: #f4f3ef; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #dcdad3; --accent: #2f5d8a; --warn: #a3512b; }
+		* { box-sizing: border-box; }
+		body { margin: 0; font: 13px/1.4 system-ui, sans-serif; color: var(--ink); background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
+		#view { flex: 1; position: relative; min-width: 0; }
+		#view canvas { display: block; width: 100%; height: 100%; }
+		#legend { position: absolute; left: 12px; bottom: 12px; background: rgba(255,255,255,.88); padding: 6px 8px; border-radius: 6px; font-size: 12px; }
+		#legend .bar { width: 180px; height: 10px; background: linear-gradient(90deg, #3b6fd8, #4cc38a, #f2d14b, #e2533b); border-radius: 3px; margin: 4px 0 2px; }
+		#legend .ends { display: flex; justify-content: space-between; color: var(--muted); }
+		#panel { width: 340px; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 14px 16px 24px; }
+		h1 { font-size: 15px; margin: 0 0 4px; }
+		h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 6px; }
+		.row { display: grid; grid-template-columns: 1fr 96px; gap: 8px; align-items: center; margin: 4px 0; }
+		.row label { color: var(--ink); }
+		.row small { display: block; color: var(--muted); font-size: 11px; }
+		input, select { width: 100%; font: inherit; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+		.buttons { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+		button { font: inherit; padding: 6px 12px; border-radius: 5px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+		button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+		button:disabled { opacity: .5; cursor: default; }
+		#out { margin-top: 12px; font-variant-numeric: tabular-nums; }
+		#out table { width: 100%; border-collapse: collapse; }
+		#out td { padding: 2px 0; }
+		#out td:last-child { text-align: right; }
+		#note { color: var(--warn); font-size: 12px; margin-top: 6px; }
+		#chart { width: 100%; height: 120px; border: 1px solid var(--line); border-radius: 4px; margin-top: 8px; }
+		#status { color: var(--muted); margin-top: 6px; min-height: 1.4em; }
+	</style>
+</head>
+<body>
+	<!-- Dev tuning page for the GPU re-fit (dev server only; not part of the build). Cases from pipeline/race/export_app.py. -->
+	<div id="view"><div id="legend"><div id="legendTitle">distance from the settled fit</div><div class="bar"></div><div class="ends"><span>0</span><span id="legendMax">5 mm</span></div></div></div>
+	<div id="panel">
+		<h1>Re-fit tuning</h1>
+		<div style="color: var(--muted)">Today's fitting method with friction, on this computer's graphics chip.</div>
+		<h2>Test case</h2>
+		<div class="row"><label>Case</label><select id="case"></select></div>
+		<h2>When to stop</h2>
+		<div class="row"><label>Window<small>steps averaged together</small></label><input id="window" type="number" min="1" step="1"></div>
+		<div class="row"><label>Settled when drift under<small>mm the averages move per window</small></label><input id="tol" type="number" min="0" step="0.01"></div>
+		<div class="row"><label>Measured over<small>which points must be under it</small></label><select id="stat"><option value="max">every point</option><option value="99.9">99.9% of points</option><option value="99.5">99.5% of points</option><option value="99">99% of points</option></select></div>
+		<div class="row"><label>Step limit</label><input id="maxSteps" type="number" min="1" step="10"></div>
+		<h2>Solver</h2>
+		<div class="row"><label>Solve effort per step<small>conjugate-gradient iterations</small></label><input id="cgIters" type="number" min="1" step="1"></div>
+		<div class="row"><label>Damping</label><input id="damp" type="number" min="0" step="0.01"></div>
+		<h2>Friction</h2>
+		<div class="row"><label>Strength (μ)</label><input id="mu" type="number" min="0" step="0.05"></div>
+		<div class="row"><label>Give before sliding<small>mm</small></label><input id="stick" type="number" min="0.05" step="0.1"></div>
+		<div class="row"><label>Grip change per step<small>1 = all at once</small></label><input id="grip" type="number" min="0.01" max="1" step="0.05"></div>
+		<h2>Show</h2>
+		<div class="row"><label>Garment</label><select id="show"><option value="avg">last window's average</option><option value="raw">last step</option><option value="start">the start</option></select></div>
+		<div class="row"><label>Colour</label><select id="colour"><option value="error">distance from the settled fit</option><option value="drift">drift in the last window</option><option value="none">plain</option></select></div>
+		<div class="buttons"><button id="run" class="primary">Run</button><button id="reset">Reset</button><button id="check">Check against Python</button><button id="defaults">Defaults</button></div>
+		<div id="status"></div>
+		<div id="out"></div>
+		<canvas id="chart"></canvas>
+		<div id="note"></div>
+	</div>
+	<script type="module" src="/src/dev/refit-lab.js"></script>
+</body>
+</html>

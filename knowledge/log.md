@@ -1,6 +1,9 @@
 # Bundle update log
 
 ## 2026-11-03
+* **Creation**: [The re-fit in the app](/engineering/app/refit-in-the-app.md): today's method with friction on WebGPU (2 ms per step), a tuning page at `/refit.html`, a stop rule by window-averaged drift, determinism checked.
+* **Update**: [Solver race plan](/engineering/app/solver-race-plan.md): correction. Points resting on the body had a random normal, which gave friction extra grip; fixed (`SNAP`), poses now end 1.2-2.2 mm mean from the reference, not 0.3-0.6. The posed cutout now starts from the standing cutout.
+* **Update**: [Re-fits carry friction](/decisions/2026-11-03-friction-on-refits.md): corrected numbers; the owner's determinism rule (every pose from the standing fit of the same design).
 * **Decision**: [Re-fits carry friction](/decisions/2026-11-03-friction-on-refits.md) (mu 0.4, 1 mm of give), superseding [no friction for now](/decisions/2026-11-02-no-friction-for-now.md).
 * **Update**: [Solver race plan](/engineering/app/solver-race-plan.md): friction added and raced. Poses now settle in about 1 s (0.3-0.6 mm mean, 95% under 2.5 mm); standing and cutouts to the bar in 0.05-0.2 s; the worst few dozen points stay 7-15 mm off, mostly where the reference is unsettled. A pose now shows the garment carried into it.
 * **Update**: [Refitting after an edit](/engineering/app/refitting-after-an-edit.md): GPU timings with friction.

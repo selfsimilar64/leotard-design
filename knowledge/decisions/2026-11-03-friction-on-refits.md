@@ -29,14 +29,15 @@ Values: mu = 0.4, fabric on dry skin (about 0.5 in the skin review, polyamide fa
 
 # Context
 
-The solver race showed that without friction the garment slides along the body almost freely, so a pose's placement crept on for tens of seconds and different solvers settled 5-10 mm apart while agreeing on shape.[^race] With friction (young, local/global on the GTX 1650): poses settle in about 1 s at 0.3-0.6 mm mean and under 2.5 mm for 95% of points from the reference; the worst few dozen points (wrist ends, neckline, fabric off the body) stay 7-15 mm off, mostly where the reference itself is not settled. Standing and cutouts reach the full bar in 0.05-0.2 s, one cutout case in 7.5 s by its worst point. Weaker friction (0.25) or 2 mm of give gives the same picture; the settled fits move about 0.45 mm mean between those settings.
+The solver race showed that without friction the garment slides along the body almost freely, so a pose's placement crept on for tens of seconds and different solvers settled 5-10 mm apart while agreeing on shape.[^race] With friction (young, local/global on the GTX 1650; corrected the same day for a bug that gave points resting on the body a random normal, and so extra grip): standing and cutouts settle within about 0.1 mm mean; poses end 1.2-2.2 mm mean from the reference after 20 s and keep sliding slowly, the sleeve turning round the upper arm most (frictionless: 1.8-11 mm). A first report of poses settling in about 1 s at 0.3-0.6 mm was that bug. Weaker friction (0.25) or 2 mm of give gave the same picture before the correction; not re-run since.
 
 # Consequences / how to apply
 
-- A pose shows the garment carried into it: the standing fit placed by surface coordinates, then relaxed only where tension beats friction. On back-arched it sits 27 mm mean from the frictionless answer and 1.5 mm from where it was placed. Don't describe a pose as a fresh settle.
+- A pose shows the garment carried into it: the standing fit placed by surface coordinates, then relaxed only where tension beats friction. On back-arched it sits 2.5 mm mean from where it was placed (before the correction: 27 mm mean from the frictionless answer, not re-measured). Don't describe a pose as a fresh settle.
 - A re-fit's answer depends on where it started (friction is history). Re-fitting from a different start can give a slightly different, equally valid fit.
+- So that the same design and pose always show the same fit (owner, 2026-11-03): every pose starts from the standing fit of the same design, placed by surface coordinates, and a posed edit from the standing fit of the edited design, never from whatever was shown before; a run ends after a step count or a stop rule, never wall time. Bit-identical on one device; a different GPU can differ by a fraction of a millimetre ([re-fit in the app](/engineering/app/refit-in-the-app.md)).
 - A fit from nothing (the first standing fit, `wrap_block.solve`) stays frictionless; nothing is there to hold.
-- Only the race code carries it so far; the app has no re-fit yet.
+- The race code and the app's WebGPU re-fit carry it (`app/src/fit/`, tuning page `/refit.html`); the app does not yet re-fit a live design.
 
 # Revisit if
 
