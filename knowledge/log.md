@@ -1,6 +1,8 @@
 # Bundle update log
 
 ## 2026-11-02
+* **Creation**: [Solver race plan](/engineering/app/solver-race-plan.md): one explicit energy, several solvers as GPU kernels in Warp, raced on the same re-fit cases against one reference.
+* **Decision**: [No friction in the fit for now](/decisions/2026-11-02-no-friction-for-now.md): a pose shows the garment settled in it.
 * **Decision**: [A re-fit takes under five seconds](/decisions/2026-11-02-refit-under-five-seconds.md): the owner's target for the fit solver's speed work.
 * **Update**: [Refitting after an edit](/engineering/app/refitting-after-an-edit.md): speed baseline, `pipeline/speed_probe.py`. Factorising is three quarters of each iteration, a pose needs about 480 iterations to settle, and a stale factor, Anderson acceleration and a coarse start were tried and rejected.
 * **Update**: [Fit solver realism audit](/engineering/app/fit-solver-realism-audit.md): steps 1-5 done. The fit settles and holds on finer meshes and in a heavier simulator, no physics added, poses are the largest error, wrinkles come from the fit in the preview.

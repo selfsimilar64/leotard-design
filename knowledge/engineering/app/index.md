@@ -18,6 +18,7 @@
 # Roadmap
 
 * [Designer app build status](build-status.md) (draft) - Where the build of the designer app stands against the roadmap phases P0-P8: what each phase delivered, measured numbers, known gaps, how to run and test, and what comes next. Updated at the end of every phase.
+* [Solver race plan](solver-race-plan.md) (draft) - Plan, 2026-11-02, for choosing the fit solver that meets the owner's 5-second re-fit target: one explicit energy (today's physics, frictionless), several solvers written as GPU kernels in NVIDIA Warp on the GTX 1650, raced on the same re-fit cases against one settled reference, scored on time to a fixed accuracy. The winner is then ported into the app.
 
 # Section
 
