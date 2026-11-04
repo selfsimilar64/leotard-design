@@ -3,7 +3,8 @@ type: Decision
 title: Stones may overlap; the live preview is the design
 description: "Owner direction of 2026-11-04: stone patterns are never checked for stones touching, so what is shown during a drag is exactly the result; the designer spaces and sizes the stones. Opens the way to placing them on the GPU."
 tags: [decision, stones, procedural, patterns, performance, gpu]
-status: stable
+status: deprecated
+superseded_by: /decisions/2026-11-04-pattern-stones-kept-apart.md
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-04T15:00:00Z }
 sources:
   - id: owner
@@ -16,6 +17,9 @@ sources:
 ---
 
 # Decision
+
+**Superseded the same day for patterns** by [a pattern's stones are kept apart by the parallel rule](/decisions/2026-11-04-pattern-stones-kept-apart.md):
+the owner chose the parallel rule as the look. The live preview stays the design, and two groups may still overlap.
 
 Asked how to make pattern edits faster without band-aids, the owner chose placing the stones on the GPU and skipping
 the check that stones do not touch.[^owner] Offered a fast preview during the drag with an exact tidy-up on release,

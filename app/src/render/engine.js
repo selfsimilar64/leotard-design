@@ -605,7 +605,7 @@ Engine.prototype.syncStones = function (doc, touched = null) {
 		strapHeight: (s) => 0.0009 + 0.0013 * (s.layer ?? 0) + 0.0019 * Math.min(s.width / 0.01, 1.4),
 		cloth: (id) => this.clothOf(id), pending: this.stonePending, patternCache: this.patternCache,
 		packs: true, // patterns are placed on the GPU (stones/gpu-view.js), their records made when asked for
-		peaks: false, // stones kept apart by the parallel rule (stones/peaks.js): an experiment, off until the owner chooses
+		peaks: true, // a pattern's stones kept apart by the parallel rule (stones/peaks.js): the look (owner, 2026-11-04)
 		mirrorFit: (fit) => this.fitted.mirrorFit(fit),
 		// on fabric (any layer's panel that is not cut out) and clear of finished opening edges
 		isFabric: (sp, p, size, keepOut) => {

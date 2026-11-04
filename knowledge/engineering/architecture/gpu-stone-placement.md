@@ -25,6 +25,10 @@ own, so a pattern can be laid by the GPU. The CPU draws the pattern's candidates
 turn or flip of the pattern, a density, and the body's pose cost the CPU nothing per stone. **[INFERRED]** design, built
 in stages below.
 
+Since the evening of 2026-11-04 a pattern's stones are kept apart again, by the parallel rule, which a GPU can run too
+([decision](/decisions/2026-11-04-pattern-stones-kept-apart.md)): each candidate is decided from the candidates alone, in
+rounds, so the reasoning above still holds.
+
 # Where the time goes (measured 2026-11-04, Procedural Gem Test 3, ~17 800 stones, no clearance check)
 
 A move step is ~39 ms in 3D, ~42 ms with the flat view: laying ~28 ms (layout drawing through the map, `piece.find`, the

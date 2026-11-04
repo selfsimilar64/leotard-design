@@ -280,15 +280,17 @@ export function patternCandidates(gen, piece, cache = null) {
 // Which of a pattern's candidates are kept, and how: packed arrays, nothing per stone allocated. opts: { cache, edge(p, keepOut) }.
 // -> { n (kept), I (candidate index), U, V (on the cloth), A (direction on the cloth, the stone's turn applied), D (diameter),
 // H (the stone's own random), stone (crystal names), Cd (the candidates) }.
-// Stones may overlap: each candidate is kept or not on its own (density, room on the piece, the openings' keep-out), never
-// against the others, so what is shown during a drag is the design itself (owner, 2026-11-04: the designer spaces and sizes
-// the stones). Before, each stone was checked against those kept before it, and the piece and the keep-out asked the body.
+// Each candidate passes or not on its own (density, room on the piece, the openings' keep-out), then the parallel rule
+// (stones/peaks.js) keeps the stones apart: decided from the candidates alone, so what is shown during a drag is the design
+// itself (owner, 2026-11-04: knowledge/decisions/2026-11-04-pattern-stones-kept-apart.md). opts.peaks: false lets them overlap
+// (the superseded 2026-11-04 decision; tests and comparisons). Before, each stone was checked against those kept before it,
+// and the piece and the keep-out asked the body.
 const kept = { I: new Int32Array(0), U: new Float64Array(0), V: new Float64Array(0), A: new Float64Array(0), D: new Float64Array(0), H: new Float64Array(0), stone: [] };
 export function keepPattern(gen, piece, opts = {}) {
 	const Cd = patternCandidates(gen, piece, opts.cache), { n, GX, GY, GA, R, K, T, C, D, P, d0, fine, dart, isRound } = Cd, rg = Cd.rigid;
-	// opts.peaks: stones kept apart after all, by the parallel rule (stones/peaks.js): every candidate decided first, then each
-	// conflict resolved by the candidates' standing; the stones the CPU path kept apart one by one, before 2026-11-04
-	const peaks = opts.peaks ? conflictsOf(Cd) : null, alive = peaks ? aliveOf(n) : null;
+	// the parallel rule (stones/peaks.js), unless opts.peaks is false: every candidate decided first, then each conflict
+	// resolved by the candidates' standing; the stones the CPU path kept apart one by one, before 2026-11-04
+	const peaks = opts.peaks !== false ? conflictsOf(Cd) : null, alive = peaks ? aliveOf(n) : null;
 	const frame = frameOf(P), edgeAt = (u, v) => piece.edgeAt(u, v);
 	const mods = compileMods(P.mods, frame, edgeAt, gen.stone ?? 'Crystal AB');
 	const overall = P.density ?? 1, margin = P.margin ?? 0, keepOut = P.keepOut, edge = opts.edge;

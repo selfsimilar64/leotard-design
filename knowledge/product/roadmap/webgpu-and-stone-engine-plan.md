@@ -128,6 +128,11 @@ every fabric draws, drawn and fitted; see [the fabric's vertex attributes](/engi
 
 ## 0.3 Parallel rule on
 
+**Done 2026-11-04**: on by default; [decision](/decisions/2026-11-04-pattern-stones-kept-apart.md); conflict lists from
+typed-array grids, per size class on mixed scatters (1.5-3.5x faster, same lists:
+[parallel rule](/engineering/architecture/parallel-stone-spacing.md)). Found: density thins a scatter of many sizes much
+less under the rule (95% of the stones kept at density 0.5), as the old check did; for the owner to look at.
+
 - `render/engine.js` stoneCtx: `peaks: true`; decision record superseding the overlap decision for patterns; update
   `procedural-stone-patterns.md` pipeline step 4 and the tests that assert overlap (`app/test/patterns.test.js`: "a scatter
   under a size modifier thins...", "patterns are kept as laid..."; scatters go back to `gap` clearance under the rule).

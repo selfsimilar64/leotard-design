@@ -25,7 +25,7 @@
 
 # Experiment
 
-* [Stones kept apart by a parallel rule](parallel-stone-spacing.md) (draft) - Experiment of 2026-11-04: instead of letting a pattern's stones overlap, resolve conflicts between candidates by a fixed order in parallel rounds (a shader's way). Same stones as the old one-by-one check, zero overlaps, moves as fast as the overlap version. Behind a switch, off.
+* [Stones kept apart by a parallel rule](parallel-stone-spacing.md) (draft) - Since 2026-11-04 every pattern's spacing rule (owner's choice after this experiment): instead of letting a pattern's stones overlap, resolve conflicts between candidates by a fixed order in parallel rounds (a shader's way). Same stones as the old one-by-one check, zero overlaps, moves as fast as the overlap version. Conflict lists from typed-array grids.
 
 # Section
 

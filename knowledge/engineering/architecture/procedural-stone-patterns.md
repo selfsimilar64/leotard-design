@@ -151,17 +151,21 @@ every preset and finds at least 97% of stones away from the edges exactly where 
    replay them.
 2. **Density**: `rank < density x modifiers`, so thinning nests. A `dart` layout's (scatter, clusters, stardust, galaxy)
    candidates come from the ranked blue-noise tile, spaced for its smallest stones (`fine`); a stone of diameter `d`
-   keeps the first `(d0 x fine / d)^2` of them, those the tile spaced for its size.
+   keeps the first `(d0 x fine / d)^2` of them, those the tile spaced for its size (with the parallel rule off only: step 4).
 3. **Edge**: `edgeAt` against radius + `margin`.
-4. **No clearance check (owner, 2026-11-04).** Stones may overlap: each candidate is kept or not on its own, never
-   against the others, so the live preview during a drag is the design itself and the rule can run on the GPU. The
-   designer spaces and sizes the stones. Spacing comes from how layouts are made: lines walk `gap x` the stones' sizes,
-   lattices are drawn at the spacing, scatters, clusters and galaxies take the blue-noise tile's first points (clusters:
-   the first `count` points inside each circle, the count's slider ending at what fits; galaxy: each tile point kept as
-   far down the ranked order as the old random arms were dense there). Big stones among small ones, crossings that are
-   not joints, distortions that squeeze, and two groups over each other can overlap. Before, a hash of cells on the
-   cloth kept a pattern's stones 0.92 of touching apart (or `gap` for dart layouts, biggest first), and the final pass
-   kept groups apart on the body.
+4. **Kept apart by the parallel rule (owner, 2026-11-04,
+   [decision](/decisions/2026-11-04-pattern-stones-kept-apart.md)).** Every candidate that passes 1-3 is alive; a
+   candidate is kept when no kept candidate above it in a fixed order conflicts with it (closer than 0.92 of touching, or
+   `gap` for dart layouts), in rounds a shader can run, ending with the stones the old one-by-one check kept
+   ([parallel rule](/engineering/architecture/parallel-stone-spacing.md)). The order: a dart layout by size, biggest
+   first; otherwise by what the design hangs on (`P`: joints, nodes), then as drawn. The conflict lists are worked out when
+   the candidates are drawn (a typed-array grid, one per size class on a mixed scatter), so a move or turn only re-runs the
+   rounds, and the live preview during a drag is still the design. Two groups over each other may still overlap: the rule
+   works within a pattern. Spacing still comes first from how layouts are made (lines walk `gap x` the stones' sizes,
+   lattices draw at the spacing, scatters, clusters and galaxies take the blue-noise tile's first points); with the rule
+   off (`opts.peaks: false`, tests and comparisons only) a dart layout's stone of diameter `d` keeps the first
+   `(d0 x fine / d)^2` of the tile's points instead, and stones may overlap
+   ([superseded decision](/decisions/2026-11-04-stones-may-overlap.md)).
 5. **Triangle**: the surface point, its reference position, within 3 cm of an edge the trim's keep-out; its angle; its
    colour. Randomness (a round stone's spin, dithering, sparkle) comes from the rank, so it stays with the stone.
 

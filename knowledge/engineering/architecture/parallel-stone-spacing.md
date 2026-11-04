@@ -1,7 +1,7 @@
 ---
 type: Experiment
 title: Stones kept apart by a parallel rule
-description: "Experiment of 2026-11-04: instead of letting a pattern's stones overlap, resolve conflicts between candidates by a fixed order in parallel rounds (a shader's way). Same stones as the old one-by-one check, zero overlaps, moves as fast as the overlap version. Behind a switch, off."
+description: "Since 2026-11-04 every pattern's spacing rule (owner's choice after this experiment): instead of letting a pattern's stones overlap, resolve conflicts between candidates by a fixed order in parallel rounds (a shader's way). Same stones as the old one-by-one check, zero overlaps, moves as fast as the overlap version. Conflict lists from typed-array grids."
 tags: [stones, patterns, gpu, performance, experiment, spacing]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-04T19:00:00Z }
@@ -27,7 +27,8 @@ standing (the old check's order: joints and nodes first, a scatter's big stones 
 candidate above it conflicts with it. Resolved in parallel rounds (each candidate decided from the last round's states:
 in once all its blockers are out, out once one is in) it ends with exactly the stones the sequential check kept. On 25
 presets it reproduces the stones of the version before 2026-11-04 (commit d451a97) with zero overlaps, and a move costs
-what the overlap version costs. **Off** (`engine.stoneCtx.peaks = false`) until the owner chooses.[^owner]
+what the overlap version costs. **On by default since the evening of 2026-11-04**: the owner chose it as the look
+([decision](/decisions/2026-11-04-pattern-stones-kept-apart.md)); `opts.peaks: false` turns it off for tests and comparisons.[^owner]
 
 # How
 
@@ -96,5 +97,21 @@ painted, the 3D frame submitted), Gem Test 3 in Both, the flower of life made de
   (well under a millisecond) is quicker than a GPU round trip, so it stays on the CPU unless counts grow by tens of times.
 - Choosing it would supersede [stones may overlap](/decisions/2026-11-04-stones-may-overlap.md) for patterns (the
   preview stays the design: the rule runs every frame).
+
+
+# Made the default; conflict grid in typed arrays (2026-11-04, evening)
+
+- **Default**: `render/engine.js` stoneCtx `peaks: true`, and `keepPattern` runs the rule unless `opts.peaks` is `false`.
+- **Conflict list** (`conflictsOf`): the `Map` of arrays became counting-sort grids in typed arrays; a mixed scatter gets
+  one grid per size class (cells sized by that class's reach, or by about one candidate a cell where the class is
+  sparse), and a stone searches only the classes not smaller than its own (smaller ones come later in the order). Same
+  conflict lists as before on every preset compared. Offline, 0.4 x 0.6 m piece, median of 7 (a busy machine; the ratios
+  held across runs): flower of life 22 -> 8 ms, circles 6 -> 3.5, scales 7.7 -> 2.1, scatter-mixed 55 -> 31, sunburst
+  0.8 -> 0.8. `test/patterns.test.js` checks the lists against a brute-force search, one size and mixed.
+- **Density on a scatter of many sizes thins less under the rule**: at density 0.5 a `variety: 0.8` scatter keeps 95% of
+  its stones and 82% of its covered area (small stones take the room the dropped big ones leave; one size halves as
+  asked). The one-by-one check before 2026-11-04 did the same. **For the owner to look at.**
+- **A drag frame** (`test/patterns.test.js`, a dense hex, with the pattern cache as the app drags) costs the same with
+  the rule once warm (12 against 11 ms here); the rule's first frame took about twice that while its code warmed up.
 
 [^owner]: Conversation with the product owner, 2026-11-04.
