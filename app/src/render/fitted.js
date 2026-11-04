@@ -12,6 +12,8 @@ import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { ROLE_COLOURS } from './overlay.js';
+import { FittedCloth } from '../stones/fitted-cloth.js';
+import { TRIMS as EDGE_TRIMS } from '../garment/trim.js';
 
 const LINE_LIFT = 0.0022; // m over where the fabric is fitted, on top of its lift: render/overlay.js LIFT (the fabric material adds 1.2 mm itself)
 
@@ -78,6 +80,9 @@ export class FittedView {
 		this.lines = null;      // its seams and edges as overlay lines (setLinesVisible: the lines button)
 		this.linesOn = true;
 		this.pairs = null;      // { seam, edge }: whole-garment point pairs the lines join
+		this.cloths = new Map(); // panel id -> its piece as flat cloth for stones (stones/fitted-cloth.js), or null
+		this.twin = null;       // whole-garment point -> its mirror point (the other half, the other sleeve)
+		this.shownP = null; this.shownN = null; // per whole-garment point, where it is drawn (lift included) and its normal
 		this.on = null;         // body vertices under its fabric (the cover hook)
 		this.solved = null;     // the last re-fit's points, on the body as it was when it ran
 		this.options = { ...FIT_DEFAULTS };
@@ -140,7 +145,15 @@ export class FittedView {
 			for (let t = 0; t < T.length; t += 3) for (let k = 0; k < 3; k++) { near[T[t + k]].add(T[t + (k + 1) % 3]); near[T[t + k]].add(T[t + (k + 2) % 3]); }
 			this.near = near.map((s) => [...s]);
 		}
+		if (data.case) {
+			// mirror points: the two halves (and the two sleeves) are the same cells point for point
+			const twin = this.twin = new Int32Array(data.case.n).map((_, i) => i);
+			const byPiece = new Map();
+			for (const c of data.cells) { const l = byPiece.get(c.piece) ?? []; l[c.half] = c; byPiece.set(c.piece, l); }
+			for (const [, [h0, h1]] of byPiece) if (h0?.cid && h1?.cid) for (let l = 0; l < h0.cid.length; l++) { twin[h0.cid[l]] = h1.cid[l]; twin[h1.cid[l]] = h0.cid[l]; }
+		}
 		this.build();
+		this.restone();
 		this.engine.updateCover(doc); // the body lifts and slides where this fabric is
 		this.place();
 		this.dress(doc);
@@ -203,7 +216,14 @@ export class FittedView {
 			geo.attributes.aLift.array.fill(0);
 			geo.attributes.aLift.needsUpdate = geo.attributes.position.needsUpdate = true;
 			geo.computeBoundingSphere();
+			// where each whole-garment point is drawn, for the stones on it (frameAt)
+			if (mesh.cid) {
+				const n0 = this.data.case?.n ?? 0;
+				if (!this.shownP || this.shownP.length !== n0 * 3) { this.shownP = new Float32Array(n0 * 3); this.shownN = new Float32Array(n0 * 3); }
+				for (let l = 0; l < n; l++) { const i = mesh.cid[l] * 3; for (let k = 0; k < 3; k++) { this.shownP[i + k] = P[l * 3 + k]; this.shownN[i + k] = N[l * 3 + k]; } }
+			}
 		}
+		this.engine.stoneView.build(); // its stones follow the fabric
 		this.finish();
 		this.drawLines();
 		this.quiet();
@@ -232,6 +252,73 @@ export class FittedView {
 	}
 
 	setLinesVisible(v) { this.linesOn = v; if (this.lines) this.lines.visible = v; }
+
+	// --- stones on the fitted garment -------------------------------------------------------------------------------------
+
+	// The piece of a panel as flat cloth: the fitted piece of that panel's name (Front, Back: both halves as one piece; Sleeve: one
+	// of the pair, the other carried by the group's mirror). null when the garment has no piece of that name.
+	clothFor(panelId) {
+		if (!this.active || !this.data.case) return null;
+		if (this.cloths.has(panelId)) return this.cloths.get(panelId);
+		const name = this.engine.app?.doc.panels.find((p) => p.id === panelId)?.name;
+		const cells = this.data.cells.filter((c) => c.name === name && c.cid && (c.name !== 'Sleeve' || c.half === 0));
+		const piece = cells.length ? new FittedCloth(this.data, cells, this.engine.surf, 'fit:' + panelId) : null;
+		if (piece) piece.paired = name === 'Sleeve';
+		this.cloths.set(panelId, piece);
+		return piece;
+	}
+
+	// A stone's place on the fabric as drawn now: position (lift included) and normal into P and N; false if it cannot say.
+	frameAt(fit, P, N) {
+		const S = this.shownP, M = this.shownN;
+		if (!this.active || !S) return false;
+		const a = fit.a * 3, b = fit.b * 3, c = fit.c * 3;
+		if (c + 2 >= S.length) return false;
+		for (let k = 0; k < 3; k++) { P[k] = fit.w0 * S[a + k] + fit.w1 * S[b + k] + fit.w2 * S[c + k]; N[k] = fit.w0 * M[a + k] + fit.w1 * M[b + k] + fit.w2 * M[c + k]; }
+		const L = Math.hypot(N[0], N[1], N[2]) || 1;
+		N[0] /= L; N[1] /= L; N[2] /= L;
+		return true;
+	}
+
+	// The same weights on the mirror points (a stone pattern's mirrored half).
+	mirrorFit(fit) {
+		const t = this.twin;
+		if (!t) return undefined;
+		return { ...fit, a: t[fit.a], b: t[fit.b], c: t[fit.c] };
+	}
+
+	// Distance from a reference position to the nearest of this garment's finished openings, less the elastic's keep-out
+	// (render/engine.js edgeKeepOut does the same for the drawn pieces' rims). Built once per garment.
+	edgeKeepOut() {
+		if (this.keepOut) return this.keepOut;
+		const SP = this.engine.surf.P, cell = 0.02, grid = new Map(), keep = EDGE_TRIMS.elastic.width + 0.0015;
+		const keyOf = (i, j, k) => `${i},${j},${k}`;
+		for (const o of this.data?.openings ?? []) {
+			for (let i = 0; i < o.hostW.length / 3; i++) {
+				let x = 0, y = 0, z = 0;
+				for (let j = 0; j < 3; j++) { const v = o.hostI[i * 3 + j] * 3, w = o.hostW[i * 3 + j]; x += w * SP[v]; y += w * SP[v + 1]; z += w * SP[v + 2]; }
+				const key = keyOf(Math.floor(x / cell), Math.floor(y / cell), Math.floor(z / cell));
+				let l = grid.get(key); if (!l) grid.set(key, (l = [])); l.push(x, y, z);
+			}
+		}
+		this.keepOut = (p, override) => {
+			let best = Infinity;
+			const cx = Math.floor(p.x / cell), cy = Math.floor(p.y / cell), cz = Math.floor(p.z / cell);
+			for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+				const l = grid.get(keyOf(cx + i, cy + j, cz + k));
+				if (l) for (let q = 0; q < l.length; q += 3) best = Math.min(best, Math.hypot(p.x - l[q], p.y - l[q + 1], p.z - l[q + 2]) - (override ?? keep));
+			}
+			return best;
+		};
+		return this.keepOut;
+	}
+
+	// Stones lay again: their pieces changed (a fitted garment came or went).
+	restone() {
+		const e = this.engine;
+		e.stoneGeoRev++; e.patternCache?.clear(); e.stoneCache = { gens: new Map() }; e.stonePending?.clear?.();
+		e.stonesDirty = true;
+	}
 
 	async refit() {
 		if (this.running) { this.again = true; return; }
@@ -305,6 +392,8 @@ export class FittedView {
 		if (this.edges) { this.edges.parent?.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
 		if (this.lines) { this.lines.parent?.remove(this.lines); for (const l of this.lines.children) l.geometry.dispose(); this.lines = null; }
 		this.data = null; this.garment = null; this.near = null; this.solved = null; this.cache = null; this.pairs = null;
+		this.cloths.clear(); this.twin = null; this.shownP = this.shownN = null; this.keepOut = null;
+		this.restone();
 		this.setStatus({ state: 'off' });
 		const covered = !!this.on;
 		this.on = null;

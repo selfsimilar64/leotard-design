@@ -50,8 +50,9 @@ export function StonesOn({ p }) {
 	stonesRun.value; // laid again during a drag: drawn again
 	const e = app.engine;
 	if (!e || p.cell === undefined) return null;
-	const cloth = e.clothOfCell(p.layer, p.cell, p.panelId);
-	if (!cloth) return null;
+	// a fitted garment's piece: its own cloth (stones/fitted-cloth.js), its stones found by their fitted triangle
+	const cloth = p.fitted ? e.fitted.clothFor(p.panelId) : e.clothOfCell(p.layer, p.cell, p.panelId);
+	if (!cloth || cloth.cell !== p.cell) return null;
 	const run = e.stoneRun;
 	let cache = placedOn.get(run);
 	if (!cache) placedOn.set(run, (cache = new Map()));
@@ -65,10 +66,21 @@ export function StonesOn({ p }) {
 			const [X, Y] = F.toSvg(uv[0], uv[1]);
 			list.push({ X, Y, r: (s.size * 1000) / 2, colour: parseStone(s.stone).colour, gen: s.gen, id: s.id, twin });
 		};
-		const cells = stonesByCell(e);
+		if (p.fitted) {
+			const at = (s, uv, twin) => { const [X, Y] = F.toSvg(uv[0], uv[1]); list.push({ X, Y, r: (s.size * 1000) / 2, colour: parseStone(s.stone).colour, gen: s.gen, id: s.id, twin }); };
+			for (const s of run.stones ?? []) {
+				if (!s.fit) continue;
+				const own = cloth.uvOfFit(s.fit);
+				if (own) { at(s, own, false); continue; }
+				const other = e.fitted.mirrorFit(s.fit), uv = other && cloth.uvOfFit(other); // on the other sleeve of the pair
+				if (uv) at(s, uv, true);
+			}
+			cache.set(p.key + '|' + p.at.join(), list);
+		}
+		const cells = p.fitted ? new Map() : stonesByCell(e);
 		for (const s of cells.get(p.layer + '|' + p.cell) ?? []) put(s, s.sp, false);
 		// a mirrored pair is one pattern piece cut twice: the other cell's stones, mirrored onto this one, drawn dashed
-		const L = e.layers.get(p.layer);
+		const L = p.fitted ? null : e.layers.get(p.layer);
 		for (const c of L?.view.cells ?? []) {
 			if (c.panelId !== p.panelId || c.cell === p.cell) continue;
 			for (const s of cells.get(p.layer + '|' + c.cell) ?? []) put(s, mirrorFast(e.surf, s.sp), true);

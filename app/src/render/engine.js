@@ -98,6 +98,7 @@ export class Engine {
 		body.onGarment = [() => { if (this.pick) this.pick.update(body.garmentPos); else this.pick = new Surface(body.idx, body.garmentPos); this.gizmo?.again(); }];
 		this.raycaster = new THREE.Raycaster();
 		this.fitted = new FittedView(this); // a fitted garment in place of the drawn pieces (doc.meta.fitted)
+		this.stoneView.fitAt = (fit, P, N) => this.fitted.frameAt(fit, P, N); // its stones sit on its fabric
 	}
 
 	// What is under a screen point: the garment surface point, the panel there, and (for the
@@ -559,6 +560,8 @@ function layerLift(layer) { const z = layer?.z ?? 0; return z > 0 ? 0.0009 * z :
 Engine.prototype.clothOf = function (panelId) {
 	const p = this.app.doc.panels.find((x) => x.id === panelId), L = p && this.layers.get(p.layer ?? 'L0');
 	if (!L?.g) return null;
+	// a fitted garment on show: its own piece of that panel's name (stones/fitted-cloth.js)
+	if (this.fitted?.active) { const piece = this.fitted.clothFor(panelId); return piece ? { piece, pending: false, paired: piece.paired } : null; }
 	const seeds = L.g.seeds.filter((s) => s.panel === panelId && s.cell >= 0), rec = seeds.length ? L.view.cells.find((c) => c.cell === seeds[0].cell && c.panelId === panelId) : null;
 	if (!rec) return null;
 	if (!rec.hasUV) return { piece: null, pending: true };
@@ -594,6 +597,7 @@ Engine.prototype.syncStones = function (doc, touched = null) {
 		garment: (layer = 'L0') => this.layers.get(layer)?.g ?? this.g,
 		strapHeight: (s) => 0.0009 + 0.0013 * (s.layer ?? 0) + 0.0019 * Math.min(s.width / 0.01, 1.4),
 		cloth: (id) => this.clothOf(id), pending: this.stonePending, patternCache: this.patternCache,
+		mirrorFit: (fit) => this.fitted.mirrorFit(fit),
 		// on fabric (any layer's panel that is not cut out) and clear of finished opening edges
 		isFabric: (sp, p, size, keepOut) => {
 			const d = ctx.doc;
@@ -607,7 +611,8 @@ Engine.prototype.syncStones = function (doc, touched = null) {
 			return on && ctx.edge(p, keepOut) > size / 2;
 		},
 	};
-	ctx.doc = doc; ctx.evaluated = this.evaluated; ctx.edge = edge; ctx.geoRev = this.stoneGeoRev;
+	// a fitted garment's own openings keep stones off its elastic, not the drawn pieces'
+	ctx.doc = doc; ctx.evaluated = this.evaluated; ctx.edge = this.fitted?.active ? this.fitted.edgeKeepOut() : edge; ctx.geoRev = this.stoneGeoRev;
 	ctx.placedSame = !!touched && !touched.has('placed');
 	const was = this.stoneRun;
 	this.stoneRun = runStones(doc, ctx, this.stoneCache);

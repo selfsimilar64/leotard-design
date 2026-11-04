@@ -159,6 +159,12 @@ export class StoneView {
 
 	// Where a stone sits on the body on show: position and normal, written to P and N.
 	frameOf(s, fam, P, N) {
+		// on a fitted garment's fabric where it lies (render/fitted.js frameAt), when the stone knows its fitted triangle
+		if (s.fit && this.fitAt?.(s.fit, P, N)) {
+			const up = ABOVE + (s.lift ?? 0) + this.heightAt(s);
+			P[0] += N[0] * up; P[1] += N[1] * up; P[2] += N[2] * up;
+			return;
+		}
 		const man = this.man, G = man.garmentPos, A = man.aGNormal.array, idx = man.idx, sp = s.sp, f = sp.f * 3, b0 = sp.b0, b1 = sp.b1, b2 = sp.b2;
 		const v0 = idx[f] * 3, v1 = idx[f + 1] * 3, v2 = idx[f + 2] * 3;
 		let nx = b0 * A[v0] + b1 * A[v1] + b2 * A[v2], ny = b0 * A[v0 + 1] + b1 * A[v1 + 1] + b2 * A[v2 + 1], nz = b0 * A[v0 + 2] + b1 * A[v1 + 2] + b2 * A[v2 + 2];

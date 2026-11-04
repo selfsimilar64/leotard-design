@@ -272,7 +272,8 @@ export function patternStones(gen, piece, opts = {}) {
 		nh++;
 		const h = frac(rank * 61.803398875 + 0.137);
 		const angle = isRound ? h * Math.PI : piece.angleOf(q, (upright ? upAngle : A[i]) + turn);
-		out.push({ sp: piece.spOf(q, w1, w2), size: d, stone: colour(u, v, k, t, cat, rank), angle, lift: 0, shape, gen: id, layer, x: _p3.x, y: _p3.y, z: _p3.z, r: h, fab: true });
+		// fit: where on a fitted garment's fabric (stones/fitted-cloth.js), drawn there rather than on the body under it
+		out.push({ sp: piece.spOf(q, w1, w2), fit: piece.fitOf?.(q, w1, w2), size: d, stone: colour(u, v, k, t, cat, rank), angle, lift: 0, shape, gen: id, layer, x: _p3.x, y: _p3.y, z: _p3.z, r: h, fab: true });
 	}
 	return out;
 }

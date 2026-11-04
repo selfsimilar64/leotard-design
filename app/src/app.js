@@ -281,9 +281,10 @@ export class App {
 
 	// Run fn with the editing overlay (lines, control points) hidden, unless keep.
 	async withoutOverlay(fn, keep = false) {
-		const o = this.engine.overlay, was = o.group.visible;
-		if (!keep) o.group.visible = false;
-		try { return await fn(); } finally { o.group.visible = was; }
+		// (a fitted garment draws its own seam lines beside the overlay: render/fitted.js)
+		const o = this.engine.overlay, was = o.group.visible, f = this.engine.fitted, fwas = f?.linesOn;
+		if (!keep) { o.group.visible = false; f?.setLinesVisible(false); }
+		try { return await fn(); } finally { o.group.visible = was; if (!keep) f?.setLinesVisible(fwas); }
 	}
 
 	// Pattern pieces of the current garment (mm), once every piece is flattened.

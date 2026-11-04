@@ -50,8 +50,8 @@ gemstones, perhaps a hint of the material, and gem patterns editable there, alwa
 
 - Only stone **patterns** have handles in 2D; rows, scatters, fills and the other kinds are drawn and selectable but are placed on
   the 3D body, with no flat coordinates to edit them by.
-- A fitted garment's pieces show colour and fabric but no stones: its pieces have no flat-cloth link to the stones (which are
-  still placed on the hidden drawn pieces).
+- A fitted garment's pieces show their pattern stones and handles (by each stone's fitted triangle: see
+  [fitted garments](/engineering/app/fitted-garments-in-the-app.md)); other stone kinds on a fitted garment do not show in 2D.
 - Stones are drawn round; shaped stones (navettes, pears) are not turned or stretched in 2D.
 - Hundreds to a few thousand stones draw as SVG circles; much denser designs may slow the flat view.
 - With the app's window not drawing, stones wait for the next frame (the engine lays them in its frame loop), so the flat view

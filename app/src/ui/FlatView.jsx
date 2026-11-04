@@ -13,7 +13,7 @@ import { StonesOn, PatternHandlesOn } from './FlatStones.jsx';
 
 const piecesNow = () => {
 	const f = app.engine?.fitted;
-	if (f?.active) return fittedPieces(f.data, app.doc);
+	if (f?.active) return fittedPieces(f.data, app.doc, f);
 	return patternPieces(app.engine.views, app.doc, { surf: app.engine.surf }).pieces;
 };
 

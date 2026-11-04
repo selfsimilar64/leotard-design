@@ -115,6 +115,24 @@ The owner asked for the GPU re-fit, its settings and the 2D + 3D views in the re
   triangles sit apart in the flat pattern) feeds `aSeam`, and the garment's seams (yellow) and openings (blue) are drawn as
   overlay lines 2.2 mm over the fabric, following the lines button.
 
+# Stones on a fitted garment (2026-11-04)
+
+The owner saw a stone pattern sink below the fitted fabric in places and no stones in the flat view: stones were still laid on
+the hidden drawn pieces and drawn on the body's surface, where the fitted fabric does not lie.
+
+- **Laid on the fitted pieces.** With a fitted garment on, `Engine.clothOf` gives each panel the fitted piece of its name as flat
+  cloth (`stones/fitted-cloth.js` FittedCloth: the drafted piece's own flat shape, the front and back each both halves joined at
+  the fold, a sleeve one of the pair; origin at its points' mean, as a drawn piece's). It answers what a drawn ClothPiece answers,
+  so stone patterns and their handles work unchanged.
+- **Drawn on the fitted fabric.** Each pattern stone carries `fit` (its fitted triangle's whole-garment points and weights); the
+  stone view places it at those points as drawn now (`FittedView.frameAt`: after every re-fit and lift change) plus the usual
+  1.45 mm. Mirrored stones (the other sleeve) take the mirror points (`mirrorFit`). Stones keep off the fitted garment's own
+  openings, not the drawn pieces'.
+- **In the flat view** the fitted pieces show their stones by the same `fit` and take the pattern handles; a drag edits both views.
+- Checked on a copy of the owner's design (a lattice on the high-cut front, in `lunge-arms-up`): 3345 stones, every one on the
+  fitted fabric in 3D and on the front piece in 2D; a 2D move drag and its undo.
+- Still on the body surface: stone kinds other than patterns (rows, scatters, fills) on a fitted garment.
+
 # Views (2026-11-04)
 
 - **Three layouts** in the top bar: 3D, Both, Pattern (`ui/Shell.jsx` LAYOUTS, `layout` 3d | split | flat). The 3D view stays alive
@@ -131,8 +149,8 @@ The owner asked for the GPU re-fit, its settings and the 2D + 3D views in the re
   re-fit, which settles it on that body but cannot grow or shrink the pattern: a child wears the young block.
 - **Determinism:** every re-fit starts from the standing fit carried onto the body shown, so it does not depend on what was shown
   before; the body trees' layout does depend on the first body seen (the answers do not).
-- Stones, ombre gradients and decals are placed by the drawn pieces' geometry: stones still sit where
-  the drawn pieces are, an ombre front shows no gradient. Not adapted yet.
+- Ombre gradients and decals are placed by the drawn pieces' geometry (an ombre front shows no gradient), and so are stone
+  kinds other than patterns. Not adapted yet.
 - No thumbnails yet for the two starting points.
 
 [^owner]: Conversation with the product owner, 2026-11-03.
