@@ -182,7 +182,11 @@ export function createFabricNodeMaterial(zone, u) {
 		const q = select(an.z.greaterThanEqual(an.x).and(an.z.greaterThanEqual(an.y)), positionGeometry.xy, select(an.x.greaterThanEqual(an.y), positionGeometry.zy, positionGeometry.xz)).toVar();
 		If(U('uUV').greaterThan(0.5), () => { const g = U('uGrain'), cg = cos(g), sg = sin(g); q.assign(mat2(cg, sg, sg.negate(), cg).mul(aUV)); });
 		const fp = length(fwidth(positionGeometry));
-		const viewDir = positionViewDirection;
+		// Evaluated here, at the top level, on purpose: three writes its shared `positionViewDirection` variable once, at the
+		// first place the shader reads it, and the lighting after this function reuses that variable. Read first inside an If,
+		// the write sat in a branch most fabrics never take, so lighting saw a zero view direction (Fresnel 1: every lit side
+		// white). See knowledge/engineering/rendering/webgpu-port.md.
+		const viewDir = positionViewDirection.toVar('viewDir');
 		const lum = vec3(0.2126, 0.7152, 0.0722);
 
 		// scanned fabric

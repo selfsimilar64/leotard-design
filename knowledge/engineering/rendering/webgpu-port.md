@@ -53,36 +53,31 @@ are the next steps.[^plan]
 | part | on WebGPU |
 |---|---|
 | renderer, camera, controls, studios, shadows, floor, lines | drawn |
-| fabric | `materials/fabric-node.js`: the whole of FABRIC_FRAGMENT ported (pattern space, scans, print, checker, ombre, duochrome, film, knit, crinkle, flakes and foil, holo, mesh, decals, wrinkles, fit folds, seams, edge stitching), plus the garment surface, cut, lining clip, tapes and occlusion. Not yet: the lighting chunks (film thickness, foil specular, skin wrap, satin thread model). **Open bug**, see below |
+| fabric | `materials/fabric-node.js`: the whole of FABRIC_FRAGMENT ported (pattern space, scans, print, checker, ombre, duochrome, film, knit, crinkle, flakes and foil, holo, mesh, decals, wrinkles, fit folds, seams, edge stitching), plus the garment surface, cut, lining clip, tapes and occlusion. Not yet: the lighting chunks (film thickness, foil specular, skin wrap, satin thread model) |
 | skin finish, skin pass | step 3 |
 | post: MSAA, contact shadows, bloom, glare, outline | none yet (step 4) |
 | pattern stones (`stones/gpu-view.js` atlas: four float targets and GLSL) | not drawn, a console note (step 5); WebGPU's default allows 32 bytes per sample across colour targets, the atlas writes 64 |
 | photo colour sampling, swatch renders, the person figure's occlusion bake | WebGL only (step 6) |
 
-# Open bug: fabrics far too bright on WebGPU (2026-11-05)
+# Fixed: fabrics far too bright on WebGPU (root cause, 2026-11-05)
 
-Matte, shiny, mystique, ombre, glitter, velvet and oil-slick come out light grey or white where WebGL shows the dark green;
-hologram matches closely. What is known:[^run]
-- Drawn unlit, every value the fabric function produces is right (colour, roughness 0.96, metalness 0, opacity 1).
-- A stock MeshPhysicalNodeMaterial with the fabric's position node alone draws the right green; adding any one output of the
-  fabric function (colour, normal, roughness, metalness, occlusion or opacity, even a metalness of 0) turns it grey. So
-  evaluating the function changes the lighting itself.
-- Not the cause, tested one at a time on the stock material: Discard, dFdx and fwidth, the geometry normal, the view
-  direction, the view matrix, reflect, a loop, a struct, material colour/roughness/opacity reads, reference and
-  per-object uniforms, a texture sample with bias.
-- By sections (localStorage `fabricSkip`, read at load): grey with the scan, decal or duochrome/ombre/flake sections in,
-  green with only wrinkles, folds and clip, green with only print. Colour uniforms fed as vec3 did not change it.
-- Ruled out 2026-11-05 (15-minute isolation run): (1) the WebGPU backend and the driver: three's node renderer on its WebGL 2
-  backend (`?renderer=webgpu&forcewebgl`) shows the same grey on the lit side, dark green in shadow, so it is a direct-light
-  term; (2) the per-object uniform buffer: three's offsets for all 109 fields equal WGSL's layout of `objectStruct`, and the
-  CPU values (IOR 1.5, specular colour 1, intensity 1, sheen colour x 0.1, emissive 0) are right (a GPU read-back of that
-  buffer is not possible: usage UNIFORM|COPY_DST, no COPY_SRC, so a copy silently fails and reads zeros); (3) the working
-  normal aliasing three's geometry normal: the generated code declares it as its own var (`nodeVarN = normalize(normalViewGeometry)`).
-  Left: three's node lighting fed by the fabric's outputs, or the port's outputs themselves. Next: in the generated shader,
-  zero the direct diffuse / direct specular / sheen terms one at a time on the lit side.
-- Earlier plan: diff the generated WGSL of a green and a grey build (`renderer.debug.getShaderAsync`), especially the
-  lighting part and the uniform struct; build the scan section alone; check whether a uniform count or a WGSL size limit
-  is crossed.
+Matte, shiny, mystique, ombre, glitter, velvet and oil-slick came out light grey or white on the lit side, dark green in shadow.
+**Root cause: three's view-direction variable was first written inside a branch.** three declares `positionViewDirection`
+once per shader (`var<private>`) and writes it (`= normalize(v_positionViewDirection)`) at the first place the shader reads
+it; the lighting after the fabric function reuses that variable. The fabric function kept `viewDir = positionViewDirection`
+as a lazy node reference, so its first read, and with it the only write, landed inside `If` blocks (rim, holo, flakes,
+decals) that most fabrics never take. The lighting then saw a zero view direction: half vector = light direction,
+dot(V,H) = 0, Fresnel = 1, a white specular everywhere a light hit and the diffuse cut. Any fabric output wired into the
+material pulled the function, and so the misplaced write, into the shader, which is why even a metalness of 0 turned it grey.
+Fix: `positionViewDirection.toVar('viewDir')` at the top level of the function (`materials/fabric-node.js`). After:
+matte, shiny and velvet torso captures equal the WebGL baseline (mean difference 0.3-1.0 of 255); glitter (9.8) and
+oil-slick (7.3) still differ by the lighting chunks not yet ported (foil specular, film thickness).
+**Rule for the rest of the port:** read every three built-in that is a shared shader variable (view direction, and any
+other `var<private>` three writes lazily) at the top level of a Fn before any `If`/`Loop`, via `.toVar()`.
+Not the cause (checked on the way): WebGPU backend and driver (same grey on three's WebGL 2 backend,
+`?renderer=webgpu&forcewebgl`); the per-object uniform buffer (offsets of all 109 fields equal WGSL's layout, CPU values
+right; note a GPU read-back of it is impossible, usage has no COPY_SRC, a copy silently reads zeros); normal aliasing.
+Found by listing every non-local assignment in the generated WGSL before the lighting and checking its nesting depth.
 
 Fixed on the way (each was a bug of the port, recorded so it is not made again): `customProgramCacheKey` on a node material
 shares its node graph, and with it the first material's uniform objects, across materials; an empty `If` with an `Else` and
