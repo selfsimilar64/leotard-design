@@ -16,7 +16,9 @@ export const RENDERER = (() => {
 
 // The renderer and what the viewport needs set up around it. -> { renderer, pmrem, ready: Promise }
 export function createWebGPU() {
-	const renderer = new WebGPURenderer({ antialias: false, powerPreference: 'high-performance', trackTimestamp: true });
+	// ?forcewebgl: the same node renderer on its WebGL 2 backend (tells three's node code apart from the WebGPU backend/driver)
+	const forceWebGL = typeof location !== 'undefined' && new URLSearchParams(location.search).has('forcewebgl');
+	const renderer = new WebGPURenderer({ antialias: false, powerPreference: 'high-performance', trackTimestamp: true, forceWebGL });
 	const pmrem = new PMREMGenerator(renderer);
 	return { renderer, pmrem, ready: renderer.init() };
 }

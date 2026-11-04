@@ -72,7 +72,15 @@ hologram matches closely. What is known:[^run]
   per-object uniforms, a texture sample with bias.
 - By sections (localStorage `fabricSkip`, read at load): grey with the scan, decal or duochrome/ombre/flake sections in,
   green with only wrinkles, folds and clip, green with only print. Colour uniforms fed as vec3 did not change it.
-- Next to try: diff the generated WGSL of a green and a grey build (`renderer.debug.getShaderAsync`), especially the
+- Ruled out 2026-11-05 (15-minute isolation run): (1) the WebGPU backend and the driver: three's node renderer on its WebGL 2
+  backend (`?renderer=webgpu&forcewebgl`) shows the same grey on the lit side, dark green in shadow, so it is a direct-light
+  term; (2) the per-object uniform buffer: three's offsets for all 109 fields equal WGSL's layout of `objectStruct`, and the
+  CPU values (IOR 1.5, specular colour 1, intensity 1, sheen colour x 0.1, emissive 0) are right (a GPU read-back of that
+  buffer is not possible: usage UNIFORM|COPY_DST, no COPY_SRC, so a copy silently fails and reads zeros); (3) the working
+  normal aliasing three's geometry normal: the generated code declares it as its own var (`nodeVarN = normalize(normalViewGeometry)`).
+  Left: three's node lighting fed by the fabric's outputs, or the port's outputs themselves. Next: in the generated shader,
+  zero the direct diffuse / direct specular / sheen terms one at a time on the lit side.
+- Earlier plan: diff the generated WGSL of a green and a grey build (`renderer.debug.getShaderAsync`), especially the
   lighting part and the uniform struct; build the scan section alone; check whether a uniform count or a WGSL size limit
   is crossed.
 
