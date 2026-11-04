@@ -64,6 +64,30 @@ In the app, Gem Test 3 (flower of life on the drawn front), one edit a frame, me
 flower of life, circles, scales, wallpaper p6m, guilloche and a mixed scatter in the three versions: `screenshots/
 spacing-compare.png` (not committed).
 
+# At higher stone counts (2026-11-04, later)
+
+The table above is in frames (one edit a frame, the time between frames), so anything under one 60 Hz frame reads 16.7 ms.
+Measured again as main-thread work per step (the edit, plus `Viewport.frame` timed by a wrapper: stones laid, both views
+painted, the 3D frame submitted), Gem Test 3 in Both, the flower of life made denser (stone size, spacing), median ms:
+
+| size, spacing | stones old / overlap / parallel | move old / overlap / parallel | spacing drag old / overlap / parallel |
+|---|---|---|---|
+| ss4, 37 mm | 14 148 / 17 706 / 14 048 | 28 / 8 / 8 | 29 / 23 / 39 |
+| ss4, 24 mm | 19 548 / 25 547 / 19 416 | 40 / 11 / 10 | 40 / 39 / 59 |
+| ss3, 16 mm | 26 240 / 40 022 / 26 029 | 61 / 14 / 15 | 78 / 58 / 108 |
+| ss3, 11 mm | 27 798 / 57 277 / 27 604 | 136 / 19 / 16 | 102 / 86 / 128 |
+| ss3, 8 mm | 26 246 / 56 275 / 26 057 | 127 / 17 / 16 | 133 / 122 / 166 |
+
+- Moves: the overlap and parallel versions stay at 8-19 ms of work up to the densest; the old one-by-one path grows to
+  ~130 ms (7 fps). The parallel rule's per-frame step stays negligible.
+- Kept stones level off near 27 000 with the old check and the parallel rule (the lines cannot hold more without
+  touching); the overlap version keeps piling them on (57 000), the candidates still growing underneath.
+- Arrangement changes (the spacing drag) grow with the candidates in every version; the parallel rule is the slowest
+  (its conflict list built each time: +16 to +50 ms over the overlap version). The candidates' drawing is the cost to cut
+  next (a worker, or lattice layouts generated on the GPU), with a faster conflict grid.
+- The 3D frame itself (`Viewport.benchmark(10)`, GPU included, whole scene at the pane's size) was 9-16 ms at every
+  density: stones barely move it, and it is what holds dense moves at 40-60 fps.
+
 # Open
 
 - The conflict grid makes arrangement changes ~7-10 ms slower (38 ms on a mixed scatter): a grid per size class, or a
