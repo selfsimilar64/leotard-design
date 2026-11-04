@@ -47,6 +47,7 @@ export class FittedView {
 		this.engine.updateCover(doc); // the body lifts and slides where this fabric is; place() follows from onGarment
 		this.place();
 		this.dress(doc);
+		this.engine.drawOverlay(doc); // the drawn lines go with the drawn pieces
 	}
 
 	build() {
@@ -122,6 +123,7 @@ export class FittedView {
 		e.wrinkleZones().N[0].w = 1; // the crotch zone (setWrinklePose sets only the armpits)
 		e.setWrinklePose(doc.body.pose);
 		if (covered) e.updateCover(doc);
+		if (covered) e.drawOverlay(doc);
 	}
 
 	// The openings finished as the app finishes its own (render/rims.js): turned elastic in the front panel's look, along

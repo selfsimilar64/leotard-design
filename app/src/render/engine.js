@@ -285,7 +285,7 @@ export class Engine {
 
 	drawOverlay(doc, evaluated = this.evaluated) {
 		this.overlay.surf = this.surf;
-		this.overlay.setVisible(!doc.legacy && !this.ui.hidden);
+		this.overlay.setVisible(!doc.legacy && !this.ui.hidden && !this.fitted?.active); // a fitted garment has none of the drawn lines
 		if (evaluated) this.overlay.setCurves(evaluated, doc, this.ui);
 		this.lastEvaluated = evaluated;
 		this.gizmo?.again();
