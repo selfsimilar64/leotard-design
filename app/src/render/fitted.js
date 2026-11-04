@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 import { fittedOf } from '../garment/fitted.js';
+import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
 import { Refit, DEFAULTS } from '../fit/refit.js';
 import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
@@ -36,7 +37,7 @@ function seamKeys(c) {
 	return keys;
 }
 
-// Per point of a cell, metres (flat, on the pattern piece) to its nearest seam edge, capped: what aSeam carries for the shader.
+// Per point of a cell, metres (flat, on the pattern piece) to its nearest seam edge, capped: the shader's seam (aFold.w).
 function cellSeams(c, keys, n) {
 	const I = c.I, U = c.uv, cid = c.cid, m = U.length / 2, segs = [];
 	for (let t = 0; t < I.length; t += 3) for (let k = 0; k < 3; k++) {
@@ -171,13 +172,13 @@ export class FittedView {
 		for (const c of this.data.cells) {
 			const n = c.hostW.length / 3, geo = new THREE.BufferGeometry();
 			const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
-			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aFold', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
+			A('position', 3); A('normal', 3); A('tangent', 4); addFabricAttributes(geo, n);
 			// metres to the nearest seam: the shader's groove and ridge (render/garment.js does the same from the drawn arrangement)
-			geo.setAttribute('aSeam', new THREE.BufferAttribute(keys && c.cid ? cellSeams(c, keys, this.data.case.n) : new Float32Array(n).fill(SEAM_CAP), 1));
-			geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
+			setFabricSlot(geo, 'seam', keys && c.cid ? cellSeams(c, keys, this.data.case.n) : SEAM_CAP);
+			setFabricSlot(geo, 'cover', 1);
 			geo.setIndex(new THREE.BufferAttribute(Uint32Array.from(c.I), 1));
 			geo.attributes.aUV.array.set(c.uv); // flat metres: the cloth's weave and prints follow the pattern piece
-			if (c.fold) geo.attributes.aFold.array.set(c.fold); // the fit's own folds (pipeline/wrap_block.py)
+			if (c.fold) setFabricSlot(geo, 'fold', c.fold); // the fit's own folds (pipeline/wrap_block.py)
 			const mesh = new THREE.Mesh(geo, HIDDEN); // dress() gives it its panel's material
 			mesh.frustumCulled = false;
 			mesh.userData = { fitted: c.name, piece: c.piece };

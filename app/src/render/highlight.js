@@ -24,11 +24,11 @@ function maskMaterial(source, box, depth) {
 			tDepth: depth, uRes: { value: new THREE.Vector2() }, uNear: { value: 0.01 }, uFar: { value: 40 },
 		},
 		vertexShader: /* glsl */`
-			attribute vec3 aLift; attribute vec3 aRef; attribute float aKeep;
+			attribute vec3 aLift; attribute vec3 aRef; attribute vec4 aKeepForm; // keep in x (materials/fabric-attributes.js)
 			uniform float uOffset, uGarment;
 			varying vec3 vRef; varying float vKeep, vZ;
 			void main() {
-				vRef = aRef; vKeep = aKeep;
+				vRef = aRef; vKeep = aKeepForm.x;
 				vec4 mv = modelViewMatrix * vec4( position + normal * uOffset + aLift * uGarment, 1. );
 				vZ = - mv.z;
 				gl_Position = projectionMatrix * mv;

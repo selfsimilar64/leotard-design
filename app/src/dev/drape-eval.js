@@ -8,6 +8,7 @@
 // shop photos) and close (about 6 cm, where single dots show).
 import * as THREE from 'three';
 import { RIGS } from '../render/presets.js';
+import { setFabricSlot } from '../materials/fabric-attributes.js';
 
 const app = new Proxy({}, { get: (_, k) => (typeof window.app[k] === 'function' ? window.app[k].bind(window.app) : window.app[k]) });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -41,9 +42,7 @@ function drape(relief = 1) {
 	g.setAttribute('aUV', new THREE.Float32BufferAttribute(uv, 2));
 	g.setAttribute('tangent', new THREE.Float32BufferAttribute(tan, 4));
 	g.setAttribute('aRef', new THREE.Float32BufferAttribute(pos, 3));
-	g.setAttribute('aAO', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
-	g.setAttribute('aCover', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
-	g.setAttribute('aKeep', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
+	setFabricSlot(g, 'ao', 1); setFabricSlot(g, 'cover', 1); setFabricSlot(g, 'keep', 1);
 	g.setIndex(idx);
 	return g;
 }

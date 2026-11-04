@@ -69,7 +69,7 @@ placed on the GPU from per-piece atlases), `389cb3c` (flat view paints packed ar
   is slow there because the design's old-format record carries a size modifier (`sizeTo`, "along", 1 -> 0.875), which turns
   off `Candidates.stamped`'s cell template (any `diam` does), so every circle is walked stone by stone (2.6 ms with it).
 - **Shiny fabric draws nothing** (WebGL): its program fails to link, "Too many attributes (aSeam)". Found 2026-11-04,
-  not fixed (`fitted-garments-in-the-app.md`, "Re-fitted live").
+  fixed the same day in Phase 0.1 (satin, duotone satin and wet were broken too).
 - **WebGPU already in use**: the re-fit runs raw WGSL compute on its own `GPUDevice` (`app/src/fit/refit.js`,
   `fit/refit-wgsl.js`), separate from the WebGL renderer, reading back with `mapAsync`.
 
@@ -93,6 +93,9 @@ placed on the GPU from per-piece atlases), `389cb3c` (flat view paints packed ar
 # Phase 0: shiny fabric, WebGL baseline, parallel rule on
 
 ## 0.1 Fix "Too many attributes" (WebGL first, so the baseline is right)
+
+**Done 2026-11-04**: packed to 8 attributes, not the 7 proposed (`aUV` and `aRim` stay unpacked: many CPU readers);
+every fabric draws, drawn and fitted; see [the fabric's vertex attributes](/engineering/rendering/fabric-shading/fabric-vertex-attributes.md).
 
 - Cause: `app/src/materials/fabric.js` PARS_VERTEX declares 13 custom attributes (aCover, aZone, aAO, aLift, aFold,
   aGNormal, aRef, aKeep, aForm, aRim, aUV, aGrad, aSeam); with position, normal and the variant's built-ins (shiny has

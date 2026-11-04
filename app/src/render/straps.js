@@ -3,6 +3,7 @@
 // shadow on whatever it lies on (fabric or skin). Straps stack by their layer number where they cross.
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric, bindScan, texScaleOf } from '../materials/fabric.js';
+import { setFabricSlot } from '../materials/fabric-attributes.js';
 import { strapGrid, markGrid, ACROSS, STRAP_PROFILE } from '../garment/straps.js';
 
 const FABRIC = 0.0012, ABOVE = 0.0009, STACK = 0.0013;
@@ -81,9 +82,8 @@ export class StrapView {
 			g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 			g.setAttribute('aUV', new THREE.BufferAttribute(uv, 2));
 			g.setAttribute('aRim', new THREE.BufferAttribute(rim, 2));
-			g.setAttribute('aAO', new THREE.BufferAttribute(ao, 1));
 			g.setAttribute('aRef', new THREE.BufferAttribute(ref, 3));
-			g.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(nr * nc).fill(1), 1));
+			setFabricSlot(g, 'ao', ao); setFabricSlot(g, 'cover', 1); setFabricSlot(g, 'keep', 0); // (keep and gradient 0, as when they were left out)
 			g.setIndex(index);
 			g.computeVertexNormals();
 			// orient: the ribbon's normals must face away from the body

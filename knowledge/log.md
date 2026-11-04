@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-04
+* **Creation**: [The fabric's vertex attributes (packed)](/engineering/rendering/fabric-shading/fabric-vertex-attributes.md): shiny, satin, duotone satin and wet drew nothing (17 vertex attributes, 16 allowed); the fabric's inputs packed into 8; every fabric checked before and after. Plan Phase 0.1 done.
 * **Creation**: [WebGPU renderer and one GPU stone engine (plan)](/product/roadmap/webgpu-and-stone-engine-plan.md): hand-off plan: shiny fabric fix and WebGL baseline, parallel rule on, WebGPU renderer with parity, stone engine as GPU compute, 100 000-stone gates.
 * **Creation**: [One stone engine for every pattern (proposal)](/engineering/architecture/stone-pattern-engine.md): layouts describe geometry (points, runs, areas, tiling); one data-parallel engine lays the stones; layout classes and build order.
 * **Creation**: [Stones kept apart by a parallel rule](/engineering/architecture/parallel-stone-spacing.md): experiment, off by default: conflicts resolved in parallel rounds reproduce the old spacing with zero overlaps at the overlap version's speed; comparison of the three versions.

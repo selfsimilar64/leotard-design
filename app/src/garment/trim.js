@@ -9,6 +9,7 @@
 // The rim is drawn with the same fabric materials (zone 4), plus topstitching.
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric } from '../materials/fabric.js';
+import { setFabricSlot } from '../materials/fabric-attributes.js';
 
 // Profiles: [u, v, ao] with u = metres in from the finished edge across the surface, v = metres
 // above the garment surface (the fabric itself sits at 1.2 mm), ao = contact darkening where the
@@ -230,9 +231,7 @@ export function buildGeometry(loops, prof) {
 	g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
 	g.setAttribute('aRef', new THREE.BufferAttribute(ref, 3));
 	g.setAttribute('aRim', new THREE.BufferAttribute(rim, 2));
-	g.setAttribute('aKeep', new THREE.BufferAttribute(keep, 1));
-	g.setAttribute('aAO', new THREE.BufferAttribute(ao, 1));
-	g.setAttribute('aCover', new THREE.BufferAttribute(cover, 1));
+	setFabricSlot(g, 'keep', keep); setFabricSlot(g, 'ao', ao); setFabricSlot(g, 'cover', cover);
 	g.setAttribute('tangent', new THREE.BufferAttribute(tan, 4));
 	g.setIndex(index);
 	return g;

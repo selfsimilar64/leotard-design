@@ -9,6 +9,7 @@
 // The app's own fitted garments (render/fitted.js) are this show/cover/finish grown up: change one, look at the other.
 import * as THREE from 'three';
 import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
+import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const post = (file, body) => fetch('/__fs/captures/' + file, { method: 'POST', body });
@@ -130,9 +131,8 @@ export async function show(file, mode = 'fabric', opts = {}) {
 	for (const c of data.cells) {
 		const n = c.hostW.length / 3, geo = new THREE.BufferGeometry();
 		const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
-		A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aFold', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
-		geo.setAttribute('aSeam', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
-		geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
+		A('position', 3); A('normal', 3); A('tangent', 4); addFabricAttributes(geo, n);
+		setFabricSlot(geo, 'seam', 1); setFabricSlot(geo, 'cover', 1);
 		geo.setIndex(new THREE.BufferAttribute(Uint32Array.from(c.I), 1));
 		geo.attributes.aUV.array.set(c.uv);
 		const uv = new Float32Array(n * 2);
@@ -156,7 +156,7 @@ export async function show(file, mode = 'fabric', opts = {}) {
 		// the garment surface already holds the lift: the fabric shader would add it again (materials/fabric.js)
 		if (mode === 'fabric' && !opts.material) {
 			geo.attributes.aLift.array.fill(0);
-			if (c.fold) geo.attributes.aFold.array.set(c.fold); // the settled standing fit's (pipeline/wrap_block.py folds): a carried-over fit's strain in a pose is not fit to draw folds from
+			if (c.fold) setFabricSlot(geo, 'fold', c.fold); // the settled standing fit's (pipeline/wrap_block.py folds): a carried-over fit's strain in a pose is not fit to draw folds from
 		}
 		if (mode === 'stretch') stretchColours(geo);
 		view.group.add(mesh);

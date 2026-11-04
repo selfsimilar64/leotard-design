@@ -75,7 +75,9 @@ From `wrap_block.py --drafted armstrong-6 young` (median stretch over flat size)
   restored). Designs in the "shiny" fabric draw no garment at all, drawn or fitted, an untouched
   starting point included: its shader fails to link with "Too many attributes (aSeam)" (WebGL allows 16
   per vertex on this machine; adding `aFold` in commit 1600d71 pushed shiny's variant over). Not a
-  minimised-window effect as first guessed; not fixed here.
+  minimised-window effect as first guessed. **Fixed later that day** by packing the fabric's attributes
+  ([the fabric's vertex attributes](/engineering/rendering/fabric-shading/fabric-vertex-attributes.md)); satin, duotone satin and
+  wet failed the same way.
 
 # Re-fitted live in the app (2026-11-04)
 

@@ -2,6 +2,7 @@
 // touched) rebuilds whatever depends on the sections a command touched (see doc/store.js).
 import * as THREE from 'three';
 import { createFabricMaterial } from '../materials/fabric.js';
+import { setFabricSlot } from '../materials/fabric-attributes.js';
 import { fullBodyStand, dressFormStand, cutCaps } from './stand.js';
 import { MANNEQUIN_FINISHES, REALISTIC_SKIN } from './presets.js';
 import { DecalSet } from './decals.js';
@@ -48,8 +49,10 @@ export class Engine {
 		const caps = body.eyeCaps(), ix = new Uint32Array(body.idx.length + caps.length);
 		ix.set(body.idx); ix.set(caps, body.idx.length);
 		const piece = (mat) => {
-			const g = new THREE.BufferGeometry(), keep = new THREE.BufferAttribute(new Float32Array(body.vertices), 1);
-			for (const [k, a] of Object.entries(body.geometry.attributes)) g.setAttribute(k, k === 'aKeep' ? keep : a);
+			// each piece its own keep (packed with the form: materials/fabric-attributes.js), the rest shared with the body
+			const g = new THREE.BufferGeometry(), keep = new THREE.BufferAttribute(new Float32Array(body.vertices * 4), 4);
+			for (const [k, a] of Object.entries(body.geometry.attributes)) g.setAttribute(k, k === 'aKeepForm' ? keep : a);
+			setFabricSlot(g, 'form', body.form);
 			g.setIndex(new THREE.BufferAttribute(ix, 1));
 			const m = new THREE.Mesh(g, mat);
 			m.frustumCulled = false; // the geometry's positions change when the body is swapped
@@ -465,7 +468,7 @@ export class Engine {
 		}
 		// the two skin pieces always clip: the body's cut, and each other's side of the head's border
 		const K = body.keep, H = body.wHead, kb = this.skinMesh.userData.keep, kh = this.headMesh.userData.keep;
-		for (let i = 0; i < body.vertices; i++) { kb.array[i] = Math.min(K[i], 0.5 - H[i]); kh.array[i] = Math.min(K[i], H[i] - 0.5); }
+		for (let i = 0; i < body.vertices; i++) { kb.array[i * 4] = Math.min(K[i], 0.5 - H[i]); kh.array[i * 4] = Math.min(K[i], H[i] - 0.5); } // keep: aKeepForm.x
 		kb.needsUpdate = kh.needsUpdate = true;
 		for (const m of [this.skin, this.headSkin]) m.userData.u.uClip.value = 1;
 		if (this.stand) { scene.remove(this.stand); this.stand.traverse((o) => o.geometry?.dispose()); }

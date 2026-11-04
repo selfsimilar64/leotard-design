@@ -6,6 +6,7 @@
 // (Used by app.swatchSheet. The material grid's tiles are pre-rendered: swirlThumb below.)
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric, applyTexture, texScaleOf } from './fabric.js';
+import { setFabricSlot } from './fabric-attributes.js';
 
 const PX = 96, SS = 2, SIZE = 0.17;
 let rig = null;
@@ -27,9 +28,7 @@ function cloth() {
 	g.setAttribute('aUV', new THREE.Float32BufferAttribute(uv, 2));
 	// reference heights spanning the POC ombre's fade, so ombre fabrics show their gradient
 	g.setAttribute('aRef', new THREE.Float32BufferAttribute(pos.map((v, k) => (k % 3 === 1 ? 1.07 + v * 4 : v)), 3));
-	g.setAttribute('aAO', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
-	g.setAttribute('aCover', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
-	g.setAttribute('aKeep', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
+	setFabricSlot(g, 'ao', 1); setFabricSlot(g, 'cover', 1); setFabricSlot(g, 'keep', 1);
 	g.setAttribute('tangent', new THREE.Float32BufferAttribute(Array.from({ length: N }, () => [1, 0, 0, 1]).flat(), 4));
 	g.setIndex(idx);
 	return g;
@@ -154,9 +153,7 @@ function swirlCloth() {
 	g.setAttribute('tangent', new THREE.Float32BufferAttribute(tan, 4));
 	g.setAttribute('aUV', new THREE.Float32BufferAttribute(uv, 2));
 	g.setAttribute('aRef', new THREE.Float32BufferAttribute(ref, 3));
-	g.setAttribute('aAO', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
-	g.setAttribute('aCover', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
-	g.setAttribute('aKeep', new THREE.Float32BufferAttribute(new Float32Array(N).fill(1), 1));
+	setFabricSlot(g, 'ao', 1); setFabricSlot(g, 'cover', 1); setFabricSlot(g, 'keep', 1);
 	g.setIndex(idx);
 	return g;
 }

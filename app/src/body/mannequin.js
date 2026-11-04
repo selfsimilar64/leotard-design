@@ -29,6 +29,7 @@ import { ccStencil, applyStencil, quadTriangles, readPolys } from './subdivide.j
 import { slideGarment } from './slide.js';
 import { rollingBall } from './ball.js';
 import { seatSheet } from './seat.js';
+import { setFabricSlot } from '../materials/fabric-attributes.js';
 
 const abs = Math.abs, min = Math.min, max = Math.max;
 const clamp = (x, a, b) => min(max(x, a), b);
@@ -150,11 +151,13 @@ class Mannequin {
 		g.setIndex(new THREE.BufferAttribute(idx, 1));
 		const attr = (name, size, data = new Float32Array(N * size)) => { const a = new THREE.BufferAttribute(data, size); g.setAttribute(name, a); return a; };
 		this.aPos = attr('position', 3); this.aNrm = attr('normal', 3); this.aTan = attr('tangent', 4);
-		this.aAO = attr('aAO', 1); this.aCover = attr('aCover', 1); this.aZone = attr('aZone', 2);
 		this.aLift = attr('aLift', 3); this.aGNormal = attr('aGNormal', 3); // aLift: skin (or slid fabric) to garment surface
 		attr('aRef', 3, this.ref);
-		attr('aKeep', 1, this.keep);
-		attr('aForm', 2, this.form);
+		// cover, ambient occlusion, zone, keep and form stay plain arrays for the CPU solvers (aCover, aAO, aZone: not on the
+		// geometry); the fabric shader reads them packed (materials/fabric-attributes.js), copied in wherever they change
+		const own = (size) => new THREE.BufferAttribute(new Float32Array(N * size), size);
+		this.aAO = own(1); this.aCover = own(1); this.aZone = own(2);
+		setFabricSlot(g, 'cover', 0); setFabricSlot(g, 'keep', this.keep); setFabricSlot(g, 'form', this.form);
 		this.triArea = new Float32Array(this.triangles);
 		this.cdf = new Float32Array(this.triangles);
 		this.key = null;
@@ -301,7 +304,7 @@ class Mannequin {
 			regions(v, style, out);
 			cover[i] = out[0]; zone[i * 2] = out[1]; zone[i * 2 + 1] = out[2];
 		}
-		this.aCover.needsUpdate = true; this.aZone.needsUpdate = true;
+		setFabricSlot(this.geometry, 'cover', cover); setFabricSlot(this.geometry, 'zone', zone);
 		if (this.key) this.updateGarment();
 	}
 
@@ -309,7 +312,7 @@ class Mannequin {
 	// is warm-started from the previous solution, which is close when only some lines moved.
 	setCover(cover) {
 		this.aCover.array.set(cover);
-		this.aCover.needsUpdate = true;
+		setFabricSlot(this.geometry, 'cover', this.aCover.array);
 		this.styleKey = null;
 		if (this.key) this.updateGarment(true);
 	}
@@ -461,7 +464,8 @@ class Mannequin {
 		}
 		this.area = total;
 
-		for (const a of [this.aAO, this.aLift, this.aGNormal]) a.needsUpdate = true;
+		for (const a of [this.aLift, this.aGNormal]) a.needsUpdate = true;
+		setFabricSlot(this.geometry, 'ao', ao);
 		for (const fn of this.onGarment ?? []) fn();
 	}
 
@@ -759,7 +763,7 @@ class Mannequin {
 
 	// -------------------------------------------------------------------------------------------
 	// Cuts. form: 'full' | 'torso' (the dress form: neck, upper arms, mid-thigh); head: HEADS.
-	// The keep field (> 0 = shown) is swapped in place: aKeep and the garment share the array.
+	// The keep field (> 0 = shown) is swapped in place, then copied into the geometry's packed aKeepForm.
 	// The head is part of the mesh: 'none' cuts it off flat under the chin (keepNeck, set per body
 	// in setBody); 'mannequin' shapes it in setBody (sculptHead); 'person' leaves the mannequin's
 	// skin to render/figure.js.
@@ -770,7 +774,7 @@ class Mannequin {
 	}
 	applyCut() {
 		this.keep.set(this.formKind === 'torso' ? this.keepTorso : this.head === 'none' ? this.keepNeck : this.keepAll);
-		this.geometry.getAttribute('aKeep').needsUpdate = true;
+		setFabricSlot(this.geometry, 'keep', this.keep);
 	}
 	get headless() { return this.formKind !== 'torso' && this.head === 'none'; }
 

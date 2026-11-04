@@ -5,6 +5,7 @@
 // (zone 5: no region discards, cloth-space UVs). Changing body only re-interpolates.
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric, bindScan, texScaleOf } from '../materials/fabric.js';
+import { addFabricAttributes, setFabricSlot, FABRIC_SLOTS } from '../materials/fabric-attributes.js';
 import { cellPiece, cellSignature } from '../garment/pieces.js';
 import { Flattener } from '../garment/flattener.js';
 import { seamKeys, seamDistance, gradientField } from '../garment/fields.js';
@@ -77,9 +78,9 @@ export class GarmentView {
 			}
 			const geo = new THREE.BufferGeometry();
 			const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
-			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aFold', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
-			geo.setAttribute('aSeam', new THREE.BufferAttribute(seamDistance(arr, man, c, verts, seams), 1));
-			geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
+			A('position', 3); A('normal', 3); A('tangent', 4); addFabricAttributes(geo, n);
+			setFabricSlot(geo, 'seam', seamDistance(arr, man, c, verts, seams));
+			setFabricSlot(geo, 'cover', 1);
 			geo.setIndex(new THREE.BufferAttribute(piece.I, 1));
 			const mesh = new THREE.Mesh(geo, this.material(panel.id));
 			mesh.renderOrder = -1 - Math.max(this.layer.z ?? 0, 0); // outer layers first: what they hide fails the depth test
@@ -162,17 +163,16 @@ export class GarmentView {
 		this.updateUVFlags();
 	}
 
-	// Fill aGrad on a panel's cells for its gradient (none: leave zeros). Cached per spec.
+	// Fill the gradient position (aKeepForm.w) on a panel's cells for its gradient (none: zeros). Cached per spec.
 	gradient(id, spec) {
 		const key = spec ? JSON.stringify([spec.curve, spec.axis, spec.start, spec.end]) : '';
 		for (const c of this.cells) {
 			if (c.panelId !== id || c.gradKey === key) continue;
 			c.gradKey = key;
-			const A = c.mesh.geometry.attributes.aGrad;
-			if (!spec) { A.array.fill(0); A.needsUpdate = true; continue; }
+			const geo = c.mesh.geometry;
+			if (!spec) { setFabricSlot(geo, 'grad', 0); continue; }
 			const ev = this.g?.evaluated, pts = spec.curve ? [...(ev?.get(spec.curve)?.pts ?? []), ...(ev?.get(spec.curve + '~m')?.pts ?? [])] : null;
-			A.array.set(gradientField(c.mesh.geometry.attributes.aRef.array, { pts, axis: spec.axis ?? (spec.curve ? null : [0, -1, 0]), start: spec.start ?? 0, end: spec.end ?? 0.2 }));
-			A.needsUpdate = true;
+			setFabricSlot(geo, 'grad', gradientField(geo.attributes.aRef.array, { pts, axis: spec.axis ?? (spec.curve ? null : [0, -1, 0]), start: spec.start ?? 0, end: spec.end ?? 0.2 }));
 		}
 	}
 
@@ -186,16 +186,17 @@ export class GarmentView {
 	}
 
 	// A lining is clipped to where the shell has fabric: the shell's per-vertex cover (+1 fabric,
-	// -1 opening) interpolated into aCover; the shader discards below zero.
+	// -1 opening) interpolated into the cover (aCoverZone.x); the shader discards below zero.
 	setClip(cover) {
 		this.clip = cover;
 		for (const c of this.cells) this.fillClip(c);
 	}
 	fillClip(rec) {
-		const A = rec.mesh.geometry.attributes.aCover, C = this.clip, { i: hi, w: hw } = rec.hosts, n = hw.length / 3;
-		if (!C) { A.array.fill(1); A.needsUpdate = true; return; }
-		for (let l = 0; l < n; l++) A.array[l] = hw[l * 3] * C[hi[l * 3]] + hw[l * 3 + 1] * C[hi[l * 3 + 1]] + hw[l * 3 + 2] * C[hi[l * 3 + 2]];
-		A.needsUpdate = true;
+		const geo = rec.mesh.geometry, C = this.clip, { i: hi, w: hw } = rec.hosts, n = hw.length / 3;
+		if (!C) { setFabricSlot(geo, 'cover', 1); return; }
+		const cover = new Float32Array(n);
+		for (let l = 0; l < n; l++) cover[l] = hw[l * 3] * C[hi[l * 3]] + hw[l * 3 + 1] * C[hi[l * 3 + 1]] + hw[l * 3 + 2] * C[hi[l * 3 + 2]];
+		setFabricSlot(geo, 'cover', cover);
 	}
 
 	// Re-interpolate every attribute from the mannequin's current arrays (after a body change).
@@ -213,18 +214,19 @@ export class GarmentView {
 			}
 			attr.needsUpdate = true;
 		};
-		const lerp1 = (S, attr, k = 1) => {
-			const D = attr.array;
+		// k components per vertex from S, into attr from its component o on (a packed fabric attribute's slot)
+		const lerp1 = (S, attr, k = 1, o = 0) => {
+			const D = attr.array, s = attr.itemSize;
 			for (let l = 0; l < n; l++) {
 				const a = hi[l * 3] * k, b = hi[l * 3 + 1] * k, c = hi[l * 3 + 2] * k, wa = hw[l * 3], wb = hw[l * 3 + 1], wc = hw[l * 3 + 2];
-				for (let q = 0; q < k; q++) D[l * k + q] = wa * S[a + q] + wb * S[b + q] + wc * S[c + q];
+				for (let q = 0; q < k; q++) D[l * s + o + q] = wa * S[a + q] + wb * S[b + q] + wc * S[c + q];
 			}
 			attr.needsUpdate = true;
 		};
-		const A = geo.attributes;
+		const A = geo.attributes, slot = (name, S) => { const [a, o, k] = FABRIC_SLOTS[name]; lerp1(S, A[a], k, o); };
 		// the fabric's own place on the body (slid over the skin in a pose: body/slide.js)
 		lerp3(man.gPos ?? man.aPos.array, A.position, false); lerp3(man.gNrm ?? man.aNrm.array, A.normal, true); lerp3(man.aGNormal.array, A.aGNormal, true);
-		lerp3(man.ref, A.aRef, false); lerp3(man.aLift.array, A.aLift, false); lerp1(man.aAO.array, A.aAO); lerp1(man.keep, A.aKeep); lerp1(man.form, A.aForm, 2);
+		lerp3(man.ref, A.aRef, false); lerp3(man.aLift.array, A.aLift, false); slot('ao', man.aAO.array); slot('keep', man.keep); slot('form', man.form);
 		// tangent round the body (the stretch direction anisotropic shine follows), as the POC's
 		lerp1(man.aTan.array, A.tangent, 4);
 		const T = A.tangent.array;

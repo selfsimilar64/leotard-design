@@ -8,27 +8,23 @@
 // fabric bridges hollows, plus the fabric thickness). Zone 3 means "no mask" and is the mannequin
 // itself, which can also carry dress-form style tapes. Zone 4 is a finished edge (trim.js): its
 // own geometry, already placed, carrying topstitching. Every zone honours the dress-form cut
-// (aKeep < 0 is discarded when uClip is on).
+// (keep < 0 is discarded when uClip is on).
 import * as THREE from 'three';
 
 const PARS_VERTEX = /* glsl */`
-attribute float aCover;
-attribute vec2 aZone;
-attribute float aAO;
+// the fabric's per-vertex inputs, packed to stay within 16 vertex attributes: materials/fabric-attributes.js (names, sizes, slots)
+attribute vec4 aCoverZone; // x cover, y ambient occlusion, zw the garment-zone fields (body/mannequin.js)
+attribute vec4 aKeepForm;  // x keep (< 0 cut away), yz the dress-form tape fields, w panels: 0..1 position in the panel's colour gradient (render/garment.js)
 attribute vec3 aLift;      // skin (or slid fabric) to the garment surface (body/mannequin.js updateGarment)
-attribute vec3 aFold;      // folds where a fit leaves fabric gathered: height as twice-the-angle x, y and height, metres (pipeline/wrap_block.py folds); zero elsewhere
+attribute vec4 aFold;      // xyz folds where a fit leaves fabric gathered: height as twice-the-angle x, y and height, metres (pipeline/wrap_block.py folds); zero elsewhere. w panels: metres to the nearest seam (render/garment.js)
 varying vec3 vFold;
 attribute vec3 aGNormal;
 attribute vec3 aRef;
-attribute float aKeep;
-attribute vec2 aForm;
 attribute vec2 aRim;
 varying vec2 vRim;
 attribute vec2 aUV;
 varying vec2 vUV;
-attribute float aGrad;     // panels: 0..1 position in the panel's colour gradient (render/garment.js)
 varying float vGrad;
-attribute float aSeam;     // panels: metres to the nearest seam (render/garment.js)
 varying float vSeam;
 uniform float uOffset;
 uniform float uGarment;
@@ -44,19 +40,19 @@ varying float vAO;
 
 const BEGIN_VERTEX = /* glsl */`
 transformed += normal * uOffset + aLift * uGarment;
-vFold = aFold;
+vFold = aFold.xyz;
 vObjPos = position;
 vObjNormal = normal;
-vCover = aCover;
-vZone = aZone;
-vAO = mix( aAO, 1. - ( 1. - aAO ) * .3, uGarment ); // fabric spans the crevice, so it is barely shaded
+vCover = aCoverZone.x;
+vZone = aCoverZone.zw;
+vAO = mix( aCoverZone.y, 1. - ( 1. - aCoverZone.y ) * .3, uGarment ); // fabric spans the crevice, so it is barely shaded
 vRef = aRef;
-vKeep = aKeep;
-vForm = aForm;
+vKeep = aKeepForm.x;
+vForm = aKeepForm.yz;
 vRim = aRim;
 vUV = aUV;
-vGrad = aGrad;
-vSeam = aSeam;
+vGrad = aKeepForm.w;
+vSeam = aFold.w;
 `;
 
 const BEGIN_NORMAL = /* glsl */`
@@ -68,7 +64,7 @@ varying vec3 vObjPos;
 varying vec3 vRef;
 varying float vKeep;
 varying vec2 vForm;
-uniform float uClip;       // 1 = dress form: discard everything outside the cut (aKeep < 0)
+uniform float uClip;       // 1 = dress form: discard everything outside the cut (keep < 0)
 uniform float uTape;       // 1 = dress-form style tapes on the mannequin
 uniform vec4 uTapeY;       // reference-body heights of the waist, bust, hip and neck tapes
 uniform vec3 uTapeColor;
@@ -156,7 +152,7 @@ varying float vGrad;
 
 uniform float uSkin;       // > 0: athlete skin, wrap lighting (used in RE_Direct_Physical, see SKIN_DIFFUSE)
 uniform float uSeam;       // 1 = vSeam is valid: seam groove and ridge, mesh doubled over the allowance
-uniform float uClipShell;  // 1 = a lining: only where the shell has fabric (aCover carries the shell's cover)
+uniform float uClipShell;  // 1 = a lining: only where the shell has fabric (cover carries the shell's cover)
 uniform float uSeamAllow;  // seam allowance, metres (folded under the seam: mesh shows it as a darker band)
 varying float vSeam;
 uniform float uDuo;        // duochrome: share of uDuoColor at grazing angles
