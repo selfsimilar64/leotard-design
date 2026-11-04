@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { SHAPES, parseStone } from './library.js';
 import { facetedGeometry, pearlGeometry, discGeometry, nailheadGeometry } from './shapes.js';
+import { PackView } from './gpu-view.js';
 
 const ABOVE = 0.00145; // above the outermost fabric (fabric at 1.2 mm)
 
@@ -116,9 +117,17 @@ export class StoneView {
 		this.mats = FAMILY_MATS();
 		this.meshes = new Map(); // shape -> InstancedMesh, kept and refilled (grown when it must)
 		this.count = 0;
-		this.stones = [];
+		this.records = [];  // the stones laid on the CPU, drawn here
+		this.packs = [];    // the patterns the GPU places (stones/gpu-view.js PackView)
+		this.run = null;    // the run they came from: every stone as a record, when asked (stones)
+		this.renderer = null; // (set by the engine: the GPU's patterns draw their atlases with it)
 		this.placedDirty = false;
 	}
+
+	// Every stone as a record (picking, hover rings): the packs' made when first asked for.
+	get stones() { return this.run ? this.run.stones : this.records; }
+
+	newCrystal() { return crystalMaterial(); }
 
 	geometry(shape) {
 		let g = this.geos.get(shape);
@@ -151,10 +160,13 @@ export class StoneView {
 		return mesh;
 	}
 
-	// stones: from runStones; heightAt(stone) -> extra metres above the garment surface for its layer
-	set(stones, heightAt = () => 0) {
-		this.stones = stones;
-		this.build(heightAt);
+	// records: the CPU's stones; heightAt(stone) -> extra metres above the garment surface for its layer; packs: the patterns the
+	// GPU places; run: their run (stones/generators.js runOf)
+	set(records, heightAt = () => 0, packs = [], run = null) {
+		this.records = records; this.packs = packs; this.run = run;
+		this.build(heightAt, false);
+		if (this.renderer && (packs.length || this.packView)) (this.packView ??= new PackView(this, this.renderer)).set(packs);
+		this.count = this.man.garmentPos ? this.records.length + (this.packView?.count ?? 0) : 0;
 	}
 
 	// Where a stone sits on the body on show: position and normal, written to P and N.
@@ -177,13 +189,15 @@ export class StoneView {
 		N[0] = nx; N[1] = ny; N[2] = nz;
 	}
 
-	build(heightAt = this.heightAt ?? (() => 0)) {
+	// again: the body has moved under them (a pose, a re-fit, the garment re-cut): the GPU's atlases too
+	build(heightAt = this.heightAt ?? (() => 0), again = true) {
 		this.heightAt = heightAt;
 		this.placedDirty = true;
+		if (again && this.packView) this.packView.again();
 		const shown = new Set();
-		if (this.man.garmentPos && this.stones.length) {
+		if (this.man.garmentPos && this.records.length) {
 			const byShape = new Map(), P = [0, 0, 0], N = [0, 0, 0];
-			for (const s of this.stones) { const l = byShape.get(s.shape); if (l) l.push(s); else byShape.set(s.shape, [s]); }
+			for (const s of this.records) { const l = byShape.get(s.shape); if (l) l.push(s); else byShape.set(s.shape, [s]); }
 			for (const [shape, list] of byShape) {
 				const fam = SHAPES[shape]?.family ?? 'crystal', aspect = SHAPES[shape]?.aspect ?? 1, n = list.length;
 				const mesh = this.meshFor(shape, n), M = mesh.instanceMatrix.array, C = mesh.instanceColor.array, attr = mesh.geometry.attributes.aFinish, F = attr.array;
@@ -213,7 +227,7 @@ export class StoneView {
 			}
 		}
 		for (const [shape, mesh] of this.meshes) if (!shown.has(shape)) { mesh.count = 0; mesh.visible = false; }
-		this.count = this.man.garmentPos ? this.stones.length : 0;
+		this.count = this.man.garmentPos ? this.records.length + (this.packView?.count ?? 0) : 0;
 	}
 
 	// Each stone's place and normal as vectors, for picking and the hover rings: made when first asked
@@ -231,12 +245,16 @@ export class StoneView {
 	// counts by size (ss) and colour, for the live read-out
 	stats() {
 		const bySize = {}, byStone = {};
-		for (const s of this.stones) {
-			const mm = Math.round(s.size * 10000) / 10;
-			bySize[mm] = (bySize[mm] ?? 0) + 1;
-			byStone[s.stone] = (byStone[s.stone] ?? 0) + 1;
-		}
-		return { total: this.stones.length, bySize, byStone };
+		let total = 0;
+		const add = (size, stone, times) => {
+			const mm = Math.round(size * 10000) / 10;
+			bySize[mm] = (bySize[mm] ?? 0) + times;
+			byStone[stone] = (byStone[stone] ?? 0) + times;
+			total += times;
+		};
+		for (const s of this.records) add(s.size, s.stone, 1);
+		for (const p of this.packs) { const k = p.k, t = (p.own ? 1 : 0) + (p.mirrored ? 1 : 0); for (let j = 0; j < k.n; j++) add(k.D[j], k.stone[j], t); }
+		return { total, bySize, byStone };
 	}
 
 	setVisible(v) { this.group.visible = v; }

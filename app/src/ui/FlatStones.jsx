@@ -22,7 +22,7 @@ function stonesByCell(engine) {
 	let m = byCell.get(run);
 	if (m) return m;
 	m = new Map();
-	for (const s of run.stones ?? []) {
+	for (const s of run.records ?? run.stones ?? []) {
 		if (s.flat) continue; // a pattern's stone: drawn by the piece it was laid on (stonesFor)
 		const L = engine.layers.get(s.layer ?? 'L0');
 		if (!L?.g) continue;
@@ -70,10 +70,22 @@ export function stonesFor(p) {
 	const at = (s, uv, twin) => { const [X, Y] = F.toSvg(uv[0], uv[1]); list.push({ X, Y, r: (s.size * 1000) / 2, colour: colourOf(s.stone), gen: s.gen, id: s.id, twin }); };
 	// a pattern's stones laid on this very piece carry their flat place (stones/pattern.js patternStones: flat, fu, fv); the mirrored
 	// copy of a pair carries its original's, drawn as the other cut. Finding thousands of stones again from their surface points
-	// cost as much as laying them, on every step of a drag.
-	for (const s of run.stones ?? []) if (s.flat === cloth) at(s, [s.fu, s.fv], !!s.mirrored);
+	// cost as much as laying them, on every step of a drag. A pattern the GPU places (a pack: stones/generators.js packOfGroup)
+	// has them packed: its own side, and its mirrored side as the other cut.
+	const records = run.records ?? run.stones ?? [];
+	for (const s of records) if (s.flat === cloth) at(s, [s.fu, s.fv], !!s.mirrored);
+	for (const pk of run.packs ?? []) {
+		if (pk.piece !== cloth) continue;
+		const k = pk.k;
+		for (const twin of [pk.own ? false : null, pk.mirrored ? true : null]) {
+			if (twin === null) continue;
+			for (let j = 0; j < k.n; j++) { const [X, Y] = F.toSvg(k.U[j], k.V[j]); list.push({ X, Y, r: (k.D[j] * 1000) / 2, colour: colourOf(k.stone[j]), gen: pk.gen, twin }); }
+		}
+	}
 	if (p.fitted) {
-		for (const s of run.stones ?? []) {
+		// (a mirrored pack on another piece, the other sleeve of a pair, lands here by its fitted triangles: its records)
+		const others = (run.packs ?? []).filter((pk) => pk.mirrored && pk.piece !== cloth).flatMap((pk) => pk.records());
+		for (const s of others.length ? records.concat(others) : records) {
 			if (!s.fit || s.flat === cloth) continue;
 			const own = cloth.uvOfFit(s.fit);
 			if (own) { at(s, own, false); continue; }

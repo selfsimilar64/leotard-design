@@ -69,6 +69,7 @@ export class Engine {
 		this.straps = new StrapView(scene, body, this.textures);
 		this.hardware = new HardwareView(scene, body, this.surf);
 		this.stoneView = new StoneView(scene, body);
+		this.stoneView.renderer = viewport.renderer; // (the GPU's patterns: stones/gpu-view.js)
 		this.stoneRun = { stones: [], errors: [], dropped: 0 };
 		this.stoneCache = { gens: new Map() };  // per group, what the last run made (stones/generators.js)
 		this.patternCache = new Map();          // per pattern, its heavy candidates between frames
@@ -600,6 +601,7 @@ Engine.prototype.syncStones = function (doc, touched = null) {
 		garment: (layer = 'L0') => this.layers.get(layer)?.g ?? this.g,
 		strapHeight: (s) => 0.0009 + 0.0013 * (s.layer ?? 0) + 0.0019 * Math.min(s.width / 0.01, 1.4),
 		cloth: (id) => this.clothOf(id), pending: this.stonePending, patternCache: this.patternCache,
+		packs: true, // patterns are placed on the GPU (stones/gpu-view.js), their records made when asked for
 		mirrorFit: (fit) => this.fitted.mirrorFit(fit),
 		// on fabric (any layer's panel that is not cut out) and clear of finished opening edges
 		isFabric: (sp, p, size, keepOut) => {
@@ -620,8 +622,9 @@ Engine.prototype.syncStones = function (doc, touched = null) {
 	const was = this.stoneRun;
 	this.stoneRun = runStones(doc, ctx, this.stoneCache);
 	if (this.stoneRun === was) return;
-	this.stoneView.set(this.stoneRun.stones, (s) => (s.layer ? 0.0009 * Math.max(layerZ.get(s.layer) ?? 0, 0) : 0));
-	this.timing.stones = { ms: performance.now() - t0, count: this.stoneRun.stones.length, dropped: this.stoneRun.dropped, errors: this.stoneRun.errors };
+	const run = this.stoneRun;
+	this.stoneView.set(run.records ?? run.stones, (s) => (s.layer ? 0.0009 * Math.max(layerZ.get(s.layer) ?? 0, 0) : 0), run.packs ?? [], run.records ? run : null);
+	this.timing.stones = { ms: performance.now() - t0, count: run.count ?? run.stones.length, dropped: run.dropped, errors: run.errors };
 };
 
 // Distance from a reference position to the nearest finished opening edge, minus that edge's

@@ -234,15 +234,15 @@ const chosenPattern = () => { const s = selection.value; return s?.kind === 'sto
 // The crystals on the design, always in view; with a stone group chosen, how many of them are its.
 function CrystalCount() {
 	rev.value; stonesRun.value;
-	const stones = app.engine?.stoneRun.stones;
-	if (!stones?.length) return null;
+	const run = app.engine?.stoneRun, total = run?.count ?? run?.stones.length ?? 0;
+	if (!total) return null;
 	const s = selection.value, id = s?.kind === 'stones' ? s.id : null;
-	let mine = 0;
-	if (id) for (let i = 0; i < stones.length; i++) if (stones[i].gen === id) mine++;
+	// (a run's own count: a pattern the GPU places has no record per stone until one is asked for)
+	const mine = id ? run.countOf?.(id) ?? run.stones.filter((x) => x.gen === id).length : 0;
 	return (
 		<div class="crystal-count" role="status" title="Crystals on the whole design, and in the group being edited">
 			{id ? <span class="cc-part cc-mine"><span class="cc-label">{chosenPattern() ? 'This pattern' : 'This group'}</span><span class="cc-num">{mine.toLocaleString()}</span></span> : null}
-			<span class="cc-part"><span class="cc-label">Whole design</span><span class="cc-num">{stones.length.toLocaleString()}</span></span>
+			<span class="cc-part"><span class="cc-label">Whole design</span><span class="cc-num">{total.toLocaleString()}</span></span>
 		</div>
 	);
 }

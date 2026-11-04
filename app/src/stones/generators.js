@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { sizeOf, SHAPES } from './library.js';
 import { motifOutline, insidePoly, distPoly } from './motifs.js';
-import { runPattern } from './pattern.js';
+import { runPattern, packPattern, packRecords } from './pattern.js';
 import { mirrorFast } from './cloth.js';
 import { hash2 } from './fields.js';
 import { projectNear } from '../curves/evaluate.js';
@@ -542,6 +542,8 @@ function dart(region, rand, candidates, gap, sizeFor, pick, ctx) {
 // A group's stones as they go on the body: mirrored, cut to one side, erased.
 function stonesOfGroup(gen, ctx, errors) {
 	const fn = GENERATORS[gen.kind], surf = ctx.surf, seed = gen.seed ?? 1, isPattern = gen.kind === 'pattern';
+	// a pattern the GPU places (ctx.packs: the app's view can): its kept stones packed, the records made only when asked for
+	if (isPattern && ctx.packs && !gen.params?.symmetric && !gen.side && !gen.erase?.length) return packOfGroup(gen, ctx, errors);
 	let list;
 	try { list = fn(gen, ctx, rng(seed)); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
 	const shape = gen.shape ?? 'round', keepOut = gen.params?.keepOut;
@@ -573,6 +575,30 @@ function stonesOfGroup(gen, ctx, errors) {
 		list = list.filter((s) => { for (const m of marks) { const dx = s.x - m.p.x, dy = s.y - m.p.y, dz = s.z - m.p.z; if (dx * dx + dy * dy + dz * dz < m.r * m.r) return false; } return true; });
 	}
 	return list;
+}
+
+// A pattern group as a pack (stones/gpu-view.js PackView draws it): its own side and its mirrored one as stonesOfGroup lays
+// them, the records (records()) made as stonesOfGroup makes them, only when something asks for each stone.
+function packOfGroup(gen, ctx, errors) {
+	let r;
+	try { r = packPattern(gen, ctx, ctx.patternCache); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
+	if (!r) return [];
+	const surf = ctx.surf, m = gen.mirror, paired = !!ctx.cloth?.(gen.on?.panel)?.paired;
+	const own = m !== 'only', mirrored = m === 'both' || m === 'only' || paired;
+	let recs = null;
+	return {
+		pack: true, gen: gen.id, shape: gen.shape ?? 'round', layer: gen.layer ?? null, piece: r.piece, k: r.k, own, mirrored,
+		mirrorSP: (sp) => mirrorFast(surf, sp), mirrorFit: ctx.mirrorFit,
+		get count() { return r.k.n * ((own ? 1 : 0) + (mirrored ? 1 : 0)); },
+		records() {
+			if (recs) return recs;
+			const list = packRecords(gen, r.piece, r.k), mir = (s) => {
+				const sp = mirrorFast(surf, s.sp), p = surf.pos(sp, _a);
+				return { ...s, sp, fit: s.fit ? ctx.mirrorFit?.(s.fit) ?? undefined : undefined, angle: Math.PI - s.angle, mirrored: true, x: p.x, y: p.y, z: p.z, r: (s.r * 7.13 + 0.37) % 1 };
+			};
+			return (recs = (own ? list : []).concat(mirrored ? list.map(mir) : []));
+		},
+	};
 }
 
 function placedStones(doc, surf) {
@@ -666,10 +692,25 @@ export function runStones(doc, ctx, cache = null) {
 		}
 		if (!changed) return cache.last;
 	} else lists.push(placedStones(doc, ctx.surf));
-	const { kept, total } = keepApart(lists, ctx);
-	const out = { stones: kept, errors, dropped: total - kept.length };
+	const packs = lists.filter((l) => l.pack), { kept, total } = keepApart(lists.filter((l) => !l.pack), ctx);
+	const out = runOf(kept, packs, errors, total - kept.length);
 	if (cache) cache.last = out;
 	return out;
+}
+
+// A run: records (every stone the CPU laid), packs (patterns the GPU places), and the count of both. stones: every stone as a
+// record, the packs' made when first asked for (picking, a stone list); a count or a group's count does not need them.
+function runOf(records, packs, errors, dropped) {
+	let all = null, by = null;
+	const count = records.length + packs.reduce((a, p) => a + p.count, 0);
+	return {
+		records, packs, errors, dropped, count,
+		get stones() { return (all ??= packs.length ? records.concat(...packs.map((p) => p.records())) : records); },
+		countOf(id) {
+			if (!by) { by = new Map(); for (const s of records) by.set(s.gen, (by.get(s.gen) ?? 0) + 1); for (const p of packs) by.set(p.gen, (by.get(p.gen) ?? 0) + p.count); }
+			return by.get(id) ?? 0;
+		},
+	};
 }
 
 export const GENERATOR_KINDS = Object.keys(GENERATORS);

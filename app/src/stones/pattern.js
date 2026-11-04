@@ -312,8 +312,10 @@ export function keepPattern(gen, piece, opts = {}) {
 
 // The stones of a pattern on a piece, as records. opts: { cache: Map (the group's drawing between frames), edge(p, keepOut) }.
 // -> stones on the body (the piece's own side; the caller mirrors)
-export function patternStones(gen, piece, opts = {}) {
-	const k = keepPattern(gen, piece, opts), { U, V, A, D, H, stone } = k, shape = gen.shape ?? 'round', layer = gen.layer ?? null, id = gen.id, out = [];
+export function patternStones(gen, piece, opts = {}) { return packRecords(gen, piece, keepPattern(gen, piece, opts)); }
+// The records of a kept set (keepPattern, or a pack's copy of one: packPattern).
+export function packRecords(gen, piece, k) {
+	const { U, V, A, D, H, stone } = k, shape = gen.shape ?? 'round', layer = gen.layer ?? null, id = gen.id, out = [];
 	for (let j = 0; j < k.n; j++) {
 		const u = U[j], v = V[j];
 		// its triangle; one kept by the room raster just past the piece's last triangle takes that one, carried on
@@ -343,6 +345,17 @@ export function runPattern(gen, ctx, cache = null) {
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return []; }
 	return patternStones(gen, piece, { cache, edge: ctx.edge });
+}
+// A pattern's kept stones as packed arrays of its own (keepPattern's are reused), for the GPU to place
+// (stones/gpu-view.js); null when there are none to place. -> { piece, k: { n, U, V, A, D, H, stone } }
+export function packPattern(gen, ctx, cache = null) {
+	const panel = ctx.doc.panels.find((p) => p.id === gen.on?.panel);
+	if (!panel) throw new Error('No panel ' + gen.on?.panel);
+	if (panel.removed) return null;
+	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
+	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return null; }
+	const k = keepPattern(gen, piece, { cache, edge: ctx.edge }), n = k.n;
+	return { piece, k: { n, U: k.U.slice(0, n), V: k.V.slice(0, n), A: k.A.slice(0, n), D: k.D.slice(0, n), H: k.H.slice(0, n), stone: k.stone } };
 }
 
 // What a pattern's mirror half needs flipped when its two halves live on two pieces (doc/symmetry.js):

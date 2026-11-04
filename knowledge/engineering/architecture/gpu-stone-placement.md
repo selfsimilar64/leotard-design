@@ -101,6 +101,24 @@ that later.
    carried on), packed arrays out, no body search. 2.1 ms for 17 700 candidates. `patternStones` builds records from it
    (find, or the nearest triangle for a stone the room raster keeps just past the last one). The keep set is now
    decided on the CPU only; the GPU will place, not decide (parity by construction).
-4. Atlases and the 3D placement shader; StoneView draws pattern groups from them.
-5. Flat view from the same arrays and rasters.
-6. Diff test, measurements, owner check.
+4. Done (2026-11-04): `stones/gpu-view.js`. A pattern group (not `symmetric`, `side` or erased: those stay records)
+   is a **pack** (`stones/generators.js` packOfGroup: the kept arrays, own and mirrored sides, `records()` made only
+   when asked). `PackView` draws each side as an `InstancedBufferGeometry` mesh whose material (the crystal's, or the
+   family's) gets `placeStone()`: four texel fetches of the side's atlas (four float targets: lifted position, normal,
+   body directions of flat +u, +v; corners by `StoneView.frameOf`, so fitted garments and layer heights come free;
+   the mirrored side's corners at `mirrorFast` / `mirrorFit` points), mask-weighted bilinear, a frame as
+   `StoneView.build`. Atlases are drawn again on `StoneView.build()` (pose, re-fit, garment) and when a pack's piece
+   changes. Runs carry `records`, `packs`, `count`, `countOf(id)`; `stones` makes every record on first ask (picking,
+   hover). Shell's and Sparkle's counts read `count` / `countOf`; `StoneView.stats` reads packs' arrays.
+   - Direction: from the posed body's +u/+v. The CPU path turns a stone by an angle found in the rest pose and
+     applies it to the posed normal's up-based basis, so on a raised arm its navettes turn ~90 deg against the fabric;
+     in the A-pose the two match (checked). The GPU's follows the fabric.
+   - Checked on Gem Test 3: same stones and look as the CPU path at the same camera (mean brightness equal within
+     0.01%); a navette pattern on a paired sleeve draws on both sleeves; pose change and a fitted garment (29 000
+     stones on `FittedCloth`) draw right.
+   - Gem Test 3 (17 700 stones), one edit a frame: move 3D 16.8 ms (the display's frame; stones 3.4 ms), Pattern only
+     16.8, Both 23 (the flat view's per-stone list), turn 17, spacing 46 (the CPU drawing the candidates again).
+5. The flat view reads packs' arrays directly (`ui/FlatStones.jsx` stonesFor); still a list of objects per stone and
+   the WebGL painter's upload (~6 ms of Both's 23). A fitted pair's other sleeve asks the pack's records.
+6. Next: the flat view straight from the arrays; the candidates' drawing (scale, spacing, the layout's grips) in a
+   worker; reference-x raster so `symmetric` / `side` groups can be packs; owner check.

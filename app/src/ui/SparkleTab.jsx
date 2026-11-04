@@ -138,7 +138,7 @@ function OnDesign({ doc }) {
 	rev.value;
 	if (!app.engine || doc.legacy) return null;
 	const s = app.stoneStats(), sel = selection.value;
-	const count = (g) => app.engine.stoneRun.stones.filter((x) => x.gen === g.id).length;
+	const count = (g) => app.engine.stoneRun.countOf?.(g.id) ?? app.engine.stoneRun.stones.filter((x) => x.gen === g.id).length;
 	if (!doc.stones.length && !doc.placed.length) return null;
 	return (
 		<Section title="On this design" aside={<span class="sec-value">{s.total.toLocaleString()} crystals</span>} id="sparkle-on">
@@ -163,7 +163,7 @@ function OnDesign({ doc }) {
 function GroupEditor({ id, doc }) {
 	const g = doc.stones.find((x) => x.id === id), back = () => { selection.value = null; };
 	if (!g) return <PartHeader back="Sparkle" onBack={back} title="These crystals no longer exist" />;
-	const count = app.engine?.stoneRun.stones.filter((s) => s.gen === g.id).length ?? 0, p = g.params ?? {};
+	const run = app.engine?.stoneRun, count = run ? run.countOf?.(g.id) ?? run.stones.filter((s) => s.gen === g.id).length : 0, p = g.params ?? {};
 	const set = (patch, gesture) => run({ op: 'stones.set', id: g.id, ...patch, ...(gesture ? { gesture } : {}) });
 	const param = (k, v, gesture) => set({ params: { [k]: v } }, gesture);
 	const known = new Set(['size', 'rows', 'offset', 'gap', 'pattern']);
