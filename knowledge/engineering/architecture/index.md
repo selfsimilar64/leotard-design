@@ -10,6 +10,10 @@
 * [POC-to-product gap - the garment must become data](poc-to-product-gap.md) (draft) - What the three.js POC can be reused for and what must change: the garment's shape is hard-coded as analytic fields, and the professional tool needs it as an editable, serialisable panel model that flattens to patterns.
 * [Procedural stone patterns](procedural-stone-patterns.md) (draft) - A stone group as a live procedure on the flat cloth of one piece: an arrangement (48, offered as about 150 presets) with its own sizing, a frame that moves the whole of it, a stack of modifiers on density, size and colour, distortions, handles over the view specific to each kind; what the design hangs on is placed first, and everything re-runs within a frame of a drag.
 
+# Component
+
+* [Stone patterns placed on the GPU](gpu-stone-placement.md) (draft) - Design and build plan for laying a stone pattern's stones on the GPU in both the 3D and flat views: candidates drawn on the CPU only when the drawing changes, everything a move or turn changes done per stone in a shader, and a CPU twin of the same rule for counts, picking and export.
+
 # Data Model
 
 * [Design document model (garment as data)](design-document-model.md) (draft) - The serialisable design file every tool edits: body and pose, a curve graph on the canonical body, panels derived from it with fabric stacks, straps, trims, decals and procedural stone generators; all edits are commands, everything derived is a rebuildable cache.

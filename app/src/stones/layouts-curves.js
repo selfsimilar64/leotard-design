@@ -10,7 +10,10 @@ import { mm, num, ratio, deg, pct, opt, when, along, radius, point, lattice } fr
 // levels: the values; step: grid size (metres); kOfLevel: each line's own size.
 const scratch = { val: new Float32Array(0), link: new Int32Array(0), px: new Float32Array(0), py: new Float32Array(0), mark: new Uint8Array(0) };
 function isolines(E, f, levels, step, kOfLevel = null) {
-	step = Math.max(step, Math.sqrt(((E.box.x1 - E.box.x0) * (E.box.y1 - E.box.y0)) / 90000));
+	// (no finer than a 300 x 300 grid over the box, the floor on powers of two: a box a little bigger, as a moved pattern's
+	// is, draws the same lines: stones/pattern.js patternCandidates)
+	const least = Math.sqrt(((E.box.x1 - E.box.x0) * (E.box.y1 - E.box.y0)) / 90000);
+	if (least > step) step = Math.max(step, 2 ** Math.ceil(Math.log2(least)));
 	const anchorReach = E.pitch * 6;
 	// its grid on whole steps from the pattern's origin: a line drawn on it does not change with the box
 	const B = { x0: Math.floor(E.box.x0 / step) * step, y0: Math.floor(E.box.y0 / step) * step, x1: E.box.x1, y1: E.box.y1 };

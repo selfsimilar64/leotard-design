@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-04
+* **Creation**: [Stone patterns placed on the GPU](/engineering/architecture/gpu-stone-placement.md): design and stages; stage 2 done (candidates drawn in the pattern's own frame and reused on a move or turn).
 * **Update**: [Procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md): stones may overlap (owner): no clearance check in patterns or between a pattern and other groups; scatters thin by size from the ranked blue-noise tile; clusters and galaxy rebuilt on it; the flat view repaints after edits outside a drag.
 * **Update**: [The flat view's Look appearance and stones](/engineering/app/flat-view-look-and-stones.md): the handle dead in the Pattern-only layout (stones were laid only while the 3D pane drew); 2D stones drawn on the GPU and placed from their flat position (2D steps about 90 -> 45 ms on 14 000 stones, 3D 37).
 * **Update**: [The flat view's Look appearance and stones](/engineering/app/flat-view-look-and-stones.md): why 2D edits were slower than 3D (CPU-drawn svg against one GPU draw; a frame of lag); stones painted on a canvas, every move applied at once.

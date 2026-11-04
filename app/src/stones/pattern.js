@@ -173,31 +173,83 @@ function keepGrid(piece, edge, u, v) {
 	return (D[o] * (1 - w) + D[o + 1] * w) * (1 - h) + (D[o + G.nx] * (1 - w) + D[o + G.nx + 1] * w) * h;
 }
 
+// A pattern's frame split in two: its rigid part (where it lies, its turn, its flip) and the rest (its scale, the plane, the
+// distortion). Candidates are drawn in the frame's own space with the rest only, so moving, turning or flipping the pattern
+// moves them without drawing them again: lines walked at the stones' spacing stay so (a rigid move keeps distances), and the
+// modifiers' fields read the frame's own coordinates (stones/modifiers.js compileMods), which the rigid part leaves alone,
+// except a field of the piece's edge. On the cloth: (x, y) + R(rotate) (F gx, gy). A flat layout (drawn on the cloth against
+// the piece) has none. Design: knowledge/engineering/architecture/gpu-stone-placement.md.
+export function rigidOf(P, flat) {
+	if (flat) return { x: 0, y: 0, c: 1, s: 0, F: 1, a: 0 };
+	const f = frameOf(P);
+	return { x: f.x, y: f.y, c: f.c, s: f.s, F: f.F, a: ((P.rotate ?? 0) * Math.PI) / 180 };
+}
+// What a rigid move leaves alone in a pattern's parameters: the key of its drawn candidates.
+const RIGID = new Set(['x', 'y', 'rotate', 'flip', 'density', 'margin', 'keepOut', 'stoneTurn', 'turn']);
+function candidateKey(P, isRound, seed) {
+	const sizeMods = (P.mods ?? []).filter((m) => !m.off && m.on === 'size'), byEdge = sizeMods.some((m) => m.shape === 'edge');
+	const kept = {};
+	for (const k of Object.keys(P)) if (k !== 'mods' && (byEdge || !RIGID.has(k))) kept[k] = P[k];
+	return JSON.stringify([kept, sizeMods, isRound, seed]);
+}
+
+// A pattern's candidate stones in its frame's own space (rigidOf), drawn again only when something other than the rigid part
+// changes. -> { n, GX, GY, GA (direction), R (rank), K, T, C (family), D (diameter, size modifiers applied), rigid, P, d0,
+// fine, dart, isRound, flat }. cache: the group's Map (the heavy layouts' drawing is kept there too).
+export function patternCandidates(gen, piece, cache = null) {
+	const P = patternParams(gen, piece), layout = LAYOUTS[P.layout], flat = !!layout.flat, seed = gen.seed ?? 1;
+	const d0 = sizeOf(P.size ?? 'ss12'), gap = P.gap ?? 1.2, rigid = rigidOf(P, flat);
+	const shape = gen.shape ?? 'round', isRound = (SHAPES[shape]?.aspect ?? 1) === 1 && shape !== 'heart' && shape !== 'triangle' && shape !== 'star' && shape !== 'square';
+	const dart = !!layout.dart, [modLo] = sizeRange(P.mods), fine = Math.min(1, Math.max(0.25, modLo * (layout.fine?.(P) ?? 1)));
+	// what must be drawn: the piece seen from the frame's own space (a flat layout: the piece itself); what is drawn: that
+	// with 2 to 4 cm round it on whole steps, so that a move or a turn draws again only when it reaches past it (drawn again
+	// for another reason, a slider of the arrangement say, only a few millimetres round it: the next will be the same; not a
+	// heavy layout, whose pen's moves are kept on their own wider box)
+	let need = null;
+	if (!flat) {
+		need = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+		for (const [u, v] of [[piece.x0, piece.y0], [piece.x1, piece.y0], [piece.x0, piece.y1], [piece.x1, piece.y1]]) {
+			const du = u - rigid.x, dv = v - rigid.y, gx = (rigid.c * du + rigid.s * dv) * rigid.F, gy = rigid.c * dv - rigid.s * du;
+			need.x0 = Math.min(need.x0, gx); need.x1 = Math.max(need.x1, gx); need.y0 = Math.min(need.y0, gy); need.y1 = Math.max(need.y1, gy);
+		}
+	}
+	const key = candidateKey(P, isRound, seed);
+	const c = cache?.get(gen.id + '#cand');
+	if (c?.key === key && (flat || (need.x0 >= c.local.x0 && need.x1 <= c.local.x1 && need.y0 >= c.local.y0 && need.y1 <= c.local.y1))) return { ...c.out, rigid, P };
+	const m = flat ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, distortion(P, seed));
+	const local = flat ? null : anchoredBox(need, c?.key === key || layout.heavy ? 0.02 : 0.004);
+	const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : boxOver(P, local, m);
+	const pitch = (d0 * gap) / m.sc;
+	// sizes that vary with place: the modifier's answer, some of each of the sizes it falls between; read in the frame's own
+	// space (a field of the piece's edge asks the cloth there, so its key holds the rigid part too)
+	const edgeAt = (u, v) => piece.edgeAt(u, v);
+	const edgeLocal = flat ? edgeAt : (gx, gy) => piece.edgeAt(rigid.x + rigid.c * rigid.F * gx - rigid.s * gy, rigid.y + rigid.s * rigid.F * gx + rigid.c * gy);
+	const S = flat ? 1 : frameOf(P).S, sizeMods = compileMods(P.mods, { x: 0, y: 0, c: 1, s: 0, S, F: 1 }, edgeLocal, gen.stone ?? 'Crystal AB').size;
+	const diam = sizeMods ? (u, v, k, t, cat, rank) => ditherSize(d0 * k * sizeMods(u, v, k, t, cat, rank), frac(rank * 97.13 + 0.71)) : null;
+	const E = scratch.reset(box, pitch, seed, flat ? edgeAt : null, { map: m, clip: flat ? piece : local, d0, gap, diam, fine, angles: !isRound, jitter: P.jitter ?? 0 });
+	drawInto(gen, layout, P, E, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine }, cache);
+	const n = E.n, cut = (a) => a.slice(0, n);
+	const out = { n, GX: cut(E.X), GY: cut(E.Y), GA: cut(E.A), R: cut(E.R), K: cut(E.K), T: cut(E.T), C: cut(E.C), D: cut(E.D), rigid, P, d0, fine, dart, isRound, flat };
+	cache?.set(gen.id + '#cand', { key, local, out });
+	return out;
+}
+
 // The stones of a pattern on a piece. opts: { cache: Map (the group's drawing between frames), edge(p, keepOut) }.
 // -> stones on the body (the piece's own side; the caller mirrors)
 export function patternStones(gen, piece, opts = {}) {
-	const P = patternParams(gen, piece), layout = LAYOUTS[P.layout], flat = !!layout.flat, seed = gen.seed ?? 1;
-	const d0 = sizeOf(P.size ?? 'ss12'), gap = P.gap ?? 1.2, frame = frameOf(P), edgeAt = (u, v) => piece.edgeAt(u, v);
+	const Cd = patternCandidates(gen, piece, opts.cache), { n, GX, GY, GA, R, K, T, C, D, P, d0, fine, dart, isRound } = Cd, rg = Cd.rigid;
+	const frame = frameOf(P), edgeAt = (u, v) => piece.edgeAt(u, v);
 	const mods = compileMods(P.mods, frame, edgeAt, gen.stone ?? 'Crystal AB');
-	const shape = gen.shape ?? 'round', isRound = (SHAPES[shape]?.aspect ?? 1) === 1 && shape !== 'heart' && shape !== 'triangle' && shape !== 'star' && shape !== 'square';
-	const m = flat ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap(P, distortion(P, seed));
-	const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : boxOver(P, piece, m);
-	const pitch = (d0 * gap) / m.sc, dart = !!layout.dart, [modLo] = sizeRange(P.mods);
-	const fine = Math.min(1, Math.max(0.25, modLo * (layout.fine?.(P) ?? 1)));
-	// sizes that vary with place: the modifier's answer, some of each of the sizes it falls between
-	const diam = mods.size ? (u, v, k, t, cat, rank) => ditherSize(d0 * k * mods.size(u, v, k, t, cat, rank), frac(rank * 97.13 + 0.71)) : null;
-	const E = scratch.reset(box, pitch, seed, flat ? edgeAt : null, { map: m, clip: piece, d0, gap, diam, fine, angles: !isRound, jitter: P.jitter ?? 0 });
-	drawInto(gen, layout, P, E, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine }, opts.cache);
-	const n = E.n, X = E.X, Y = E.Y, R = E.R, A = E.A, T = E.T, K = E.K, C = E.C, D = E.D;
-
+	const shape = gen.shape ?? 'round';
 	const overall = P.density ?? 1, margin = P.margin ?? 0, keepOut = P.keepOut, edge = opts.edge;
 	const density = mods.density, colour = mods.colour ?? plainColour(gen), layer = gen.layer ?? null, id = gen.id, out = [];
 	const turn = ((P.stoneTurn ?? 0) * Math.PI) / 180, upright = P.turn === 'fixed', upAngle = ((P.rotate ?? 0) * Math.PI) / 180;
+	const rx = rg.x, ry = rg.y, rc = rg.c, rs = rg.s, rF = rg.F, ra = rg.a;
 	// Stones may overlap: each candidate is kept or not on its own (density, room, the piece, the keep-out), never against the
 	// others, so what is shown during a drag is the design itself, and the same rule can run on the GPU (owner, 2026-11-04:
 	// the designer spaces and sizes the stones). Before, each stone was checked against those kept before it.
 	for (let i = 0; i < n; i++) {
-		const u = X[i], v = Y[i], k = K[i], t = T[i], cat = C[i], rank = R[i], d = D[i];
+		const gx = GX[i], gy = GY[i], u = rx + rc * rF * gx - rs * gy, v = ry + rs * rF * gx + rc * gy, k = K[i], t = T[i], cat = C[i], rank = R[i], d = D[i];
 		let dens = overall;
 		if (density) dens *= density(u, v, k, t, cat, rank);
 		// a scatter's candidates are a blue-noise tile in ranked order whose first points lie furthest apart (stones/layouts-lattice.js
@@ -218,7 +270,9 @@ export function patternStones(gen, piece, opts = {}) {
 			if (sure ? near < d / 2 : edge(_p3, keepOut) <= d / 2) continue;
 		}
 		const h = frac(rank * 61.803398875 + 0.137);
-		const angle = isRound ? h * Math.PI : piece.angleOf(q, (upright ? upAngle : A[i]) + turn);
+		// (its direction on the cloth: the frame's own, turned and mirrored with the frame)
+		const A = ra + (rF < 0 ? Math.PI - GA[i] : GA[i]);
+		const angle = isRound ? h * Math.PI : piece.angleOf(q, (upright ? upAngle : A) + turn);
 		// fit: where on a fitted garment's fabric (stones/fitted-cloth.js), drawn there rather than on the body under it
 		// flat, fu, fv: the piece it was laid on and where on its flat cloth, so the flat view draws it without finding it again
 		// from its surface point (ui/FlatStones.jsx stonesFor; a mirrored copy keeps them: stones/generators.js mirrored)
