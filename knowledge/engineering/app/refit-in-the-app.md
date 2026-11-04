@@ -105,10 +105,17 @@ The owner saw skin showing through, fabric that seemed folded over itself, and u
 - **Underarm seams.** Arms down (standing), the sleeve's extra underarm fabric (stretch sleeves are drafted for arms partly out) bunches: side seam and sleeve seam folded onto each other (32-35 degrees apart), armhole seams sagging 15-24% of their chord over 40 mm. Arms up (lunge-arms-up, passe), the side seam runs on into the sleeve seam within 3-15 degrees of straight and both stay straight (1-3% sag), and the armhole crosses at 75-88 degrees, as in the photos; but the armhole dips into a U at the underarm. Part of its curve is the loop round the arm (a 5 cm radius loop sags about 10% over 40 mm; measured 6-12%). The dip is the start: the standing fit is carried onto the posed skin, which stretches in the armpit, and friction keeps much of that shape. With friction off, 750 steps visibly flatten the U.
 - **Not checked:** whether the armhole seam lies on the body's arm/torso split, where sleeve and bodice points see different body surfaces (a suspect for the crumpling at the junction).
 
+# In the main app (2026-11-04)
+
+The re-fit now runs in the main app for fitted garments, on a case built live from the body shown: see
+[fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md). `Refit` takes an optional `cache` so a new pose
+rebuilds nothing that did not change (compiled programs, constant matrix, gathers; body trees refitted by `refitBVH`) and has
+`destroy()` for its buffers. Drawn designs still have no case.
+
 # Known limits
 
 - The 750-step default is a time budget, not convergence, on poses.
-- Cases are exported from Python; the app cannot yet build one from a live design.
+- The tuning page's cases are exported from Python; the main app builds one live only for a fitted garment, not for drawn designs.
 - iPad untried; WebGPU on Safari exists but speed and the 0.2 mm cross-device drift are unmeasured there.
 
 [^owner]: Conversation with the product owner, 2026-11-03.

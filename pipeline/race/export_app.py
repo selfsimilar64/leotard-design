@@ -6,6 +6,7 @@ Everything the solver needs is computed here exactly as gpu.Problem does (the bo
 has one source; the app builds only its bounding-volume tree. Also stored: the start (race.start_of), the reference with friction, and
 Python's local/global (10 CG, friction) after 1 and 20 iterations, for checking the port step by step.
 Spec: knowledge/engineering/app/solver-race-plan.md (app port).
+Twin: app/src/fit/fitted-case.js builds the same arrays in the app, live, for a fitted garment.
 """
 import json
 import os

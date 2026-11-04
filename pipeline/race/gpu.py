@@ -472,7 +472,8 @@ def scale_k(alpha: float, x: wp.array(dtype=wp.vec3), out: wp.array(dtype=wp.vec
 
 
 def part_geometry(P, t):
-	"""Face normals, edge and angle-weighted vertex pseudo-normals, and open edges and vertices, of one part's triangles t (surface_at)."""
+	"""Face normals, edge and angle-weighted vertex pseudo-normals, and open edges and vertices, of one part's triangles t (surface_at).
+	Twin: partGeometry in app/src/fit/fitted-case.js (the app's live re-fit case); keep them in step."""
 	unit = lambda a: a / (np.linalg.norm(a, axis=-1, keepdims=True) + 1e-30)
 	fn = unit(np.cross(P[t[:, 1]] - P[t[:, 0]], P[t[:, 2]] - P[t[:, 0]]))
 	vn = np.zeros_like(P)

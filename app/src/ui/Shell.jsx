@@ -12,16 +12,39 @@ import { tools } from './toolbar.js';
 import { Field, Segmented, Switch, CommitSlider, Button, IconButton } from './kit.jsx';
 import { I } from './icons.jsx';
 import { viewTo, cancel as cancelFlight } from './camera.js';
-import { DISPLAY_OPTIONS, saveDisplay } from '../render/display.js';
+import { DISPLAY_OPTIONS, saveDisplay, fitOptions } from '../render/display.js';
 import { symmetryOn } from '../doc/symmetry.js';
+
+// The stage's layouts: the model alone, the model and its flat pattern side by side (a divider between them), the pattern alone.
+// The 3D view stays alive in every layout (its canvas is only narrowed away), so switching back is instant.
+const LAYOUTS = [['3d', '3D', 'The model only'], ['split', 'Both', 'The model and its pattern pieces side by side'], ['flat', 'Pattern', 'The pattern pieces only']];
+const setLayout = (k) => { layout.value = k; };
+
+// Dragging the divider between the 3D view and the pattern: its place is remembered (prefs.split, a share of the stage).
+function SplitHandle() {
+	const drag = (e) => {
+		const stage = e.currentTarget.parentElement, r = stage.getBoundingClientRect();
+		e.currentTarget.setPointerCapture(e.pointerId);
+		const move = (m) => setPref('split', Math.min(0.8, Math.max(0.2, (m.clientX - r.left) / r.width)));
+		const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); };
+		addEventListener('pointermove', move); addEventListener('pointerup', up);
+	};
+	const key = (e) => {
+		const s = prefs.value.split ?? 0.5;
+		if (e.key === 'ArrowLeft') setPref('split', Math.max(0.2, s - 0.05));
+		if (e.key === 'ArrowRight') setPref('split', Math.min(0.8, s + 0.05));
+	};
+	return <div class="split-handle" role="separator" aria-orientation="vertical" aria-label="Divider between the model and the pattern (drag, or the arrow keys)" tabIndex={0} onPointerDown={drag} onKeyDown={key} onDblClick={() => setPref('split', 0.5)} title="Drag to resize; double-click to centre" />;
+}
 
 export function Shell({ onViewport }) {
 	return (
 		<div class={`shell layout-${layout.value}`}>
 			<TopBar />
-			<main class="stage">
+			<main class="stage" style={{ '--split': `${Math.round((prefs.value.split ?? 0.5) * 1000) / 10}%` }}>
 				<div class="view3d" ref={(el) => el && onViewport?.(el)} />
 				{layout.value !== '3d' ? <div class="viewflat"><FlatView /></div> : null}
+				{layout.value === 'split' ? <SplitHandle /> : null}
 				<ModeBar />
 				<StageHint />
 				<Busy />
@@ -63,7 +86,9 @@ function TopBar() {
 				</span>
 				<span class="tb-div" />
 				<button class={`tb-btn ${symmetryOn(app.doc) ? 'active' : ''}`} title={symmetryOn(app.doc) ? 'Mirror is on: changes reach both sides. Turn off to change one side only (X)' : 'Mirror is off: changes reach one side only. A mirrored part you change splits from its pair (X)'} aria-pressed={symmetryOn(app.doc)} onClick={toggleMirror}><I.mirror size={19} /><span>Mirror</span></button>
-				<button class={`tb-btn ${layout.value !== '3d' ? 'active' : ''}`} title="Show the pattern pieces beside the model" aria-pressed={layout.value !== '3d'} onClick={() => { layout.value = layout.value === '3d' ? 'split' : '3d'; }}><I.pattern size={19} /><span>Pattern</span></button>
+				<span class="tb-seg" role="radiogroup" aria-label="View">
+					{LAYOUTS.map(([k, l, hint]) => <button key={k} role="radio" aria-checked={layout.value === k} class={`tb-btn ${layout.value === k ? 'active' : ''}`} title={hint} onClick={() => setLayout(k)}>{k === 'flat' ? <I.pattern size={19} /> : null}<span>{l}</span></button>)}
+				</span>
 				<button class="tb-btn" title="Save the printable full-size pattern (PDF)" onClick={exportPattern}><I.export size={19} /><span>Export</span></button>
 				<button class="btn primary" title="Save to your designs (Ctrl+S)" onClick={save}>Save</button>
 				<span class="menu-anchor">
@@ -101,7 +126,7 @@ function Settings({ onClose }) {
 			<Switch label="Turn the view to the part being changed" value={prefs.value.followCamera} onChange={(v) => setPref('followCamera', v)} />
 			<details class="disclosure">
 				<summary><I.chevronRight size={16} class="disc-chev" /><span>Fabric fit (experimental)</span></summary>
-				<div class="disc-body"><FabricFit /></div>
+				<div class="disc-body"><FittedFit /><FabricFit /></div>
 			</details>
 			<h3 class="pop-title">Performance</h3>
 			<Switch label="Show the frame rate" value={showStats.value} onChange={(v) => { showStats.value = v; }} />
@@ -155,6 +180,33 @@ function FabricFit() {
 				<Field label="Bridge reach (how wide a hollow it spans)"><CommitSlider value={Math.round(d.liftReach * 100)} min={25} max={150} step={5} format={(v) => `${v}%`} onCommit={(v) => apply({ liftReach: v / 100 })} /></Field>
 			</>}
 			<p class="pop-meta">{fitting ? 'Fitting…' : !posed ? 'Sliding shows in poses; the mannequin stance is the design as drawn.' : ms ? `Fitted in ${(ms / 1000).toFixed(1)} s` : ''}</p>
+		</div>
+	);
+}
+
+// A fitted garment (Shape tab, Garment): whether it is re-fitted on the GPU after a pose or body change (fit/refit.js), for how
+// many steps and with how much friction, and how far its fabric is drawn off the body. This computer's setting, like the rest.
+function FittedFit() {
+	const d = display.value, f = app.engine?.fitted, [st, setSt] = useState(f?.status ?? { state: 'off' });
+	useEffect(() => { if (!f) return; f.onStatus = setSt; setSt(f.status); return () => { if (f.onStatus === setSt) f.onStatus = null; }; }, [f]);
+	if (!d) return null;
+	const apply = (patch) => { const n = { ...d, ...patch }; display.value = n; saveDisplay(n); f?.setOptions(fitOptions(n)); };
+	const said = {
+		off: 'These apply to a fitted garment (Shape tab, Garment).',
+		carried: st.note ?? 'Carried onto the body by surface position, not re-fitted.',
+		fitting: 'Re-fitting…',
+		fitted: `Re-fitted: ${st.steps} steps in ${(st.seconds ?? 0).toFixed(2)} s (setting up ${(st.setup ?? 0).toFixed(2)} s)`,
+		error: `The re-fit could not run here: ${st.note}`,
+	}[st.state];
+	return (
+		<div class="fit">
+			<Switch label="Re-fit a fitted garment on the body shown" value={d.fitRefit} onChange={(v) => apply({ fitRefit: v })} />
+			{d.fitRefit ? <>
+				<Field label="Re-fit steps (more settles closer, takes longer)"><CommitSlider value={d.fitSteps} min={20} max={750} step={10} format={(v) => `${v}`} onCommit={(v) => apply({ fitSteps: v })} /></Field>
+				<Field label="Friction against the skin"><CommitSlider value={Math.round(d.fitMu * 100)} min={0} max={100} step={5} format={(v) => (v / 100).toFixed(2)} onCommit={(v) => apply({ fitMu: v / 100 })} /></Field>
+			</> : null}
+			<Field label="Fabric drawn off the body"><CommitSlider value={Math.round(d.fitLift * 10000) / 10} min={0} max={5} step={0.1} format={(v) => `${(+v).toFixed(1)} mm`} onCommit={(v) => apply({ fitLift: v / 1000 })} /></Field>
+			<p class="pop-meta">{said}</p>
 		</div>
 	);
 }

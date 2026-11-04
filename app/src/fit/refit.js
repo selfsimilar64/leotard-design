@@ -7,7 +7,7 @@
 // the fit is done when the chosen statistic of that drift (max, or a percentile) is under `tol`. The averaged positions are also
 // what the page can show, which hides the chatter.
 
-import { buildBVH } from './bvh.js';
+import { buildBVH, refitBVH } from './bvh.js';
 import { WGSL, WG, RED, BLOCK, PARAMS, FPARAMS } from './refit-wgsl.js';
 
 export const DEFAULTS = {
@@ -83,21 +83,24 @@ export class Refit {
 		return adapter.requestDevice({ requiredLimits: { maxStorageBuffersPerShaderStage: Math.min(10, adapter.limits.maxStorageBuffersPerShaderStage), maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize, maxBufferSize: adapter.limits.maxBufferSize } });
 	}
 
+	// data.cache (optional, the app's live re-fits, render/fitted.js): kept between runs on the same garment and body mesh, so a new
+	// pose rebuilds nothing that did not change: the garment's constant matrix and gathers, and the body trees (refitted to the new
+	// points, not rebuilt). The tuning page passes none.
 	constructor(device, data, settings = {}) {
 		this.device = device;
 		this.head = data.head;
 		this.settings = { ...DEFAULTS, ...settings };
-		const A = data.arrays, h = data.head;
+		const A = data.arrays, h = data.head, cache = data.cache ?? {};
 		const n = this.n = h.n, nt = h.nt, ns = h.ns;
 		this.data = data;
 		// gather lists, as gpu.Problem
-		const vt = csr(A.tris, n);
+		const vt = cache.vt ??= csr(A.tris, n);
 		const ends = new Int32Array(2 * ns), signed = new Int32Array(2 * ns);
 		ends.set(A.sj, 0); ends.set(A.si, ns);
 		for (let s = 0; s < ns; s++) { signed[s] = s; signed[ns + s] = -s - 1; }
-		const vs = csr(ends, n);
+		const vs = cache.vs ??= csr(ends, n);
 		const vsSrc = Int32Array.from(vs.order, (o) => signed[o]);
-		const M = this.matrix = constantMatrix(n, A.tris, A.Dinv, A.area, A.si, A.sj, A.k);
+		const M = this.matrix = cache.matrix ??= constantMatrix(n, A.tris, A.Dinv, A.area, A.si, A.sj, A.k);
 		const topo = concat(Int32Array, [['tri', A.tris], ['sleeve', A.sleeve], ['vts', vt.start], ['vtc', vt.order], ['vss', vs.start], ['vsc', vsSrc],
 			['si', A.si], ['sj', A.sj], ['cp', M.ptr], ['cc', M.cols]]);
 		const kon = concat(Float32Array, [['dinv', A.Dinv], ['area', A.area], ['facing', A.facing], ['rest', A.rest_len], ['k', A.k], ['cv', M.vals], ['lii', M.lii]]);
@@ -105,7 +108,8 @@ export class Refit {
 		const m = h.body_points;
 		const vec4 = (src, count, w) => { const o = new Float32Array(count * 4); for (let i = 0; i < count; i++) { o[4 * i] = src[3 * i]; o[4 * i + 1] = src[3 * i + 1]; o[4 * i + 2] = src[3 * i + 2]; o[4 * i + 3] = w ? w[i] : 0; } return o; };
 		const parts = ['torso', 'arm'].map((p) => ({ tris: A[p + '_tris'], fn: A[p + '_fn'], en: A[p + '_en'], eb: A[p + '_eb'], vn: A[p + '_vn'], vb: A[p + '_vb'] }));
-		const bvhs = parts.map((p) => buildBVH(A.body, p.tris));
+		const bvhs = parts.map((p, i) => (cache.bvhs?.[i] ? refitBVH(cache.bvhs[i], A.body, p.tris) : buildBVH(A.body, p.tris)));
+		if (data.cache) cache.bvhs = bvhs;
 		const nf = parts.map((p) => p.tris.length / 3);
 		const faceI = new Int32Array((nf[0] + nf[1]) * 4), faceN = new Float32Array((nf[0] + nf[1]) * 16);
 		let f = 0;
@@ -146,15 +150,22 @@ export class Refit {
 			loc: make(new Float32Array((3 * nt + ns) * 4)), red: make(new Float32Array(1024 + 16)),
 		};
 		this.stage = device.createBuffer({ size: n * 16, usage: GPUBufferUsage.MAP_READ | D });
-		const module = device.createShaderModule({ code: WGSL });
-		const entries = Array.from({ length: 9 }, (_, i) => ({ binding: i, visibility: GPUShaderStage.COMPUTE, buffer: { type: i === 0 ? 'uniform' : 'storage' } }));
-		const layout = device.createBindGroupLayout({ entries });
-		this.bind = device.createBindGroup({ layout, entries: [this.uniform, this.buf.topo, this.buf.kon, this.buf.v, this.buf.pt, this.buf.loc, this.buf.red, this.buf.bodyI, this.buf.bodyF].map((b, i) => ({ binding: i, resource: { buffer: b } })) });
-		const pl = device.createPipelineLayout({ bindGroupLayouts: [layout] });
-		this.pipe = {};
-		for (const e of ['query', 'tri', 'spring', 'rhs', 'cg_init', 'cg_ap', 'cg_update', 'cg_dir', 'finish_rz0', 'finish_alpha', 'finish_beta', 'window_add', 'window_end']) {
-			this.pipe[e] = device.createComputePipeline({ layout: pl, compute: { module, entryPoint: e } });
+		// the programs: the same for every case (sizes and offsets are in the uniform), so a cache keeps them compiled
+		let shared = cache.gpu?.device === device ? cache.gpu : null;
+		if (!shared) {
+			const module = device.createShaderModule({ code: WGSL });
+			const entries = Array.from({ length: 9 }, (_, i) => ({ binding: i, visibility: GPUShaderStage.COMPUTE, buffer: { type: i === 0 ? 'uniform' : 'storage' } }));
+			const layout = device.createBindGroupLayout({ entries });
+			const pl = device.createPipelineLayout({ bindGroupLayouts: [layout] });
+			const pipe = {};
+			for (const e of ['query', 'tri', 'spring', 'rhs', 'cg_init', 'cg_ap', 'cg_update', 'cg_dir', 'finish_rz0', 'finish_alpha', 'finish_beta', 'window_add', 'window_end']) {
+				pipe[e] = device.createComputePipeline({ layout: pl, compute: { module, entryPoint: e } });
+			}
+			shared = { device, layout, pipe };
+			if (data.cache) cache.gpu = shared;
 		}
+		this.bind = device.createBindGroup({ layout: shared.layout, entries: [this.uniform, this.buf.topo, this.buf.kon, this.buf.v, this.buf.pt, this.buf.loc, this.buf.red, this.buf.bodyI, this.buf.bodyF].map((b, i) => ({ binding: i, resource: { buffer: b } })) });
+		this.pipe = shared.pipe;
 		this.setSettings(this.settings);
 		this.reset();
 	}
@@ -248,6 +259,11 @@ export class Refit {
 	async drift() {
 		const v4 = await this.read(DRIFT);
 		return Float32Array.from({ length: this.n }, (_, i) => 1000 * v4[4 * i]);
+	}
+
+	// Free its GPU buffers (the app makes one per re-fit: the body changes with every pose).
+	destroy() {
+		for (const b of [...Object.values(this.buf), this.uniform, this.stage]) b.destroy();
 	}
 
 	async positions(averaged = false) {

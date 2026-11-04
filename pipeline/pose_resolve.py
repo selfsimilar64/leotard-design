@@ -30,7 +30,8 @@ def principal(tris, rest, p):
 
 
 def whole(G):
-	"""The garment with both sides as one mesh, joined at the fold: which point each point mirrors to, and the mesh's arrays."""
+	"""The garment with both sides as one mesh, joined at the fold: which point each point mirrors to, and the mesh's arrays.
+	Twin: wrap_block.export's `case` (the app's re-fit case) builds the same mesh; keep them in step."""
 	n = G['nw']
 	twin = np.arange(n, 2 * n)
 	twin[G['folds']] = G['folds']

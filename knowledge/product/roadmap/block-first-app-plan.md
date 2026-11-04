@@ -84,6 +84,11 @@ Also outside the shape options:
 - **Focus on a piece:** double-click a piece in the flat view (or "Edit this piece" on a picked piece) to give the flat view to that piece alone: zoomed to fit, at true scale, with its seams, notches, grain line and the lines on it editable; the other pieces hidden or ghosted, a strip of piece thumbnails to switch, Esc or "All pieces" to go back. The 3D view keeps showing the whole garment and highlights the piece.
 - **Edits re-fit:** a change to a piece's outline re-fits from the standing fit (150 steps, about 0.3 s on the GTX 1650; cuts and seams 30-50 steps), then the pose. A split needs no re-fit.
 
+# Progress (2026-11-04)
+
+- Step 2, the views: done for the three layouts, the divider and piece focus ([fitted garments](/engineering/app/fitted-garments-in-the-app.md)); edits on the focused piece are not built.
+- Step 3, a case from a live design: done for fitted garments (re-fitted on every pose and body), not yet for cuts or drawn designs.
+
 # Order, if the owner goes ahead
 
 1. Account for the options in the app as they are today: which `BLOCK_OPTIONS` choices map to which cut or split of block XS (draw each on the flat pieces), and which are redrafts.

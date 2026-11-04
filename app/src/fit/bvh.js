@@ -52,6 +52,35 @@ export function buildBVH(points, tris) {
 	return { box: new Float32Array(box), link: new Int32Array(link), order };
 }
 
+// The same tree on moved points (the next pose of the same body mesh): only the boxes are recomputed, bottom-up, in one pass. A
+// child's id is always above its parent's (build numbers nodes as it enters them), so a pass from the last node back meets every
+// child before its parent. The answers are the same as a rebuilt tree's (a box still bounds its triangles); a pose far from the
+// one the tree was built on only makes the walk visit more boxes. In place; returns the tree.
+export function refitBVH(bvh, points, tris) {
+	const { box, link, order } = bvh, nodes = link.length / 2;
+	for (let id = nodes - 1; id >= 0; id--) {
+		const a = link[id * 2], b = link[id * 2 + 1], o = id * 8;
+		let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+		if (a < 0) {
+			for (let i = -a - 1; i < -a - 1 + b; i++) {
+				const t = order[i];
+				for (let c = 0; c < 3; c++) {
+					const v = tris[t * 3 + c] * 3, x = points[v], y = points[v + 1], z = points[v + 2];
+					if (x < x0) x0 = x; if (y < y0) y0 = y; if (z < z0) z0 = z; if (x > x1) x1 = x; if (y > y1) y1 = y; if (z > z1) z1 = z;
+				}
+			}
+		} else {
+			for (const c of [a, b]) {
+				const q = c * 8;
+				x0 = Math.min(x0, box[q]); y0 = Math.min(y0, box[q + 1]); z0 = Math.min(z0, box[q + 2]);
+				x1 = Math.max(x1, box[q + 4]); y1 = Math.max(y1, box[q + 5]); z1 = Math.max(z1, box[q + 6]);
+			}
+		}
+		box[o] = x0; box[o + 1] = y0; box[o + 2] = z0; box[o + 4] = x1; box[o + 5] = y1; box[o + 6] = z1;
+	}
+	return bvh;
+}
+
 // Closest point on triangle abc to p (Ericson, Real-Time Collision Detection 5.1.5): its barycentric weights.
 export function closestOnTriangle(p, a, b, c) {
 	const sub = (u, v) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];

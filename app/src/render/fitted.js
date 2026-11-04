@@ -1,28 +1,60 @@
 // A fitted garment on the body (garment/fitted.js): the fit solver's pieces drawn in place of the app's own.
 // Each point of a fitted piece is a host triangle and weights on the body's surface, the same coordinates the app's
-// own pieces use, so it is placed by GarmentView.interpolate and follows every body and pose as they do. The design's
+// own pieces use, so it follows every body and pose as they do: carried. Where WebGPU is available it is then re-fitted on the
+// body as it now is (fit/refit.js on a case built live by fit/fitted-case.js), and drawn where the re-fit settled it. The design's
 // panels lend their materials by name; the app's own pieces and edge finishes stay in the document, hidden.
 // Grew out of the dev viewer, dev/wrap-eval.js (show, cover, finish): change one, look at the other.
 import * as THREE from 'three';
 import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 import { fittedOf } from '../garment/fitted.js';
+import { Refit, DEFAULTS } from '../fit/refit.js';
+import { buildCase, garmentArrays } from '../fit/fitted-case.js';
 
 const HIDDEN = new THREE.MeshBasicMaterial({ visible: false });
+
+// The designer's settings (ui/Shell.jsx Fabric fit, kept with the display settings).
+export const FIT_DEFAULTS = {
+	refit: true,              // re-fit on the GPU after every body or pose change (off: the carried fit only)
+	steps: DEFAULTS.maxSteps, // the re-fit's length: speed against accuracy (about 2 ms a step on the GTX 1650)
+	mu: DEFAULTS.mu,          // friction against the skin
+	lift: 0.0012,             // m the fabric is drawn off the surface it was fitted to (the dev viewer's 1.2 mm), on top of the
+	// fabric material's own 1.2 mm: a fitted mesh's flat 7 mm triangles dip under a curved body between their points
+	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look)
+};
 
 export class FittedView {
 	constructor(engine) {
 		this.engine = engine;
 		this.key = null;        // the fitted garment asked for
 		this.data = null;       // its loaded file
+		this.garment = null;    // its part of a re-fit case (fitted-case.js garmentArrays)
+		this.near = null;       // per whole-garment point, its neighbours (an opening's inward direction)
 		this.meshes = [];       // one per piece half
 		this.edges = null;      // the finished openings
 		this.on = null;         // body vertices under its fabric (the cover hook)
+		this.solved = null;     // the last re-fit's points, on the body as it was when it ran
+		this.options = { ...FIT_DEFAULTS };
+		this.status = { state: 'off' }; // for the settings panel: off | carried | fitting | fitted | error
+		this.onStatus = null;
+		this.device = null;
+		this.running = false; this.again = false; this.gen = 0;
 		engine.coverHooks.push((C) => { if (this.on) for (const v of this.on) C[v] = 1; });
 		engine.body.onGarment.push(() => this.place());
 	}
 
 	get active() { return !!this.data; }
 	get view() { return this.engine.layers.get('L0')?.view ?? null; }
+
+	setStatus(s) { this.status = s; this.onStatus?.(s); }
+
+	// The designer's fit settings: a change to the re-fit runs it again; the lift only redraws.
+	setOptions(o) {
+		const before = this.options;
+		this.options = { ...before, ...o };
+		if (!this.active) return;
+		if (o.refit !== undefined && o.refit !== before.refit || o.steps !== undefined && o.steps !== before.steps || o.mu !== undefined && o.mu !== before.mu) this.place();
+		else this.show();
+	}
 
 	// After every document change the engine has applied.
 	sync(doc) {
@@ -43,11 +75,18 @@ export class FittedView {
 		if (this.key !== want) return; // asked for another meanwhile
 		this.data = data;
 		this.on = new Set(data.cells.flatMap((c) => c.hostI));
+		if (data.case) {
+			this.garment = garmentArrays(data);
+			const n = data.case.n, T = data.case.tris, near = Array.from({ length: n }, () => new Set());
+			for (let t = 0; t < T.length; t += 3) for (let k = 0; k < 3; k++) { near[T[t + k]].add(T[t + (k + 1) % 3]); near[T[t + k]].add(T[t + (k + 2) % 3]); }
+			this.near = near.map((s) => [...s]);
+		}
 		this.build();
-		this.engine.updateCover(doc); // the body lifts and slides where this fabric is; place() follows from onGarment
+		this.engine.updateCover(doc); // the body lifts and slides where this fabric is
 		this.place();
 		this.dress(doc);
 		this.engine.drawOverlay(doc); // the drawn lines go with the drawn pieces
+		this.onLoaded?.(); // the flat view lays out its pieces
 	}
 
 	build() {
@@ -65,22 +104,76 @@ export class FittedView {
 			mesh.frustumCulled = false;
 			mesh.userData = { fitted: c.name, piece: c.piece };
 			mesh.hosts = { i: Uint32Array.from(c.hostI), w: Float32Array.from(c.hostW) };
+			mesh.cid = c.cid ? Int32Array.from(c.cid) : null;
 			view.group.add(mesh);
 			this.meshes.push(mesh);
 		}
 	}
 
-	// On the body as it now is: positions, normals, lift and the rest from the body's arrays, then the finished edges.
+	// The body changed (a new body, pose or cover): draw the fit carried onto it at once, then re-fit it there.
 	place() {
 		if (!this.active) return;
+		this.solved = null;
+		this.show();
+		if (this.options.refit && this.data.case) this.refit();
+		else this.setStatus({ state: 'carried', note: this.data.case ? null : 'This garment file has no re-fit data' });
+	}
+
+	// Every attribute from the body's arrays; positions where the re-fit settled each point, or carried by surface coordinates, then
+	// lifted off the garment surface by options.lift (the garment surface already holds the body's own lift: aLift is zeroed).
+	show() {
 		const view = this.view;
 		if (!view) return;
+		const man = this.engine.body, G = man.garmentPos, X = this.solved, lift = this.options.lift;
 		for (const mesh of this.meshes) {
 			if (mesh.parent !== view.group) view.group.add(mesh); // the layer's view was rebuilt
 			view.interpolate({ mesh, hosts: mesh.hosts });
+			const geo = mesh.geometry, P = geo.attributes.position.array, N = geo.attributes.normal.array, hi = mesh.hosts.i, hw = mesh.hosts.w, n = hw.length / 3;
+			for (let l = 0; l < n; l++) for (let k = 0; k < 3; k++) {
+				let v;
+				if (X && mesh.cid) v = X[3 * mesh.cid[l] + k];
+				else { v = 0; for (let j = 0; j < 3; j++) v += hw[l * 3 + j] * G[hi[l * 3 + j] * 3 + k]; }
+				P[l * 3 + k] = v + N[l * 3 + k] * lift;
+			}
+			geo.attributes.aLift.array.fill(0);
+			geo.attributes.aLift.needsUpdate = geo.attributes.position.needsUpdate = true;
+			geo.computeBoundingSphere();
 		}
 		this.finish();
 		this.quiet();
+	}
+
+	async refit() {
+		if (this.running) { this.again = true; return; }
+		this.running = true;
+		try {
+			do {
+				this.again = false;
+				const gen = this.gen; // clear() moves it on: a garment taken away meanwhile is not drawn
+				this.setStatus({ state: 'fitting' });
+				this.device ||= await Refit.device();
+				const man = this.engine.body, t0 = performance.now();
+				const data = buildCase(this.data, this.garment, man.garmentPos, man.idx, man.wArm, this.cache ??= {});
+				const r = new Refit(this.device, data, { maxSteps: this.options.steps, mu: this.options.mu, tol: 0 });
+				const built = performance.now() - t0;
+				// no early stop (the step count is the lever), so no reading back every window: all but the last window in one run,
+				// then the last window, whose average is what is drawn (the shoulder's chatter hidden), as the tuning page shows it
+				const steps = this.options.steps, W = r.settings.window, tRun = performance.now();
+				if (steps > W) { r.settings.window = steps - W; await r.run({ steps: steps - W }); r.settings.window = W; }
+				const res = await r.run({ steps });
+				const X = await r.positions(steps > W);
+				r.destroy();
+				if (this.again || gen !== this.gen || !this.active) continue; // the body changed meanwhile: run again on the new one
+				this.solved = X;
+				this.show();
+				this.setStatus({ state: 'fitted', steps: res.steps, seconds: (performance.now() - tRun) / 1000, setup: built / 1000 });
+			} while (this.again && this.active);
+		} catch (e) {
+			console.error('re-fit', e);
+			this.setStatus({ state: 'error', note: e.message });
+		} finally {
+			this.running = false;
+		}
 	}
 
 	// The design's materials on the fitted pieces, and the app's own pieces and edges out of sight.
@@ -112,10 +205,12 @@ export class FittedView {
 
 	clear(doc) {
 		const view = this.view, e = this.engine;
+		this.gen++; // any re-fit under way is for the garment going
 		for (const m of this.meshes) { m.parent?.remove(m); m.geometry.dispose(); }
 		this.meshes = [];
 		if (this.edges) { this.edges.parent?.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
-		this.data = null;
+		this.data = null; this.garment = null; this.near = null; this.solved = null; this.cache = null;
+		this.setStatus({ state: 'off' });
 		const covered = !!this.on;
 		this.on = null;
 		if (view) for (const c of view.cells) c.mesh.visible = true;
@@ -126,21 +221,32 @@ export class FittedView {
 		if (covered) e.drawOverlay(doc);
 	}
 
-	// The openings finished as the app finishes its own (render/rims.js): turned elastic in the front panel's look, along
-	// the loops the fit exported, on the body's current garment surface.
+	// The openings finished as the app finishes its own (render/rims.js): turned elastic in the front panel's look, along the
+	// garment's own edge points (re-fitted, or carried by their hosts), with the body's normal there.
 	finish() {
 		const e = this.engine, view = this.view, doc = e.app?.doc;
 		if (this.edges) { this.edges.parent?.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
 		if (!doc || !view || !this.data?.openings?.length) return;
-		const L = e.layers.get('L0'), man = e.body, G = man.garmentPos, GN = man.aGNormal.array;
+		const L = e.layers.get('L0'), man = e.body, G = man.garmentPos, GN = man.aGNormal.array, X = this.solved;
 		const at = (I, W, i, out) => { out.set(0, 0, 0); for (let j = 0; j < 3; j++) { const v = I[i * 3 + j] * 3, w = W[i * 3 + j]; out.x += w * G[v]; out.y += w * G[v + 1]; out.z += w * G[v + 2]; } return out; };
 		const nrm = (I, W, i) => { const o = new THREE.Vector3(); for (let j = 0; j < 3; j++) { const v = I[i * 3 + j] * 3, w = W[i * 3 + j]; o.x += w * GN[v]; o.y += w * GN[v + 1]; o.z += w * GN[v + 2]; } return o.normalize(); };
+		const pt = (i) => new THREE.Vector3(X[3 * i], X[3 * i + 1], X[3 * i + 2]);
 		const built = [];
 		for (const o of this.data.openings) {
-			const n = o.hostW.length / 3, recs = [];
+			const n = o.hostW.length / 3, recs = [], solved = X && o.ids && this.near;
 			for (let i = 0; i < n; i++) {
-				const p = at(o.hostI, o.hostW, i, new THREE.Vector3()), q = at(o.inI, o.inW, i, new THREE.Vector3()), nn = nrm(o.hostI, o.hostW, i);
-				const inside = q.sub(p); inside.addScaledVector(nn, -inside.dot(nn)).normalize();
+				const nn = nrm(o.hostI, o.hostW, i);
+				let p, inside;
+				if (solved) {
+					p = pt(o.ids[i]);
+					inside = new THREE.Vector3();
+					for (const j of this.near[o.ids[i]]) inside.add(pt(j));
+					inside.divideScalar(this.near[o.ids[i]].length).sub(p);
+				} else {
+					p = at(o.hostI, o.hostW, i, new THREE.Vector3());
+					inside = at(o.inI, o.inW, i, new THREE.Vector3()).sub(p);
+				}
+				inside.addScaledVector(nn, -inside.dot(nn)).normalize();
 				recs.push({ p, n: nn, inside, kappa: 0, ref: p.clone(), keep: 1, sleeve: 0 });
 			}
 			const { pts, length } = resample(recs), m = pts.length, P = pts.map((a) => a.p), Nn = pts.map((a) => a.n), In = pts.map((a) => a.inside);
@@ -149,7 +255,7 @@ export class FittedView {
 			for (let i = 0; i < m; i++) {
 				const nn = Nn[i].normalize(), t = P[(i + 1) % m].clone().sub(P[(i - 1 + m) % m]).normalize(), d = new THREE.Vector3().crossVectors(nn, t).normalize();
 				if (d.dot(In[i]) < 0) d.negate();
-				frames.push({ p: P[i].addScaledVector(nn, 0.0012), n: nn, d, kap: 0 });
+				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: 0 });
 				scale.push(1);
 			}
 			built.push({ frames, scale, pts, length });

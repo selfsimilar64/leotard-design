@@ -10,6 +10,10 @@ sources:
     resource: conversation with the product owner, 2026-11-03 (Claude Code session)
     title: "Draft a new design and integrate sim-fitted designs into the real app, as separate designs or design choices, keeping the non-block choices for now"
     author: human:mattj
+  - id: owner2
+    resource: conversation with the product owner, 2026-11-04 (Claude Code session)
+    title: "Do all three: the 2D + 3D views, the live re-fit case in the app, and the solver's settings"
+    author: human:mattj
   - id: code
     resource: "app/src/render/fitted.js, app/src/garment/fitted.js, app/src/render/engine.js (fitted), app/src/doc/commands-garment.js (fitted.set), app/src/garment/starts.js, app/src/ui/ShapeTab.jsx (Garment), pipeline/draft_armstrong.py, pipeline/publish_fitted.py"
     title: Fitted garment code
@@ -68,20 +72,56 @@ From `wrap_block.py --drafted armstrong-6 young` (median stretch over flat size)
   opening and a forearm (the carried standing fit).
 - Checked in the app on port 5176: start points, the Garment row, undo and redo, a reload keeping the
   choice, recolouring through the panels, pose following, back to Drawn (pieces, edges and wrinkle zones
-  restored). **[UNVERIFIED]** With the app's window minimised, designs in the "shiny" fabric drew no
-  garment at all, drawn or fitted, an untouched starting point included; mystique drew. Most likely its
-  shader had not compiled in a hidden window; check with the window in view.
+  restored). Designs in the "shiny" fabric draw no garment at all, drawn or fitted, an untouched
+  starting point included: its shader fails to link with "Too many attributes (aSeam)" (WebGL allows 16
+  per vertex on this machine; adding `aFold` in commit 1600d71 pushed shiny's variant over). Not a
+  minimised-window effect as first guessed; not fixed here.
+
+# Re-fitted live in the app (2026-11-04)
+
+The owner asked for the GPU re-fit, its settings and the 2D + 3D views in the real app.[^owner2]
+
+- **Case built in the app.** `wrap_block.py` now also writes each fit's solver case into the fitted file (`case`: the whole
+  garment joined at the fold, rest shape, elastic, sleeve points; per cell `cid`, per opening `ids`), built as
+  `pose_resolve.whole` does (twins, cross-referenced). `fit/fitted-case.js` makes the rest from the live body: the start (every
+  point by its hosts on the current garment surface), the torso and arm parts with pseudo-normals (`partGeometry`, twin of
+  `gpu.part_geometry`).
+- **When it runs.** After every body, pose or cover change (`body.onGarment`): the carried fit is drawn at once, then
+  `FittedView.refit` runs `fit/refit.js` for the set step count (no early stop) and draws the last window's average. A change
+  during a run runs it again on the new body. Without WebGPU the carried fit stays and the panel says why.
+- **Speed** (GTX 1650, app rendering at the same time): a pose change 0.6-1.2 s to set up and 0.5-1.1 s for 150 steps once warm;
+  the first after a reload about 1.6 + 1.4 s (programs compiled). Kept between runs (`cache`): the garment's constant matrix and
+  gathers, the compiled programs, the body parts and edge pairing, the body trees (refitted to the new points, `refitBVH`, not
+  rebuilt: same answers). Reading back drift every 10 steps cost about 0.6 s of 150, so the app reads once at the end.
+- **Settings** (Settings, Fabric fit, kept per computer: `render/display.js` fit*): re-fit on or off, steps (20-750, default
+  150), friction (0-1, default 0.4), fabric drawn off the body (0-5 mm, default 1.2 mm on top of the material's own 1.2 mm; the
+  dev viewer's). The lift only redraws. The panel shows the last re-fit's steps and time.
+- **Fabric off the body.** Positions are now the re-fit's points (or the carried ones) on the lifted garment surface plus the lift,
+  with `aLift` zeroed, as the dev viewer drew them; the first in-app version used the app's own placement without the extra
+  1.2 mm, which let the flat 7 mm triangles dip into the body (the peek-through the owner saw).
+- **Seen:** `lunge-arms-up` re-fitted shows no skin at the leg opening or forearm where the carried fit did; `passe` on the high cut
+  clean. A lighter fade at the lower front in `passe` was seen and not explained (lighting or material) **[UNVERIFIED]**.
+
+# Views (2026-11-04)
+
+- **Three layouts** in the top bar: 3D, Both, Pattern (`ui/Shell.jsx` LAYOUTS, `layout` 3d | split | flat). The 3D view stays alive
+  in Pattern (narrowed to nothing), so switching back is instant. In Both a divider drags (or arrow keys; double-click centres);
+  its place is kept (`prefs.split`, 20-80%).
+- **The fitted garment's own pieces** in the flat view (`garment/fitted.js` fittedPieces: each piece once, its stitching line).
+- **Piece focus:** double-click a piece: it alone, fitted to the view, with its size, a strip of the other pieces and All pieces or
+  Esc to go back. Choosing a piece in either view chooses its panel (the Fabric tab follows). The 3D view does not yet highlight a
+  fitted piece.
 
 # Known limits **[INFERRED]**
 
-- **Fitted on one body.** On other bodies the young fit is carried by surface coordinates, not refitted.
-  Refitting per body (CPU minutes, or the [GPU re-fit](/engineering/app/refit-in-the-app.md) once the app
-  can build a case) is the next step.
-- **Poses** slide the standing fit, as for the drawn pieces; no re-solve per pose yet.
+- **Fitted on one body.** On other bodies the young standing fit is carried by surface coordinates and then re-fitted by the GPU
+  re-fit, which settles it on that body but cannot grow or shrink the pattern: a child wears the young block.
+- **Determinism:** every re-fit starts from the standing fit carried onto the body shown, so it does not depend on what was shown
+  before; the body trees' layout does depend on the first body seen (the answers do not).
 - Stones, ombre gradients and decals are placed by the drawn pieces' geometry: stones still sit where
   the drawn pieces are, an ombre front shows no gradient. Not adapted yet.
-- The flat (pattern) view still shows the drawn pieces.
 - No thumbnails yet for the two starting points.
 
 [^owner]: Conversation with the product owner, 2026-11-03.
+[^owner2]: Conversation with the product owner, 2026-11-04: do the views, the live case and the settings.
 [^code]: Fitted garment code.

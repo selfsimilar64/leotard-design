@@ -1,6 +1,8 @@
 // Display settings: how this machine renders the view (resolution, anti-aliasing, shadows, glow,
 // skin scattering, ambient occlusion, lower resolution while moving). They belong to the computer, not the design, so they are kept in
 // the browser (not in the document or its undo history) and applied to the viewport at start-up.
+import { FIT_DEFAULTS } from './fitted.js';
+
 const KEY = 'leotard.display.v1';
 
 // msaa off by default (owner, 2026-10-24); with the stencil no longer resolved (render/postfx.js
@@ -16,7 +18,13 @@ export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 0, shad
 	// or the rolling-ball fit instead (body/ball.js, experiment: left a crevice and artifacts from
 	// ~90 mm, owner 2026-10-25) and its ball radius (m); the taut sheet across the seat on top
 	// (body/seat.js, experiment) and how much harder it is stretched across the seat than up it
-	liftMethod: 'membrane', liftBall: 0.05, liftSeat: true, liftSeatAcross: 4 };
+	liftMethod: 'membrane', liftBall: 0.05, liftSeat: true, liftSeatAcross: 4,
+	// a fitted garment (render/fitted.js FIT_DEFAULTS): re-fit on the GPU after a body or pose change, its step count and friction,
+	// and how far its fabric is drawn off the body
+	fitRefit: FIT_DEFAULTS.refit, fitSteps: FIT_DEFAULTS.steps, fitMu: FIT_DEFAULTS.mu, fitLift: FIT_DEFAULTS.lift };
+
+// A fitted garment's options from the display settings.
+export const fitOptions = (d) => ({ refit: d.fitRefit, steps: d.fitSteps, mu: d.fitMu, lift: d.fitLift });
 
 // Choices the UI offers (value, label).
 export const DISPLAY_OPTIONS = {

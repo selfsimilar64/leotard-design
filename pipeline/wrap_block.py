@@ -762,7 +762,25 @@ def main(after=None):
 		return out / seen[:, None]
 
 	def export(G, pts, label):
-		"""The whole garment, each half mirrored: host triangles the app can place on any body, and each piece's exact outline."""
+		"""The whole garment, each half mirrored: host triangles the app can place on any body, and each piece's exact outline.
+		Also the re-fit's case for the app (app/src/fit/fitted-case.js): the whole garment as one mesh joined at the fold, as
+		pose_resolve.whole and speed_probe.prepare build it (twin: keep the three in step), each cell point's index in it (cid) and each
+		opening as a loop of its indices (ids)."""
+		nw = G['nw']
+		twin = np.arange(nw, 2 * nw)
+		twin[G['folds']] = G['folds']
+		w_tris = np.vstack([G['tris'], twin[G['tris']][:, [0, 2, 1]]])
+		w_rest = np.concatenate([G['rest'], G['rest'][:, [0, 2, 1]] * np.array([-1.0, 1.0])])
+		e = G['elastic']
+		w_el = np.vstack([e, np.column_stack([twin[e[:, 0].astype(int)], twin[e[:, 1].astype(int)], e[:, 2:]])])
+		used_w = np.unique(w_tris)
+		whole_of = -np.ones(2 * nw, int)
+		whole_of[used_w] = np.arange(len(used_w))
+		sleeve_w = np.concatenate([G['on_sleeve'], G['on_sleeve']])[used_w]
+		case = {'n': int(len(used_w)), 'tris': whole_of[w_tris].ravel().tolist(), 'rest': w_rest.ravel().round(7).tolist(),
+			'facing': np.concatenate([G['facing'], G['facing']]).round(3).tolist(), 'si': whole_of[w_el[:, 0].astype(int)].tolist(),
+			'sj': whole_of[w_el[:, 1].astype(int)].tolist(), 'rest_len': w_el[:, 2].round(7).tolist(), 'k': w_el[:, 3].round(5).tolist(),
+			'sleeve': sleeve_w.astype(int).tolist(), 'plane': PLANE, 'gather': GATHER}
 		cells = []
 		for name, piece in G['pieces'].items():
 			used = np.unique(piece.T)
@@ -784,7 +802,8 @@ def main(after=None):
 				tri = remap[piece.T]
 				if flip != (FACING[name] < 0):
 					tri = tri[:, [0, 2, 1]]
-				return {'name': label_, 'uv': uv.ravel().round(6).tolist(), 'I': tri.ravel().tolist(), 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'piece': piece_id, 'half': half_, 'wid': ids.tolist(), 'outline': outline.round(6).tolist(), 'fold': folds_of(q, uv, tri).ravel().round(6).tolist()}
+				cid = whole_of[ids if half_ == 0 else twin[ids]]
+				return {'name': label_, 'uv': uv.ravel().round(6).tolist(), 'I': tri.ravel().tolist(), 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'piece': piece_id, 'half': half_, 'wid': ids.tolist(), 'cid': cid.tolist(), 'outline': outline.round(6).tolist(), 'fold': folds_of(q, uv, tri).ravel().round(6).tolist()}
 			m = np.array([-1, 1])
 			if name == 'sleeve':
 				cells.append(make(q, uv, False, 'Sleeve', 'sleeve-a', 0, line))
@@ -799,11 +818,11 @@ def main(after=None):
 			for k in range(3):
 				neighbours[t[k]] += [t[(k + 1) % 3], t[(k + 2) % 3]]
 
-		def loop_of(name, q, into, part):
+		def loop_of(name, q, into, part, ids):
 			into = q + 0.006 * into / (np.linalg.norm(into, axis=1, keepdims=True) + 1e-12)
 			f, w = surface.hosts(q, part=part)
 			fi, wi = surface.hosts(into, part=part)
-			return {'name': name, 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'inI': fi.ravel().tolist(), 'inW': wi.ravel().round(5).tolist()}
+			return {'name': name, 'hostI': f.ravel().tolist(), 'hostW': w.ravel().round(5).tolist(), 'inI': fi.ravel().tolist(), 'inW': wi.ravel().round(5).tolist(), 'ids': whole_of[ids].tolist()}
 		openings = []
 		mirror = np.array([-1, 1, 1])
 		leg = np.concatenate([w_of('front', 'leg'), w_of('back', 'leg')[::-1][1:-1]])
@@ -811,13 +830,13 @@ def main(after=None):
 		neck = np.concatenate([w_of('front', 'neck'), w_of('back', 'neck')[::-1][1:]])
 		into_of = lambda ids: np.array([pts[neighbours[i]].mean(0) - pts[i] for i in ids])
 		for name, ids in (('leg', leg), ('wrist', wrist)):
-			openings.append(loop_of(name, pts[ids], into_of(ids), G['on_sleeve'][ids]))
-			openings.append(loop_of(name, pts[ids] * mirror, into_of(ids) * mirror, G['on_sleeve'][ids]))
+			openings.append(loop_of(name, pts[ids], into_of(ids), G['on_sleeve'][ids], ids))
+			openings.append(loop_of(name, pts[ids] * mirror, into_of(ids) * mirror, G['on_sleeve'][ids], twin[ids]))
 		# the neck is one loop across the body: one half, then the same points mirrored coming back
 		d = into_of(neck)
-		openings.append(loop_of('neck', np.vstack([pts[neck], (pts[neck] * mirror)[-2:0:-1]]), np.vstack([d, (d * mirror)[-2:0:-1]]), np.zeros(2 * len(neck) - 2, bool)))
+		openings.append(loop_of('neck', np.vstack([pts[neck], (pts[neck] * mirror)[-2:0:-1]]), np.vstack([d, (d * mirror)[-2:0:-1]]), np.zeros(2 * len(neck) - 2, bool), np.concatenate([neck, twin[neck][-2:0:-1]])))
 		with open(os.path.join(CAPTURES, f'wrap-{size}-{label}.json'), 'w', encoding='utf-8') as f:
-			json.dump({'size': size, 'cut': label, 'side': side, 'cells': cells, 'openings': openings}, f, separators=(',', ':'))
+			json.dump({'size': size, 'cut': label, 'side': side, 'cells': cells, 'openings': openings, 'case': case}, f, separators=(',', ':'))
 
 	def true_to_lines(G, label):
 		"""Every point of a mesh's outline lies on the design's exact lines."""

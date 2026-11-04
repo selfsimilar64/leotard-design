@@ -1,6 +1,9 @@
 # Bundle update log
 
 ## 2026-11-04
+* **Update**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): re-fitted live on the GPU after every pose and body change (case built in the app, `fit/fitted-case.js`); re-fit, steps, friction and fabric lift in Settings, Fabric fit; 3D, Both and Pattern layouts with a divider and piece focus; the fitted pieces in the flat view. A pose change about 1-2.3 s. Found: shiny fabric's shader has too many attributes and draws nothing.
+* **Update**: [The re-fit in the app](/engineering/app/refit-in-the-app.md): runs in the main app for fitted garments; `Refit` cache and `destroy()`.
+* **Update**: [Bringing the block-first garment into the app](/product/roadmap/block-first-app-plan.md): progress on steps 2 and 3.
 * **Creation**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): a design can show a solver-fitted block instead of its drawn pieces (Shape tab Garment row, `fitted.set`, two starting points); first the textbook leotard, basic and high-cut leg, fitted on `young`. Owned blocks ship in `app/public/fitted/`; bought-block fits stay dev-only.
 * **Update**: [Armstrong leotard and bodysuit foundation drafts](/domain/construction/armstrong-leotard-foundation-draft.md): the basic back bodice draft and size-6 chart values added; the armhole is raised 1 in (read from the figure), not lowered; our implementation choices (`pipeline/draft_armstrong.py`) recorded.
 
