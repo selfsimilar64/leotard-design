@@ -46,6 +46,21 @@ gemstones, perhaps a hint of the material, and gem patterns editable there, alwa
 - The pieces are laid out again only when lines, panels, layers, trims or meta change, not on stone or colour edits, so a drag
   stays light.
 
+# Edges and speed (owner's review, 2026-11-04)
+
+- **Why a pattern stopped short of the edges.** Stones keep off the elastic at the finished openings (neck, legs, wrists): on the
+  fitted front they came within 1.6 mm of the seams but no nearer than 13 mm to an opening. In 3D the elastic is drawn over that
+  strip; in 2D it was not, so it read as a gap. Look now draws each fitted piece's openings as the elastic band (its width, a shade
+  of the piece's colour, lighter on dark colours). A drawn piece's Look outline is now its stitching line, not its cut line with
+  the 6 mm seam allowance the stones never reach. Drawn pieces' elastic bands are not drawn in 2D yet.
+- **Why 2D edits were slow.** Each pointer move sent an edit; each edit redrew about 13 000 SVG nodes (two circles a stone,
+  about 55 ms), twice (once for the edit, once for the stones laid after it), and the fitted pieces' stones each searched the
+  whole body for their surface point (about 20 ms of a 50 ms pattern run). Now: stones are a few paths per colour and kind (59
+  nodes for the whole view), their paths rebuilt only when the stones or the selection change; a drag applies one edit a frame
+  (the last always on release); a fitted stone's surface point is searched from the body face its corner is carried on.
+  Measured on a 3345-stone lattice (background tab): laying 12-31 ms, the flat view's redraw 17-32 ms, against about 50 and
+  2 x 55 ms before, plus queued moves.
+
 # Limits **[INFERRED]**
 
 - Only stone **patterns** have handles in 2D; rows, scatters, fills and the other kinds are drawn and selectable but are placed on

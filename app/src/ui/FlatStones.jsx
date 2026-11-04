@@ -12,6 +12,7 @@ import { parseStone } from '../stones/library.js';
 import { patternHandles } from '../stones/handles.js';
 import { mirrorFast } from '../stones/cloth.js';
 import { TONES } from '../render/gizmo.js';
+import { TRIMS } from '../garment/trim.js';
 
 // Stones by the cell they lie on, once per engine run (a run is a new object).
 const byCell = new WeakMap();
@@ -87,20 +88,78 @@ export function StonesOn({ p }) {
 		}
 		cache.set(p.key + '|' + p.at.join(), list);
 	}
-	const sel = selection.value;
-	const choose = (s) => (ev) => { ev.stopPropagation(); selection.value = s.gen === 'placed' ? { kind: 'placed', id: s.id } : { kind: 'stones', id: s.gen }; };
+	const sel = selection.value, isOn = (s) => !!sel && ((sel.kind === 'stones' && sel.id === s.gen) || (sel.kind === 'placed' && sel.id === s.id));
+	// A few paths, one per colour and kind (this piece's, the pair's, the chosen group's), not two circles a stone: a drag on a
+	// pattern redraws a handful of nodes instead of thousands (13 000 nodes took about 55 ms a redraw). Picking is by the pointer.
+	// (built once per laid stones and selection: other edits redraw the view without rebuilding thousands of path pieces)
+	const selKey = sel ? sel.kind + ':' + sel.id : '';
+	if (list.paths?.selKey !== selKey) {
+		const f2 = (x) => Math.round(x * 100) / 100, circ = (x, y, r) => `M${f2(x - r)} ${f2(y)}a${f2(r)} ${f2(r)} 0 1 0 ${f2(2 * r)} 0a${f2(r)} ${f2(r)} 0 1 0 ${f2(-2 * r)} 0`;
+		const groups = new Map(), shine = [];
+		for (const s of list) {
+			const on = isOn(s), k = s.colour + (s.twin ? '|t' : '|o') + (on ? '|on' : '');
+			let g = groups.get(k);
+			if (!g) groups.set(k, (g = { colour: s.colour, twin: s.twin, on, d: [], r: s.r }));
+			g.d.push(circ(s.X, s.Y, s.r));
+			shine.push(circ(s.X - s.r * 0.3, s.Y - s.r * 0.3, s.r * 0.32));
+		}
+		for (const g of groups.values()) g.d = g.d.join('');
+		list.paths = { selKey, groups: [...groups.values()], shine: shine.join('') };
+	}
+	const { groups, shine } = list.paths;
+	const choose = (ev) => {
+		ev.stopPropagation();
+		const svg = ev.currentTarget.ownerSVGElement, pt = svg.createSVGPoint();
+		pt.x = ev.clientX; pt.y = ev.clientY;
+		const q = pt.matrixTransform(svg.getScreenCTM().inverse());
+		let best = null, bd = Infinity;
+		for (const s of list) { const d = (s.X - q.x) ** 2 + (s.Y - q.y) ** 2; if (d < bd) { bd = d; best = s; } }
+		if (!best || Math.sqrt(bd) > best.r * 1.6 + 1) return;
+		selection.value = best.gen === 'placed' ? { kind: 'placed', id: best.id } : { kind: 'stones', id: best.gen };
+	};
 	return (
-		<g class="flat-stones">
-			{list.map((s, i) => {
-				const on = sel && ((sel.kind === 'stones' && sel.id === s.gen) || (sel.kind === 'placed' && sel.id === s.id));
-				return (
-					<g key={i} class={`flat-stone ${on ? 'on' : ''} ${s.twin ? 'twin' : ''}`} onClick={choose(s)}>
-						<title>{s.twin ? 'On the other piece of the pair' : 'On this piece'}</title>
-						<circle cx={s.X} cy={s.Y} r={s.r} fill={s.colour} stroke="rgba(20, 18, 15, 0.55)" stroke-width={Math.max(0.12, s.r * 0.12)} stroke-dasharray={s.twin ? `${s.r * 0.5} ${s.r * 0.35}` : undefined} opacity={s.twin ? 0.7 : 1} />
-						<circle cx={s.X - s.r * 0.3} cy={s.Y - s.r * 0.3} r={s.r * 0.32} fill="rgba(255, 255, 255, 0.75)" />
-					</g>
-				);
-			})}
+		<g class="flat-stones" onClick={choose}>
+			{groups.map((g) => (
+				<path key={g.colour + g.twin + g.on} class={`flat-stone ${g.on ? 'on' : ''} ${g.twin ? 'twin' : ''}`} d={g.d} fill={g.colour}
+					stroke={g.on ? '#1f1d1a' : 'rgba(20, 18, 15, 0.55)'} stroke-width={g.on ? 0.5 : Math.max(0.12, g.r * 0.12)}
+					stroke-dasharray={g.twin ? `${g.r * 0.5} ${g.r * 0.35}` : undefined} opacity={g.twin ? 0.7 : 1}>
+					<title>{g.twin ? 'Stones on the other piece of the pair' : 'Stones on this piece'}</title>
+				</path>
+			))}
+			<path d={shine} fill="rgba(255, 255, 255, 0.75)" pointer-events="none" />
+		</g>
+	);
+}
+
+// A fitted piece's finished openings (neck, legs, wrists) as the band of elastic turned in along them, as the 3D view draws it:
+// stones keep clear of it (render/fitted.js edgeKeepOut), so without it the Look showed a bare strip. Inside the piece only.
+export function OpeningBands({ p, pts, colour }) {
+	const e = app.engine;
+	if (!p.fitted || !e?.fitted?.data) return null;
+	const cloth = e.fitted.clothFor(p.panelId);
+	if (!cloth || cloth.cell !== p.cell) return null;
+	const F = frameOf(p), runs = [];
+	for (const o of e.fitted.data.openings ?? []) {
+		let run = [];
+		const n = o.ids?.length ?? 0;
+		for (let i = 0; i <= n; i++) {
+			const l = i < n ? cloth.idsAt.get(o.ids[i % n]) : undefined;
+			if (l === undefined) { if (run.length > 1) runs.push(run); run = []; continue; }
+			run.push(F.toSvg(cloth.uv[l * 2], cloth.uv[l * 2 + 1]));
+		}
+	}
+	if (!runs.length) return null;
+	const id = `band-${p.key}`, w = TRIMS.elastic.width * 1000;
+	// a shade that reads on the fabric: darker on a light colour, lighter on a dark one
+	const hex = /^#?([0-9a-f]{6})$/i.exec(colour ?? '')?.[1], lum = hex ? (0.2126 * parseInt(hex.slice(0, 2), 16) + 0.7152 * parseInt(hex.slice(2, 4), 16) + 0.0722 * parseInt(hex.slice(4, 6), 16)) / 255 : 0.5;
+	const shade = lum < 0.35 ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.22)';
+	return (
+		<g pointer-events="none">
+			<clipPath id={id}><polygon points={pts} /></clipPath>
+			<g clip-path={`url(#${id})`}>
+				{runs.map((r, i) => <polyline key={i} points={r.map((q) => q.join(',')).join(' ')} fill="none" stroke={colour} stroke-width={2 * w} stroke-linejoin="round" />)}
+				{runs.map((r, i) => <polyline key={'s' + i} points={r.map((q) => q.join(',')).join(' ')} fill="none" stroke={shade} stroke-width={2 * w} stroke-linejoin="round" />)}
+			</g>
 		</g>
 	);
 }
@@ -132,15 +191,33 @@ export function PatternHandlesOn({ p }) {
 		const [u, v] = svgPoint(ev);
 		drag.current = { k, id: gen.id, u0: k.u, v0: k.v, gu: u, gv: v, gesture: 'pattern2d' + Date.now() };
 	};
-	const move = (ev) => {
+	// A pointer sends many moves a frame and each edit lays the stones again (about 30 ms on a 3 000-stone pattern): only the latest
+	// move of a frame is applied, and the last one always when the pointer lets go.
+	const apply = () => {
 		const d = drag.current;
-		if (!d) return;
-		const [u, v] = svgPoint(ev), params = d.k.drag({ u: d.u0 + (u - d.gu), v: d.v0 + (v - d.gv), u0: d.u0, v0: d.v0, shift: ev.shiftKey, alt: ev.altKey });
+		if (!d?.next) return;
+		const { u, v, shift, alt } = d.next;
+		d.next = null;
+		const params = d.k.drag({ u: d.u0 + (u - d.gu), v: d.v0 + (v - d.gv), u0: d.u0, v0: d.v0, shift, alt });
 		edit(app, { op: 'stones.set', id: d.id, params, gesture: d.gesture });
 		const now = selection.value?.id;
 		if (now && now !== d.id) d.id = now; // Mirror off: the first move split the pair; carry on with this side
 	};
-	const up = () => { if (drag.current) { drag.current = null; app.endGesture(); } };
+	const move = (ev) => {
+		const d = drag.current;
+		if (!d) return;
+		const [u, v] = svgPoint(ev);
+		d.next = { u, v, shift: ev.shiftKey, alt: ev.altKey };
+		if (!d.frame) d.frame = requestAnimationFrame(() => { if (drag.current === d) { d.frame = 0; apply(); } });
+	};
+	const up = () => {
+		const d = drag.current;
+		if (!d) return;
+		if (d.frame) cancelAnimationFrame(d.frame);
+		apply();
+		drag.current = null;
+		app.endGesture();
+	};
 	const colour = (t) => TONES[t] ?? '#ffffff';
 	return (
 		<g class="flat-handles">

@@ -9,7 +9,7 @@ import { rev, selection, layout, prefs, setPref } from './state.js';
 import { patternPieces, layoutPieces } from '../garment/pattern.js';
 import { fittedPieces } from '../garment/fitted.js';
 import { thumb, thumbName, Segmented } from './kit.jsx';
-import { StonesOn, PatternHandlesOn } from './FlatStones.jsx';
+import { StonesOn, PatternHandlesOn, OpeningBands } from './FlatStones.jsx';
 
 const piecesNow = () => {
 	const f = app.engine?.fitted;
@@ -125,11 +125,13 @@ function lookOf(p) {
 
 // The piece as it will look: its colour (or fade), a faint tile of its fabric, its outline; the name small.
 function LookPiece({ p, active, onClick, onFocus }) {
-	const [ox, oy] = p.at, pt = ([x, y]) => `${ox + x},${oy + p.size[1] - y}`, s = lookOf(p), pts = p.cutLine.map(pt).join(' ');
+	// the piece as it is seen sewn: its stitching line, not the cut with its seam allowance (stones stop at the stitching line)
+	const [ox, oy] = p.at, pt = ([x, y]) => `${ox + x},${oy + p.size[1] - y}`, s = lookOf(p), pts = (p.stitch ?? p.cutLine).map(pt).join(' ');
 	return (
 		<g class={`piece look ${active ? 'sel' : ''}`} onClick={onClick} onDblClick={onFocus}>
 			<polygon points={pts} fill={s.ombre ? `url(#fade-${p.key})` : s.colour} stroke="none" />
 			{s.fabric ? <polygon points={pts} fill={`url(#tex-${thumbName(s.fabric)})`} opacity="0.5" style={{ mixBlendMode: 'soft-light' }} stroke="none" /> : null}
+			<OpeningBands p={p} pts={pts} colour={s.colour} />
 			<polygon class="look-edge" points={pts} fill="none" stroke={active ? '#1f1d1a' : 'rgba(31, 29, 26, 0.45)'} stroke-width={active ? 1.6 : 0.7} />
 			<StonesOn p={p} />
 			<PatternHandlesOn p={p} />

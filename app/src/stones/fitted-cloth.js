@@ -10,6 +10,18 @@ import { ClothPiece } from './cloth.js';
 
 const _p = new THREE.Vector3();
 
+// A surface's faces by their three corners (sorted), to find the face a fitted point's host triangle is.
+const facesOf = new WeakMap();
+function faceMap(surf) {
+	let m = facesOf.get(surf);
+	if (m) return m;
+	m = new Map();
+	const idx = surf.idx, n = surf.P.length / 3;
+	for (let f = 0; f < idx.length / 3; f++) { const t = [idx[f * 3], idx[f * 3 + 1], idx[f * 3 + 2]].sort((a, b) => a - b); m.set((t[0] * n + t[1]) * n + t[2], f); }
+	facesOf.set(surf, m);
+	return m;
+}
+
 export class FittedCloth {
 	// data: the fitted file; cells: the cells (data.cells entries) that make this piece; surf: the reference surface (engine.surf)
 	constructor(data, cells, surf, key) {
@@ -17,13 +29,15 @@ export class FittedCloth {
 		const nv = cells.reduce((s, c) => s + c.uv.length / 2, 0), nt = cells.reduce((s, c) => s + c.I.length / 3, 0);
 		const uv = this.uv = new Float32Array(nv * 2), I = new Uint32Array(nt * 3), P = new Float32Array(nv * 3), cid = this.cid = new Int32Array(nv);
 		let vo = 0, to = 0;
-		const SP = surf.P;
+		const SP = surf.P, faces = faceMap(surf), nb = SP.length / 3, vface = this.vface = new Int32Array(nv).fill(-1);
 		for (const c of cells) {
 			const m = c.uv.length / 2;
 			uv.set(c.uv, vo * 2);
 			for (let t = 0; t < c.I.length; t++) I[to * 3 + t] = c.I[t] + vo;
 			for (let l = 0; l < m; l++) {
 				cid[vo + l] = c.cid[l];
+				const h = [c.hostI[l * 3], c.hostI[l * 3 + 1], c.hostI[l * 3 + 2]].sort((a, b) => a - b);
+				vface[vo + l] = faces.get((h[0] * nb + h[1]) * nb + h[2]) ?? -1; // the body face this point is carried on
 				for (let k = 0; k < 3; k++) { let x = 0; for (let j = 0; j < 3; j++) x += c.hostW[l * 3 + j] * SP[c.hostI[l * 3 + j] * 3 + k]; P[(vo + l) * 3 + k] = x; }
 			}
 			vo += m; to += c.I.length / 3;
@@ -67,10 +81,13 @@ export class FittedCloth {
 		for (let l = 0; l < nv; l++) if (!this.idsAt.has(cid[l])) this.idsAt.set(cid[l], l);
 	}
 
-	// The surface point at triangle q's weights: the reference position's nearest point on the reference surface.
+	// The surface point at triangle q's weights: the reference position's nearest point on the reference surface, searched from the
+	// face its heaviest corner is carried on and that face's neighbours (a whole-body search cost about 20 ms a pattern run).
 	spOf(q, w1 = this.w1, w2 = this.w2) {
-		const r = this.surf.closest(this.posOf(q, _p, w1, w2), {});
-		return { f: r.f, b0: r.b0, b1: r.b1, b2: r.b2 };
+		const p = this.posOf(q, _p, w1, w2), I = this.piece.I, w0 = 1 - w1 - w2;
+		const corner = w0 >= w1 && w0 >= w2 ? I[q * 3] : w1 >= w2 ? I[q * 3 + 1] : I[q * 3 + 2], f0 = this.vface[corner];
+		const r = f0 >= 0 ? this.surf.closestNear(p, f0, 1, {}) : this.surf.closest(p, {});
+		return r ? { f: r.f, b0: r.b0, b1: r.b1, b2: r.b2 } : null;
 	}
 
 	// Where on the fitted garment: its triangle's whole-garment points and weights (render/fitted.js frameAt).

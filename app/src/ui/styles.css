@@ -437,7 +437,6 @@ kbd { font: 600 10px var(--sans); padding: 2px 5px; border-radius: 5px; backgrou
 .flat-svg .piece.sel polygon:first-child { stroke: var(--ink); stroke-width: 1.8; fill-opacity: 0.4; }
 .flat-empty { color: var(--ink-3); padding: 24px; }
 .flat-stone { cursor: pointer; }
-.flat-stone.on circle:first-child { stroke: #1f1d1a; stroke-width: 0.6; }
 .flat-knob { touch-action: none; }
 .flat-mode { position: absolute; left: 50%; top: 8px; z-index: 2; transform: translateX(-50%); }
 .flat-mode .seg { background: rgba(251, 250, 248, 0.92); box-shadow: 0 0 0 1px rgba(35, 30, 24, 0.07); }
