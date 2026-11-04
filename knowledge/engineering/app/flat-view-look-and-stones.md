@@ -55,11 +55,28 @@ gemstones, perhaps a hint of the material, and gem patterns editable there, alwa
   the 6 mm seam allowance the stones never reach. Drawn pieces' elastic bands are not drawn in 2D yet.
 - **Why 2D edits were slow.** Each pointer move sent an edit; each edit redrew about 13 000 SVG nodes (two circles a stone,
   about 55 ms), twice (once for the edit, once for the stones laid after it), and the fitted pieces' stones each searched the
-  whole body for their surface point (about 20 ms of a 50 ms pattern run). Now: stones are a few paths per colour and kind (59
-  nodes for the whole view), their paths rebuilt only when the stones or the selection change; a drag applies one edit a frame
-  (the last always on release); a fitted stone's surface point is searched from the body face its corner is carried on.
+  whole body for their surface point (about 20 ms of a 50 ms pattern run). Then: stones as a few svg paths per colour, one edit a frame,
+  and a fitted stone's surface point searched from the body face its corner is carried on (kept); the paths and the frame hold
+  were replaced next (below).
   Measured on a 3345-stone lattice (background tab): laying 12-31 ms, the flat view's redraw 17-32 ms, against about 50 and
   2 x 55 ms before, plus queued moves.
+
+# Why 2D was slower than 3D, and the canvas (owner, 2026-11-04)
+
+The owner found the same pattern edit smooth in 3D and noticeably slower in 2D. Laying the stones costs the same in both (the
+pattern runs once a frame either way). The difference was drawing them: 3D draws every stone in one instanced draw on the GPU
+(about 1-2 ms); 2D drew them as svg paths, which the browser rasterises on the CPU, over 3 000 circles at the screen's 1.75 scale:
+5 ms a frame typically and up to 25 ms, plus the redraw work. And the one-edit-a-frame hold added a frame of lag the 3D handles do
+not have.
+
+- Stones are now painted on a canvas laid over the pieces' svg (`ui/FlatView.jsx` Stack: pieces svg, stones canvas, handles svg,
+  one viewBox; `ui/FlatStones.jsx` paintStones reads the svg's screen transform), repainted when stones are laid or the selection
+  changes. Picking a stone is on the piece, by the nearest stone to the pointer (pickStone).
+- Handle drags apply every move at once, as `ui/tools.js` dragHandle does (an edit during a gesture only marks the stones to be laid
+  next frame).
+- Measured per step on the 3345-stone lattice: laying 9-29 ms (both views), painting the 2D stones and refreshing the handles
+  4-12 ms, the whole flat view 51 nodes. Frame rates in this session's test tab were not usable (the window was covered: frames
+  held for seconds with almost no work done), so the feel is the owner's to judge.
 
 # Limits **[INFERRED]**
 
@@ -68,7 +85,6 @@ gemstones, perhaps a hint of the material, and gem patterns editable there, alwa
 - A fitted garment's pieces show their pattern stones and handles (by each stone's fitted triangle: see
   [fitted garments](/engineering/app/fitted-garments-in-the-app.md)); other stone kinds on a fitted garment do not show in 2D.
 - Stones are drawn round; shaped stones (navettes, pears) are not turned or stretched in 2D.
-- Hundreds to a few thousand stones draw as SVG circles; much denser designs may slow the flat view.
 - With the app's window not drawing, stones wait for the next frame (the engine lays them in its frame loop), so the flat view
   shows them only once frames run.
 

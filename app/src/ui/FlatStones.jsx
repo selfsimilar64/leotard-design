@@ -4,6 +4,7 @@
 // mm = uv * 1000 * (1 + ease) - origin). A chosen stone pattern shows the handles the 3D view shows (stones/handles.js
 // patternHandles, in flat cloth metres already), and a drag sends the same edit the 3D handles do (stones.set through the Mirror
 // toggle), so both views follow it. Twin of the 3D side: ui/tools.js startHandle / dragHandle, render/gizmo.js.
+// Stones are painted on a canvas over the pieces (paintStones), not drawn as svg shapes: see paintStones for why.
 import { useRef } from 'preact/hooks';
 import { app } from '../instance.js';
 import { selection, patternFocus, stonesRun, edit } from './state.js';
@@ -47,88 +48,97 @@ export function frameOf(p) {
 }
 
 const placedOn = new WeakMap(); // per run, per piece key: the stones drawn on it
-export function StonesOn({ p }) {
-	stonesRun.value; // laid again during a drag: drawn again
+
+// The stones on a piece, in the svg's units (mm): this piece's own, and a mirrored pair's other piece's mirrored onto it (twin).
+// Worked out once per engine run (a run is a new object) and piece place.
+export function stonesFor(p) {
 	const e = app.engine;
-	if (!e || p.cell === undefined) return null;
+	if (!e || p.cell === undefined) return [];
 	// a fitted garment's piece: its own cloth (stones/fitted-cloth.js), its stones found by their fitted triangle
 	const cloth = p.fitted ? e.fitted.clothFor(p.panelId) : e.clothOfCell(p.layer, p.cell, p.panelId);
-	if (!cloth || cloth.cell !== p.cell) return null;
+	if (!cloth || cloth.cell !== p.cell) return [];
 	const run = e.stoneRun;
 	let cache = placedOn.get(run);
 	if (!cache) placedOn.set(run, (cache = new Map()));
-	let list = cache.get(p.key + '|' + p.at.join());
-	if (!list) {
-		const F = frameOf(p);
-		list = [];
-		const put = (s, sp, twin) => {
-			const uv = cloth.uvOf(sp);
-			if (!uv) return;
-			const [X, Y] = F.toSvg(uv[0], uv[1]);
-			list.push({ X, Y, r: (s.size * 1000) / 2, colour: parseStone(s.stone).colour, gen: s.gen, id: s.id, twin });
-		};
-		if (p.fitted) {
-			const at = (s, uv, twin) => { const [X, Y] = F.toSvg(uv[0], uv[1]); list.push({ X, Y, r: (s.size * 1000) / 2, colour: parseStone(s.stone).colour, gen: s.gen, id: s.id, twin }); };
-			for (const s of run.stones ?? []) {
-				if (!s.fit) continue;
-				const own = cloth.uvOfFit(s.fit);
-				if (own) { at(s, own, false); continue; }
-				const other = e.fitted.mirrorFit(s.fit), uv = other && cloth.uvOfFit(other); // on the other sleeve of the pair
-				if (uv) at(s, uv, true);
-			}
-			cache.set(p.key + '|' + p.at.join(), list);
+	const key = p.key + '|' + p.at.join();
+	let list = cache.get(key);
+	if (list) return list;
+	const F = frameOf(p);
+	list = [];
+	const at = (s, uv, twin) => { const [X, Y] = F.toSvg(uv[0], uv[1]); list.push({ X, Y, r: (s.size * 1000) / 2, colour: parseStone(s.stone).colour, gen: s.gen, id: s.id, twin }); };
+	if (p.fitted) {
+		for (const s of run.stones ?? []) {
+			if (!s.fit) continue;
+			const own = cloth.uvOfFit(s.fit);
+			if (own) { at(s, own, false); continue; }
+			const other = e.fitted.mirrorFit(s.fit), uv = other && cloth.uvOfFit(other); // on the other sleeve of the pair
+			if (uv) at(s, uv, true);
 		}
-		const cells = p.fitted ? new Map() : stonesByCell(e);
+	} else {
+		const cells = stonesByCell(e), put = (s, sp, twin) => { const uv = cloth.uvOf(sp); if (uv) at(s, uv, twin); };
 		for (const s of cells.get(p.layer + '|' + p.cell) ?? []) put(s, s.sp, false);
 		// a mirrored pair is one pattern piece cut twice: the other cell's stones, mirrored onto this one, drawn dashed
-		const L = p.fitted ? null : e.layers.get(p.layer);
-		for (const c of L?.view.cells ?? []) {
+		for (const c of e.layers.get(p.layer)?.view.cells ?? []) {
 			if (c.panelId !== p.panelId || c.cell === p.cell) continue;
 			for (const s of cells.get(p.layer + '|' + c.cell) ?? []) put(s, mirrorFast(e.surf, s.sp), true);
 		}
-		cache.set(p.key + '|' + p.at.join(), list);
 	}
+	cache.set(key, list);
+	return list;
+}
+
+// The stones of every piece painted on a canvas laid exactly over the pieces' svg (the same viewBox, read through the svg's own
+// screen transform). Painting thousands of circles on a canvas takes a few milliseconds; the browser drawing them as svg shapes
+// at a high-resolution screen cost 5-25 ms a frame and made a 2D drag on a pattern slower than the same drag in 3D, whose stones
+// are one instanced draw on the GPU. Painted again whenever stones are laid or the selection changes (ui/FlatView.jsx Stack).
+export function paintStones(canvas, svg, pieces) {
+	if (!canvas || !svg) return;
+	const r = canvas.getBoundingClientRect(), dpr = devicePixelRatio || 1, w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+	if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+	const g = canvas.getContext('2d'), M = svg.getScreenCTM();
+	g.setTransform(1, 0, 0, 1, 0, 0);
+	g.clearRect(0, 0, w, h);
+	if (!M) return;
+	g.setTransform(M.a * dpr, M.b * dpr, M.c * dpr, M.d * dpr, (M.e - r.left) * dpr, (M.f - r.top) * dpr);
 	const sel = selection.value, isOn = (s) => !!sel && ((sel.kind === 'stones' && sel.id === s.gen) || (sel.kind === 'placed' && sel.id === s.id));
-	// A few paths, one per colour and kind (this piece's, the pair's, the chosen group's), not two circles a stone: a drag on a
-	// pattern redraws a handful of nodes instead of thousands (13 000 nodes took about 55 ms a redraw). Picking is by the pointer.
-	// (built once per laid stones and selection: other edits redraw the view without rebuilding thousands of path pieces)
-	const selKey = sel ? sel.kind + ':' + sel.id : '';
-	if (list.paths?.selKey !== selKey) {
-		const f2 = (x) => Math.round(x * 100) / 100, circ = (x, y, r) => `M${f2(x - r)} ${f2(y)}a${f2(r)} ${f2(r)} 0 1 0 ${f2(2 * r)} 0a${f2(r)} ${f2(r)} 0 1 0 ${f2(-2 * r)} 0`;
-		const groups = new Map(), shine = [];
-		for (const s of list) {
-			const on = isOn(s), k = s.colour + (s.twin ? '|t' : '|o') + (on ? '|on' : '');
-			let g = groups.get(k);
-			if (!g) groups.set(k, (g = { colour: s.colour, twin: s.twin, on, d: [], r: s.r }));
-			g.d.push(circ(s.X, s.Y, s.r));
-			shine.push(circ(s.X - s.r * 0.3, s.Y - s.r * 0.3, s.r * 0.32));
-		}
-		for (const g of groups.values()) g.d = g.d.join('');
-		list.paths = { selKey, groups: [...groups.values()], shine: shine.join('') };
+	const groups = new Map();
+	for (const p of pieces) for (const s of stonesFor(p)) {
+		const k = s.colour + (s.twin ? '|t' : '|o') + (isOn(s) ? '|on' : '');
+		let l = groups.get(k);
+		if (!l) groups.set(k, (l = []));
+		l.push(s);
 	}
-	const { groups, shine } = list.paths;
-	const choose = (ev) => {
-		ev.stopPropagation();
-		const svg = ev.currentTarget.ownerSVGElement, pt = svg.createSVGPoint();
-		pt.x = ev.clientX; pt.y = ev.clientY;
-		const q = pt.matrixTransform(svg.getScreenCTM().inverse());
-		let best = null, bd = Infinity;
-		for (const s of list) { const d = (s.X - q.x) ** 2 + (s.Y - q.y) ** 2; if (d < bd) { bd = d; best = s; } }
-		if (!best || Math.sqrt(bd) > best.r * 1.6 + 1) return;
-		selection.value = best.gen === 'placed' ? { kind: 'placed', id: best.id } : { kind: 'stones', id: best.gen };
-	};
-	return (
-		<g class="flat-stones" onClick={choose}>
-			{groups.map((g) => (
-				<path key={g.colour + g.twin + g.on} class={`flat-stone ${g.on ? 'on' : ''} ${g.twin ? 'twin' : ''}`} d={g.d} fill={g.colour}
-					stroke={g.on ? '#1f1d1a' : 'rgba(20, 18, 15, 0.55)'} stroke-width={g.on ? 0.5 : Math.max(0.12, g.r * 0.12)}
-					stroke-dasharray={g.twin ? `${g.r * 0.5} ${g.r * 0.35}` : undefined} opacity={g.twin ? 0.7 : 1}>
-					<title>{g.twin ? 'Stones on the other piece of the pair' : 'Stones on this piece'}</title>
-				</path>
-			))}
-			<path d={shine} fill="rgba(255, 255, 255, 0.75)" pointer-events="none" />
-		</g>
-	);
+	for (const [k, list] of groups) {
+		const twin = k.includes('|t'), on = k.endsWith('|on');
+		g.beginPath();
+		for (const s of list) { g.moveTo(s.X + s.r, s.Y); g.arc(s.X, s.Y, s.r, 0, Math.PI * 2); }
+		g.globalAlpha = twin ? 0.7 : 1;
+		g.fillStyle = list[0].colour;
+		g.fill();
+		g.lineWidth = on ? 0.5 : Math.max(0.12, list[0].r * 0.12);
+		g.strokeStyle = on ? '#1f1d1a' : 'rgba(20, 18, 15, 0.55)';
+		g.setLineDash(twin ? [list[0].r * 0.5, list[0].r * 0.35] : []);
+		g.stroke();
+		// the crystal's shine
+		g.beginPath();
+		for (const s of list) { const x = s.X - s.r * 0.3, y = s.Y - s.r * 0.3, rr = s.r * 0.32; g.moveTo(x + rr, y); g.arc(x, y, rr, 0, Math.PI * 2); }
+		g.fillStyle = 'rgba(255, 255, 255, 0.75)';
+		g.fill();
+	}
+	g.globalAlpha = 1;
+	g.setLineDash([]);
+}
+
+// The stone under the pointer on piece p, chosen (its group, or the placed stone); false when there is none under it.
+export function pickStone(p, ev) {
+	const svg = ev.currentTarget.ownerSVGElement ?? ev.currentTarget, pt = svg.createSVGPoint();
+	pt.x = ev.clientX; pt.y = ev.clientY;
+	const q = pt.matrixTransform(svg.getScreenCTM().inverse());
+	let best = null, bd = Infinity;
+	for (const s of stonesFor(p)) { const d = (s.X - q.x) ** 2 + (s.Y - q.y) ** 2; if (d < bd) { bd = d; best = s; } }
+	if (!best || Math.sqrt(bd) > best.r * 1.6 + 1) return false;
+	selection.value = best.gen === 'placed' ? { kind: 'placed', id: best.id } : { kind: 'stones', id: best.gen };
+	return true;
 }
 
 // A fitted piece's finished openings (neck, legs, wrists) as the band of elastic turned in along them, as the 3D view draws it:
@@ -191,33 +201,17 @@ export function PatternHandlesOn({ p }) {
 		const [u, v] = svgPoint(ev);
 		drag.current = { k, id: gen.id, u0: k.u, v0: k.v, gu: u, gv: v, gesture: 'pattern2d' + Date.now() };
 	};
-	// A pointer sends many moves a frame and each edit lays the stones again (about 30 ms on a 3 000-stone pattern): only the latest
-	// move of a frame is applied, and the last one always when the pointer lets go.
-	const apply = () => {
+	// Every move is applied as it comes, as the 3D handles do (ui/tools.js dragHandle): during a gesture an edit only marks the
+	// stones to be laid in the next frame, so it is cheap, and holding moves back for a frame only made the handle lag the pointer.
+	const move = (ev) => {
 		const d = drag.current;
-		if (!d?.next) return;
-		const { u, v, shift, alt } = d.next;
-		d.next = null;
-		const params = d.k.drag({ u: d.u0 + (u - d.gu), v: d.v0 + (v - d.gv), u0: d.u0, v0: d.v0, shift, alt });
+		if (!d) return;
+		const [u, v] = svgPoint(ev), params = d.k.drag({ u: d.u0 + (u - d.gu), v: d.v0 + (v - d.gv), u0: d.u0, v0: d.v0, shift: ev.shiftKey, alt: ev.altKey });
 		edit(app, { op: 'stones.set', id: d.id, params, gesture: d.gesture });
 		const now = selection.value?.id;
 		if (now && now !== d.id) d.id = now; // Mirror off: the first move split the pair; carry on with this side
 	};
-	const move = (ev) => {
-		const d = drag.current;
-		if (!d) return;
-		const [u, v] = svgPoint(ev);
-		d.next = { u, v, shift: ev.shiftKey, alt: ev.altKey };
-		if (!d.frame) d.frame = requestAnimationFrame(() => { if (drag.current === d) { d.frame = 0; apply(); } });
-	};
-	const up = () => {
-		const d = drag.current;
-		if (!d) return;
-		if (d.frame) cancelAnimationFrame(d.frame);
-		apply();
-		drag.current = null;
-		app.endGesture();
-	};
+	const up = () => { if (drag.current) { drag.current = null; app.endGesture(); } };
 	const colour = (t) => TONES[t] ?? '#ffffff';
 	return (
 		<g class="flat-handles">

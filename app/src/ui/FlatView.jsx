@@ -3,13 +3,13 @@
 // click on a piece chooses it (the Fabric tab), a double-click focuses on it alone: zoomed to fit at
 // true proportion, with a strip of the other pieces to switch to and Esc or All pieces to go back.
 // With a fitted garment on (garment/fitted.js) the pieces are its own, as drafted.
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { rev, selection, layout, prefs, setPref } from './state.js';
+import { rev, selection, layout, prefs, setPref, stonesRun } from './state.js';
 import { patternPieces, layoutPieces } from '../garment/pattern.js';
 import { fittedPieces } from '../garment/fitted.js';
 import { thumb, thumbName, Segmented } from './kit.jsx';
-import { StonesOn, PatternHandlesOn, OpeningBands } from './FlatStones.jsx';
+import { PatternHandlesOn, OpeningBands, paintStones, pickStone } from './FlatStones.jsx';
 
 const piecesNow = () => {
 	const f = app.engine?.fitted;
@@ -59,11 +59,11 @@ export function FlatView() {
 				<div class="flat-title">{focused.name}</div>
 				{mode}
 				<button class="btn small flat-back" onClick={() => setFocus(null)} title="Back to every piece (Esc)">All pieces</button>
-				<svg class="flat-svg" viewBox={`${-pad} ${-pad} ${W + 2 * pad} ${H + 2 * pad}`} preserveAspectRatio="xMidYMid meet">
+				<Stack viewBox={`${-pad} ${-pad} ${W + 2 * pad} ${H + 2 * pad}`} pieces={[one]} look={look}>
 					<P p={one} active onClick={() => pick(focused)} />
 					<Defs pieces={[one]} look={look} />
 					<text x={-pad + 4} y={H + pad - 8} font-size={Math.max(8, H / 70)} fill="#8f8a82" font-family="system-ui, sans-serif">{Math.round(W)} × {Math.round(H)} mm</text>
-				</svg>
+				</Stack>
 				<div class="flat-strip" role="tablist" aria-label="Pieces">
 					{data.placed.map((p) => {
 						const [w, h] = p.size;
@@ -83,12 +83,32 @@ export function FlatView() {
 		<>
 			<div class="flat-title">Pattern pieces{app.engine?.fitted?.active ? ' (fitted garment)' : ''}</div>
 			{mode}
-			<svg class="flat-svg" viewBox={`${-pad} ${-pad - 24} ${W + 2 * pad} ${H + 2 * pad + 24}`} preserveAspectRatio="xMidYMid meet">
+			<Stack viewBox={`${-pad} ${-pad - 24} ${W + 2 * pad} ${H + 2 * pad + 24}`} pieces={data.placed} look={look}>
 				{data.placed.map((p) => <P key={p.key} p={p} active={sel?.kind === 'panels' && sel.id === p.panelId} onClick={() => pick(p)} onFocus={() => { setFocus(p.key); pick(p); }} />)}
 				<Defs pieces={data.placed} look={look} />
 				<text x={-pad + 4} y={H + pad - 6} font-size="8" fill="#8f8a82" font-family="system-ui, sans-serif">Millimetres · seam allowance on pieced pieces · dotted: where an appliqué is sewn · double-click a piece to work on it alone</text>
-			</svg>
+			</Stack>
 		</>
+	);
+}
+
+// The pieces (svg), their stones (a canvas over them: ui/FlatStones.jsx paintStones), and a chosen pattern's handles (an svg over
+// that), all three in one viewBox so they line up. The stones are painted, not drawn as svg shapes, so a drag stays as quick as in 3D.
+function Stack({ viewBox, pieces, look, children }) {
+	const svgRef = useRef(null), canvasRef = useRef(null);
+	useEffect(() => {
+		if (!look) return;
+		const paint = () => paintStones(canvasRef.current, svgRef.current, pieces);
+		const offStones = stonesRun.subscribe(paint), offSel = selection.subscribe(paint), ro = new ResizeObserver(paint);
+		ro.observe(svgRef.current);
+		return () => { offStones(); offSel(); ro.disconnect(); };
+	}, [pieces, look, viewBox]);
+	return (
+		<div class="flat-stack">
+			<svg ref={svgRef} class="flat-svg" viewBox={viewBox} preserveAspectRatio="xMidYMid meet">{children}</svg>
+			{look ? <canvas ref={canvasRef} class="flat-stones-canvas" /> : null}
+			{look ? <svg class="flat-svg flat-over" viewBox={viewBox} preserveAspectRatio="xMidYMid meet">{pieces.map((p) => <PatternHandlesOn key={p.key} p={p} />)}</svg> : null}
+		</div>
 	);
 }
 
@@ -128,13 +148,11 @@ function LookPiece({ p, active, onClick, onFocus }) {
 	// the piece as it is seen sewn: its stitching line, not the cut with its seam allowance (stones stop at the stitching line)
 	const [ox, oy] = p.at, pt = ([x, y]) => `${ox + x},${oy + p.size[1] - y}`, s = lookOf(p), pts = (p.stitch ?? p.cutLine).map(pt).join(' ');
 	return (
-		<g class={`piece look ${active ? 'sel' : ''}`} onClick={onClick} onDblClick={onFocus}>
+		<g class={`piece look ${active ? 'sel' : ''}`} onClick={(ev) => { if (!pickStone(p, ev)) onClick?.(ev); }} onDblClick={onFocus}>
 			<polygon points={pts} fill={s.ombre ? `url(#fade-${p.key})` : s.colour} stroke="none" />
 			{s.fabric ? <polygon points={pts} fill={`url(#tex-${thumbName(s.fabric)})`} opacity="0.5" style={{ mixBlendMode: 'soft-light' }} stroke="none" /> : null}
 			<OpeningBands p={p} pts={pts} colour={s.colour} />
 			<polygon class="look-edge" points={pts} fill="none" stroke={active ? '#1f1d1a' : 'rgba(31, 29, 26, 0.45)'} stroke-width={active ? 1.6 : 0.7} />
-			<StonesOn p={p} />
-			<PatternHandlesOn p={p} />
 			<text x={ox + 6} y={oy + 12} font-size="8" fill="#59554f" font-family="system-ui, sans-serif">{p.name}</text>
 		</g>
 	);

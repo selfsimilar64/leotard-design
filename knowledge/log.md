@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-04
+* **Update**: [The flat view's Look appearance and stones](/engineering/app/flat-view-look-and-stones.md): why 2D edits were slower than 3D (CPU-drawn svg against one GPU draw; a frame of lag); stones painted on a canvas, every move applied at once.
 * **Update**: [The flat view's Look appearance and stones](/engineering/app/flat-view-look-and-stones.md): the elastic band drawn at fitted openings (why patterns stopped short), stitching-line outlines; 2D pattern edits fast (stones as a few paths, one edit a frame, seeded surface search).
 * **Update**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): stone patterns laid on the fitted pieces' own flat shape and drawn on the fitted fabric (no more sinking under it), shown and edited in the flat view.
 * **Creation**: [The flat view's Look appearance and stones](/engineering/app/flat-view-look-and-stones.md): Sewing and Look appearances; pieces in colour with a fabric hint; stones drawn on their pieces; stone patterns edited in 2D with the 3D handles, in sync. Layout remembered.
