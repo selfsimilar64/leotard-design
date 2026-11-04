@@ -13,6 +13,7 @@
 # Component
 
 * [Stone patterns placed on the GPU](gpu-stone-placement.md) (draft) - Design and build plan for laying a stone pattern's stones on the GPU in both the 3D and flat views: candidates drawn on the CPU only when the drawing changes, everything a move or turn changes done per stone in a shader, and a CPU twin of the same rule for counts, picking and export.
+* [One stone engine for every pattern (proposal)](stone-pattern-engine.md) (draft) - Proposal of 2026-11-04: split every stone pattern into a small description of its geometry (points, runs of line and arc pieces, areas, optionally tiled) and one shared, data-parallel stone engine (spacing by size along runs, per-stone fields, the parallel rule, piece and body). Classes of layout, what each costs, and the order to build it in.
 
 # Data Model
 
