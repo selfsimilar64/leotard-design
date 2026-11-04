@@ -22,6 +22,10 @@
 
 * [The Mirror toggle and paired parts](mirror-toggle.md) (draft) - One toolbar toggle decides whether an edit reaches both sides of the body. Mirror off, an edit of a paired part splits the pair permanently; there is no per-part mirror control.
 
+# Experiment
+
+* [Stones kept apart by a parallel rule](parallel-stone-spacing.md) (draft) - Experiment of 2026-11-04: instead of letting a pattern's stones overlap, resolve conflicts between candidates by a fixed order in parallel rounds (a shader's way). Same stones as the old one-by-one check, zero overlaps, moves as fast as the overlap version. Behind a switch, off.
+
 # Section
 
 * [Architecture](about.md) - System-level structure of the product: what the POC provides, the garment data model, and how role views sit on one design.

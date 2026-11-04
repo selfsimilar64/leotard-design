@@ -12,7 +12,7 @@ import { curvePoints, curveData, CURVES } from '../src/stones/layouts-curves.js'
 import { distortion } from '../src/stones/fields.js';
 import { MOD_SHAPES, compileMods, modGeometry, newModifier, sizeRange } from '../src/stones/modifiers.js';
 import { ClothPiece, mirrorFast } from '../src/stones/cloth.js';
-import { runPattern, patternStones, patternParams, patternMap, presetPatch, flipPatternParams, minScale, frameOf, frameToCloth, clothToFrame } from '../src/stones/pattern.js';
+import { runPattern, patternStones, keepPattern, patternParams, patternMap, presetPatch, flipPatternParams, minScale, frameOf, frameToCloth, clothToFrame } from '../src/stones/pattern.js';
 import { patternHandles } from '../src/stones/handles.js';
 import { runStones } from '../src/stones/generators.js';
 import { buildGarment } from '../src/garment/build.js';
@@ -476,6 +476,23 @@ describe('no dead controls', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+describe('the parallel rule (stones/peaks.js, an experiment)', () => {
+	// two stones closer than 0.92 of touching: the old one-by-one check's line
+	const overlapping = (list) => { let n = 0; for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) { const a = list[i], b = list[j]; if (Math.hypot(a.sp.u - b.sp.u, a.sp.v - b.sp.v) < ((a.size + b.size) / 2) * 0.92 - 1e-9) n++; } return n; };
+	it('keeps the flower of life, circles and a mixed scatter apart, and its rounds keep the same stones as one pass', () => {
+		for (const key of ['flower-of-life', 'circles', 'scatter-mixed']) {
+			const it = GALLERY_ITEMS.get(key), P = { ...presetParams(it), x: 0, y: 0 }, cache = new Map();
+			const loose = stonesOf(P, {}, SMALL), kept = stonesOf(P, {}, SMALL, { peaks: true, cache });
+			expect(overlapping(kept), key).toBe(0);
+			expect(overlapping(loose), key).toBeGreaterThan(0);
+			const g = { id: 'g', seed: 3, stone: 'Crystal', shape: 'round', params: { size: 'ss12', gap: 1.15, ...P } };
+			const k1 = keepPattern(g, SMALL, { peaks: true, cache }), once = [...k1.I.subarray(0, k1.n)]; // (its arrays are reused)
+			const k2 = keepPattern(g, SMALL, { peaks: true, parallel: true, cache });
+			expect([...k2.I.subarray(0, k2.n)], key).toEqual(once);
+		}
+	});
+});
+
 describe('modifiers', () => {
 	const at = (mods, u, v, k = 1, t = 0, cat = 0, rank = 0.3) => compileMods(mods, null, () => 0.02, 'Crystal');
 	const F = { x: 0, y: 0, c: 1, s: 0, S: 1, F: 1 };

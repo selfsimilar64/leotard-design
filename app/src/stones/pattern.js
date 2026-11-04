@@ -20,6 +20,7 @@ import { Candidates, Drawing, SIZES } from './candidates.js';
 import { distortion, distortionReach, frac } from './fields.js';
 import { compileMods, modsFromOld, modWithGeometry, presetMods, sizeRange } from './modifiers.js';
 import { sizeOf, SHAPES } from './library.js';
+import { conflictsOf, aliveOf, resolvePeaks } from './peaks.js';
 
 // how far from an opening edge a stone can be and still need the elastic's keep-out checked
 const NEAR_EDGE = 0.03;
@@ -271,7 +272,7 @@ export function patternCandidates(gen, piece, cache = null) {
 	const E = scratch.reset(box, pitch, seed, flat ? edgeAt : null, { map: m, clip: flat ? piece : local, d0, gap, diam, fine, angles: !isRound, jitter: P.jitter ?? 0 });
 	drawInto(gen, layout, P, E, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine }, cache);
 	const n = E.n, cut = (a) => a.slice(0, n);
-	const out = { n, GX: cut(E.X), GY: cut(E.Y), GA: cut(E.A), R: cut(E.R), K: cut(E.K), T: cut(E.T), C: cut(E.C), D: cut(E.D), rigid, P, d0, fine, dart, isRound, flat };
+	const out = { n, GX: cut(E.X), GY: cut(E.Y), GA: cut(E.A), R: cut(E.R), K: cut(E.K), T: cut(E.T), C: cut(E.C), D: cut(E.D), PR: cut(E.P), rigid, P, d0, gap, fine, dart, isRound, flat, varied: !!sizeMods };
 	cache?.set(gen.id + '#cand', { key, local, rot: P.rotate, out });
 	return out;
 }
@@ -285,6 +286,9 @@ export function patternCandidates(gen, piece, cache = null) {
 const kept = { I: new Int32Array(0), U: new Float64Array(0), V: new Float64Array(0), A: new Float64Array(0), D: new Float64Array(0), H: new Float64Array(0), stone: [] };
 export function keepPattern(gen, piece, opts = {}) {
 	const Cd = patternCandidates(gen, piece, opts.cache), { n, GX, GY, GA, R, K, T, C, D, P, d0, fine, dart, isRound } = Cd, rg = Cd.rigid;
+	// opts.peaks: stones kept apart after all, by the parallel rule (stones/peaks.js): every candidate decided first, then each
+	// conflict resolved by the candidates' standing; the stones the CPU path kept apart one by one, before 2026-11-04
+	const peaks = opts.peaks ? conflictsOf(Cd) : null, alive = peaks ? aliveOf(n) : null;
 	const frame = frameOf(P), edgeAt = (u, v) => piece.edgeAt(u, v);
 	const mods = compileMods(P.mods, frame, edgeAt, gen.stone ?? 'Crystal AB');
 	const overall = P.density ?? 1, margin = P.margin ?? 0, keepOut = P.keepOut, edge = opts.edge;
@@ -302,18 +306,31 @@ export function keepPattern(gen, piece, opts = {}) {
 		// a scatter's candidates are a blue-noise tile in ranked order whose first points lie furthest apart (stones/layouts-lattice.js
 		// blueTile), spaced for its smallest stones: a bigger stone keeps the first share of them, those spaced for its own size. So
 		// stones of one size keep their room by how they are made, not by checking each other (big among small may overlap).
-		if (dart) { const f = (d0 * fine) / d; if (f < 1) dens *= f * f; }
+		if (dart && !peaks) { const f = (d0 * fine) / d; if (f < 1) dens *= f * f; }
 		if (rank >= dens) continue;
 		const r = roomAt(room, u, v);
 		if (r < d / 2 + margin) continue;
 		// finished opening edges: the trim's keep-out (or the group's own), as for every other stone
 		if (KA && r < NEAR_EDGE + less && keepAt(keep, KA, u, v) - less < d / 2) continue;
+		if (peaks) { alive[i] = 1; continue; }
 		const h = frac(rank * 61.803398875 + 0.137);
 		I[m] = i; U[m] = u; V[m] = v; KD[m] = d; H[m] = h;
 		// (its direction on the cloth: the frame's own, turned and mirrored with the frame; a round stone's spin is its own)
 		A[m] = isRound ? NaN : (upright ? upAngle : ra + (rF < 0 ? Math.PI - GA[i] : GA[i])) + turn;
 		names.push(colour(u, v, k, t, cat, rank));
 		m++;
+	}
+	if (peaks) {
+		const won = resolvePeaks(peaks, alive, opts.parallel);
+		for (let i = 0; i < n; i++) {
+			if (!won[i]) continue;
+			const gx = GX[i], gy = GY[i], u = rx + rc * rF * gx - rs * gy, v = ry + rs * rF * gx + rc * gy, rank = R[i];
+			I[m] = i; U[m] = u; V[m] = v; KD[m] = D[i]; H[m] = frac(rank * 61.803398875 + 0.137);
+			A[m] = isRound ? NaN : (upright ? upAngle : ra + (rF < 0 ? Math.PI - GA[i] : GA[i])) + turn;
+			names.push(colour(u, v, K[i], T[i], C[i], rank));
+			m++;
+		}
+		return { n: m, I, U, V, A, D: KD, H, stone: names, Cd, rounds: resolvePeaks.rounds };
 	}
 	return { n: m, I, U, V, A, D: KD, H, stone: names, Cd };
 }
@@ -352,7 +369,7 @@ export function runPattern(gen, ctx, cache = null) {
 	if (panel.removed) return [];
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return []; }
-	return patternStones(gen, piece, { cache, edge: ctx.edge });
+	return patternStones(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks });
 }
 // A pattern's kept stones as packed arrays of its own (keepPattern's are reused), for the GPU to place
 // (stones/gpu-view.js); null when there are none to place. -> { piece, k: { n, U, V, A, D, H, stone } }
@@ -362,7 +379,7 @@ export function packPattern(gen, ctx, cache = null) {
 	if (panel.removed) return null;
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return null; }
-	const k = keepPattern(gen, piece, { cache, edge: ctx.edge }), n = k.n;
+	const k = keepPattern(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks }), n = k.n;
 	return { piece, k: { n, U: k.U.slice(0, n), V: k.V.slice(0, n), A: k.A.slice(0, n), D: k.D.slice(0, n), H: k.H.slice(0, n), stone: k.stone } };
 }
 
