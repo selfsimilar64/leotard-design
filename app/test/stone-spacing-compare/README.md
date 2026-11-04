@@ -20,3 +20,6 @@ python app/test/stone-spacing-compare/render.py /tmp/out flower-of-life,circles,
 Outputs `stones.json`, `metrics.json` (counts, overlapping pairs below 0.92 of touching, rounds of the parallel rule,
 milliseconds to draw afresh and to move) and `spacing-compare.png`. Results of 2026-11-04:
 `knowledge/engineering/architecture/parallel-stone-spacing.md`.
+
+`bench-in-app.js`: the in-app timing of stone edits at rising densities (work per step and GPU frame), pasted into the
+test tab's console; see its header.

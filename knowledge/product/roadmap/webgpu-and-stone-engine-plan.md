@@ -221,8 +221,8 @@ device; nothing read back per frame except a few counts.
   under 16.7 ms) and the edit's result is on screen the same frame or the next.
 - **Measure work, not frame gaps**: at 60 Hz a step that fits reads 16.7 ms whatever it costs. Report CPU time per step
   (the edit plus `Viewport.frame`, timed by a wrapper) and GPU time (timestamp queries), with medians and 90th
-  percentiles. The benchmark scripts used on 2026-11-04 are in this conversation's record: one edit per animation frame
-  in a gesture, `S.edit(app, { op: 'stones.set', ... , gesture })`, layouts '3d' / 'split' / 'flat'.
+  percentiles. The script used on 2026-11-04: `app/test/stone-spacing-compare/bench-in-app.js` (paste into the test
+  tab's console; one edit per animation frame in a gesture; work = the edit + `Viewport.frame`; GPU by `benchmark`).
 - **Environment**: GTX 1650 4 GB, 4K display at 1.75 scale. The preview pane throttles when hidden: check
   `document.hidden` and that the tab is fronted before trusting any timing; a hidden pane's rAF stops entirely.
 - Visual comparisons of stone spacing: `app/test/stone-spacing-compare/` (Node, three versions, contact sheet).
