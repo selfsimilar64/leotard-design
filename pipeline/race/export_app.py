@@ -38,7 +38,8 @@ class Keep(S.Recorder):
 
 def seam_edges(tris, rest):
 	"""Edges where the garment is sewn: the two triangles beside the edge sit apart in the flat pattern (a fold, where the halves join
-	mirrored, keeps the same flat place and is not a seam). Pairs of point indices."""
+	mirrored, keeps the same flat place and is not a seam). Pairs of point indices.
+	Twin: seamKeys in app/src/render/fitted.js (a fitted garment's seams in the app)."""
 	where = {}
 	seams = []
 	for t in range(len(tris)):

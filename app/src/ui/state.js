@@ -23,6 +23,7 @@ export const showHandles = signal(true);   // a chosen pattern's handles on the 
 export const patternFocus = signal('frame'); // what a chosen pattern's handles work on: 'frame' | 'plane' | a modifier's id (stones/handles.js)
 export const hideMannequin = signal(false); // the leotard floats with the mannequin hidden (M)
 export const libraryOpen = signal(false);  // the designs library over the whole window
+export const fitStatus = signal({ state: 'off' }); // a fitted garment's re-fit (render/fitted.js status): the busy note and the settings panel
 export const busy = signal(null);          // { text } while a slow change (a new shape, a design) is applied
 export const savedRev = signal(-1);        // the design's revision when it was last saved or opened
 

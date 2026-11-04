@@ -4,7 +4,7 @@
 // library (ui/Library.jsx) opens over everything.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { drawnLines, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, savedRev, prefs, setPref } from './state.js';
+import { drawnLines, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, fitStatus, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, savedRev, prefs, setPref } from './state.js';
 import { Panel, pickTab } from './Panel.jsx';
 import { Library } from './Library.jsx';
 import { FlatView } from './FlatView.jsx';
@@ -187,8 +187,7 @@ function FabricFit() {
 // A fitted garment (Shape tab, Garment): whether it is re-fitted on the GPU after a pose or body change (fit/refit.js), for how
 // many steps and with how much friction, and how far its fabric is drawn off the body. This computer's setting, like the rest.
 function FittedFit() {
-	const d = display.value, f = app.engine?.fitted, [st, setSt] = useState(f?.status ?? { state: 'off' });
-	useEffect(() => { if (!f) return; f.onStatus = setSt; setSt(f.status); return () => { if (f.onStatus === setSt) f.onStatus = null; }; }, [f]);
+	const d = display.value, f = app.engine?.fitted, st = fitStatus.value;
 	if (!d) return null;
 	const apply = (patch) => { const n = { ...d, ...patch }; display.value = n; saveDisplay(n); f?.setOptions(fitOptions(n)); };
 	const said = {
@@ -289,7 +288,8 @@ function StageHint() {
 }
 
 function Busy() {
-	const b = busy.value;
+	// a slow change the UI asked for, or a fitted garment being re-fitted (render/fitted.js: the view holds its last frame meanwhile)
+	const b = busy.value ?? (fitStatus.value.state === 'fitting' ? { text: 'Fitting the leotard…' } : null);
 	return b ? <div class="busy" role="status"><span class="spinner" /><span>{b.text}</span></div> : null;
 }
 

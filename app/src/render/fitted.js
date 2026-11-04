@@ -8,9 +8,53 @@ import * as THREE from 'three';
 import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 import { fittedOf } from '../garment/fitted.js';
 import { Refit, DEFAULTS } from '../fit/refit.js';
-import { buildCase, garmentArrays } from '../fit/fitted-case.js';
+import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { ROLE_COLOURS } from './overlay.js';
+
+const LINE_LIFT = 0.0022; // m over where the fabric is fitted, on top of its lift: render/overlay.js LIFT (the fabric material adds 1.2 mm itself)
 
 const HIDDEN = new THREE.MeshBasicMaterial({ visible: false });
+const HOLD_MAX_MS = 8000; // the longest the view waits for a re-fit before drawing what it has
+const SEAM_CAP = 0.012;   // m: as garment/fields.js seamDistance, the shader only cares within this of a seam
+
+// Sewn edges of the whole garment: the two triangles beside the edge sit apart in the flat pattern (at the fold, where the halves join
+// mirrored, they keep the same flat place: not a seam). Twin: export_app.seam_edges (pipeline/race). Keys a * n + b, a < b.
+function seamKeys(c) {
+	const n = c.n, T = c.tris, R = c.rest, where = new Map(), keys = new Set();
+	for (let t = 0; t < T.length / 3; t++) for (let k = 0; k < 3; k++) {
+		const a = T[3 * t + k], b = T[3 * t + (k + 1) % 3], key = a < b ? a * n + b : b * n + a;
+		const ra = [R[6 * t + 2 * k], R[6 * t + 2 * k + 1]], rb = [R[6 * t + 2 * ((k + 1) % 3)], R[6 * t + 2 * ((k + 1) % 3) + 1]];
+		const flat = a < b ? [ra, rb] : [rb, ra], seen = where.get(key);
+		if (!seen) { where.set(key, flat); continue; }
+		where.delete(key);
+		if (Math.max(Math.abs(seen[0][0] - flat[0][0]), Math.abs(seen[0][1] - flat[0][1]), Math.abs(seen[1][0] - flat[1][0]), Math.abs(seen[1][1] - flat[1][1])) > 1e-6) keys.add(key);
+	}
+	return keys;
+}
+
+// Per point of a cell, metres (flat, on the pattern piece) to its nearest seam edge, capped: what aSeam carries for the shader.
+function cellSeams(c, keys, n) {
+	const I = c.I, U = c.uv, cid = c.cid, m = U.length / 2, segs = [];
+	for (let t = 0; t < I.length; t += 3) for (let k = 0; k < 3; k++) {
+		const a = I[t + k], b = I[t + (k + 1) % 3], A = cid[a], B = cid[b];
+		if (keys.has(A < B ? A * n + B : B * n + A)) segs.push(U[2 * a], U[2 * a + 1], U[2 * b], U[2 * b + 1]);
+	}
+	const out = new Float32Array(m).fill(SEAM_CAP);
+	for (let l = 0; l < m; l++) {
+		const px = U[2 * l], py = U[2 * l + 1];
+		let best = SEAM_CAP * SEAM_CAP;
+		for (let s = 0; s < segs.length; s += 4) {
+			const ax = segs[s], ay = segs[s + 1], dx = segs[s + 2] - ax, dy = segs[s + 3] - ay, L = dx * dx + dy * dy;
+			const u = L > 0 ? Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / L)) : 0, ex = ax + u * dx - px, ey = ay + u * dy - py;
+			const d = ex * ex + ey * ey;
+			if (d < best) best = d;
+		}
+		out[l] = Math.sqrt(best);
+	}
+	return out;
+}
 
 // The designer's settings (ui/Shell.jsx Fabric fit, kept with the display settings).
 export const FIT_DEFAULTS = {
@@ -31,11 +75,14 @@ export class FittedView {
 		this.near = null;       // per whole-garment point, its neighbours (an opening's inward direction)
 		this.meshes = [];       // one per piece half
 		this.edges = null;      // the finished openings
+		this.lines = null;      // its seams and edges as overlay lines (setLinesVisible: the lines button)
+		this.linesOn = true;
+		this.pairs = null;      // { seam, edge }: whole-garment point pairs the lines join
 		this.on = null;         // body vertices under its fabric (the cover hook)
 		this.solved = null;     // the last re-fit's points, on the body as it was when it ran
 		this.options = { ...FIT_DEFAULTS };
 		this.status = { state: 'off' }; // for the settings panel: off | carried | fitting | fitted | error
-		this.onStatus = null;
+		this.listeners = new Set(); // told of every status change (the busy note, the settings panel: main.jsx)
 		this.device = null;
 		this.running = false; this.again = false; this.gen = 0;
 		engine.coverHooks.push((C) => { if (this.on) for (const v of this.on) C[v] = 1; });
@@ -45,14 +92,26 @@ export class FittedView {
 	get active() { return !!this.data; }
 	get view() { return this.engine.layers.get('L0')?.view ?? null; }
 
-	setStatus(s) { this.status = s; this.onStatus?.(s); }
+	setStatus(s) { this.status = s; for (const fn of this.listeners) fn(s); }
+
+	// While a re-fit for a new body or pose runs, the view keeps its last frame: the garment is only ever shown fitted (owner,
+	// 2026-11-04: never the carried, unfitted state). Let go when the fit is drawn, or fails, or after HOLD_MAX_MS whatever happens.
+	hold(on) {
+		const holds = this.engine.viewport.holds;
+		clearTimeout(this.holdTimer);
+		if (!on) { holds.delete(this); return; }
+		holds.add(this);
+		this.holdTimer = setTimeout(() => holds.delete(this), HOLD_MAX_MS);
+	}
 
 	// The designer's fit settings: a change to the re-fit runs it again; the lift only redraws.
 	setOptions(o) {
 		const before = this.options;
 		this.options = { ...before, ...o };
 		if (!this.active) return;
-		if (o.refit !== undefined && o.refit !== before.refit || o.steps !== undefined && o.steps !== before.steps || o.mu !== undefined && o.mu !== before.mu) this.place();
+		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
+		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
+		else if ((changed('refit') || changed('steps') || changed('mu')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
 		else this.show();
 	}
 
@@ -90,12 +149,18 @@ export class FittedView {
 	}
 
 	build() {
-		const view = this.view;
+		const view = this.view, keys = this.data.case ? seamKeys(this.data.case) : null;
+		if (keys) {
+			const n = this.data.case.n, edge = [];
+			for (const o of this.data.openings) if (o.ids) for (let i = 0; i < o.ids.length; i++) edge.push(o.ids[i], o.ids[(i + 1) % o.ids.length]);
+			this.pairs = { seam: [...keys].flatMap((k) => [Math.floor(k / n), k % n]), edge };
+		}
 		for (const c of this.data.cells) {
 			const n = c.hostW.length / 3, geo = new THREE.BufferGeometry();
 			const A = (name, size) => geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(n * size), size));
 			A('position', 3); A('normal', 3); A('tangent', 4); A('aLift', 3); A('aFold', 3); A('aGNormal', 3); A('aAO', 1); A('aRef', 3); A('aKeep', 1); A('aForm', 2); A('aZone', 2); A('aUV', 2); A('aGrad', 1);
-			geo.setAttribute('aSeam', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
+			// metres to the nearest seam: the shader's groove and ridge (render/garment.js does the same from the drawn arrangement)
+			geo.setAttribute('aSeam', new THREE.BufferAttribute(keys && c.cid ? cellSeams(c, keys, this.data.case.n) : new Float32Array(n).fill(SEAM_CAP), 1));
 			geo.setAttribute('aCover', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
 			geo.setIndex(new THREE.BufferAttribute(Uint32Array.from(c.I), 1));
 			geo.attributes.aUV.array.set(c.uv); // flat metres: the cloth's weave and prints follow the pattern piece
@@ -114,9 +179,9 @@ export class FittedView {
 	place() {
 		if (!this.active) return;
 		this.solved = null;
+		if (this.options.refit && this.data.case) { this.hold(true); this.refit(); return; } // shown once fitted (hold)
 		this.show();
-		if (this.options.refit && this.data.case) this.refit();
-		else this.setStatus({ state: 'carried', note: this.data.case ? null : 'This garment file has no re-fit data' });
+		this.setStatus({ state: 'carried', note: this.data.case ? null : 'This garment file has no re-fit data' });
 	}
 
 	// Every attribute from the body's arrays; positions where the re-fit settled each point, or carried by surface coordinates, then
@@ -140,8 +205,33 @@ export class FittedView {
 			geo.computeBoundingSphere();
 		}
 		this.finish();
+		this.drawLines();
 		this.quiet();
 	}
+
+	// The garment's seams (yellow) and edges (blue), as the overlay draws a drawn design's, at its points as now shown.
+	drawLines() {
+		if (this.lines) { this.lines.parent?.remove(this.lines); for (const l of this.lines.children) l.geometry.dispose(); this.lines = null; }
+		if (!this.pairs) return;
+		const man = this.engine.body, X = this.solved ?? startOf(this.data, man.garmentPos), N = startOf(this.data, man.aGNormal.array), lift = this.options.lift + LINE_LIFT;
+		const at = (i, out, o) => { const L = Math.hypot(N[3 * i], N[3 * i + 1], N[3 * i + 2]) || 1; for (let k = 0; k < 3; k++) out[o + k] = X[3 * i + k] + N[3 * i + k] / L * lift; };
+		this.lines = new THREE.Group();
+		this.lines.renderOrder = 10;
+		for (const [kind, colour] of [['seam', ROLE_COLOURS.seam], ['edge', ROLE_COLOURS.edge]]) {
+			const P = this.pairs[kind], pos = new Float32Array(P.length * 3);
+			for (let j = 0; j < P.length; j++) at(P[j], pos, 3 * j);
+			const g = new LineSegmentsGeometry();
+			g.setPositions(pos);
+			const line = new LineSegments2(g, this.engine.overlay.material(colour, 1.6));
+			line.frustumCulled = false;
+			line.renderOrder = 10;
+			this.lines.add(line);
+		}
+		this.lines.visible = this.linesOn;
+		this.engine.overlay.group.parent.add(this.lines);
+	}
+
+	setLinesVisible(v) { this.linesOn = v; if (this.lines) this.lines.visible = v; }
 
 	async refit() {
 		if (this.running) { this.again = true; return; }
@@ -166,13 +256,16 @@ export class FittedView {
 				if (this.again || gen !== this.gen || !this.active) continue; // the body changed meanwhile: run again on the new one
 				this.solved = X;
 				this.show();
+				this.hold(false);
 				this.setStatus({ state: 'fitted', steps: res.steps, seconds: (performance.now() - tRun) / 1000, setup: built / 1000 });
 			} while (this.again && this.active);
 		} catch (e) {
 			console.error('re-fit', e);
+			this.show(); // what can be shown: the carried fit
 			this.setStatus({ state: 'error', note: e.message });
 		} finally {
 			this.running = false;
+			if (!this.running && !this.again) this.hold(false);
 		}
 	}
 
@@ -206,10 +299,12 @@ export class FittedView {
 	clear(doc) {
 		const view = this.view, e = this.engine;
 		this.gen++; // any re-fit under way is for the garment going
+		this.hold(false);
 		for (const m of this.meshes) { m.parent?.remove(m); m.geometry.dispose(); }
 		this.meshes = [];
 		if (this.edges) { this.edges.parent?.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
-		this.data = null; this.garment = null; this.near = null; this.solved = null; this.cache = null;
+		if (this.lines) { this.lines.parent?.remove(this.lines); for (const l of this.lines.children) l.geometry.dispose(); this.lines = null; }
+		this.data = null; this.garment = null; this.near = null; this.solved = null; this.cache = null; this.pairs = null;
 		this.setStatus({ state: 'off' });
 		const covered = !!this.on;
 		this.on = null;
