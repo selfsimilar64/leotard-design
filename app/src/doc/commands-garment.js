@@ -6,6 +6,7 @@ import { toSP } from '../body/surface.js';
 import { makeBlock, blockFabric, blockKeyOf, blockOf, fitToStrap, BLOCK_OPTIONS, DEFAULT_BLOCK, ELEMENT_CURVES, ELEMENT_PANELS } from '../garment/blocks.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { STARTS } from '../garment/starts.js';
+import { FITTED } from '../garment/fitted.js';
 import { buildGarment, cellSeed, evaluateAll, isStroke, overlayLines, panelAt, pickableRegions, strokeId, strokeRegions, whyNotPickable } from '../garment/build.js';
 import { locate } from '../garment/arrangement.js';
 import { LOOK, lookOf, setLook, assign, usage, freshName, keepMaterial, dropAutoMaterial } from './materials.js';
@@ -108,6 +109,18 @@ defineCommand('start.apply', {
 			tx.exec({ op: 'stones.add', ...g, on, params });
 		}
 		tx.set('meta/start', st.key);
+		tx.set('meta/fitted', st.fitted ?? null);
+	},
+});
+
+// A fitted garment (garment/fitted.js) in place of the drawn pieces, or null for the drawn pieces again. The drawn
+// pieces stay in the document: their panels dress the fitted pieces of the same name (Front, Back, Sleeve).
+defineCommand('fitted.set', {
+	label: 'Fitted garment', args: `{ key: ${FITTED.map((f) => f.key).join('|')}|null }`,
+	run(tx, a) {
+		const key = a.key ?? null;
+		if (key !== null && !FITTED.some((f) => f.key === key)) throw new Error('key must be one of: ' + FITTED.map((f) => f.key).join(', ') + ', or null');
+		tx.set('meta/fitted', key);
 	},
 });
 

@@ -1,5 +1,9 @@
 # Bundle update log
 
+## 2026-11-04
+* **Creation**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): a design can show a solver-fitted block instead of its drawn pieces (Shape tab Garment row, `fitted.set`, two starting points); first the textbook leotard, basic and high-cut leg, fitted on `young`. Owned blocks ship in `app/public/fitted/`; bought-block fits stay dev-only.
+* **Update**: [Armstrong leotard and bodysuit foundation drafts](/domain/construction/armstrong-leotard-foundation-draft.md): the basic back bodice draft and size-6 chart values added; the armhole is raised 1 in (read from the figure), not lowered; our implementation choices (`pipeline/draft_armstrong.py`) recorded.
+
 ## 2026-11-03
 * **Creation**: [Armstrong leotard and bodysuit foundation drafts](/domain/construction/armstrong-leotard-foundation-draft.md): the textbook draft from a basic back bodice plus three measurements, restated in our own words, as the route to blocks the project owns (the Etsy blocks forbid redistribution). The basic back bodice draft it starts from is not yet read.
 * **Creation**: [Bringing the block-first garment into the app](/product/roadmap/block-first-app-plan.md): every design option as a cut, split or redraft of the bought block; flat and 3D views switchable with a focus on one piece; one block altered, plus bought sleeveless and raglan variants, rather than a block per design. Not started.

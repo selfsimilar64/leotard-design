@@ -41,5 +41,17 @@ export const STARTS = [
 		block: { neck: 'scoop', back: 'open', sleeves: 'tank', leg: 'competition', yoke: 'none', waist: 'none' },
 		fabric: { fabric: 'shiny', colour: '#b3122e' },
 	},
+	// Fitted garments (garment/fitted.js): a textbook-drafted block, sewn and fitted by the fit solver, shown in place of
+	// the drawn pieces. The block below only names the panels (Front, Back, Sleeve) that dress it.
+	{
+		key: 'fitted-textbook', label: 'Fitted: textbook leotard', hint: 'Drafted by the book (Armstrong, size 6) and fitted by simulation; long sleeves, basic leg',
+		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
+		fabric: { fabric: 'mystique', colour: '#16205c' }, fitted: 'armstrong-6',
+	},
+	{
+		key: 'fitted-textbook-high', label: 'Fitted: textbook, high cut', hint: 'The same textbook block with its high-cut leg, fitted by simulation',
+		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
+		fabric: { fabric: 'shiny', colour: '#b3122e' }, fitted: 'armstrong-6-high',
+	},
 ];
 export const DEFAULT_START = 'plain-tank';

@@ -25,6 +25,7 @@ import { locate, baryOfVertexInFace } from '../garment/arrangement.js';
 import { TRIMS } from '../garment/trim.js';
 import { FigureView, finishSurface } from './figure.js';
 import { markSkin } from './postfx.js';
+import { FittedView } from './fitted.js';
 
 const BEHIND = 0.006; // m: picks count this far behind the surface hit (what sits on the fabric)
 const _v = new THREE.Vector3();
@@ -96,6 +97,7 @@ export class Engine {
 		this.pick = null;
 		body.onGarment = [() => { if (this.pick) this.pick.update(body.garmentPos); else this.pick = new Surface(body.idx, body.garmentPos); this.gizmo?.again(); }];
 		this.raycaster = new THREE.Raycaster();
+		this.fitted = new FittedView(this); // a fitted garment in place of the drawn pieces (doc.meta.fitted)
 	}
 
 	// What is under a screen point: the garment surface point, the panel there, and (for the
@@ -274,6 +276,7 @@ export class Engine {
 			if (t('stones') || t('placed') || t('curves') || t('panels') || t('straps') || t('trims') || t('layers')) { this.syncStones(doc, all ? null : touched); this.stonesDirty = false; }
 			if (t('decals') || t('layers') || t('curves') || t('panels')) this.syncDecals(doc);
 			if (t('body')) this.applyBody(doc.body, all);
+			this.fitted.sync(doc);
 		}
 		if (!legacy && why !== 'gesture') this.drawOverlay(doc);
 		if (this.hover && why !== 'gesture') this.showHover();
@@ -352,6 +355,7 @@ export class Engine {
 		const p = poseSpec(pose), W = this.wrinkleZones();
 		// (a Daz pose's arms are not presets: its armpits keep their folds)
 		W.N[1].w = p.left === 'up' ? 0.3 : 1; W.N[2].w = p.right === 'up' ? 0.3 : 1;
+		if (this.fitted?.active) for (const n of W.N) n.w = 0; // a fitted garment's folds come from its fit
 	}
 
 	// Logos and lettering: every layer's views get that layer's decal atlas and boxes.

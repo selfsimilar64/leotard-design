@@ -16,13 +16,29 @@ import { TRIMS } from '../garment/trim.js';
 import { overlayLines, panelAt } from '../garment/build.js';
 import { focusOn } from './camera.js';
 import { BLOCK_OPTIONS, blockOf, blockAllows, blockKeyOf } from '../garment/blocks.js';
+import { FITTED, fittedOf } from '../garment/fitted.js';
 
 export function ShapeTab() {
 	rev.value;
 	const sel = selection.value, doc = app.doc;
 	if (sel?.kind === 'curves') return <LineEditor key={sel.id} id={sel.id} doc={doc} />;
 	if (sel?.kind === 'straps') return <StrapEditor key={sel.id} id={sel.id} doc={doc} />;
-	return <><Silhouette doc={doc} /><Drawn doc={doc} /></>;
+	return <><Garment doc={doc} /><Silhouette doc={doc} /><Drawn doc={doc} /></>;
+}
+
+// --- which garment: the drawn pieces, or a fitted one (garment/fitted.js) ---------------------------------
+// The drawn pieces stay in the design either way; their Front, Back and Sleeve panels dress the fitted pieces.
+function Garment({ doc }) {
+	const f = fittedOf(doc), started = doc.curves.length > 0;
+	if (!started) return null;
+	const pick = (key) => run({ op: 'fitted.set', key });
+	return (
+		<Section title="Garment">
+			<Segmented wrap value={f?.key ?? null} onPick={pick}
+				options={[[null, 'Drawn', null, 'The pieces drawn on the body, shaped by the options below'], ...FITTED.map((x) => [x.key, x.label, null, `${x.leg}; drafted from a textbook block and fitted by simulation on the ${x.fittedOn} body`])]} />
+			{f ? <Hint>Fitted on the {f.fittedOn} body. The options below shape the drawn pieces, not this one; its fabric comes from the Front, Back and Sleeve pieces.</Hint> : null}
+		</Section>
+	);
 }
 
 // --- the silhouette, element by element ---------------------------------------------------------

@@ -6,6 +6,7 @@
 //   w.hide();                                 // back to the app's own build
 // Each point of the wrapped pieces is a host triangle and weights on the body's surface, the same coordinates
 // the app's own pieces use, so GarmentView places them and they follow the body and pose.
+// The app's own fitted garments (render/fitted.js) are this show/cover/finish grown up: change one, look at the other.
 import * as THREE from 'three';
 import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 
