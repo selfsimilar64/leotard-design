@@ -74,13 +74,18 @@ export function stonesFor(p) {
 	// has them packed: its own side, and its mirrored side as the other cut.
 	const records = run.records ?? run.stones ?? [];
 	for (const s of records) if (s.flat === cloth) at(s, [s.fu, s.fv], !!s.mirrored);
+	// (as arrays, not an object a stone: list.packs, painted and picked from directly)
+	list.packs = [];
 	for (const pk of run.packs ?? []) {
 		if (pk.piece !== cloth) continue;
-		const k = pk.k;
-		for (const twin of [pk.own ? false : null, pk.mirrored ? true : null]) {
-			if (twin === null) continue;
-			for (let j = 0; j < k.n; j++) { const [X, Y] = F.toSvg(k.U[j], k.V[j]); list.push({ X, Y, r: (k.D[j] * 1000) / 2, colour: colourOf(k.stone[j]), gen: pk.gen, twin }); }
+		const k = pk.k, n = k.n, X = new Float32Array(n), Y = new Float32Array(n), R = new Float32Array(n), C = new Float32Array(n * 3);
+		const [ox, oy] = F.toSvg(0, 0);
+		for (let j = 0; j < n; j++) {
+			X[j] = ox + k.U[j] * F.kx; Y[j] = oy - k.V[j] * F.ky; R[j] = k.D[j] * 500;
+			const c = rgbOf(colourOf(k.stone[j]));
+			C[j * 3] = c[0]; C[j * 3 + 1] = c[1]; C[j * 3 + 2] = c[2];
 		}
+		for (const twin of [pk.own ? false : null, pk.mirrored ? true : null]) if (twin !== null) list.packs.push({ n, X, Y, R, C, twin, gen: pk.gen });
 	}
 	if (p.fitted) {
 		// (a mirrored pack on another piece, the other sleeve of a pair, lands here by its fitted triangles: its records)
@@ -125,16 +130,27 @@ export function paintStones(canvas, svg, pieces) {
 	const k = M.a * dpr, tx = (M.e - r.left) * dpr, ty = (M.f - r.top) * dpr, maxR = G.maxSize / 2 - 2;
 	const sel = selection.value, isOn = (s) => !!sel && ((sel.kind === 'stones' && sel.id === s.gen) || (sel.kind === 'placed' && sel.id === s.id));
 	let n = 0;
-	for (const p of pieces) n += stonesFor(p).length;
+	for (const p of pieces) { const l = stonesFor(p); n += l.length; for (const pk of l.packs ?? []) n += pk.n; }
 	if (!n) return;
 	// per stone: x, y (canvas pixels), radius, outline width (pixels), r, g, b, look (1: the pair's other cut, 2: chosen)
 	const A = G.data.length >= n * 8 ? G.data : (G.data = new Float32Array(n * 8 * 1.5));
 	let i = 0;
 	const onW = 0.5 * k; // a chosen group's outline: half a millimetre
-	for (const p of pieces) for (const s of stonesFor(p)) {
-		const R = Math.min(s.r * k, maxR), on = isOn(s), c = rgbOf(s.colour);
-		A[i++] = s.X * k + tx; A[i++] = s.Y * k + ty; A[i++] = R; A[i++] = on ? onW : Math.max(0.5, R * 0.12);
-		A[i++] = c[0]; A[i++] = c[1]; A[i++] = c[2]; A[i++] = (s.twin ? 1 : 0) + (on ? 2 : 0);
+	for (const p of pieces) {
+		const l = stonesFor(p);
+		for (const s of l) {
+			const R = Math.min(s.r * k, maxR), on = isOn(s), c = rgbOf(s.colour);
+			A[i++] = s.X * k + tx; A[i++] = s.Y * k + ty; A[i++] = R; A[i++] = on ? onW : Math.max(0.5, R * 0.12);
+			A[i++] = c[0]; A[i++] = c[1]; A[i++] = c[2]; A[i++] = (s.twin ? 1 : 0) + (on ? 2 : 0);
+		}
+		for (const pk of l.packs ?? []) {
+			const on = sel?.kind === 'stones' && sel.id === pk.gen, look = (pk.twin ? 1 : 0) + (on ? 2 : 0), { X, Y, R: PR, C } = pk;
+			for (let j = 0; j < pk.n; j++) {
+				const R = Math.min(PR[j] * k, maxR);
+				A[i++] = X[j] * k + tx; A[i++] = Y[j] * k + ty; A[i++] = R; A[i++] = on ? onW : Math.max(0.5, R * 0.12);
+				A[i++] = C[j * 3]; A[i++] = C[j * 3 + 1]; A[i++] = C[j * 3 + 2]; A[i++] = look;
+			}
+		}
 	}
 	gl.useProgram(G.prog);
 	gl.uniform2f(G.uSize, w, h);
@@ -205,7 +221,9 @@ export function pickStone(p, ev) {
 	pt.x = ev.clientX; pt.y = ev.clientY;
 	const q = pt.matrixTransform(svg.getScreenCTM().inverse());
 	let best = null, bd = Infinity;
-	for (const s of stonesFor(p)) { const d = (s.X - q.x) ** 2 + (s.Y - q.y) ** 2; if (d < bd) { bd = d; best = s; } }
+	const l = stonesFor(p);
+	for (const s of l) { const d = (s.X - q.x) ** 2 + (s.Y - q.y) ** 2; if (d < bd) { bd = d; best = s; } }
+	for (const pk of l.packs ?? []) for (let j = 0; j < pk.n; j++) { const d = (pk.X[j] - q.x) ** 2 + (pk.Y[j] - q.y) ** 2; if (d < bd) { bd = d; best = { r: pk.R[j], gen: pk.gen }; } }
 	if (!best || Math.sqrt(bd) > best.r * 1.6 + 1) return false;
 	selection.value = best.gen === 'placed' ? { kind: 'placed', id: best.id } : { kind: 'stones', id: best.gen };
 	return true;

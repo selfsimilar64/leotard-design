@@ -236,9 +236,9 @@ export function patternCandidates(gen, piece, cache = null) {
 	const shape = gen.shape ?? 'round', isRound = (SHAPES[shape]?.aspect ?? 1) === 1 && shape !== 'heart' && shape !== 'triangle' && shape !== 'star' && shape !== 'square';
 	const dart = !!layout.dart, [modLo] = sizeRange(P.mods), fine = Math.min(1, Math.max(0.25, modLo * (layout.fine?.(P) ?? 1)));
 	// what must be drawn: the piece seen from the frame's own space (a flat layout: the piece itself); what is drawn: that
-	// with 2 to 4 cm round it on whole steps, so that a move or a turn draws again only when it reaches past it (drawn again
-	// for another reason, a slider of the arrangement say, only a few millimetres round it: the next will be the same; not a
-	// heavy layout, whose pen's moves are kept on their own wider box)
+	// with a few millimetres round it when the arrangement itself changed (a slider of it, say: the next step will be the
+	// same; a heavy layout, whose pen's moves are kept on their own wider box, 2 to 4 cm), reused while a move or a turn
+	// stays inside
 	let need = null;
 	if (!flat) {
 		need = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
@@ -251,7 +251,15 @@ export function patternCandidates(gen, piece, cache = null) {
 	const c = cache?.get(gen.id + '#cand');
 	if (c?.key === key && (flat || (need.x0 >= c.local.x0 && need.x1 <= c.local.x1 && need.y0 >= c.local.y0 && need.y1 <= c.local.y1))) return { ...c.out, rigid, P };
 	const m = flat ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, distortion(P, seed));
-	const local = flat ? null : anchoredBox(need, c?.key === key || layout.heavy ? 0.02 : 0.004);
+	// (reached past by a turn: the circle round the frame's origin that holds the piece whichever way it turns, and 5 cm
+	// more, so a turn draws again once; by a move: what must be drawn and 5 cm more round it)
+	let local = null;
+	if (!flat && c?.key === key && c.rot === P.rotate) local = anchoredBox({ x0: need.x0 - 0.05, x1: need.x1 + 0.05, y0: need.y0 - 0.05, y1: need.y1 + 0.05 }, 0.02);
+	else if (!flat && c?.key === key) {
+		let rho = 0;
+		for (const [u, v] of [[piece.x0, piece.y0], [piece.x1, piece.y0], [piece.x0, piece.y1], [piece.x1, piece.y1]]) rho = Math.max(rho, Math.hypot(u - rigid.x, v - rigid.y));
+		local = anchoredBox({ x0: -rho - 0.05, x1: rho + 0.05, y0: -rho - 0.05, y1: rho + 0.05 }, 0.02);
+	} else if (!flat) local = anchoredBox(need, layout.heavy ? 0.02 : 0.004);
 	const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : boxOver(P, local, m);
 	const pitch = (d0 * gap) / m.sc;
 	// sizes that vary with place: the modifier's answer, some of each of the sizes it falls between; read in the frame's own
@@ -264,7 +272,7 @@ export function patternCandidates(gen, piece, cache = null) {
 	drawInto(gen, layout, P, E, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine }, cache);
 	const n = E.n, cut = (a) => a.slice(0, n);
 	const out = { n, GX: cut(E.X), GY: cut(E.Y), GA: cut(E.A), R: cut(E.R), K: cut(E.K), T: cut(E.T), C: cut(E.C), D: cut(E.D), rigid, P, d0, fine, dart, isRound, flat };
-	cache?.set(gen.id + '#cand', { key, local, out });
+	cache?.set(gen.id + '#cand', { key, local, rot: P.rotate, out });
 	return out;
 }
 

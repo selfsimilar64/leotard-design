@@ -118,7 +118,10 @@ that later.
      stones on `FittedCloth`) draw right.
    - Gem Test 3 (17 700 stones), one edit a frame: move 3D 16.8 ms (the display's frame; stones 3.4 ms), Pattern only
      16.8, Both 23 (the flat view's per-stone list), turn 17, spacing 46 (the CPU drawing the candidates again).
-5. The flat view reads packs' arrays directly (`ui/FlatStones.jsx` stonesFor); still a list of objects per stone and
-   the WebGL painter's upload (~6 ms of Both's 23). A fitted pair's other sleeve asks the pack's records.
-6. Next: the flat view straight from the arrays; the candidates' drawing (scale, spacing, the layout's grips) in a
-   worker; reference-x raster so `symmetric` / `side` groups can be packs; owner check.
+5. Done (2026-11-04): the flat view paints and picks a pack's stones from arrays (`stonesFor`'s `list.packs`), no
+   object a stone. A fitted pair's other sleeve still asks the pack's records. Drawn area: tight after an arrangement
+   change; a move past it draws the needed box + 5 cm; a turn past it the circle that holds the piece at any angle + 5 cm.
+   Gem Test 3, one edit a frame (median / worst of 40): move 5 cm in Both 16.7 / 19 ms, 8 cm 17.4 / 86 (one redraw),
+   turn 30 deg 16.8 / 78 (one redraw), Pattern only 16.6 / 26, 3D 16.7.
+6. Next: the candidates' drawing (scale, spacing, the layout's grips, and the one redraw of a long move or turn) in a
+   worker; a reference-x raster so `symmetric` / `side` groups can be packs; owner check.
