@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { SHAPES, parseStone } from './library.js';
 import { RENDERER } from '../render/webgpu.js';
+import { AtlasNode, placedNode, nodeTwin } from './stones-node.js';
 
 // The texel: a millimetre, coarser only on a piece over a metre across (1024 texels at most).
 const TEXEL = 0.001, MAX_TEXELS = 1024;
@@ -99,6 +100,8 @@ export class Atlas {
 	constructor(renderer) {
 		this.renderer = renderer;
 		this.rt = null;
+		// WebGPU: rendered by its twin, stones/stones-node.js AtlasNode (one target at a time); placed stones read it there
+		this.node = RENDERER === 'webgpu' ? new AtlasNode(renderer) : null;
 		this.mat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: ATLAS_VS, fragmentShader: ATLAS_FS, uniforms: { uBox: { value: new THREE.Vector4() } }, side: THREE.DoubleSide, depthTest: false, depthWrite: false });
 		this.geo = new THREE.BufferGeometry();
 		this.mesh = new THREE.Mesh(this.geo, this.mat);
@@ -143,6 +146,7 @@ export class Atlas {
 		// the target: the piece's box and two texels round it
 		const span = Math.max(piece.x1 - piece.x0, piece.y1 - piece.y0), t = Math.max(TEXEL, span / (MAX_TEXELS - 4));
 		const x0 = piece.x0 - 2 * t, y0 = piece.y0 - 2 * t, w = Math.ceil((piece.x1 - piece.x0) / t) + 4, h = Math.ceil((piece.y1 - piece.y0) / t) + 4;
+		if (this.node) { this.node.render({ aFlat: geo.attributes.aFlat, aPos: geo.attributes.aPos, aNrm: geo.attributes.aNrm, aTu: geo.attributes.aTu, aTv: geo.attributes.aTv }, { x0, y0, w, h, t }); return; }
 		if (!this.rt || this.rt.width !== w || this.rt.height !== h) {
 			this.rt?.dispose();
 			this.rt = new THREE.WebGLRenderTarget(w, h, { count: 4, type: THREE.FloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false, generateMipmaps: false });
@@ -160,7 +164,7 @@ export class Atlas {
 		U.uAt.value.set(x0, y0, 1 / t);
 	}
 
-	dispose() { this.rt?.dispose(); this.geo.dispose(); this.mat.dispose(); }
+	dispose() { this.rt?.dispose(); this.geo.dispose(); this.mat.dispose(); this.node?.dispose(); }
 }
 
 // A stone's colour and coating, once per name (StoneView's finishOf, same numbers).
@@ -191,8 +195,6 @@ export class PackView {
 	// packs: [{ id, gen, shape, layer, piece, k: { n, U, V, A, D, H, stone }, own, mirrored, mirrorSP(sp), mirrorFit(fit) }]
 	set(packs) {
 		this.packs = packs;
-		// WebGPU: the atlas (four float targets, a GLSL program) is not ported yet (plan Phase 1 step 5): no pattern stones drawn
-		if (RENDERER === 'webgpu') { if (!PackView.warned) { PackView.warned = true; console.warn('Pattern stones are not drawn on the WebGPU renderer yet'); } return; }
 		const used = new Set();
 		for (const p of packs) {
 			for (const side of [p.own ? 'own' : null, p.mirrored ? 'mirror' : null]) {
@@ -220,7 +222,9 @@ export class PackView {
 		geo.index = base.index;
 		for (const [name, a] of Object.entries(base.attributes)) geo.setAttribute(name, a);
 		const atlas = new Atlas(this.renderer), uniforms = { ...atlas.uniforms, uAspect: { value: SHAPES[shape]?.aspect ?? 1 } };
-		const material = placed(fam === 'crystal' ? this.view.newCrystal() : this.view.mats[fam].clone(), uniforms);
+		const material = atlas.node
+			? placedNode(fam === 'crystal' ? this.view.newCrystal() : nodeTwin(this.view.mats[fam].clone()), atlas.node, SHAPES[shape]?.aspect ?? 1)
+			: placed(fam === 'crystal' ? this.view.newCrystal() : this.view.mats[fam].clone(), uniforms);
 		const mesh = new THREE.Mesh(geo, material);
 		mesh.frustumCulled = false;
 		mesh.renderOrder = -8; // (as StoneView's: in front of everything)

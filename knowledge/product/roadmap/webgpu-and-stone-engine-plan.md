@@ -164,7 +164,11 @@ Inventory (2026-11-04) of what must move:
 | environment | `RoomEnvironment`, `HDRLoader`, `GroundedSkybox`, `RectAreaLightUniformsLib`, `render/studio.js` | PMREM, RectAreaLight WebGL | PMREM nodes, `RectAreaLightTexturesLib` |
 | the rest | `render/decals.js`, `straps.js`, `hardware.js`, `pictures.js`, `stand.js`, `garment.js`, `fitted.js`, flat view canvas (`ui/FlatStones.jsx`, WebGL2) | stock materials mostly | stock node materials; flat view: a WebGPU canvas on the same device (Phase 3) |
 
-Progress: [the 3D view on WebGPU](/engineering/rendering/webgpu-port.md) (step 1 in, 2026-11-05).
+Progress (2026-11-05): steps 1-7 in, step 8 decided, see [the 3D view on WebGPU](/engineering/rendering/webgpu-port.md):
+fabrics, stones, post effects and designs match the baseline within 0.8 of 255 at the median shot (worst 2.5, a design whose
+stones changed after the baseline). Not passed yet: four bright photographed studios differ in their window glow (open), and
+the frame-cost gate is not measured. The person figure (step 3) is not shown by the app (the body is always the headless
+mannequin), so it was not ported; the athlete-skin finishes and the skin pass are.
 
 Steps, each gated by the baseline (Phase 0.2) on the same capture and a pixel-difference report plus the owner's eye for
 anything that differs; do not simplify a material's look to make a port easier (owner's rule during look-dev):

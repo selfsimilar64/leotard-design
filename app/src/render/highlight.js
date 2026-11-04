@@ -9,6 +9,10 @@
 //    screen to show a ring it is a soft dot, so a dense group reads as a tint.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { RENDERER } from './webgpu.js';
+import { OutlineNode } from './outline-node.js';
+import { ringSprite } from './rings-node.js';
+import { uniform } from 'three/tsl';
 
 const CLEAR = 0.006;          // m: what stands closer than this to the part (stones, straps) does not hide it
 const OUTLINE_PX = 1.5;       // CSS pixels
@@ -127,7 +131,8 @@ class OutlinePass extends Pass {
 export class HoverHighlight {
 	constructor(viewport, parent, isOn) {
 		this.viewport = viewport; this.parent = parent;
-		this.pass = new OutlinePass(viewport, isOn);
+		// (WebGPU: its twin, render/outline-node.js, drawn by render/webgpu-post.js)
+		this.pass = RENDERER === 'webgpu' ? new OutlineNode(viewport, isOn) : new OutlinePass(viewport, isOn);
 		viewport.composer.addPass(this.pass); // after the tone mapping
 		this.rings = null;
 		this.ringMat = new THREE.ShaderMaterial({
@@ -173,7 +178,8 @@ export class HoverHighlight {
 
 	// stones: from StoneView (s.at, s.up, s.size); strong: the one under the pointer
 	setStones(stones, strong = null) {
-		if (this.rings) { this.parent.remove(this.rings); this.rings.geometry.dispose(); this.rings = null; }
+		// (a WebGPU ring sprite's own geometry is three's shared quad: its attributes' geometry goes instead)
+		if (this.rings) { this.parent.remove(this.rings); (this.rings.isSprite ? this.rings.userData.geo : this.rings.geometry).dispose(); this.rings = null; }
 		if (!stones.length) return;
 		const n = stones.length, pos = new Float32Array(n * 3), size = new Float32Array(n), str = new Float32Array(n);
 		stones.forEach((s, i) => {
@@ -185,6 +191,18 @@ export class HoverHighlight {
 		g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 		g.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
 		g.setAttribute('aStrong', new THREE.BufferAttribute(str, 1));
+		if (RENDERER === 'webgpu') {
+			// (WebGPU draws points a pixel wide: each ring an instanced quad, render/rings-node.js)
+			this.ringU ??= { px: uniform(1000), pr: uniform(1) };
+			const rings = this.rings = ringSprite(g.attributes.position, g.attributes.aSize, g.attributes.aStrong, this.ringU);
+			rings.frustumCulled = false; rings.renderOrder = 13; rings.userData.geo = g;
+			rings.onBeforeRender = (renderer, scene, camera) => {
+				this.ringU.px.value = renderer.getDrawingBufferSize(new THREE.Vector2()).y * camera.projectionMatrix.elements[5] / 2;
+				this.ringU.pr.value = renderer.getPixelRatio();
+			};
+			this.parent.add(rings);
+			return;
+		}
 		const rings = this.rings = new THREE.Points(g, this.ringMat);
 		rings.frustumCulled = false; rings.renderOrder = 13;
 		rings.onBeforeRender = (renderer, scene, camera) => {

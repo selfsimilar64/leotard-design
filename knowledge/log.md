@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-05
+* **Update**: [The 3D view on WebGPU (Phase 1)](/engineering/rendering/webgpu-port.md): every part the app shows ported (fabric lighting incl. the satin thread model, stones and their GPU placement, post effects, outline and stone rings, photo sampling and swatches, the re-fit on the renderer's device); parity against the WebGL baseline (median 0.1-0.4 of 255 by group, worst 2.5 outside four bright studios whose window glow differs, open); pitfalls recorded; [plan](/product/roadmap/webgpu-and-stone-engine-plan.md) progress updated.
 * **Update**: [The 3D view on WebGPU](/engineering/rendering/webgpu-port.md): bright-fabric bug fixed. Root cause: three writes its shared view-direction variable where the shader first reads it, and the fabric function first read it inside a branch most fabrics skip, so lighting saw a zero view direction (Fresnel 1). Rule recorded for the rest of the port.
 * **Update**: [The 3D view on WebGPU](/engineering/rendering/webgpu-port.md): the fabric's fragment code ported to node code; an open bug (scanned and plain fabrics far too bright on WebGPU) with what was ruled out; WebGPU limits met (8 vertex buffers: one interleaved pack per fabric geometry).
 * **Creation**: [The 3D view on WebGPU (port in progress)](/engineering/rendering/webgpu-port.md): Phase 1 step 1: `?renderer=webgpu` draws the scene with three's own materials; fabric code, post effects and pattern stones next.

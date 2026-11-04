@@ -14,7 +14,9 @@ import { SCENE, RIGS, DEFAULT_RIG } from './presets.js';
 import { GlarePass, GLARE_SIZE, GLARE_STRENGTH } from './glare.js';
 import { ScenePass, SkinPass, AOPass } from './postfx.js';
 import { studioEnvironment, cyclorama } from './studio.js';
-import { RENDERER, createWebGPU, NodePost, stubPasses, initAreaLights, benchmarkFrames, captureFrame } from './webgpu.js';
+import { RENDERER, createWebGPU, initAreaLights, benchmarkFrames, captureFrame, readPixels } from './webgpu.js';
+import { NodePost } from './webgpu-post.js';
+import { RenderTarget } from 'three/webgpu';
 import { syncFabricPacks } from '../materials/fabric-node.js';
 
 const _size = new THREE.Vector2(), _Y = new THREE.Vector3(0, 1, 0);
@@ -85,8 +87,8 @@ export class Viewport {
 		scene.backgroundBlurriness = 0.7;
 
 		// the scene is drawn multisampled into its own target (with depth and stencil); the composer's
-		// buffers are plain (render/postfx.js ScenePass). WebGPU: its own post chain (render/webgpu.js NodePost).
-		if (gpu) { this.composer = new NodePost(renderer, scene, camera); Object.assign(this, stubPasses()); } else {
+		// buffers are plain (render/postfx.js ScenePass). WebGPU: its own post chain, the twin of this one (render/webgpu-post.js).
+		if (gpu) { const c = this.composer = new NodePost(renderer, scene, camera); Object.assign(this, { scenePass: c.scenePass, skinPass: c.skinPass, aoPass: c.aoPass, bloom: c.bloom, glare: c.glare }); } else {
 		const composer = this.composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false }));
 		this.scenePass = new ScenePass(scene, camera);
 		composer.addPass(this.scenePass);
@@ -155,7 +157,8 @@ export class Viewport {
 		// the owner saw while orbiting, when dynamic resolution changed the size twice a second).
 		new ResizeObserver(() => { if (this.resize() && this.container.clientWidth) this.render(); }).observe(container);
 		this.resize();
-		renderer.setAnimationLoop(() => this.frame());
+		// (WebGPU: once the device is in; three starts its own initialisation when the loop is set, on a device of its own)
+		if (gpu) this.ready.then(() => renderer.setAnimationLoop(() => this.frame())); else renderer.setAnimationLoop(() => this.frame());
 	}
 
 	// Fits the canvas to its pane (or to a reference photo's crop) at the current resolution.
@@ -194,6 +197,7 @@ export class Viewport {
 		this.scene.backgroundIntensity = r.bg;
 		this.glare.setPreset(this.settings.glare ?? 'plain', { size: this.settings.glareSize ?? GLARE_SIZE, strength: this.settings.glareStrength ?? GLARE_STRENGTH });
 		this.bloomK = r.bloomK ?? 1;
+		this.bloom.strength = this.settings.bloom * this.bloomK; // (as frame() does: a page that draws no frames captures with it too)
 		this.showHdri(null);
 		this.showStudio(null);
 		if (r.areas) { this.showStudio(r); return; }
@@ -414,8 +418,9 @@ export class Viewport {
 
 	// Render once at a fixed size and read back the (2r+1)-pixel square around (x, y) (pixels from
 	// the top left), as sRGB bytes: how a panel's colour comes out under the rig, to match a photo.
+	// (WebGPU: a Promise of the same, read from a capture-sized target: samplePatchWebGPU.)
 	samplePatch(x, y, width, height, r = 4) {
-		if (this.webgpu) throw new Error('Sampling a patch is not on the WebGPU renderer yet');
+		if (this.webgpu) return this.samplePatchWebGPU(x, y, width, height, r);
 		const R = this.renderer, cam = this.camera, aspect = cam.aspect, n = 2 * r + 1, buf = new Uint8Array(n * n * 4);
 		R.setPixelRatio(1); R.setSize(width, height, false);
 		this.composer.setPixelRatio(1); this.composer.setSize(width, height);
@@ -427,6 +432,18 @@ export class Viewport {
 		gl.readPixels(Math.round(x) - r, height - 1 - Math.round(y) - r, n, n, gl.RGBA, gl.UNSIGNED_BYTE, buf); // GL rows run bottom up
 		cam.aspect = aspect; this.resize();
 		return buf;
+	}
+
+	async samplePatchWebGPU(x, y, width, height, r) {
+		const R = this.renderer, cam = this.camera, aspect = cam.aspect, n = 2 * r + 1;
+		R.setPixelRatio(1); R.setSize(width, height, false);
+		cam.aspect = width / height; cam.updateProjectionMatrix();
+		for (const fn of this.onResize) fn(width, height);
+		const rt = new RenderTarget(width, height, { type: THREE.UnsignedByteType, depthBuffer: true });
+		try {
+			R.setRenderTarget(rt); this.render(); R.setRenderTarget(null);
+			return await readPixels(R, rt, Math.round(x) - r, Math.round(y) - r, n, n); // (rows top first, as the photo's)
+		} finally { R.setRenderTarget(null); rt.dispose(); cam.aspect = aspect; this.resize(); }
 	}
 
 	// Look through a reference photo's solved camera, the photo over the view at `opacity`

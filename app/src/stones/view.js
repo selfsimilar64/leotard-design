@@ -6,10 +6,14 @@ import * as THREE from 'three';
 import { SHAPES, parseStone } from './library.js';
 import { facetedGeometry, pearlGeometry, discGeometry, nailheadGeometry } from './shapes.js';
 import { PackView } from './gpu-view.js';
+import { RENDERER } from '../render/webgpu.js';
+import { crystalNodeMaterial } from './stones-node.js';
 
 const ABOVE = 0.00145; // above the outermost fabric (fabric at 1.2 mm)
 
+// (WebGPU: its node twin, stones/stones-node.js crystalNodeMaterial)
 function crystalMaterial() {
+	if (RENDERER === 'webgpu') return crystalNodeMaterial();
 	const u = { uInner: { value: 1.5 }, uGlint: { value: 7 }, uGlintPow: { value: 260 } };
 	const m = new THREE.MeshPhysicalMaterial({ color: 0x000000, roughness: 0.12, metalness: 0, ior: 1.6, iridescence: 1, iridescenceIOR: 1.9, iridescenceThicknessRange: [200, 480] });
 	m.userData.u = u;
@@ -152,6 +156,11 @@ export class StoneView {
 		const finish = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
 		finish.setUsage(THREE.DynamicDrawUsage);
 		mesh.geometry.setAttribute('aFinish', finish);
+		if (RENDERER === 'webgpu') {
+			// the crystal's node twin reads its tint and table axis per stone (stones/stones-node.js)
+			mesh.geometry.setAttribute('aColour', mesh.instanceColor);
+			mesh.geometry.setAttribute('aAxis', new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage));
+		}
 		mesh.frustumCulled = false;
 		mesh.renderOrder = -8; // in front of everything: draw first and let depth reject what is behind
 		mesh.userData = { shape, cap };
@@ -201,6 +210,7 @@ export class StoneView {
 			for (const [shape, list] of byShape) {
 				const fam = SHAPES[shape]?.family ?? 'crystal', aspect = SHAPES[shape]?.aspect ?? 1, n = list.length;
 				const mesh = this.meshFor(shape, n), M = mesh.instanceMatrix.array, C = mesh.instanceColor.array, attr = mesh.geometry.attributes.aFinish, F = attr.array;
+				const axis = mesh.geometry.attributes.aAxis, X = axis?.array; // (WebGPU: the table axis, n)
 				for (let i = 0; i < n; i++) {
 					const s = list[i], o = i * 16, d = s.size, a = s.angle ?? 0, ca = Math.cos(a), sa = Math.sin(a);
 					this.frameOf(s, fam, P, N);
@@ -216,6 +226,7 @@ export class StoneView {
 					M[o + 4] = yx * dy; M[o + 5] = yy * dy; M[o + 6] = yz * dy; M[o + 7] = 0;
 					M[o + 8] = nx * d; M[o + 9] = ny * d; M[o + 10] = nz * d; M[o + 11] = 0;
 					M[o + 12] = P[0]; M[o + 13] = P[1]; M[o + 14] = P[2]; M[o + 15] = 1;
+					if (X) { X[i * 3] = nx; X[i * 3 + 1] = ny; X[i * 3 + 2] = nz; }
 					const f = finishOf(s.stone), r = s.r ?? 0.5, k = fam === 'crystal' ? 0.88 + 0.12 * ((r * 31.7) % 1) : 1;
 					C[i * 3] = f.r * k; C[i * 3 + 1] = f.g * k; C[i * 3 + 2] = f.b * k;
 					F[i * 4] = f.ab; F[i * 4 + 1] = f.metal; F[i * 4 + 2] = f.opal; F[i * 4 + 3] = r;
@@ -223,6 +234,7 @@ export class StoneView {
 				mesh.count = n;
 				mesh.visible = true;
 				mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true; attr.needsUpdate = true;
+				if (axis) axis.needsUpdate = true;
 				shown.add(shape);
 			}
 		}

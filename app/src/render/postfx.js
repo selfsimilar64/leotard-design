@@ -17,14 +17,16 @@
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { vec4, output } from 'three/tsl';
 
 export const SKIN_ALPHA = 0.5;
 
 // Make a material mark its pixels as skin (alpha SKIN_ALPHA), or stop (on = false). Chains onto the
-// material's own onBeforeCompile.
+// material's own onBeforeCompile. (A node material on WebGPU: its output's alpha, read by render/webgpu-post.js skinPass.)
 export function markSkin(mat, on = true) {
 	if (!!mat.userData.skinMark === on) return;
 	mat.userData.skinMark = on;
+	if (mat.isNodeMaterial) { mat.outputNode = on ? vec4(output.rgb, SKIN_ALPHA) : null; mat.needsUpdate = true; return; }
 	if (!mat.userData.baseCompile) mat.userData.baseCompile = mat.onBeforeCompile ?? (() => {});
 	const base = mat.userData.baseCompile, key = mat.customProgramCacheKey?.bind(mat);
 	mat.onBeforeCompile = on ? (sh, r) => {

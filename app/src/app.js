@@ -252,7 +252,7 @@ export class App {
 		x.fillStyle = '#1b1b1f'; x.fillRect(0, 0, cv.width, cv.height);
 		x.font = '10px sans-serif'; x.fillStyle = '#ddd';
 		for (let i = 0; i < fabrics.length; i++) {
-			const [url] = swatch(this.engine.viewport, { fabric: fabrics[i], colour, second, colour2 });
+			const url = await swatch(this.engine.viewport, { fabric: fabrics[i], colour, second, colour2 })[0]; // (WebGPU: a Promise)
 			const img = await loadImage(url), cx = 8 + (i % cols) * (P + 8), cy = 8 + Math.floor(i / cols) * (P + 24);
 			x.drawImage(img, cx, cy);
 			x.fillText(FABRICS[fabrics[i]].label.slice(0, 18), cx, cy + P + 13);
@@ -378,7 +378,7 @@ export class App {
 		const was = this.looking, wasOpts = this.lookOpts, overlay = this.engine.overlay, ov = overlay.group?.visible ?? true;
 		const gesture = 'match-colour-' + Date.now();
 		const set = (c) => this.exec({ op: 'panel.set', id: panel, layer, colour: '#' + c.getHexString(), gesture });
-		const render = () => srgbColour(median(this.engine.viewport.samplePatch(px[0] - crop[0], px[1] - crop[1], w, h, r)));
+		const render = async () => srgbColour(median(await this.engine.viewport.samplePatch(px[0] - crop[0], px[1] - crop[1], w, h, r))); // (WebGPU: async)
 		this.lookThrough(ref, { mode: 'off' });
 		overlay.setVisible(false);
 		const P = this.doc.panels.find((p) => p.id === panel), original = P.stack?.[layer]?.colour ?? '#888888';
@@ -387,8 +387,8 @@ export class App {
 		try {
 			// fit render = k * colour + b from two renders, per channel
 			let c0 = c.clone().multiplyScalar(0.5);
-			set(c); let r1 = render();
-			set(c0); let r0 = render();
+			set(c); let r1 = await render();
+			set(c0); let r0 = await render();
 			const sum = (x) => x.r + x.g + x.b;
 			const follows = sum(r1) - sum(r0) > 0.1 * sum(r1) && sum(r1) > 1e-4;
 			if (follows) for (let i = 0; i < Math.max(1, iterations - 1); i++) {
@@ -401,7 +401,7 @@ export class App {
 					next[k] = v;
 				}
 				c0 = c; r0 = r1; c = next;
-				set(c); r1 = render();
+				set(c); r1 = await render();
 			}
 			seen = follows ? r1 : null;
 			if (follows) set(c);

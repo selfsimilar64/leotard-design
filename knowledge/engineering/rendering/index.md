@@ -9,7 +9,7 @@
 
 # Component
 
-* [The 3D view on WebGPU (port in progress)](webgpu-port.md) (draft) - Progress of Phase 1 of the WebGPU plan: the second renderer path (?renderer=webgpu, render/webgpu.js), what draws on it so far, what is held back until its step, and what differs from the WebGL reference.
+* [The 3D view on WebGPU (Phase 1)](webgpu-port.md) (draft) - Phase 1 of the WebGPU plan: the second renderer path (?renderer=webgpu), every part of the WebGL view ported (fabric with its lighting, stones and their GPU placement, post effects, outline, captures, swatches, the re-fit's device), how each is built, the pitfalls met and the parity against the WebGL baseline.
 
 # Reference
 

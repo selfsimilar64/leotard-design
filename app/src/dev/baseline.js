@@ -40,6 +40,8 @@ export const POST = [
 ];
 
 let run = null; // { tag, manifest }
+// Frame timings per shot (frameTimes): off for a quick parity run (b.TIMINGS.on = false), the captures alone.
+export const TIMINGS = { on: true };
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 // The run's manifest: the one on disk for this tag if there is one (a group taken again replaces its own shots), else new.
@@ -49,7 +51,7 @@ async function begin(tag) {
 	const vp = app.engine.viewport, gl = vp.webgpu ? null : vp.renderer.getContext(), dbg = gl?.getExtension('WEBGL_debug_renderer_info'), ai = vp.webgpu ? vp.renderer.backend.device?.adapterInfo : null;
 	run = { tag, manifest: {
 		tag, at: new Date().toISOString(), three: THREE.REVISION, renderer: app.engine.viewport.renderer.constructor.name,
-		gpu: ai ? [ai.vendor, ai.architecture, ai.description].filter(Boolean).join(' ') : dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+		gpu: ai ? [ai.vendor, ai.architecture, ai.description].filter(Boolean).join(' ') : !gl ? 'WebGPU (no adapter info)' : dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
 		maxVertexAttribs: gl ? gl.getParameter(gl.MAX_VERTEX_ATTRIBS) : vp.renderer.backend.device?.limits.maxVertexAttributes,
 		devicePixelRatio: window.devicePixelRatio, display: { ...app.engine.viewport.display }, bench: BENCH, colour: COLOUR, shots: old?.shots ?? [],
 	} };
@@ -120,7 +122,7 @@ async function shot(group, name, view, [w, h], extra = {}, noBloom = false) {
 	const url = `/__fs/captures/baseline-${run.tag}/${group}/${name}.png`;
 	const r = await fetch(url, { method: 'POST', body: blob });
 	if (!r.ok) throw new Error(`${url}: ${r.status}`);
-	const hidden = document.hidden, times = await frameTimes();
+	const hidden = document.hidden, times = TIMINGS.on ? await frameTimes() : {};
 	vp.bloom.strength = strength;
 	vp.setCamera(cam);
 	const s = app.doc.scene, b = app.doc.body;

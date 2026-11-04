@@ -7,6 +7,8 @@
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric, applyTexture, texScaleOf } from './fabric.js';
 import { setFabricSlot } from './fabric-attributes.js';
+import { RenderTarget } from 'three/webgpu';
+import { readPixels } from '../render/webgpu.js';
 
 const PX = 96, SS = 2, SIZE = 0.17;
 let rig = null;
@@ -47,7 +49,7 @@ function setup(renderer) {
 	const glint = new THREE.PointLight(0xffffff, 0.35, 0, 2); glint.position.set(0.3, 0.1, 0.4); scene.add(glint);
 	const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 5);
 	camera.position.set(0, -0.035, 0.165); camera.lookAt(0, 0, 0);
-	const target = new THREE.WebGLRenderTarget(PX * SS, PX * SS, { type: THREE.FloatType });
+	const target = new (renderer.isWebGPURenderer ? RenderTarget : THREE.WebGLRenderTarget)(PX * SS, PX * SS, { type: THREE.FloatType });
 	return (rig = { renderer, scene, mesh, material, camera, target, buf: new Float32Array(PX * SS * PX * SS * 4) });
 }
 
@@ -63,8 +65,9 @@ function neutral(c) {
 }
 const srgb = (v) => Math.round(255 * Math.min(1, Math.max(0, v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)));
 
+// WebGPU: a Promise of the same (its read-back is async; rows top first there, bottom first on WebGL)
 function draw(r, env, angle) {
-	const { renderer, scene, mesh, camera, target, buf } = r;
+	const { renderer, scene, mesh, camera, target } = r;
 	scene.environment = env;
 	mesh.rotation.set(-0.2, angle, 0);
 	const prev = renderer.getRenderTarget();
@@ -72,12 +75,20 @@ function draw(r, env, angle) {
 	renderer.setClearColor(0x000000, 0);
 	renderer.clear();
 	renderer.render(scene, camera);
-	renderer.readRenderTargetPixels(target, 0, 0, PX * SS, PX * SS, buf);
+	if (renderer.isWebGPURenderer) {
+		renderer.setRenderTarget(prev);
+		return readPixels(renderer, target, 0, 0, PX * SS, PX * SS).then((buf) => drawn(buf, false));
+	}
+	renderer.readRenderTargetPixels(target, 0, 0, PX * SS, PX * SS, r.buf);
 	renderer.setRenderTarget(prev);
+	return drawn(r.buf, true);
+}
+function drawn(buf, flip) {
 	const W = PX * SS, img = new ImageData(PX, PX), c = [0, 0, 0];
 	for (let y = 0; y < PX; y++) for (let x = 0; x < PX; x++) {
 		c[0] = c[1] = c[2] = 0;
-		for (let j = 0; j < SS; j++) for (let i = 0; i < SS; i++) { const o = (((PX - 1 - y) * SS + j) * W + x * SS + i) * 4; c[0] += buf[o]; c[1] += buf[o + 1]; c[2] += buf[o + 2]; }
+		const row = flip ? PX - 1 - y : y;
+		for (let j = 0; j < SS; j++) for (let i = 0; i < SS; i++) { const o = ((row * SS + j) * W + x * SS + i) * 4; c[0] += buf[o]; c[1] += buf[o + 1]; c[2] += buf[o + 2]; }
 		for (let k = 0; k < 3; k++) c[k] /= SS * SS;
 		neutral(c);
 		const o = (y * PX + x) * 4;
@@ -190,7 +201,7 @@ function swirlSetup(renderer, px, ss) {
 		r = { scene, mesh, material, camera };
 	}
 	r.px = px; r.ss = ss;
-	r.target = new THREE.WebGLRenderTarget(px * ss, px * ss, { type: THREE.FloatType, samples: 0 });
+	r.target = new (renderer.isWebGPURenderer ? RenderTarget : THREE.WebGLRenderTarget)(px * ss, px * ss, { type: THREE.FloatType, samples: 0 });
 	r.buf = new Float32Array(px * ss * px * ss * 4);
 	return (swirlRig = r);
 }
@@ -199,7 +210,7 @@ function swirlSetup(renderer, px, ss) {
 // textures.js) or null, texMode }: a px-square canvas, lit by env (the studio's environment) and
 // the swirl's own lights, tone-mapped as the viewport. zoom: the fabric's texture drawn larger than
 // life (its structure, below a millimetre, would be lost at tile size); envTurn: the room turned
-// round the table (radians).
+// round the table (radians). WebGPU: a Promise of the canvas.
 export function swirlThumb(renderer, env, look, { px = 384, ss = 3, zoom = 1, envTurn = 0 } = {}) {
 	const r = swirlSetup(renderer, px, ss), m = r.material, u = m.userData.u;
 	const k = texScaleOf({ fabric: look.fabric, texture: look.texture?.id }) * zoom; // at its default texture size
@@ -215,14 +226,21 @@ export function swirlThumb(renderer, env, look, { px = 384, ss = 3, zoom = 1, en
 	renderer.setClearColor(0x000000, 0);
 	renderer.clear();
 	renderer.render(r.scene, r.camera);
+	if (renderer.isWebGPURenderer) {
+		renderer.setRenderTarget(prev);
+		return readPixels(renderer, r.target, 0, 0, px * ss, px * ss).then((buf) => swirlDrawn(buf, px, ss, false));
+	}
 	renderer.readRenderTargetPixels(r.target, 0, 0, px * ss, px * ss, r.buf);
 	renderer.setRenderTarget(prev);
-	const W = px * ss, img = new ImageData(px, px), c = [0, 0, 0], acc = [0, 0, 0], buf = r.buf;
+	return swirlDrawn(r.buf, px, ss, true);
+}
+function swirlDrawn(buf, px, ss, flip) {
+	const W = px * ss, img = new ImageData(px, px), c = [0, 0, 0], acc = [0, 0, 0];
 	for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) {
 		// each sample tone-mapped, then averaged (so a glint stays a glint)
 		acc[0] = acc[1] = acc[2] = 0;
 		for (let j = 0; j < ss; j++) for (let i = 0; i < ss; i++) {
-			const q = (((px - 1 - y) * ss + j) * W + x * ss + i) * 4, a = Math.max(buf[q + 3], 1e-4);
+			const q = (((flip ? px - 1 - y : y) * ss + j) * W + x * ss + i) * 4, a = Math.max(buf[q + 3], 1e-4);
 			for (let kk = 0; kk < 3; kk++) c[kk] = buf[q + kk] / Math.min(a, 1);
 			neutral(c);
 			for (let kk = 0; kk < 3; kk++) acc[kk] += srgb(c[kk]);

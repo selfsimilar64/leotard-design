@@ -1,11 +1,10 @@
 // The 3D view on three.js's WebGPURenderer (knowledge/product/roadmap/webgpu-and-stone-engine-plan.md, Phase 1): a second
 // renderer path beside WebGL, chosen per page (?renderer=webgpu, or localStorage 'leotard.renderer' = 'webgpu'), so the two
 // can be compared on one machine, scene and camera. The WebGL path stays untouched until parity is signed off.
-// Here: the renderer, its post chain (RenderPipeline) and stand-ins for the WebGL passes the rest of the app talks to
-// (render/viewport.js: composer, scenePass, skinPass, aoPass, bloom, glare), filled in step by step as each is ported.
-import { WebGPURenderer, RenderPipeline, PMREMGenerator, RectAreaLightNode, RenderTarget, UnsignedByteType } from 'three/webgpu';
+// Here: the renderer and its tools (capture, benchmark, area lights); the post chain is render/webgpu-post.js.
+import { WebGPURenderer, PMREMGenerator, RectAreaLightNode, RenderTarget, UnsignedByteType } from 'three/webgpu';
 import { RectAreaLightTexturesLib } from 'three/addons/lights/RectAreaLightTexturesLib.js';
-import { pass } from 'three/tsl';
+import { Refit } from '../fit/refit.js';
 
 export const RENDERER = (() => {
 	if (typeof location === 'undefined') return 'webgl'; // (tests)
@@ -14,42 +13,20 @@ export const RENDERER = (() => {
 	try { return localStorage.getItem('leotard.renderer') === 'webgpu' ? 'webgpu' : 'webgl'; } catch { return 'webgl'; }
 })();
 
-// The renderer and what the viewport needs set up around it. -> { renderer, pmrem, ready: Promise }
+// The renderer and what the viewport needs set up around it. -> { renderer, pmrem, ready: Promise }. On WebGPU the renderer is
+// made on the page's one device (fit/refit.js Refit.device: the re-fit's too, plan Phase 1 step 7); without WebGPU three's own
+// WebGL 2 backend draws (the fallback, step 8), and so does ?forcewebgl.
 export function createWebGPU() {
 	// ?forcewebgl: the same node renderer on its WebGL 2 backend (tells three's node code apart from the WebGPU backend/driver)
 	const forceWebGL = typeof location !== 'undefined' && new URLSearchParams(location.search).has('forcewebgl');
 	const renderer = new WebGPURenderer({ antialias: false, powerPreference: 'high-performance', trackTimestamp: true, forceWebGL });
 	const pmrem = new PMREMGenerator(renderer);
-	return { renderer, pmrem, ready: renderer.init() };
+	const ready = (async () => {
+		if (!forceWebGL && navigator.gpu) { try { renderer.backend.parameters.device = await Refit.device(); } catch (e) { console.warn('WebGPU device:', e.message); } }
+		await renderer.init();
+	})();
+	return { renderer, pmrem, ready };
 }
-
-// The post chain: the scene pass, then (as ported) skin, contact shadows, bloom and glare; tone mapping and the output
-// colour space at the end (the renderer's toneMapping, as OutputPass did). Answers what viewport.js asks of the
-// EffectComposer.
-export class NodePost {
-	constructor(renderer, scene, camera) {
-		this.renderer = renderer;
-		this.pipeline = new RenderPipeline(renderer);
-		this.scenePass = pass(scene, camera);
-		this.pipeline.outputNode = this.scenePass;
-		this.passes = [];
-	}
-	addPass(p) { this.passes.push(p); } // (the hover outline: not ported yet)
-	setPixelRatio() {}
-	setSize() {}
-	// every call a new frame: passes re-render once per frame, and the frame count advances only in the animation loop, which
-	// captures and benchmarks run outside of (and which stops while the pane is hidden)
-	render() { this.renderer._nodes.nodeFrame.update(); this.pipeline.render(); }
-}
-
-// Stand-ins for the WebGL passes not yet ported: the settings land on them and do nothing.
-export const stubPasses = () => ({
-	scenePass: { setSamples() {}, keepSkinMark: false },
-	skinPass: { enabled: false },
-	aoPass: { enabled: false },
-	bloom: { strength: 0, enabled: false, setSize() {} },
-	glare: { setPreset() {} },
-});
 
 // GPU time of the frames rendered since the last call, ms (timestamp queries), or null where the adapter has none.
 export async function gpuTime(renderer) {
@@ -65,13 +42,25 @@ export async function captureFrame(renderer, w, h, render) {
 		renderer.setRenderTarget(rt);
 		render();
 		renderer.setRenderTarget(null);
-		const px = await renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h), row = w * 4;
+		const px = await readPixels(renderer, rt, 0, 0, w, h);
 		const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-		const img = cv.getContext('2d').createImageData(w, h), stride = Math.ceil(row / 256) * 256; // (rows come padded to 256 bytes)
-		for (let y = 0; y < h; y++) img.data.set(px.subarray(y * stride, y * stride + row), y * row);
+		const img = cv.getContext('2d').createImageData(w, h);
+		img.data.set(px);
 		cv.getContext('2d').putImageData(img, 0, 0);
 		return await new Promise((resolve) => cv.toBlob(resolve, 'image/png'));
 	} finally { renderer.setRenderTarget(null); rt.dispose(); }
+}
+
+// A render target's pixels read back (WebGPU), rows top first and unpadded (WebGPU pads each row to 256 bytes): x, y, w, h in
+// pixels from the top left. -> Uint8Array or Float32Array, as the target's type.
+export async function readPixels(renderer, rt, x, y, w, h) {
+	const px = await renderer.readRenderTargetPixelsAsync(rt, x, y, w, h), row = w * 4;
+	// (elements a padded row: the 256-byte rule; the buffer's last row is not padded, so its length does not tell)
+	const per = Math.ceil(row * px.BYTES_PER_ELEMENT / 256) * 256 / px.BYTES_PER_ELEMENT;
+	if (per === row) return px.length === row * h ? px : px.subarray(0, row * h);
+	const out = new px.constructor(row * h);
+	for (let j = 0; j < h; j++) out.set(px.subarray(j * per, j * per + row), j * row);
+	return out;
 }
 
 // Rect area lights' lookup tables (the softbox studio), as RectAreaLightUniformsLib.init() is for WebGL.

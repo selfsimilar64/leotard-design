@@ -1,10 +1,10 @@
 ---
 type: Component
-title: The 3D view on WebGPU (port in progress)
-description: "Progress of Phase 1 of the WebGPU plan: the second renderer path (?renderer=webgpu, render/webgpu.js), what draws on it so far, what is held back until its step, and what differs from the WebGL reference."
-tags: [rendering, webgpu, webgl, port, parity]
+title: The 3D view on WebGPU (Phase 1)
+description: "Phase 1 of the WebGPU plan: the second renderer path (?renderer=webgpu), every part of the WebGL view ported (fabric with its lighting, stones and their GPU placement, post effects, outline, captures, swatches, the re-fit's device), how each is built, the pitfalls met and the parity against the WebGL baseline."
+tags: [rendering, webgpu, webgl, port, parity, tsl]
 status: draft
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-05T02:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-05T12:00:00Z }
 sources:
   - id: plan
     resource: /product/roadmap/webgpu-and-stone-engine-plan.md
@@ -13,80 +13,105 @@ sources:
     resource: /engineering/rendering/webgl-baseline-captures.md
     title: WebGL baseline captures
   - id: code
-    resource: "app/src/render/webgpu.js, app/src/render/viewport.js, app/src/render/lines.js, app/src/stones/gpu-view.js, app/src/dev/baseline.js"
+    resource: "app/src/render/webgpu.js, webgpu-post.js, outline-node.js, rings-node.js, viewport.js, lines.js; app/src/materials/fabric-node.js, fabric-light.js; app/src/stones/stones-node.js, gpu-view.js, view.js; app/src/dev/baseline.js, wgsl-scope-check.js; app/test/webgpu-parity/"
     title: WebGPU path code
     author: claude-code/claude-opus-5-5
   - id: run
     resource: "Claude Code session of 2026-11-04/05 (test copy of the app on port 5177)"
-    title: Port checks
+    title: Port checks and parity runs
     author: claude-code/claude-opus-5-5
 ---
 
 # Takeaway
 
-**The app opens on WebGPU with `?renderer=webgpu`** (or `localStorage['leotard.renderer'] = 'webgpu'`); without it the
-WebGL renderer runs exactly as before (captures equal to the baseline within capture noise).[^code][^run] Step 1 of the
-plan is in: renderer, camera and controls, environments (HDRI studios, the softbox studio's area lights), shadows, floor,
-and every mesh drawn with three.js's own materials. The fabric's own shader code, the post effects and the pattern stones
-are the next steps.[^plan]
+**Everything the app shows draws on WebGPU** with `?renderer=webgpu` (or `localStorage['leotard.renderer'] = 'webgpu'`);
+without it the WebGL renderer runs as before.[^code] Against the WebGL baseline (same captures, same machine) the fabrics,
+stones, post effects and designs match within about one level of 255 on average; see Parity below.[^run] The WebGL path is
+still the default: the plan retires it once the owner signs off the parity and the frame cost.[^plan]
 
 # How it is built
 
-- `render/webgpu.js`: the choice (`RENDERER`), `createWebGPU` (WebGPURenderer with timestamp queries, its own
-  PMREMGenerator, `ready` = `renderer.init()`), `NodePost` (a RenderPipeline answering what the viewport asks of the
-  EffectComposer), stand-ins for the WebGL passes not yet ported, area-light tables, and `benchmarkFrames` (frames back to
-  back, `queue.onSubmittedWorkDone`, GPU time from timestamp queries).
-- `render/viewport.js`: draws nothing until the device is ready (`isReady`); environments and HDRIs wait for it;
-  `benchmark` is a Promise on WebGPU (GPU time per frame left in `lastGpuMs`); `samplePatch` (photo colour match) refuses
-  on WebGPU for now. `app.benchmark()` is async for both.
-- `render/lines.js`: Line2 / LineSegments2 / their material for either renderer (WebGPU: `Line2NodeMaterial`).
-- `dev/baseline.js` times and describes either renderer (`b.all('webgpu')`).
-- **Captures** (`captureFrame`): drawn into a render target and read back (rows come padded to 256 bytes). A WebGPU canvas
-  only hands out what it last showed on screen, which is stale while the pane is hidden.
-- **Frames outside the animation loop**: three re-renders a pass once per node frame, and only the animation loop advances
-  the frame count; `NodePost.render` advances it on every call, or captures and benchmarks re-show an old frame.
-- **GPU time**: three resolves only the last frame's timestamp queries, so `benchmarkFrames` samples up to 30 frames one by
-  one (median) after timing the wall clock with tracking off. Matte torso at 1792 x 1344: 2.8 ms GPU, steady to 0.01 ms.
+| part | WebGL | WebGPU twin |
+|---|---|---|
+| renderer, capture, benchmark | `render/viewport.js` | `render/webgpu.js` (`createWebGPU`, `captureFrame`, `readPixels`, `benchmarkFrames`) |
+| fabric surface and pattern | `materials/fabric.js` (GLSL) | `materials/fabric-node.js` (TSL, section for section) |
+| fabric lighting (AO shares, skin wrap, film thickness, foil, satin thread model) | `fabric.js` AO_FRAGMENT, SKIN_DIFFUSE, FILM_FRAGMENT, FOIL_FRAGMENT, MICRO_* | `materials/fabric-light.js` (a `PhysicalLightingModel` subclass), FOIL and FILM in `fabric-node.js` |
+| post: scene (MSAA), skin pass, contact shadows, glow, glare, output | `render/postfx.js`, `glare.js`, `UnrealBloomPass`, `OutputPass` | `render/webgpu-post.js` `NodePost` |
+| hover outline, stone rings | `render/highlight.js` | `render/outline-node.js`, `render/rings-node.js` |
+| crystals | `stones/view.js` crystalMaterial | `stones/stones-node.js` crystalNodeMaterial |
+| pattern stones' GPU placement | `stones/gpu-view.js` Atlas (four float targets at once), `placed()` | `stones-node.js` AtlasNode (one target at a time), `placedNode()` |
+| photo colour sampling, swatches | sync read-back | async (`samplePatch`, `swatch`, `swirlThumb` return Promises on WebGPU; callers await) |
+| re-fit (`fit/refit.js`) | its own GPU device | the page's one device, the renderer's too (`Refit.device`, shared) |
 
-# State (2026-11-05)
+Each twin carries a cross-reference to its other side; a change to one is a change to both. The satin's thread model is
+ported in the two configurations the app uses (MICRO_SPEED 'all4' and 'duo'); its environment lookups blend two prefiltered
+levels where the GLSL takes the nearest (MICRO_MIP), within 2-4/255.
 
-| part | on WebGPU |
-|---|---|
-| renderer, camera, controls, studios, shadows, floor, lines | drawn |
-| fabric | `materials/fabric-node.js`: the whole of FABRIC_FRAGMENT ported (pattern space, scans, print, checker, ombre, duochrome, film, knit, crinkle, flakes and foil, holo, mesh, decals, wrinkles, fit folds, seams, edge stitching), plus the garment surface, cut, lining clip, tapes and occlusion. Not yet: the lighting chunks (film thickness, foil specular, skin wrap, satin thread model) |
-| skin finish, skin pass | step 3 |
-| post: MSAA, contact shadows, bloom, glare, outline | none yet (step 4) |
-| pattern stones (`stones/gpu-view.js` atlas: four float targets and GLSL) | not drawn, a console note (step 5); WebGPU's default allows 32 bytes per sample across colour targets, the atlas writes 64 |
-| photo colour sampling, swatch renders, the person figure's occlusion bake | WebGL only (step 6) |
+## Pitfalls met (keep for the rest of the port)
 
-# Fixed: fabrics far too bright on WebGPU (root cause, 2026-11-05)
+1. **A shared value first used inside a branch** (the worst, twice): TSL writes a value used in several places into a
+   variable once, at its first use; first used inside an `If` and read elsewhere, it is zero there when the branch did not
+   run. Three's own `positionViewDirection` works the same way, and the lighting after the material reuses it: the fabric read
+   it first inside rarely taken branches, so the lighting saw a zero view direction (Fresnel 1: every lit side white). Then the
+   pixel footprint `fp`, first used under the bump: fabrics without bump saw pixels of size 0 (glitter too fine, mystique's
+   foil never blending to a shimmer). Rule: make every value read in more than one branch a variable (`.toVar()`) where it is
+   defined. Check: `dev/wgsl-scope-check.js` scans the generated WGSL of a mesh for reads no write covers (clean on every
+   fabric, body, panel and edge).
+2. **`cameraNear` / `cameraFar` in a full-screen pass** are the quad's own camera's: pass the scene camera's as uniforms
+   (the skin pass blurred across the image in blocks).
+3. **Intermediate textures (`rtt`) update once a frame in an order of their own**: a pass that must follow the scene is drawn
+   into an explicit target in `NodePost.render`, as the WebGL composer did.
+4. **A multisampled depth texture cannot be sampled**: one sample of it is copied into a float target for the passes.
+5. **The prefiltered environment node takes the texture**, not another environment node (the satin's environment light came
+   out black); lookups that must follow the scene's environment are re-pointed by `syncFabricPacks` each frame.
+6. **WebGPU limits**: 8 vertex buffers a draw (fabric inputs in one interleaved copy per geometry); 32 bytes a sample across
+   colour targets by default (the stone atlas renders its four targets one by one); points one pixel wide (rings as instanced
+   quads); read-backs pad rows to 256 bytes and only async; a canvas hands out only its last shown frame (captures render to
+   a target).
+7. **Three starts its own initialisation when the animation loop is set**: the loop starts once the shared device is in, and
+   the device asks for every adapter feature (three reads `core-features-and-limits` to tell a full device from a
+   compatibility one).
+8. Earlier, recorded in the plan's log: `customProgramCacheKey` shares a node material's graph across materials; nested
+   loops need their own names in WGSL; the derivatives' view position sign; captures set the lights, exposure and glow
+   themselves (a hidden page runs no frames).
+9. A harmless warning stays: three's GTAO node hands a vec4 depth sample to a vec3 constructor (r186); three keeps its first
+   component, the depth.
 
-Matte, shiny, mystique, ombre, glitter, velvet and oil-slick came out light grey or white on the lit side, dark green in shadow.
-**Root cause: three's view-direction variable was first written inside a branch.** three declares `positionViewDirection`
-once per shader (`var<private>`) and writes it (`= normalize(v_positionViewDirection)`) at the first place the shader reads
-it; the lighting after the fabric function reuses that variable. The fabric function kept `viewDir = positionViewDirection`
-as a lazy node reference, so its first read, and with it the only write, landed inside `If` blocks (rim, holo, flakes,
-decals) that most fabrics never take. The lighting then saw a zero view direction: half vector = light direction,
-dot(V,H) = 0, Fresnel = 1, a white specular everywhere a light hit and the diffuse cut. Any fabric output wired into the
-material pulled the function, and so the misplaced write, into the shader, which is why even a metalness of 0 turned it grey.
-Fix: `positionViewDirection.toVar('viewDir')` at the top level of the function (`materials/fabric-node.js`). After:
-matte, shiny and velvet torso captures equal the WebGL baseline (mean difference 0.3-1.0 of 255); glitter (9.8) and
-oil-slick (7.3) still differ by the lighting chunks not yet ported (foil specular, film thickness).
-**Rule for the rest of the port:** read every three built-in that is a shared shader variable (view direction, and any
-other `var<private>` three writes lazily) at the top level of a Fn before any `If`/`Loop`, via `.toVar()`.
-Not the cause (checked on the way): WebGPU backend and driver (same grey on three's WebGL 2 backend,
-`?renderer=webgpu&forcewebgl`); the per-object uniform buffer (offsets of all 109 fields equal WGSL's layout, CPU values
-right; note a GPU read-back of it is impossible, usage has no COPY_SRC, a copy silently reads zeros); normal aliasing.
-Found by listing every non-local assignment in the generated WGSL before the lighting and checking its nesting depth.
+# Parity (2026-11-05)
 
-Fixed on the way (each was a bug of the port, recorded so it is not made again): `customProgramCacheKey` on a node material
-shares its node graph, and with it the first material's uniform objects, across materials; an empty `If` with an `Else` and
-an int uniform compare let every decal slot through (now float compare, four unrolled slots of plain uniforms); nested
-`Loop`s both named `i` in WGSL (now named); the derivatives' view position had the wrong sign; captures place the studio's
-lights and exposure themselves (a page opened hidden never placed them). And WebGPU limits: 8 vertex buffers a draw (a
-garment piece had 10: its fabric inputs now go in one interleaved copy per geometry, `syncFabricPacks`), one texture bound
-to several slots lost its sampler (one placeholder per slot).
+Capture set `webgpu-s12` against the WebGL baseline (170 shots), mean difference per shot in levels of 255, all channels:
+
+| group | shots | median | worst |
+|---|---|---|---|
+| fabrics (every fabric, torso, near, macro) | 75 | 0.3 | 0.8 (shiny, macro) |
+| stones (every family, near, macro) | 20 | 0.4 | 0.6 (navette, AB, macro) |
+| post effects (none, MSAA, skin, contact shadows, glow, glare, all) | 7 | 0.1 | 0.4 (all) |
+| designs (starting points and gem tests, drawn and fitted, three views) | 60 | 0.4 | 2.5 (Gem Test 3, fitted) |
+| studios | 8 | 6.0 | 59.3 (Green loft hall) |
+
+- **Gem Test 3 (2.5)** is not the renderer: the baseline predates patterns on one piece keeping apart (decision of
+  2026-11-04), so its upper front pattern now keeps stones the baseline did not show.
+- **Studios**: the softbox studios, the small photo studio and the white loft match (0.3-0.8). Four photographed studios
+  with a bright window (Green loft hall 59, Parquet sunlit 36, Window loft 29, Neon 11) differ in the glow round the window:
+  on WebGL it reaches across the whole frame, on WebGPU less far. Open, for the owner's eye. What is known: two WebGL captures
+  of Green loft hall, the baseline and one taken now, differ by 32 themselves; a fresh WebGL capture and WebGPU differ by 28.
+  The glow shaders, kernel sizes, mip chain, resolution (a quarter of the image) and composite (UnrealBloomPass's 3 x
+  strength, added times its own peak, ported in `webgpu-post.js`) are the same on both sides; the cause is not found.
+- Not measured yet (the browser pane was hidden, which stops frames): frame cost at 1792 x 1344 against WebGL (the plan's
+  gate), and a parity run on the WebGL 2 fallback.
+
+Captures: `app/captures/baseline-<tag>/` (gitignored); `python app/test/webgpu-parity/report.py <tag>` and `compare.py` (side by
+side sheets in `app/captures/parity-<tag>/`). Taken with `b.TIMINGS.on = false` (captures only); timings: below.
+
+# Platform and fallback (plan step 8)
+
+There is no desktop shell in the repository yet (the product decision is a native desktop app; Electron and Tauri both ship
+Chromium-class WebGPU on Windows). The fallback where WebGPU is missing is three's own WebGL 2 backend of the same renderer
+(`?renderer=webgpu&forcewebgl` forces it): it drew the scene earlier in the port (it was the cross-check that found the grey fabrics were not the WebGPU backend), and
+it loads without errors with everything ported here (2026-11-05); its parity run is not taken yet. Where WebGPU is missing,
+the re-fit (`fit/refit.js`, compute shaders) has no device: a fitted garment keeps its saved fit. The stone engine's CPU twin
+(Phase 3) is the stones' fallback the plan names.
 
 [^plan]: WebGPU renderer and one GPU stone engine (plan).
 [^code]: WebGPU path code.
-[^run]: Port checks, 2026-11-04/05.
+[^run]: Port checks and parity runs, 2026-11-04/05.

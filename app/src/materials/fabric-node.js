@@ -1,21 +1,19 @@
 // The fabric on the WebGPU renderer (render/webgpu.js): materials/fabric.js's shader, rewritten as three.js node code (TSL) on
 // a MeshPhysicalNodeMaterial (knowledge/engineering/rendering/webgpu-port.md). Twin of fabric.js PARS_VERTEX, BEGIN_VERTEX,
-// BEGIN_NORMAL, PARS_FRAGMENT, FABRIC_FRAGMENT and AO_FRAGMENT, section for section and in the same order: a change to one is
-// a change to both. The uniforms are fabric.js's own objects (createFabricMaterial's `u`, read here by reference; textures and
+// BEGIN_NORMAL, PARS_FRAGMENT and FABRIC_FRAGMENT, section for section and in the same order (the lighting chunks: fabric-light.js,
+// FOIL_FRAGMENT and FILM_FRAGMENT here): a change to one is a change to both. The uniforms are fabric.js's own objects (createFabricMaterial's `u`, read here by reference; textures and
 // arrays through setters), so applyFabric, bindScan, applyTexture and every caller that sets m.userData.u.uX.value work on
 // either renderer unchanged.
-// OPEN BUG (2026-11-05): with the scan, decal, duochrome or flake sections in the shader, scanned and plain fabrics light far too
-// bright (a dark green panel shows light grey); the values going in are right when drawn unlit. See the port note.
-// Not ported yet: zones 0-2 (the legacy painted garment, not shown by the app), the lighting chunks (FILM_FRAGMENT,
-// FOIL_FRAGMENT, SKIN_DIFFUSE, the satin thread model MICRO_*), and AO_FRAGMENT's share on direct light (aoNode darkens
-// indirect light only).
+// Not ported: zones 0-2 (the legacy painted garment, not shown by the app).
 import * as THREE from 'three';
 import { MeshPhysicalNodeMaterial } from 'three/webgpu';
 import { FABRIC_ATTRIBUTES } from './fabric-attributes.js';
+import { FabricLightingModel } from './fabric-light.js';
 import {
 	Fn, If, Loop, Discard, struct, select, attribute, reference, texture, uniform, uniformArray,
 	diffuseColor, positionLocal, positionGeometry, positionView, normalLocal, normalGeometry, normalViewGeometry, positionViewDirection, cameraViewMatrix,
-	materialColor, materialRoughness, materialMetalness, materialOpacity,
+	materialColor, materialRoughness, materialMetalness, materialOpacity, materialIridescenceThickness,
+	specularColor, specularColorBlended, diffuseContribution, metalness, roughness, anisotropy, alphaT,
 	float, int, vec2, vec3, vec4, mat2, abs, min, max, mix, clamp, saturate, step, smoothstep, fract, floor, sin, cos, atan, exp, exp2, log2, pow, sqrt,
 	inverseSqrt, length, dot, cross, normalize, reflect, sign, mod, transpose, dFdx, dFdy, fwidth,
 } from 'three/tsl';
@@ -87,17 +85,55 @@ function syncPack(geo) {
 	}
 	if (dirty) p.ib.needsUpdate = true;
 }
-// Before each WebGPU frame (render/viewport.js): every visible fabric mesh's pack up to date.
+// Before each WebGPU frame (render/viewport.js): every visible fabric mesh's pack up to date, and the environment lookups of
+// the satin's thread model and of the crystals (stones/stones-node.js) on the scene's environment.
 export function syncFabricPacks(root) {
-	root.traverseVisible((o) => { if (o.isMesh && o.material?.isFabricNode) syncPack(o.geometry); });
+	const env = root.environment;
+	root.traverseVisible((o) => {
+		if (!o.isMesh) return;
+		if (o.material?.isFabricNode) syncPack(o.geometry);
+		const me = o.material?.microEnv ?? o.material?.envFollow;
+		if (me?.nodes.length && env && me.texture !== env) { me.texture = env; for (const n of me.nodes) n.value = env; }
+	});
 }
 
 // The fabric's colour goes in through the diffuse set-up, not colorNode: three's shadow pass reads a material's colorNode (its
-// alpha) and would pull the whole fabric function into every shadow draw.
+// alpha) and would pull the whole fabric function into every shadow draw. (WebGL's shadow pass draws the plain depth material
+// too: no cut-outs or sheer holes in shadows on either renderer.)
 class FabricNodeMaterial extends MeshPhysicalNodeMaterial {
 	setupDiffuseColor(builder) {
 		super.setupDiffuseColor(builder);
 		if (this.fabricColor) diffuseColor.assign(vec4(this.fabricColor, diffuseColor.a));
+	}
+
+	// FOIL_FRAGMENT: foil dots beside dyed knit (uBlend: mystique), where a pixel is part dots, part knit, take the knit's diffuse
+	// from the dye alone and the mirror part from the foil alone; yarn glints (uGlint) a part-white specular, unstretched
+	setupVariants(builder) {
+		super.setupVariants(builder);
+		const g = this.fabricLight;
+		if (!g) return;
+		If(g.glint.greaterThan(0).and(g.flake.greaterThan(0)), () => {
+			specularColorBlended.assign(mix(specularColorBlended, g.foil, g.flake.mul(g.glint)));
+			if (this.useAnisotropy) {
+				anisotropy.mulAssign(float(1).sub(g.flake));
+				alphaT.assign(mix(roughness.mul(roughness), 1, anisotropy.mul(anisotropy)));
+			}
+		});
+		If(g.blend.greaterThan(0).and(g.flake.greaterThan(0)), () => {
+			diffuseColor.assign(vec4(g.foil, diffuseColor.a));
+			diffuseContribution.assign(g.dye.mul(float(1).sub(metalness)));
+			specularColorBlended.assign(mix(specularColor, g.foil, metalness));
+		});
+	}
+
+	setupLightingModel(builder) {
+		const g = this.fabricLight, u = this.userData.u;
+		// the thread model's environment lookups (fabric-light.js microEnv), kept on the scene's environment by syncFabricPacks:
+		// an environment swapped without a rebuild still reaches them
+		const e = this.envNode ?? builder.environmentNode;
+		const env = this.microEnv = { texture: e?.isTextureNode ? e.value : null, nodes: [] };
+		const micro = g && u.uMicro.value > 0 ? g.micro : null;
+		return new FabricLightingModel(this, { micro, env, xn: this.defines?.MICRO_XNARROW !== undefined, skin: g?.skin ?? null });
 	}
 }
 FabricNodeMaterial.prototype.isFabricNode = true;
@@ -113,8 +149,8 @@ export function createFabricNodeMaterial(zone, u) {
 	const m = new FabricNodeMaterial({ transparent: zone !== 3 });
 	m.userData.u = u;
 	const U = (name, type = 'float') => (type === 'color' ? C(name) : reference('value', type, u[name]));
-	// a colour as a plain vec3 uniform, refreshed per object (colour-typed reference uniforms among this many others turned the
-	// panels grey; cause not pinned down)
+	// a colour as a plain vec3 uniform, refreshed per object (a workaround from the hunt for the grey panels, whose cause turned
+	// out to be the view direction: see the RULE in the fabric function below; kept, it is harmless)
 	const C = (name) => { const v = new THREE.Vector3(); return uniform(v).onObjectUpdate(() => { const c = u[name].value; return v.set(c.r, c.g, c.b); }); };
 	// a texture uniform: a node whose texture follows u[name].value (null: a white texel)
 	const T = (name) => {
@@ -144,9 +180,9 @@ export function createFabricNodeMaterial(zone, u) {
 		return positionLocal.add(normal0.mul(uOffset)).add(aLift.mul(uGarment));
 	})();
 
-	const tBase = T('tBase'), tNormal = T('tNormal'), tRough = T('tRough'), tAlpha = T('tAlpha'), tMtl = T('tMtl'), tMask = T('tMask'), tPrint = T('tPrint'), tDecal = T('tDecal');
+	const tMicroLut = T('tMicroLut'), tBase = T('tBase'), tNormal = T('tNormal'), tRough = T('tRough'), tAlpha = T('tAlpha'), tMtl = T('tMtl'), tMask = T('tMask'), tPrint = T('tPrint'), tDecal = T('tDecal');
 	// decals: four slots of plain uniforms, each read from the arrays applyDecals hands over (render/garment.js) every frame
-	// (uniform arrays of matrices and colours in a fabric's shader turned every panel grey on this GPU, cause not found)
+	// (likewise a workaround from that hunt: arrays of matrices and colours were not the cause of the grey panels)
 	const slot = (name, k, init) => uniform(init).onObjectUpdate(() => u[name].value?.[k] ?? init);
 	const colSlot = (name, k) => { const v = new THREE.Vector3(); return uniform(v).onObjectUpdate(() => { const c = u[name].value?.[k]; return c ? v.set(c.r, c.g, c.b) : v.set(1, 1, 1); }); };
 	const decal = [0, 1, 2, 3].map((k) => ({ M: slot('uDecalM', k, new THREE.Matrix4()), rect: slot('uDecalRect', k, new THREE.Vector4()), look: slot('uDecalLook', k, new THREE.Vector4()), col: colSlot('uDecalCol', k) }));
@@ -181,11 +217,13 @@ export function createFabricNodeMaterial(zone, u) {
 		const an = abs(normalize(normalGeometry));
 		const q = select(an.z.greaterThanEqual(an.x).and(an.z.greaterThanEqual(an.y)), positionGeometry.xy, select(an.x.greaterThanEqual(an.y), positionGeometry.zy, positionGeometry.xz)).toVar();
 		If(U('uUV').greaterThan(0.5), () => { const g = U('uGrain'), cg = cos(g), sg = sin(g); q.assign(mat2(cg, sg, sg.negate(), cg).mul(aUV)); });
-		const fp = length(fwidth(positionGeometry));
-		// Evaluated here, at the top level, on purpose: three writes its shared `positionViewDirection` variable once, at the
-		// first place the shader reads it, and the lighting after this function reuses that variable. Read first inside an If,
-		// the write sat in a branch most fabrics never take, so lighting saw a zero view direction (Fresnel 1: every lit side
-		// white). See knowledge/engineering/rendering/webgpu-port.md.
+		// RULE for this function (knowledge/engineering/rendering/webgpu-port.md): TSL writes a value used in more than one place
+		// into a variable once, at its first use. A value first used inside an If (or Loop) and read again elsewhere is then
+		// zero there whenever that branch did not run. So every value read in more than one branch is made a variable (toVar)
+		// where it is defined, in the scope that encloses all its uses. Found twice: the view direction (three's own variable,
+		// which the lighting after this function reuses: every lit side white) and fp (first used under the bump: mystique,
+		// glitter and every fabric without bump saw pixels of size 0, so their flakes never blended to far).
+		const fp = length(fwidth(positionGeometry)).toVar('fp');
 		const viewDir = positionViewDirection.toVar('viewDir');
 		const lum = vec3(0.2126, 0.7152, 0.0722);
 
@@ -194,7 +232,7 @@ export function createFabricNodeMaterial(zone, u) {
 		if (!skip('scan')) If(uTex.greaterThan(0.5), () => {
 			const tuv = q.div(U('uTile', 'vec2')), TB = 1;
 			const tb = tBase.sample(tuv).bias(TB);
-			const c = tb.rgb.toVar(), texLum = max(U('uTexLum'), 1e-3);
+			const c = tb.rgb.toVar(), texLum = max(U('uTexLum'), 1e-3).toVar();
 			If(U('uTexRecolour').greaterThan(0.5), () => { c.assign(U('uTexTint', 'color').mul(dot(c, lum).div(texLum))); });
 			const flags = U('uTexFlags', 'vec4');
 			If(flags.w.greaterThan(0.5), () => {
@@ -238,7 +276,7 @@ export function createFabricNodeMaterial(zone, u) {
 		});
 		const uDuo = U('uDuo');
 		if (!skip('duo')) If(uDuo.greaterThan(0), () => { col.assign(mix(col, U('uDuoColor', 'color'), uDuo.mul(pow(float(1).sub(saturate(dot(normal, viewDir))), U('uDuoPow'))))); });
-		const hd = normalize(cameraViewMatrix.mul(vec4(U('uHoloDirW', 'vec3'), 0)).xyz);
+		const hd = normalize(cameraViewMatrix.mul(vec4(U('uHoloDirW', 'vec3'), 0)).xyz).toVar('holoDir');
 		if (!skip('film')) If(U('uFilm').greaterThan(0), () => {
 			const fq = q.div(U('uFilmScale')), wq = fq.add(vec2(vnoise(fq.mul(0.6).add(3.1)), vnoise(fq.mul(0.6).add(8.7))).sub(0.5).mul(U('uFilmWarp')));
 			film.assign(clamp(vnoise(wq).mul(0.7).add(vnoise(wq.mul(2.7).add(1.3)).mul(0.3)), 0, 1));
@@ -280,7 +318,7 @@ export function createFabricNodeMaterial(zone, u) {
 		const uFlake = U('uFlake');
 		if (!skip('flake')) If(uFlake.greaterThan(0.5), () => {
 			const uPitch = U('uPitch'), uDotR = U('uDotR'), uPresence = U('uPresence'), uTilt = U('uTilt'), uBend = U('uBend'), uBlend = U('uBlend'), uGlint = U('uGlint');
-			const qc = q.div(uPitch), r = fp.div(uPitch);
+			const qc = q.div(uPitch).toVar(), r = fp.div(uPitch);
 			const w = smoothstep(0.22, 0.6, r);
 			const nearMask = float(0).toVar(), rvNear = float(0).toVar(), rvFar = float(0).toVar(), farDots = float(1).toVar();
 			const nearTilt = vec3(0).toVar(), farTilt = vec3(0).toVar();
@@ -382,7 +420,7 @@ export function createFabricNodeMaterial(zone, u) {
 					const kind = lk.x;
 					If(kind.greaterThan(4.5), () => {
 						// surface stamps: folds in the cloth itself, no colour of their own (5 knot, 6 ruching, 7 twist knot)
-						const s = dp.xy, rr = length(s), ang = atan(s.y, s.x), h = float(0).toVar(), env = float(0).toVar();
+						const s = dp.xy.toVar(), rr = length(s).toVar(), ang = atan(s.y, s.x).toVar(), h = float(0).toVar(), env = float(0).toVar();
 						If(kind.lessThan(5.5), () => { env.assign(float(1).sub(smoothstep(0.3, 0.5, rr))); h.assign(sin(ang.mul(14)).mul(smoothstep(0.03, 0.16, rr)).mul(env).add(float(1).sub(smoothstep(0, 0.09, rr)).mul(0.8))); })
 							.ElseIf(kind.lessThan(6.5), () => { env.assign(float(1).sub(smoothstep(0.35, 0.5, abs(s.x))).mul(float(1).sub(smoothstep(0.42, 0.5, abs(s.y))))); h.assign(sin(s.y.mul(57)).mul(float(1).sub(abs(s.x).mul(1.6))).mul(env)); })
 							.Else(() => { env.assign(float(1).sub(smoothstep(0.3, 0.5, rr))); h.assign(sin(ang.mul(6).add(rr.mul(34))).mul(smoothstep(0.02, 0.12, rr)).mul(env).add(float(1).sub(smoothstep(0, 0.07, rr)).mul(0.7))); });
@@ -435,7 +473,7 @@ export function createFabricNodeMaterial(zone, u) {
 
 		// topstitching on a finished edge: coverstitch rows, or a zigzag
 		if (zone === 4) {
-			const fx = max(fwidth(aRim.x), 1e-6), fade = float(1).sub(smoothstep(0.00012, 0.0004, fx));
+			const fx = max(fwidth(aRim.x), 1e-6).toVar(), fade = float(1).sub(smoothstep(0.00012, 0.0004, fx)).toVar();
 			const thread = float(0).toVar(), groove = float(0).toVar(), rows = U('uRows', 'vec2'), uZig = U('uZig');
 			for (let k = 0; k < 2; k++) {
 				const r = k === 0 ? rows.x : rows.y;
@@ -462,12 +500,22 @@ export function createFabricNodeMaterial(zone, u) {
 		return FabricOut(col, alpha, normal, rough, metal, vAO.mul(trimAO), flakeMask, foil, dye, film);
 	});
 	const out = fabric();
-	m.colorNode = out.get('col'); // (TODO: the shadow pass reads colorNode's alpha and so runs the fabric function too)
+	m.fabricColor = out.get('col');
 	m.opacityNode = out.get('alpha');
 	m.normalNode = out.get('n');
 	m.roughnessNode = out.get('rough');
 	m.metalnessNode = out.get('metal');
 	m.aoNode = out.get('ao');
+	// FILM_FRAGMENT: thin-film thickness from the fabric's swirl field instead of one value (oil-slick, liquid hologram)
+	const uFilmRange = U('uFilmRange', 'vec2');
+	m.iridescenceThicknessNode = select(U('uFilm').greaterThan(0), mix(uFilmRange.x, uFilmRange.y, out.get('film')), materialIridescenceThickness);
+	// what the lighting model (fabric-light.js) and FOIL_FRAGMENT read
+	m.fabricLight = {
+		flake: out.get('flake'), foil: out.get('foil'), dye: out.get('dye'), glint: U('uGlint'), blend: U('uBlend'),
+		skin: zone === 3 ? U('uSkin') : null,
+		micro: { eta: U('uMicroEta'), T1: U('uMicroT1', 'vec4'), T2: U('uMicroT2', 'vec4'), A1: U('uMicroA1', 'color'), A2: U('uMicroA2', 'color'),
+			R2: U('uMicroR2', 'vec2'), off: A('uMicroOff', 'float'), len: A('uMicroLen', 'float'), lut: tMicroLut },
+	};
 	m.userData.nodes = { out, tsl: TSL }; // (debugging: m.colorNode = out.get('ao'), m.needsUpdate = true)
 	// (no customProgramCacheKey: in WebGPU it would share the node graph, and with it the first material's uniform objects,
 	// between every material of the zone; WGSL that comes out the same is shared by three anyway)

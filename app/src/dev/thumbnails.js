@@ -204,12 +204,12 @@ export async function materials(only = null, { envTurn = 0.6 } = {}) { // only: 
 	for (const k of only ?? FABRIC_KEYS) { // the fabrics the material grid offers
 		const [colour, second, colour2] = MATERIAL_COLOURS[k] ?? ['#888888'];
 		const room = k in ROOM;
-		await put(`/__fs/thumbs/materials/${thumbName(k)}.jpg`, swirlThumb(renderer, room ? loft : softboxEnv, { fabric: k, colour, second, colour2 }, { zoom: ZOOM[k] ?? 1, envTurn: room ? ROOM[k] : envTurn }));
+		await put(`/__fs/thumbs/materials/${thumbName(k)}.jpg`, await swirlThumb(renderer, room ? loft : softboxEnv, { fabric: k, colour, second, colour2 }, { zoom: ZOOM[k] ?? 1, envTurn: room ? ROOM[k] : envTurn }));
 	}
 	if (only) return;
 	for (const f of await e.textures.list()) {
 		const set = await e.textures.get(f.id);
-		await put(`/__fs/scanthumbs/${f.id}.jpg`, swirlThumb(renderer, softboxEnv, { fabric: baseFabricFor(f), colour: '#ffffff', texture: set, texMode: 'original' }, { zoom: 1.3, envTurn }));
+		await put(`/__fs/scanthumbs/${f.id}.jpg`, await swirlThumb(renderer, softboxEnv, { fabric: baseFabricFor(f), colour: '#ffffff', texture: set, texMode: 'original' }, { zoom: 1.3, envTurn }));
 	}
 }
 

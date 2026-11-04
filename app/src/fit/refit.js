@@ -76,11 +76,19 @@ function concat(Type, parts) {
 }
 
 export class Refit {
-	static async device() {
-		if (!navigator.gpu) throw new Error('WebGPU is not available in this browser');
-		const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }) || await navigator.gpu.requestAdapter();
-		if (!adapter) throw new Error('no WebGPU adapter');
-		return adapter.requestDevice({ requiredLimits: { maxStorageBuffersPerShaderStage: Math.min(10, adapter.limits.maxStorageBuffersPerShaderStage), maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize, maxBufferSize: adapter.limits.maxBufferSize } });
+	// One device per page, shared: the WebGPU renderer is made on it too (render/webgpu.js createWebGPU), so a fitted garment's
+	// points can stay on the GPU between the re-fit and the frame (plan Phase 1 step 7). Its limits are the re-fit's.
+	static device() {
+		Refit.shared ??= (async () => {
+			if (!navigator.gpu) throw new Error('WebGPU is not available in this browser');
+			const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }) || await navigator.gpu.requestAdapter();
+			if (!adapter) throw new Error('no WebGPU adapter');
+			// every feature the adapter has, as three's renderer asks for its own device (it reads 'core-features-and-limits' to
+			// tell a full device from a compatibility one)
+			return adapter.requestDevice({ requiredFeatures: [...adapter.features], requiredLimits: { maxStorageBuffersPerShaderStage: Math.min(10, adapter.limits.maxStorageBuffersPerShaderStage), maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize, maxBufferSize: adapter.limits.maxBufferSize } });
+		})();
+		Refit.shared.catch(() => { Refit.shared = null; });
+		return Refit.shared;
 	}
 
 	// data.cache (optional, the app's live re-fits, render/fitted.js): kept between runs on the same garment and body mesh, so a new
