@@ -12,8 +12,8 @@
 // Stones never scale: scaling moves them apart, or draws more of the lines. The pipeline: a layout draws
 // through the pattern's map, so what arrives is on the cloth and evenly spaced there. Then per candidate,
 // what the design hangs on first (stones/candidates.js pri), cheapest test first: density against its rank
-// (so a stone kept at 40% is kept at 60%), the piece's edge, clear of the pattern's other stones on the
-// flat cloth, its triangle on the body. Nothing here searches the body.
+// (so a stone kept at 40% is kept at 60%), the piece's edge, its triangle on the body, the openings' keep-out.
+// Each stone on its own: stones may overlap (patternStones). Nothing here searches the body.
 // Spec: knowledge/engineering/architecture/procedural-stone-patterns.md.
 import { LAYOUTS, GALLERY_ITEMS, layoutDefaults } from './layouts.js';
 import { Candidates, Drawing, SIZES } from './candidates.js';
@@ -23,12 +23,8 @@ import { sizeOf, SHAPES } from './library.js';
 
 // how far from an opening edge a stone can be and still need the elastic's keep-out checked
 const NEAR_EDGE = 0.03;
-// how close two stones of one pattern may lie, as a share of touching: they are placed flat, so this is
-// measured on the flat cloth, whatever the body does to it afterwards
-const FLAT_CLEAR = 0.92;
 
 const scratch = new Candidates(20000);
-let cellHead = new Int32Array(0), bigHead = new Int32Array(0), hashNext = new Int32Array(0), hashU = new Float32Array(0), hashV = new Float32Array(0), hashD = new Float32Array(0), order = new Int32Array(0);
 
 export const FRAME_DEFAULTS = { rotate: 0, scale: 1, flip: false };
 export const PLANE_DEFAULTS = { px: 0, py: 0, pturn: 0, pscale: 1, sx: 1, sy: 1 };
@@ -192,73 +188,28 @@ export function patternStones(gen, piece, opts = {}) {
 	const diam = mods.size ? (u, v, k, t, cat, rank) => ditherSize(d0 * k * mods.size(u, v, k, t, cat, rank), frac(rank * 97.13 + 0.71)) : null;
 	const E = scratch.reset(box, pitch, seed, flat ? edgeAt : null, { map: m, clip: piece, d0, gap, diam, fine, angles: !isRound, jitter: P.jitter ?? 0 });
 	drawInto(gen, layout, P, E, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine }, opts.cache);
-	const n = E.n, X = E.X, Y = E.Y, R = E.R, A = E.A, T = E.T, K = E.K, C = E.C, D = E.D, PR = E.P;
-
-	// what the design hangs on first, then coarser before finer; a scatter's big stones claim their room first
-	if (order.length < n) order = new Int32Array(Math.ceil(n * 1.5));
-	const ord = order;
-	if (dart && E.minK !== E.maxK || dart && diam) {
-		const by = new Int32Array(SIZES.length + 2), idx = (d) => { let q = 0; while (q < SIZES.length - 1 && SIZES[q] < d - 1e-7) q++; return SIZES.length - 1 - q; };
-		for (let i = 0; i < n; i++) by[idx(D[i]) + 1]++;
-		for (let q = 1; q < by.length; q++) by[q] += by[q - 1];
-		for (let i = 0; i < n; i++) ord[by[idx(D[i])]++] = i;
-	} else if (E.minP !== E.maxP) {
-		const by = new Int32Array(258);
-		for (let i = 0; i < n; i++) by[PR[i] + 1]++;
-		for (let q = 1; q < 258; q++) by[q] += by[q - 1];
-		for (let i = 0; i < n; i++) ord[by[PR[i]]++] = i;
-	} else for (let i = 0; i < n; i++) ord[i] = i;
-
-	// each stone against those before it, on the flat cloth: a grid of cells the size of an ordinary stone, and for the
-	// few much bigger ones a coarser one of their own, so that one big stone does not make every search long
-	const clear = dart ? gap : FLAT_CLEAR, roomy = Math.max(clear, 1) * 1.01, usual = Math.min(E.maxD, d0 * 1.35), cell = Math.max(usual * roomy, 1e-3), bigCell = Math.max(E.maxD * roomy, 1e-3);
-	const gx0 = piece.x0 - cell, gy0 = piece.y0 - cell, gw = Math.ceil((piece.x1 - gx0) / cell) + 3, gh = Math.ceil((piece.y1 - gy0) / cell) + 3, bx0 = piece.x0 - bigCell, by0 = piece.y0 - bigCell, bw = Math.ceil((piece.x1 - bx0) / bigCell) + 3, bh = Math.ceil((piece.y1 - by0) / bigCell) + 3;
-	if (cellHead.length < gw * gh) cellHead = new Int32Array(gw * gh);
-	if (bigHead.length < bw * bh) bigHead = new Int32Array(bw * bh);
-	const head = cellHead, big = bigHead;
-	head.fill(-1, 0, gw * gh); big.fill(-1, 0, bw * bh);
-	if (hashNext.length < n) { const cap = Math.ceil(n * 1.5); hashNext = new Int32Array(cap); hashU = new Float32Array(cap); hashV = new Float32Array(cap); hashD = new Float32Array(cap); }
-	const next = hashNext, HU = hashU, HV = hashV, HD = hashD;
-	let nh = 0, anyBig = false;
+	const n = E.n, X = E.X, Y = E.Y, R = E.R, A = E.A, T = E.T, K = E.K, C = E.C, D = E.D;
 
 	const overall = P.density ?? 1, margin = P.margin ?? 0, keepOut = P.keepOut, edge = opts.edge;
 	const density = mods.density, colour = mods.colour ?? plainColour(gen), layer = gen.layer ?? null, id = gen.id, out = [];
 	const turn = ((P.stoneTurn ?? 0) * Math.PI) / 180, upright = P.turn === 'fixed', upAngle = ((P.rotate ?? 0) * Math.PI) / 180;
-	// a scatter's finest candidates are denser than its stones can be: a density means a share of what fits here
-	const crowded = dart && fine < 1, meanK = layout.meanK?.(P) ?? 1;
-	for (let o = 0; o < n; o++) {
-		const i = ord[o], u = X[i], v = Y[i], k = K[i], t = T[i], cat = C[i], rank = R[i], d = D[i];
+	// Stones may overlap: each candidate is kept or not on its own (density, room, the piece, the keep-out), never against the
+	// others, so what is shown during a drag is the design itself, and the same rule can run on the GPU (owner, 2026-11-04:
+	// the designer spaces and sizes the stones). Before, each stone was checked against those kept before it.
+	for (let i = 0; i < n; i++) {
+		const u = X[i], v = Y[i], k = K[i], t = T[i], cat = C[i], rank = R[i], d = D[i];
 		let dens = overall;
 		if (density) dens *= density(u, v, k, t, cat, rank);
-		if (crowded && dens < 1) {
-			const share = fine / ((d / (d0 * k)) * meanK), crowd = share < 1 ? share * share : 1;
-			dens = dens * crowd + (1 - crowd) * Math.pow(dens, 10);
-		}
+		// a scatter's candidates are a blue-noise tile in ranked order whose first points lie furthest apart (stones/layouts-lattice.js
+		// blueTile), spaced for its smallest stones: a bigger stone keeps the first share of them, those spaced for its own size. So
+		// stones of one size keep their room by how they are made, not by checking each other (big among small may overlap).
+		if (dart) { const f = (d0 * fine) / d; if (f < 1) dens *= f * f; }
 		if (rank >= dens) continue;
 		const room = piece.edgeAt(u, v);
 		if (room < d / 2 + margin) continue;
 		const q = piece.find(u, v);
 		if (q < 0) continue;
 		const w1 = piece.w1, w2 = piece.w2;
-		const cu = Math.floor((u - gx0) / cell), cv = Math.floor((v - gy0) / cell), span = d <= usual ? 1 : Math.ceil((((usual + d) / 2) * clear) / cell);
-		const j0 = cv - span < 0 ? 0 : cv - span, j1 = cv + span >= gh ? gh - 1 : cv + span, i0 = cu - span < 0 ? 0 : cu - span, i1 = cu + span >= gw ? gw - 1 : cu + span;
-		let ok = true;
-		for (let b = j0; b <= j1 && ok; b++) for (let a = i0; a <= i1 && ok; a++) {
-			for (let e = head[b * gw + a]; e >= 0; e = next[e]) {
-				const du = HU[e] - u, dv = HV[e] - v, c = ((HD[e] + d) / 2) * clear;
-				if (du * du + dv * dv < c * c) { ok = false; break; }
-			}
-		}
-		if (ok && anyBig) {
-			const bu = Math.floor((u - bx0) / bigCell), bv = Math.floor((v - by0) / bigCell);
-			for (let b = bv - 1; b <= bv + 1 && ok; b++) for (let a = bu - 1; a <= bu + 1 && ok; a++) {
-				for (let e = big[b * bw + a]; e >= 0; e = next[e]) {
-					const du = HU[e] - u, dv = HV[e] - v, c = ((HD[e] + d) / 2) * clear;
-					if (du * du + dv * dv < c * c) { ok = false; break; }
-				}
-			}
-		}
-		if (!ok) continue;
 		piece.posOf(q, _p3, w1, w2);
 		// finished opening edges: the trim's keep-out (or the group's own), as for every other stone
 		if (edge && room < NEAR_EDGE + (keepOut ?? 0)) {
@@ -266,10 +217,6 @@ export function patternStones(gen, piece, opts = {}) {
 			const near = keepOut === undefined ? keepGrid(piece, edge, u, v) : NaN, sure = near > d / 2 + KEEP_SURE || near < d / 2 - KEEP_SURE;
 			if (sure ? near < d / 2 : edge(_p3, keepOut) <= d / 2) continue;
 		}
-		HU[nh] = u; HV[nh] = v; HD[nh] = d;
-		if (d <= usual) { const hk = cv * gw + cu; next[nh] = head[hk]; head[hk] = nh; }
-		else { const hk = Math.floor((v - by0) / bigCell) * bw + Math.floor((u - bx0) / bigCell); next[nh] = big[hk]; big[hk] = nh; anyBig = true; }
-		nh++;
 		const h = frac(rank * 61.803398875 + 0.137);
 		const angle = isRound ? h * Math.PI : piece.angleOf(q, (upright ? upAngle : A[i]) + turn);
 		// fit: where on a fitted garment's fabric (stones/fitted-cloth.js), drawn there rather than on the body under it

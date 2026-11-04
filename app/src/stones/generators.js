@@ -582,7 +582,7 @@ function placedStones(doc, surf) {
 	});
 }
 
-// Each stone against those before it: a cell hash over flat arrays (no strings, nothing allocated per
+// Each stone against those before it (not a pattern's stones: they may overlap): a cell hash over flat arrays (no strings, nothing allocated per
 // stone), so this final pass stays cheap enough for every frame of a drag.
 const CELL = 0.012, HASH = 1 << 16;
 const keep = { head: new Int32Array(HASH), next: new Int32Array(0), x: new Float32Array(0), y: new Float32Array(0), z: new Float32Array(0), size: new Float32Array(0), lift: new Float32Array(0) };
@@ -596,21 +596,21 @@ function keepApart(lists, ctx) {
 	}
 	const { head, next, x: KX, y: KY, z: KZ, size: KS, lift: KL } = keep, kept = [];
 	head.fill(-1);
-	let m = 0, biggest = 0, li = 0, linked = 0, side = 0;
-	// what has been kept joins the hash; a pattern's stones only when that side of it is done: they have been kept
-	// apart already, on the flat cloth they are pressed on, and a piece that lies a little tighter on the body
-	// must not knock out every other stone of a line
+	let m = 0, biggest = 0, linked = 0;
+	// what has been kept joins the hash
 	const link = () => {
 		for (; linked < m; linked++) {
 			const h = cellHash(Math.floor(KX[linked] / CELL), Math.floor(KY[linked] / CELL), Math.floor(KZ[linked] / CELL));
 			next[linked] = head[h]; head[h] = linked;
 		}
 	};
-	for (const list of lists) for (let n = 0, count = (li++, list.length); n < count; n++) {
-		const s = list[n], own = s.fab ? li * 2 + (s.mirrored ? 1 : 0) : 0;
-		if (own !== side) { link(); side = own; }
-		// on fabric (or on their strap) and off opening edges: known for a pattern's stones, asked once for others
-		if (!s.lift && !s.fab) {
+	for (const list of lists) for (let n = 0, count = list.length; n < count; n++) {
+		const s = list[n];
+		// a pattern's stones are kept as laid: they neither give way to other stones nor make others give way (stones may
+		// overlap, the designer spaces them: stones/pattern.js patternStones)
+		if (s.fab) { kept.push(s); continue; }
+		// on fabric (or on their strap) and off opening edges: asked once
+		if (!s.lift) {
 			if (s.onFabric === undefined) s.onFabric = !ctx.isFabric || ctx.isFabric(s.sp, _b.set(s.x, s.y, s.z), s.size, s.keepOut);
 			if (!s.onFabric) continue;
 		}
@@ -628,7 +628,7 @@ function keepApart(lists, ctx) {
 		}
 		if (!ok) continue;
 		KX[m] = px; KY[m] = py; KZ[m] = pz; KS[m] = sz; KL[m] = lift; m++;
-		if (!own) link();
+		link();
 		if (sz > biggest) biggest = sz;
 		kept.push(s);
 	}

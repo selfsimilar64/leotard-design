@@ -188,11 +188,15 @@ function crossings(ox, oy, dx, dy, others, s, reach) {
 	return out;
 }
 
+// How many stones a cluster's circle holds at the stones' spacing (the blue-noise tile's points inside it): more than that
+// would add none (clusters.make), so the slider ends there.
+const clusterFits = (P) => { const L = (sizeOf(P.size ?? 'ss12') * (P.gap ?? 1.2) * SMALLEST_VARIED(P.variety ?? 0.2)) / TILE_R; return Math.max(3, Math.floor((Math.PI * P.radius ** 2 * blueTile().n) / (L * L))); };
+
 export const LATTICE_LAYOUTS = {
 	// --- scatters ---------------------------------------------------------------------------------
 	scatter: {
 		label: 'Scatter', dart: true, random: true,
-		fine: (P) => SMALLEST_VARIED(P.variety), meanK: (P) => 1 + 0.25 * P.variety,
+		fine: (P) => SMALLEST_VARIED(P.variety),
 		params: [pct('variety', 'Variety of sizes', 0)],
 		make(P, E) {
 			// (a tile of a fixed size in its own space, so that scaling the pattern spreads its stones apart)
@@ -202,19 +206,26 @@ export const LATTICE_LAYOUTS = {
 	},
 	clusters: {
 		label: 'Clusters', dart: true, random: true,
-		fine: (P) => SMALLEST_VARIED(P.variety), meanK: (P) => 1 + 0.25 * P.variety,
-		params: [mm('spacing', 'Between clusters', 0.05, 0.015, 0.15), mm('radius', 'Cluster size', 0.014, 0.004, 0.05), num('count', 'Stones in each', 22, 3, 80), pct('heart', 'Bigger in the middle', 0.5), pct('variety', 'Variety of sizes', 0.2)],
+		fine: (P) => SMALLEST_VARIED(P.variety),
+		params: [mm('spacing', 'Between clusters', 0.05, 0.015, 0.15), mm('radius', 'Cluster size', 0.014, 0.004, 0.05), { ...num('count', 'Stones in each', 22, 3, 80), maxOf: clusterFits }, pct('heart', 'Bigger in the middle', 0.5), pct('variety', 'Variety of sizes', 0.2)],
 		grips: [along('spacing', [1, 0], 'Between clusters'), radius('radius', 'Cluster size')],
 		make(P, E) {
 			const seed = E.seed, m = P.radius, B = grown(E.box, m), v = P.variety;
 			// only the tile's first sixteenth: points four times further apart than all of it
+			// each cluster: the blue-noise tile's first points inside its circle (those furthest apart), as many as asked for or as fit
+			// at the stones' spacing, so a cluster's stones keep their room by how they are made (stones/pattern.js: stones may overlap)
+			const L = (E.d0 * E.gap * E.fine) / TILE_R, pts = [];
 			overTile(B, P.spacing / (TILE_R * 4), seed, (x, y, k, rank, i, j) => {
 				if (rank > 1 / 16) return;
 				const id = k + i * 7919 + j * 104729;
 				E.cat = id & 3;
-				for (let c = 0; c < P.count; c++) {
-					const a = hash2(id, c * 2, seed) * TAU, f = c ? Math.sqrt(hash2(id, c * 2 + 1, seed)) : 0, g = 1 - f;
-					E.add(x + P.radius * f * Math.cos(a), y + P.radius * f * Math.sin(a), Math.min(0.999, rank * 16 * 0.5 + (c / P.count) * 0.5), hash2(id, c, seed + 1) * TAU, f, varied(hash2(id, c, seed + 2), v) * (1 + P.heart * 2.2 * g * g));
+				pts.length = 0;
+				overTile({ x0: x - m, x1: x + m, y0: y - m, y1: y + m }, L, seed + id, (px, py, q, r) => { const f = Math.hypot(px - x, py - y) / m; if (f < 1) pts.push([r, px, py, f, q]); });
+				pts.sort((p, q) => p[0] - q[0]);
+				const n = Math.min(P.count, pts.length);
+				for (let c = 0; c < n; c++) {
+					const [, px, py, f, q] = pts[c], g = 1 - f;
+					E.add(px, py, Math.min(0.999, rank * 16 * 0.5 + (c / n) * 0.5), hash2(id, q, seed + 1) * TAU, f, varied(hash2(id, q, seed + 2), v) * (1 + P.heart * 2.2 * g * g));
 				}
 			});
 		},

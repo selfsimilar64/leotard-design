@@ -279,23 +279,32 @@ export const RADIAL_LAYOUTS = {
 	galaxy: {
 		label: 'Galaxy', own: true,
 		dart: true, random: true,
-		fine: (P) => SMALLEST_VARIED(P.variety), meanK: (P) => 1 + 0.25 * P.variety,
+		fine: (P) => SMALLEST_VARIED(P.variety),
 		params: [num('arms', 'Arms', 3, 1, 8), mm('radius', 'Size', 0.16, 0.03, 0.5), ratio('wind', 'Wind', 2.2, 0.2, 6, 0.05), pct('spread', 'Spread', 0.28, 0.02, 1), pct('heart', 'Bigger at the core', 0.5), pct('variety', 'Variety of sizes', 0.2)],
 		grips: [radius('radius', 'Size')],
 		make(P, E) {
-			const seed = E.seed, N = Math.min(14000, Math.round(((P.radius / (E.pitch * E.fine)) ** 2) * 3)), v = P.variety;
-			for (let i = 0; i < N; i++) {
-				const f = Math.pow(hash2(i, 1, seed), 0.65), arm = Math.floor(hash2(i, 2, seed) * P.arms);
-				const gauss = (hash2(i, 3, seed) + hash2(i, 4, seed) + hash2(i, 5, seed) - 1.5) * 1.2;
-				const a = (arm / P.arms) * TAU + P.wind * Math.log(1 + f * 6) + gauss * P.spread * (1.2 - f * 0.6), R = f * P.radius, g = 1 - f;
-				E.add(R * Math.cos(a), R * Math.sin(a), rankOf1(i), hash2(i, 6, seed) * TAU, f, varied(hash2(i, 7, seed), v) * (1 + P.heart * 2 * g * g * g), arm);
-			}
+			// the blue-noise tile over the disc, each point kept as far down the tile's ranked order as the arms are dense there: in a
+			// thin part only the tile's first points, which lie furthest apart, so stones keep their room by how they are made
+			// (stones/pattern.js: stones may overlap). Arms: logarithmic spirals, each a band as wide and as full as before.
+			const seed = E.seed, v = P.variety, Rm = P.radius, n = P.arms;
+			overTile({ x0: -Rm, x1: Rm, y0: -Rm, y1: Rm }, (E.pitch * E.fine) / TILE_R, seed, (x, y, k, rank) => {
+				const R = Math.hypot(x, y), f = R / Rm;
+				if (f >= 1) return;
+				// the nearest arm, by angle, and how far from its middle (in its width: 0.6 x spread, wider at the core)
+				const a = Math.atan2(y, x) - P.wind * Math.log(1 + f * 6), turn = (a / TAU) * n, arm = Math.round(turn), off = ((turn - arm) * TAU) / n;
+				// how many stones a stone's room held before (as many random points as three times the disc's room, a radius drawn as
+				// h^0.65, a gaussian across the arm, then packed): 1.84 / (arms x width) x f^-0.46 across the arm's middle; full past 1
+				const w = 0.6 * P.spread * (1.2 - f * 0.6), dens = Math.min(1, (1.84 / (n * w)) * Math.pow(Math.max(f, 0.01), -0.462) * Math.exp(-0.5 * (off / w) ** 2));
+				if (rank >= dens) return;
+				const g = 1 - f;
+				E.add(x, y, rank / dens, hash2(k, 6, seed) * TAU, f, varied(hash2(k, 7, seed), v) * (1 + P.heart * 2 * g * g * g), ((arm % n) + n) % n);
+			});
 		},
 	},
 	stardust: {
 		label: 'Stardust', own: true,
 		dart: true, random: true,
-		fine: (P) => SMALLEST_VARIED(P.variety), meanK: (P) => 1 + 0.25 * P.variety,
+		fine: (P) => SMALLEST_VARIED(P.variety),
 		params: [mm('radius', 'Size', 0.16, 0.02, 0.5), ratio('falloff', 'Fall-off', 2.2, 0.5, 6, 0.05), pct('heart', 'Bigger in the middle', 0.4), pct('variety', 'Variety of sizes', 0.3)],
 		grips: [radius('radius', 'Size')],
 		make(P, E) {

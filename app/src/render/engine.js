@@ -277,7 +277,7 @@ export class Engine {
 			if (t('curves') || t('panels') || t('layers') || t('trims') || this.geoSig === null) this.syncGarment(doc);
 			else if (t('straps')) this.syncStraps(doc);
 			if (t('hardware') || t('curves') || t('panels')) this.hardware.build(doc);
-			if (t('stones') || t('placed') || t('curves') || t('panels') || t('straps') || t('trims') || t('layers')) { this.syncStones(doc, all ? null : touched); this.stonesDirty = false; }
+			if (t('stones') || t('placed') || t('curves') || t('panels') || t('straps') || t('trims') || t('layers')) { this.syncStones(doc, all ? null : touched); this.stonesDirty = false; this.onStones?.(); } // (the flat view paints them: ui/FlatView.jsx Stack)
 			if (t('decals') || t('layers') || t('curves') || t('panels')) this.syncDecals(doc);
 			if (t('body')) this.applyBody(doc.body, all);
 			this.fitted.sync(doc);

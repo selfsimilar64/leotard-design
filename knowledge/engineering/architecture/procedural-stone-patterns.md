@@ -149,13 +149,20 @@ every preset and finds at least 97% of stones away from the edges exactly where 
    at their places, so a tapering line, a size modifier or a stretch keep it packed. Layouts flagged `heavy` (Voronoi,
    quasicrystals, fields, flow, bubbles) keep their pen's moves (`Drawing`) on an anchored box between frames and
    replay them.
-2. **Order**: by `P`; a `dart` layout (scatter, clusters, stardust, galaxy) by size, biggest first, so big stones claim
-   their room.
-3. **Density**: `rank < density x modifiers`, so thinning nests. A scatter's candidates are finer than its stones when
-   sizes vary (`fine`), and the density means a share of what fits.
-4. **Edge**: `edgeAt` against radius + `margin`.
-5. **Flat clearance**: a hash of cells on the cloth; 0.92 of touching, or `gap` for dart layouts.
-6. **Triangle**: the surface point, its reference position, within 3 cm of an edge the trim's keep-out; its angle; its
+2. **Density**: `rank < density x modifiers`, so thinning nests. A `dart` layout's (scatter, clusters, stardust, galaxy)
+   candidates come from the ranked blue-noise tile, spaced for its smallest stones (`fine`); a stone of diameter `d`
+   keeps the first `(d0 x fine / d)^2` of them, those the tile spaced for its size.
+3. **Edge**: `edgeAt` against radius + `margin`.
+4. **No clearance check (owner, 2026-11-04).** Stones may overlap: each candidate is kept or not on its own, never
+   against the others, so the live preview during a drag is the design itself and the rule can run on the GPU. The
+   designer spaces and sizes the stones. Spacing comes from how layouts are made: lines walk `gap x` the stones' sizes,
+   lattices are drawn at the spacing, scatters, clusters and galaxies take the blue-noise tile's first points (clusters:
+   the first `count` points inside each circle, the count's slider ending at what fits; galaxy: each tile point kept as
+   far down the ranked order as the old random arms were dense there). Big stones among small ones, crossings that are
+   not joints, distortions that squeeze, and two groups over each other can overlap. Before, a hash of cells on the
+   cloth kept a pattern's stones 0.92 of touching apart (or `gap` for dart layouts, biggest first), and the final pass
+   kept groups apart on the body.
+5. **Triangle**: the surface point, its reference position, within 3 cm of an edge the trim's keep-out; its angle; its
    colour. Randomness (a round stone's spin, dithering, sparkle) comes from the rank, so it stays with the stone.
 
 A size between two that are sold, from a modifier, is dithered between them (`ditherSize`), so a gradient has no hard
@@ -206,8 +213,8 @@ The arrangements have sizes of their own, not only what a gradient lays over the
 
 - `generators.js runStones(doc, ctx, cache)`: each group's stones are kept against its JSON and a
   geometry revision. Editing one group costs that group and the final pass; nothing changed returns
-  the last result. The final pass (on fabric, apart from others) uses a cell hash over typed arrays; a pattern's own
-  side joins the hash when that side is done, so it never probes itself.
+  the last result. The final pass (on fabric, apart from others) uses a cell hash over typed arrays; a pattern's
+  stones skip it (kept as laid, neither giving way nor making others give way).
 - `Engine.syncStones(doc, touched)`: `edgeKeepOut` and the geometry signature are rebuilt only when
   curves, panels, straps, trims or layers are touched. A gesture only flags the stones dirty; they run once per
   frame, in `viewport.onFrame`, before the draw; the handles are laid out right after them.

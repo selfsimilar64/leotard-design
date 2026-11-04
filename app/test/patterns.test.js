@@ -523,11 +523,14 @@ describe('modifiers', () => {
 			expect(gap).toBeLessThan(want * 1.6);
 		}
 	});
-	it('a scatter under a size modifier packs to the local size, biggest first', () => {
+	it('a scatter under a size modifier thins to the local size: stones of one size keep their room by how they are made', () => {
 		const P = { layout: 'scatter', x: 0, y: 0, size: 'ss12', gap: 1.1, mods: [{ id: 's', on: 'size', shape: 'linear', a: 90, w: 0.5, h: 0.5, from: 0.5, to: 2 }] };
 		const list = stonesOf(P), top = list.filter((s) => s.sp.v > 0.1), low = list.filter((s) => s.sp.v < -0.1);
 		expect(low.length).toBeGreaterThan(top.length * 3);
-		for (const a of list.slice(0, 500)) for (const b of list) if (a !== b) expect(Math.hypot(a.sp.u - b.sp.u, a.sp.v - b.sp.v)).toBeGreaterThanOrEqual(((a.size + b.size) / 2) * 1.1 - 1e-6);
+		// (stones may overlap: nothing checks them against each other. Two of one size come no closer than the tile spaced them)
+		let worst = Infinity;
+		for (const a of list.slice(0, 500)) for (const b of list) if (a !== b && a.size === b.size) worst = Math.min(worst, Math.hypot(a.sp.u - b.sp.u, a.sp.v - b.sp.v) / a.size);
+		expect(worst).toBeGreaterThan(0.75);
 		expect(sizeRange(P.mods)).toEqual([0.5, 2]);
 	});
 	it('a density on a scatter thins it as asked, whatever its sizes', () => {
@@ -872,14 +875,13 @@ describe('on a garment', () => {
 		expect(runStones(d, c2, cache)).toBe(r2); // nothing changed: nothing done
 	});
 
-	it('stones of any sizes keep apart, however big the biggest', () => {
+	it('patterns are kept as laid: two over each other both show in full (stones may overlap, the designer spaces them)', () => {
 		const P = { layout: 'grid', spacing: 0.005, size: 'ss5' };
-		const d = { ...doc, stones: [gen({ layout: 'grid', spacing: 0.03, size: 'ss48' }, { id: 'big' }), gen(P, { id: 'small' })], placed: [] };
-		const st = runStones(d, { ...ctx, doc: d }).stones, big = st.filter((s) => s.gen === 'big');
+		const both = { ...doc, stones: [gen({ layout: 'grid', spacing: 0.03, size: 'ss48' }, { id: 'big' }), gen(P, { id: 'small' })], placed: [] };
+		const alone = { ...doc, stones: [gen(P, { id: 'small' })], placed: [] };
+		const st = runStones(both, { ...ctx, doc: both }).stones, big = st.filter((s) => s.gen === 'big');
 		expect(big.length).toBeGreaterThan(10);
-		expect(st.length).toBeGreaterThan(big.length + 100);
-		// the big ones were laid first: a small one kept is clear of them, though its own reach is short
-		for (const b of big) for (const s of st) if (s !== b && s.gen !== b.gen) expect(Math.hypot(b.x - s.x, b.y - s.y, b.z - s.z)).toBeGreaterThanOrEqual(((b.size + s.size) / 2) * 0.92 - 1e-6);
+		expect(st.length - big.length).toBe(runStones(alone, { ...ctx, doc: alone }).stones.length);
 	});
 
 	it('the cached run and the plain run agree', () => {
