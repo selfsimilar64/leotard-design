@@ -85,12 +85,15 @@ export class Engine {
 		this.g = null;          // the shell layer's build (tools and picking use it)
 		this.evaluated = null;  // every layer's evaluated curves
 		this.geoSig = null;
+		// a drag edits a stone group many times a frame's worth of pointer events: run it once, here (onTick: also while the 3D pane is
+		// hidden, the pattern view alone on screen, whose handles wait on it: ui/FlatStones.jsx)
+		viewport.onTick.add(() => {
+			if (this.stonesDirty && this.app) { this.stonesDirty = false; this.syncStones(this.app.doc, this.stonesLive ? new Set(['stones']) : null); this.stonesLive = false; this.onStones?.(); }
+		});
 		viewport.onFrame.add(() => {
 			this.legacy.frame(viewport.keyDir);
 			for (const L of this.layers.values()) { L.view.frame(viewport.keyDir); L.rims.frame(viewport.keyDir); }
 			this.straps.frame(viewport.keyDir);
-			// a drag edits a stone group many times a frame's worth of pointer events: run it once, here
-			if (this.stonesDirty && this.app) { this.stonesDirty = false; this.syncStones(this.app.doc, this.stonesLive ? new Set(['stones']) : null); this.stonesLive = false; this.onStones?.(); }
 			this.gizmo.frame();
 		});
 		// picking surface: the garment surface of the body on show (same canonical faces as everywhere)

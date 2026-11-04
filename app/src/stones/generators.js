@@ -554,6 +554,7 @@ function stonesOfGroup(gen, ctx, errors) {
 	const mirrored = (s) => {
 		const sp = isPattern ? mirror(surf, s.sp) : mirror(s.sp, surf), p = surf.pos(sp, _a);
 		// (a fitted garment's stone: the mirror point's fitted triangle, render/fitted.js mirrorFit)
+		// (a pattern stone keeps flat/fu/fv, its original's place on the piece: the flat view draws it there as the pair's other cut)
 		return { ...s, sp, fit: s.fit ? ctx.mirrorFit?.(s.fit) ?? undefined : undefined, angle: Math.PI - s.angle, mirrored: true, x: p.x, y: p.y, z: p.z, r: (s.r * 7.13 + 0.37) % 1 };
 	};
 	if (isPattern) {

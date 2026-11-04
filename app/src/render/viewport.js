@@ -134,6 +134,7 @@ export class Viewport {
 
 		this.settings = { rig: DEFAULT_RIG, exposure: 1, bloom: 0.18, envRotation: 0, renderScale: 1, dynamicRes: true };
 		this.onFrame = new Set();
+		this.onTick = new Set(); // every frame, drawn or not: work the other views wait on (render/engine.js lays the stones here)
 		this.holds = new Set(); // while any holder is in it, frames are not drawn (frame)
 		this.onResize = new Set();
 		this.stats = { fps: 0, cpuMs: 0, triangles: 0, width: 0, height: 0 };
@@ -311,10 +312,12 @@ export class Viewport {
 	frame() {
 		this.timer.update();
 		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
-		if (!this.container.clientWidth) return; // pane not laid out yet
 		// something is still being worked out for what is about to be shown (a fitted garment's re-fit on a new pose: render/fitted.js):
 		// the last frame stays on screen, so the half-made state is never drawn
 		if (this.holds.size) return;
+		// (before the check below: with the pattern view alone on screen this pane has no size, and its stones must still be laid)
+		for (const fn of this.onTick) fn(dt);
+		if (!this.container.clientWidth) return; // pane not laid out yet, or hidden
 		if (this.hdriOn) this.placeHdriLights();
 		if (this.studioOn) this.placeStudioLights();
 		this.renderer.toneMappingExposure = s.exposure;

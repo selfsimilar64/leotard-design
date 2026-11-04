@@ -11,7 +11,7 @@ sources:
     title: "A secondary appearance for the 2D view with each piece's colours and gemstones, maybe a texture hint for the material; gem patterns editable there too; two ways to edit the same design, always in sync"
     author: human:mattj
   - id: code
-    resource: "app/src/ui/FlatView.jsx (LookPiece, Defs, flatLook), app/src/ui/FlatStones.jsx (StonesOn, PatternHandlesOn, frameOf), app/src/garment/pattern.js patternPieces (cell, layer, origin, easeUV; a mirrored panel shows its seed's cell), app/src/render/engine.js clothOfCell"
+    resource: "app/src/ui/FlatView.jsx (LookPiece, Defs, flatLook), app/src/ui/FlatStones.jsx (StonesOn, PatternHandlesOn, frameOf), app/src/garment/pattern.js patternPieces (cell, layer, origin, easeUV; a mirrored panel shows its seed's cell), app/src/render/engine.js clothOfCell, app/src/render/viewport.js onTick, app/src/stones/pattern.js patternStones (flat, fu, fv)"
     title: Look appearance code
     author: claude-code/claude-opus-5-5
 ---
@@ -78,6 +78,26 @@ not have.
   4-12 ms, the whole flat view 51 nodes. Frame rates in this session's test tab were not usable (the window was covered: frames
   held for seconds with almost no work done), so the feel is the owner's to judge.
 
+# Still slower in 2D, and the handle dead in Pattern-only (owner, 2026-11-04, later)
+
+The owner still found 2D pattern edits slower than 3D, and in the Pattern-only layout the handle did nothing. Measured on their
+"Procedural Gem Test 3" (one Flower of life pattern, about 14 000 stones), editing once a frame with the window in view:
+3D alone about 37 ms a step (laying the stones about 27 of it); with the pattern view showing about 90 ms.
+
+- **The handle in Pattern-only.** The engine laid the stones in the 3D viewport's frame hook, which returns early when its pane
+  has no width; in the Pattern layout the 3D pane is 0 wide, so a drag changed the design but its stones were never laid again and
+  the handles (which follow the laid stones) stayed put. Now `render/viewport.js` has `onTick`, run every frame before that
+  check (but after the fitted re-fit's hold), and `render/engine.js` lays the stones there.
+- **Painting.** The canvas painting of the previous step cost 30-55 ms for 14 000 stones once the canvas is flushed (the earlier
+  "few ms" timed the calls, not the drawing; copies of a pre-drawn stone picture were slower still). The stones are now drawn as
+  the 3D view draws them: one WebGL draw, a point per stone, the disc, outline (dashed and faded on the pair's other cut,
+  half a millimetre and dark when chosen) and shine shaded in `ui/FlatStones.jsx` (paintStones, glOf).
+- **Finding each stone on its piece.** A pattern's stones are laid in the piece's flat cloth, so `stones/pattern.js` patternStones
+  now keeps that place on the stone (`flat`: the cloth piece, `fu`, `fv`), and a mirrored copy keeps its original's
+  (`stones/generators.js` mirrored); stonesFor draws those directly instead of finding 14 000 surface points again (12 ms -> 5).
+  Other kinds of stones still go by their surface points.
+- Result, same test: 3D about 37 ms a step, Both about 44, Pattern about 45. Visual check: stones on the Front piece drawn as before.
+
 # Limits **[INFERRED]**
 
 - Only stone **patterns** have handles in 2D; rows, scatters, fills and the other kinds are drawn and selectable but are placed on
@@ -85,8 +105,8 @@ not have.
 - A fitted garment's pieces show their pattern stones and handles (by each stone's fitted triangle: see
   [fitted garments](/engineering/app/fitted-garments-in-the-app.md)); other stone kinds on a fitted garment do not show in 2D.
 - Stones are drawn round; shaped stones (navettes, pears) are not turned or stretched in 2D.
-- With the app's window not drawing, stones wait for the next frame (the engine lays them in its frame loop), so the flat view
-  shows them only once frames run.
+- With the app's window not drawing at all (minimised, covered), stones wait for the next frame (the engine lays them in its
+  frame loop), so the flat view shows them only once frames run. A hidden 3D pane (the Pattern layout) no longer stops them.
 
 [^owner]: Conversation with the product owner, 2026-11-04.
 [^code]: Look appearance code.

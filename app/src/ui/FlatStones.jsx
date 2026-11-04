@@ -23,6 +23,7 @@ function stonesByCell(engine) {
 	if (m) return m;
 	m = new Map();
 	for (const s of run.stones ?? []) {
+		if (s.flat) continue; // a pattern's stone: drawn by the piece it was laid on (stonesFor)
 		const L = engine.layers.get(s.layer ?? 'L0');
 		if (!L?.g) continue;
 		const t = locate(L.g.arr, engine.surf, s.sp);
@@ -47,6 +48,7 @@ export function frameOf(p) {
 	};
 }
 
+const colours = new Map(), colourOf = (name) => { let c = colours.get(name); if (!c) colours.set(name, (c = parseStone(name).colour)); return c; };
 const placedOn = new WeakMap(); // per run, per piece key: the stones drawn on it
 
 // The stones on a piece, in the svg's units (mm): this piece's own, and a mirrored pair's other piece's mirrored onto it (twin).
@@ -65,17 +67,21 @@ export function stonesFor(p) {
 	if (list) return list;
 	const F = frameOf(p);
 	list = [];
-	const at = (s, uv, twin) => { const [X, Y] = F.toSvg(uv[0], uv[1]); list.push({ X, Y, r: (s.size * 1000) / 2, colour: parseStone(s.stone).colour, gen: s.gen, id: s.id, twin }); };
+	const at = (s, uv, twin) => { const [X, Y] = F.toSvg(uv[0], uv[1]); list.push({ X, Y, r: (s.size * 1000) / 2, colour: colourOf(s.stone), gen: s.gen, id: s.id, twin }); };
+	// a pattern's stones laid on this very piece carry their flat place (stones/pattern.js patternStones: flat, fu, fv); the mirrored
+	// copy of a pair carries its original's, drawn as the other cut. Finding thousands of stones again from their surface points
+	// cost as much as laying them, on every step of a drag.
+	for (const s of run.stones ?? []) if (s.flat === cloth) at(s, [s.fu, s.fv], !!s.mirrored);
 	if (p.fitted) {
 		for (const s of run.stones ?? []) {
-			if (!s.fit) continue;
+			if (!s.fit || s.flat === cloth) continue;
 			const own = cloth.uvOfFit(s.fit);
 			if (own) { at(s, own, false); continue; }
 			const other = e.fitted.mirrorFit(s.fit), uv = other && cloth.uvOfFit(other); // on the other sleeve of the pair
 			if (uv) at(s, uv, true);
 		}
 	} else {
-		const cells = stonesByCell(e), put = (s, sp, twin) => { const uv = cloth.uvOf(sp); if (uv) at(s, uv, twin); };
+		const cells = stonesByCell(e), put = (s, sp, twin) => { const uv = cloth.uvOf(sp); if (uv) at(s, uv, twin); }; // (pattern stones are not in cells)
 		for (const s of cells.get(p.layer + '|' + p.cell) ?? []) put(s, s.sp, false);
 		// a mirrored pair is one pattern piece cut twice: the other cell's stones, mirrored onto this one, drawn dashed
 		for (const c of e.layers.get(p.layer)?.view.cells ?? []) {
@@ -88,45 +94,97 @@ export function stonesFor(p) {
 }
 
 // The stones of every piece painted on a canvas laid exactly over the pieces' svg (the same viewBox, read through the svg's own
-// screen transform). Painting thousands of circles on a canvas takes a few milliseconds; the browser drawing them as svg shapes
-// at a high-resolution screen cost 5-25 ms a frame and made a 2D drag on a pattern slower than the same drag in 3D, whose stones
-// are one instanced draw on the GPU. Painted again whenever stones are laid or the selection changes (ui/FlatView.jsx Stack).
+// screen transform), drawn as the 3D view draws its stones: one draw on the GPU (WebGL), each stone a point whose disc, outline
+// and shine the shader shades. Drawn by the browser instead, 14 000 stones cost 30-55 ms a step (as svg shapes, as canvas
+// circles, or as copies of a stone's picture: measured with the canvas flushed), which made a 2D drag on a pattern slower than
+// the same drag in 3D. Painted again whenever stones are laid or the selection changes (ui/FlatView.jsx Stack).
 export function paintStones(canvas, svg, pieces) {
 	if (!canvas || !svg) return;
 	const r = canvas.getBoundingClientRect(), dpr = devicePixelRatio || 1, w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
 	if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-	const g = canvas.getContext('2d'), M = svg.getScreenCTM();
-	g.setTransform(1, 0, 0, 1, 0, 0);
-	g.clearRect(0, 0, w, h);
+	const G = glOf(canvas), M = svg.getScreenCTM();
+	if (!G) return;
+	const { gl } = G;
+	gl.viewport(0, 0, w, h);
+	gl.clearColor(0, 0, 0, 0);
+	gl.clear(gl.COLOR_BUFFER_BIT);
 	if (!M) return;
-	g.setTransform(M.a * dpr, M.b * dpr, M.c * dpr, M.d * dpr, (M.e - r.left) * dpr, (M.f - r.top) * dpr);
+	// the svg's units (mm) to the canvas's pixels; the pieces are never turned, so a uniform scale and a shift
+	const k = M.a * dpr, tx = (M.e - r.left) * dpr, ty = (M.f - r.top) * dpr, maxR = G.maxSize / 2 - 2;
 	const sel = selection.value, isOn = (s) => !!sel && ((sel.kind === 'stones' && sel.id === s.gen) || (sel.kind === 'placed' && sel.id === s.id));
-	const groups = new Map();
+	let n = 0;
+	for (const p of pieces) n += stonesFor(p).length;
+	if (!n) return;
+	// per stone: x, y (canvas pixels), radius, outline width (pixels), r, g, b, look (1: the pair's other cut, 2: chosen)
+	const A = G.data.length >= n * 8 ? G.data : (G.data = new Float32Array(n * 8 * 1.5));
+	let i = 0;
+	const onW = 0.5 * k; // a chosen group's outline: half a millimetre
 	for (const p of pieces) for (const s of stonesFor(p)) {
-		const k = s.colour + (s.twin ? '|t' : '|o') + (isOn(s) ? '|on' : '');
-		let l = groups.get(k);
-		if (!l) groups.set(k, (l = []));
-		l.push(s);
+		const R = Math.min(s.r * k, maxR), on = isOn(s), c = rgbOf(s.colour);
+		A[i++] = s.X * k + tx; A[i++] = s.Y * k + ty; A[i++] = R; A[i++] = on ? onW : Math.max(0.5, R * 0.12);
+		A[i++] = c[0]; A[i++] = c[1]; A[i++] = c[2]; A[i++] = (s.twin ? 1 : 0) + (on ? 2 : 0);
 	}
-	for (const [k, list] of groups) {
-		const twin = k.includes('|t'), on = k.endsWith('|on');
-		g.beginPath();
-		for (const s of list) { g.moveTo(s.X + s.r, s.Y); g.arc(s.X, s.Y, s.r, 0, Math.PI * 2); }
-		g.globalAlpha = twin ? 0.7 : 1;
-		g.fillStyle = list[0].colour;
-		g.fill();
-		g.lineWidth = on ? 0.5 : Math.max(0.12, list[0].r * 0.12);
-		g.strokeStyle = on ? '#1f1d1a' : 'rgba(20, 18, 15, 0.55)';
-		g.setLineDash(twin ? [list[0].r * 0.5, list[0].r * 0.35] : []);
-		g.stroke();
-		// the crystal's shine
-		g.beginPath();
-		for (const s of list) { const x = s.X - s.r * 0.3, y = s.Y - s.r * 0.3, rr = s.r * 0.32; g.moveTo(x + rr, y); g.arc(x, y, rr, 0, Math.PI * 2); }
-		g.fillStyle = 'rgba(255, 255, 255, 0.75)';
-		g.fill();
-	}
-	g.globalAlpha = 1;
-	g.setLineDash([]);
+	gl.useProgram(G.prog);
+	gl.uniform2f(G.uSize, w, h);
+	gl.bindVertexArray(G.vao);
+	gl.bindBuffer(gl.ARRAY_BUFFER, G.buf);
+	gl.bufferData(gl.ARRAY_BUFFER, A.subarray(0, n * 8), gl.DYNAMIC_DRAW);
+	gl.enable(gl.BLEND);
+	gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+	gl.drawArrays(gl.POINTS, 0, n);
+}
+
+const rgbs = new Map();
+function rgbOf(hex) {
+	let c = rgbs.get(hex);
+	if (!c) { const m = /^#?([0-9a-f]{6})$/i.exec(hex ?? '')?.[1] ?? '999999'; c = [0, 2, 4].map((j) => parseInt(m.slice(j, j + 2), 16) / 255); rgbs.set(hex, c); }
+	return c;
+}
+
+// The painter of one canvas: its WebGL context, program and buffer (kept on the canvas).
+const VS = `#version 300 es
+in vec2 aPos; in vec2 aRW; in vec3 aCol; in float aLook;
+uniform vec2 uSize;
+out vec3 vCol; out float vR; out float vW; out float vLook; out float vHalf;
+void main() {
+	vCol = aCol; vR = aRW.x; vW = aRW.y; vLook = aLook;
+	vHalf = ceil(aRW.x + aRW.y + 1.0);
+	gl_PointSize = 2.0 * vHalf;
+	gl_Position = vec4(aPos.x / uSize.x * 2.0 - 1.0, 1.0 - aPos.y / uSize.y * 2.0, 0.0, 1.0);
+}`;
+// As the stones were drawn before: the crystal's colour, a thin dark outline (dashed and faded on the pair's other cut, darker and
+// wider when chosen), and a white shine up and to the left. Edges are smoothed over a pixel.
+const FS = `#version 300 es
+precision highp float;
+in vec3 vCol; in float vR; in float vW; in float vLook; in float vHalf;
+out vec4 o;
+void main() {
+	vec2 p = (gl_PointCoord - 0.5) * 2.0 * vHalf;
+	float d = length(p);
+	bool twin = mod(vLook, 2.0) > 0.5, on = vLook > 1.5;
+	float fill = clamp(vR - d + 0.5, 0.0, 1.0);
+	float line = clamp(vW * 0.5 - abs(d - vR) + 0.5, 0.0, 1.0);
+	if (twin && mod(atan(p.y, p.x) * vR, vR * 0.85) > vR * 0.5) line = 0.0;
+	vec4 c = vec4(vCol, 1.0) * fill;
+	vec4 ln = on ? vec4(0.122, 0.114, 0.102, 1.0) : vec4(0.078, 0.071, 0.059, 1.0) * 0.55;
+	c = ln * line + c * (1.0 - ln.a * line);
+	float sh = clamp(vR * 0.32 - length(p + vR * 0.3) + 0.5, 0.0, 1.0) * 0.75 * fill;
+	c = vec4(1.0) * sh + c * (1.0 - sh);
+	o = c * (twin ? 0.7 : 1.0);
+}`;
+function glOf(canvas) {
+	if (canvas._stones) return canvas._stones;
+	const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false });
+	if (!gl) return null;
+	const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+	const prog = gl.createProgram();
+	gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+	if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+	const vao = gl.createVertexArray(), buf = gl.createBuffer();
+	gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+	const at = (name, size, off) => { const l = gl.getAttribLocation(prog, name); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 32, off * 4); };
+	at('aPos', 2, 0); at('aRW', 2, 2); at('aCol', 3, 4); at('aLook', 1, 7);
+	return (canvas._stones = { gl, prog, vao, buf, uSize: gl.getUniformLocation(prog, 'uSize'), maxSize: gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1], data: new Float32Array(0) });
 }
 
 // The stone under the pointer on piece p, chosen (its group, or the placed stone); false when there is none under it.
