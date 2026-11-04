@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-04
+* **Creation**: [WebGL baseline captures](/engineering/rendering/webgl-baseline-captures.md): the parity reference for the WebGPU port (170 shots: fabrics, stones, studios, post effects, designs drawn and fitted) with GPU timer-query and frame timings at 1792 x 1344; `dev/baseline.js` takes it again. Plan Phase 0.2 done.
 * **Decision**: [A pattern's stones are kept apart by the parallel rule](/decisions/2026-11-04-pattern-stones-kept-apart.md): the owner's choice of look, now the default; supersedes [stones may overlap](/decisions/2026-11-04-stones-may-overlap.md) for patterns. Updated [procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md) step 4, [the parallel rule](/engineering/architecture/parallel-stone-spacing.md) (typed-array conflict grids; density on mixed scatters thins less) and the plan (Phase 0.3 done).
 * **Creation**: [The fabric's vertex attributes (packed)](/engineering/rendering/fabric-shading/fabric-vertex-attributes.md): shiny, satin, duotone satin and wet drew nothing (17 vertex attributes, 16 allowed); the fabric's inputs packed into 8; every fabric checked before and after. Plan Phase 0.1 done.
 * **Creation**: [WebGPU renderer and one GPU stone engine (plan)](/product/roadmap/webgpu-and-stone-engine-plan.md): hand-off plan: shiny fabric fix and WebGL baseline, parallel rule on, WebGPU renderer with parity, stone engine as GPU compute, 100 000-stone gates.

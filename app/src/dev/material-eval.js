@@ -17,7 +17,7 @@ export const BODY = { form: 'full', finish: 'Matte white fibreglass', size: 'you
 
 // Camera spots facing the torso (poses turn it, so the front is taken from the posed sternum, not
 // the room), turned a little to the viewer's right as in the comparison photos.
-function views() {
+export function views() {
 	const man = app.engine.body, R = man.ref, P = man.gPos ?? man.aPos.array, Nn = man.gNrm ?? man.aNrm.array;
 	let s = -1;
 	for (let i = 0; i < R.length / 3; i++) {

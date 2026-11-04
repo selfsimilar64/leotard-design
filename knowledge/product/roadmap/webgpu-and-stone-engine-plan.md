@@ -114,6 +114,10 @@ every fabric draws, drawn and fitted; see [the fabric's vertex attributes](/engi
 
 ## 0.2 WebGL baseline captures (the reference for parity)
 
+**Done 2026-11-04** (after 0.1 and 0.3, so every fabric draws and the stones use the rule): 170 shots with GPU and frame
+timings; `app/src/dev/baseline.js`; list, settings and numbers in
+[WebGL baseline captures](/engineering/rendering/webgl-baseline-captures.md).
+
 - Fixed set, captured with the WebGL renderer before any port, kept under `app/captures/baseline-webgl/` (not committed
   if large; record the list and settings in the knowledge bundle):
   - every fabric through `app/src/dev/material-eval.js` (`shoot(fabric, colour, tag)`: torso, near, macro distances; the
