@@ -42,6 +42,7 @@
 
 # Process
 
+* [Armstrong leotard and bodysuit foundation drafts](armstrong-leotard-foundation-draft.md) (draft) - Joseph-Armstrong's textbook method for drafting a stretch leotard (and full bodysuit) foundation from a basic back bodice plus three to six body measurements; the candidate route to blocks the project owns outright.
 * [Custom-order process, lead times and prices](custom-order-process-and-lead-times.md) - Every maker runs custom team orders as brief, digital design with revisions, sign-off, sizing kit, production; lead times run 2 to 13 weeks and embellishment is the main price driver.
 * [Cutting and marker making](cutting-and-marker-making.md) - Factories spread and laser-cut layered stretch fabric and bundle by athlete size; ateliers cut single garments by hand; a one-colour leotard uses about 0.5-1.35 m of 150 cm fabric.
 * [Production and assembly order](production-and-assembly-order.md) - Factories cut, print, appliqué, embroider and stone flat pieces, then close side, shoulder and crotch seams last; ateliers and home makers follow related but different sewing orders.
