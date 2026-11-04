@@ -14,7 +14,7 @@ import { SCENE, RIGS, DEFAULT_RIG } from './presets.js';
 import { GlarePass, GLARE_SIZE, GLARE_STRENGTH } from './glare.js';
 import { ScenePass, SkinPass, AOPass } from './postfx.js';
 import { studioEnvironment, cyclorama } from './studio.js';
-import { RENDERER, createWebGPU, NodePost, stubPasses, initAreaLights, benchmarkFrames } from './webgpu.js';
+import { RENDERER, createWebGPU, NodePost, stubPasses, initAreaLights, benchmarkFrames, captureFrame } from './webgpu.js';
 
 const _size = new THREE.Vector2(), _Y = new THREE.Vector3(0, 1, 0);
 
@@ -401,6 +401,7 @@ export class Viewport {
 		this.bloom.setSize(width / 2, height / 2);
 		cam.aspect = width / height; cam.updateProjectionMatrix();
 		for (const fn of this.onResize) fn(width, height);
+		if (this.webgpu) return captureFrame(r, width, height, () => this.render()).finally(() => { cam.aspect = aspect; this.resize(); });
 		this.render();
 		return new Promise((resolve) => r.domElement.toBlob((b) => { cam.aspect = aspect; this.resize(); resolve(b); }, 'image/png'));
 	}

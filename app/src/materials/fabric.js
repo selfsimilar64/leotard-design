@@ -9,7 +9,10 @@
 // itself, which can also carry dress-form style tapes. Zone 4 is a finished edge (trim.js): its
 // own geometry, already placed, carrying topstitching. Every zone honours the dress-form cut
 // (keep < 0 is discarded when uClip is on).
+// On the WebGPU renderer its twin in node code is materials/fabric-node.js (createFabricMaterial hands over): change both.
 import * as THREE from 'three';
+import { RENDERER } from '../render/webgpu.js';
+import { createFabricNodeMaterial } from './fabric-node.js';
 
 const PARS_VERTEX = /* glsl */`
 // the fabric's per-vertex inputs, packed to stay within 16 vertex attributes: materials/fabric-attributes.js (names, sizes, slots)
@@ -1184,6 +1187,7 @@ export function createFabricMaterial(zone) {
 		uDecalLook: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uDecalCol: { value: [0, 1, 2, 3].map(() => new THREE.Color()) }, tDecal: { value: null },
 		uWrinkle: { value: [0, 1, 2].map(() => new THREE.Vector4()) }, uWrinkleN: { value: [0, 1, 2].map(() => new THREE.Vector4()) },
 	};
+	if (RENDERER === 'webgpu') return createFabricNodeMaterial(zone, u); // its twin in node code (materials/fabric-node.js)
 	const m = new THREE.MeshPhysicalMaterial({ transparent: zone !== 3 });
 	m.userData.u = u;
 	m.onBeforeCompile = (shader) => {

@@ -41,13 +41,19 @@ are the next steps.[^plan]
   on WebGPU for now. `app.benchmark()` is async for both.
 - `render/lines.js`: Line2 / LineSegments2 / their material for either renderer (WebGPU: `Line2NodeMaterial`).
 - `dev/baseline.js` times and describes either renderer (`b.all('webgpu')`).
+- **Captures** (`captureFrame`): drawn into a render target and read back (rows come padded to 256 bytes). A WebGPU canvas
+  only hands out what it last showed on screen, which is stale while the pane is hidden.
+- **Frames outside the animation loop**: three re-renders a pass once per node frame, and only the animation loop advances
+  the frame count; `NodePost.render` advances it on every call, or captures and benchmarks re-show an old frame.
+- **GPU time**: three resolves only the last frame's timestamp queries, so `benchmarkFrames` samples up to 30 frames one by
+  one (median) after timing the wall clock with tracking off. Matte torso at 1792 x 1344: 2.8 ms GPU, steady to 0.01 ms.
 
 # State (2026-11-05)
 
 | part | on WebGPU |
 |---|---|
 | renderer, camera, controls, studios, shadows, floor, lines | drawn |
-| fabric (`materials/fabric.js` onBeforeCompile) | three's MeshPhysicalMaterial only: no lift off the body, no zones, no cut, no procedural layers (step 2) |
+| fabric | `materials/fabric-node.js` (createFabricMaterial hands over on WebGPU; same uniform objects, read by reference): garment surface (lift, offset, garment normal), dress-form cut, lining clip, dress-form tapes, occlusion (indirect light only, so far). Not yet: knit, mesh, crinkle, flakes and foil, holo, film, ombre, duochrome, seams, folds, wrinkles, edge stitching, scans, prints, decals, skin, satin thread model |
 | skin finish, skin pass | step 3 |
 | post: MSAA, contact shadows, bloom, glare, outline | none yet (step 4) |
 | pattern stones (`stones/gpu-view.js` atlas: four float targets and GLSL) | not drawn, a console note (step 5); WebGPU's default allows 32 bytes per sample across colour targets, the atlas writes 64 |
