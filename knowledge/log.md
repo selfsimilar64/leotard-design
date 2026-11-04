@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-05
+* **Update**: [The 3D view on WebGPU](/engineering/rendering/webgpu-port.md): the fabric's fragment code ported to node code; an open bug (scanned and plain fabrics far too bright on WebGPU) with what was ruled out; WebGPU limits met (8 vertex buffers: one interleaved pack per fabric geometry).
 * **Creation**: [The 3D view on WebGPU (port in progress)](/engineering/rendering/webgpu-port.md): Phase 1 step 1: `?renderer=webgpu` draws the scene with three's own materials; fabric code, post effects and pattern stones next.
 
 ## 2026-11-04

@@ -15,6 +15,7 @@ import { GlarePass, GLARE_SIZE, GLARE_STRENGTH } from './glare.js';
 import { ScenePass, SkinPass, AOPass } from './postfx.js';
 import { studioEnvironment, cyclorama } from './studio.js';
 import { RENDERER, createWebGPU, NodePost, stubPasses, initAreaLights, benchmarkFrames, captureFrame } from './webgpu.js';
+import { syncFabricPacks } from '../materials/fabric-node.js';
 
 const _size = new THREE.Vector2(), _Y = new THREE.Vector3(0, 1, 0);
 
@@ -350,6 +351,7 @@ export class Viewport {
 
 	render() {
 		if (!this.isReady) return;
+		if (this.webgpu) syncFabricPacks(this.scene); // (one vertex buffer of fabric inputs per mesh: materials/fabric-node.js)
 		this.renderer.info.reset();
 		this.composer.render();
 	}
@@ -401,6 +403,10 @@ export class Viewport {
 		this.bloom.setSize(width / 2, height / 2);
 		cam.aspect = width / height; cam.updateProjectionMatrix();
 		for (const fn of this.onResize) fn(width, height);
+		// what frame() sets before drawing: a hidden pane draws no frames, and a page opened hidden never placed its lights
+		if (this.hdriOn) this.placeHdriLights();
+		if (this.studioOn) this.placeStudioLights();
+		r.toneMappingExposure = this.settings.exposure;
 		if (this.webgpu) return captureFrame(r, width, height, () => this.render()).finally(() => { cam.aspect = aspect; this.resize(); });
 		this.render();
 		return new Promise((resolve) => r.domElement.toBlob((b) => { cam.aspect = aspect; this.resize(); resolve(b); }, 'image/png'));
