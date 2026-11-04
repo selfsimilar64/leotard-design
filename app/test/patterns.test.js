@@ -915,24 +915,49 @@ describe('on a garment', () => {
 		expect(same / b.length).toBeGreaterThan(0.85);
 	});
 
-	it('a group re-runs alone: others keep their very stones', () => {
+	it('a group re-runs alone: others keep their very stones (on a shared piece, those before it in the list)', () => {
 		const d = { ...doc, stones: [gen({ layout: 'hex', spacing: 0.02 }, { id: 'a' }), gen({ layout: 'grid', spacing: 0.02 }, { id: 'b' })], placed: [] }, c2 = { ...ctx, doc: d }, cache = { gens: new Map() };
-		const r1 = runStones(d, c2, cache), firstB = r1.stones.find((s) => s.gen === 'b');
-		expect(firstB).toBeDefined();
-		d.stones[0].params = { ...d.stones[0].params, x: 0.01 };
+		const r1 = runStones(d, c2, cache), firstA = r1.stones.find((s) => s.gen === 'a');
+		expect(firstA).toBeDefined();
+		d.stones[1].params = { ...d.stones[1].params, x: 0.01 };
 		const r2 = runStones(d, c2, cache);
-		expect(r2.stones.includes(firstB)).toBe(true);
-		expect(r2.stones.filter((s) => s.gen === 'a').length).toBeGreaterThan(0);
+		expect(r2.stones.includes(firstA)).toBe(true);
+		expect(r2.stones.filter((s) => s.gen === 'b').length).toBeGreaterThan(0);
 		expect(runStones(d, c2, cache)).toBe(r2); // nothing changed: nothing done
 	});
 
-	it('patterns are kept as laid: two over each other both show in full (the parallel rule works within a pattern, not across two)', () => {
+	it('two patterns on one piece keep apart: the first in the list stands, the second gives way around it', () => {
 		const P = { layout: 'grid', spacing: 0.005, size: 'ss5' };
 		const both = { ...doc, stones: [gen({ layout: 'grid', spacing: 0.03, size: 'ss48' }, { id: 'big' }), gen(P, { id: 'small' })], placed: [] };
-		const alone = { ...doc, stones: [gen(P, { id: 'small' })], placed: [] };
-		const st = runStones(both, { ...ctx, doc: both }).stones, big = st.filter((s) => s.gen === 'big');
+		const alone = (g) => runStones({ ...doc, stones: [g], placed: [] }, { ...ctx, doc: { ...doc, stones: [g], placed: [] } }).stones;
+		const st = runStones(both, { ...ctx, doc: both }).stones, big = st.filter((s) => s.gen === 'big'), small = st.filter((s) => s.gen === 'small');
 		expect(big.length).toBeGreaterThan(10);
-		expect(st.length - big.length).toBe(runStones(alone, { ...ctx, doc: alone }).stones.length);
+		expect(big.length).toBe(alone(both.stones[0]).length);
+		const smallAlone = alone(both.stones[1]).length;
+		expect(small.length).toBeLessThan(smallAlone);
+		expect(small.length).toBeGreaterThan(smallAlone * 0.3);
+		// on the flat cloth, no small stone within 0.92 of touching a big one
+		let worst = Infinity;
+		for (const a of small) for (const b of big) if (!a.mirrored && !b.mirrored) worst = Math.min(worst, Math.hypot(a.fu - b.fu, a.fv - b.fv) / ((a.size + b.size) / 2));
+		expect(worst).toBeGreaterThan(0.92 - 1e-9);
+		// the other way round, the small grid stands and the big one gives way
+		const flipped = { ...both, stones: [both.stones[1], both.stones[0]] };
+		const st2 = runStones(flipped, { ...ctx, doc: flipped }).stones;
+		expect(st2.filter((s) => s.gen === 'small').length).toBe(smallAlone);
+		expect(st2.filter((s) => s.gen === 'big').length).toBeLessThan(big.length);
+		// with the rule off they overlap, both in full
+		expect(runStones(both, { ...ctx, doc: both, peaks: false }).stones.length).toBe(big.length + smallAlone);
+	});
+
+	it('a pattern re-runs when one before it on its piece changes, and only then', () => {
+		const d = { ...doc, stones: [gen({ layout: 'grid', spacing: 0.03, size: 'ss48' }, { id: 'big' }), gen({ layout: 'grid', spacing: 0.006, size: 'ss5' }, { id: 'small' })], placed: [] }, c2 = { ...ctx, doc: d }, cache = { gens: new Map() };
+		const r1 = runStones(d, c2, cache), small1 = r1.stones.filter((s) => s.gen === 'small');
+		d.stones[1].params = { ...d.stones[1].params, x: 0.001 };
+		const r2 = runStones(d, c2, cache);
+		expect(r2.stones.filter((s) => s.gen === 'big')[0]).toBe(r1.stones.filter((s) => s.gen === 'big')[0]); // the first kept its very stones
+		d.stones[0].params = { ...d.stones[0].params, x: 0.01 };
+		const r3 = runStones(d, c2, cache), small3 = r3.stones.filter((s) => s.gen === 'small');
+		expect(small3[0]).not.toBe(small1[0]);
 	});
 
 	it('the cached run and the plain run agree', () => {

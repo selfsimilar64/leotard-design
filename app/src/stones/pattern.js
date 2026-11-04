@@ -20,7 +20,7 @@ import { Candidates, Drawing, SIZES } from './candidates.js';
 import { distortion, distortionReach, frac } from './fields.js';
 import { compileMods, modsFromOld, modWithGeometry, presetMods, sizeRange } from './modifiers.js';
 import { sizeOf, SHAPES } from './library.js';
-import { conflictsOf, aliveOf, resolvePeaks } from './peaks.js';
+import { conflictsOf, aliveOf, resolvePeaks, blocked } from './peaks.js';
 
 // how far from an opening edge a stone can be and still need the elastic's keep-out checked
 const NEAR_EDGE = 0.03;
@@ -283,7 +283,8 @@ export function patternCandidates(gen, piece, cache = null) {
 // Each candidate passes or not on its own (density, room on the piece, the openings' keep-out), then the parallel rule
 // (stones/peaks.js) keeps the stones apart: decided from the candidates alone, so what is shown during a drag is the design
 // itself (owner, 2026-11-04: knowledge/decisions/2026-11-04-pattern-stones-kept-apart.md). opts.peaks: false lets them overlap
-// (the superseded 2026-11-04 decision; tests and comparisons). Before, each stone was checked against those kept before it,
+// (the superseded 2026-11-04 decision; tests and comparisons). opts.blockers: the stones of patterns before this one on the
+// piece (stones/peaks.js blockersOf), which this one's stones keep clear of. Before, each stone was checked against those kept before it,
 // and the piece and the keep-out asked the body.
 const kept = { I: new Int32Array(0), U: new Float64Array(0), V: new Float64Array(0), A: new Float64Array(0), D: new Float64Array(0), H: new Float64Array(0), stone: [] };
 export function keepPattern(gen, piece, opts = {}) {
@@ -297,7 +298,7 @@ export function keepPattern(gen, piece, opts = {}) {
 	const density = mods.density, colour = mods.colour ?? plainColour(gen);
 	const turn = ((P.stoneTurn ?? 0) * Math.PI) / 180, upright = P.turn === 'fixed', upAngle = ((P.rotate ?? 0) * Math.PI) / 180;
 	const rx = rg.x, ry = rg.y, rc = rg.c, rs = rg.s, rF = rg.F, ra = rg.a;
-	const room = roomRaster(piece), keep = edge ? keepRaster(piece, edge) : null, KA = keep ? (keepOut === undefined ? keep.K : keep.B) : null, less = keepOut ?? 0;
+	const B = opts.blockers ?? null, room = roomRaster(piece), keep = edge ? keepRaster(piece, edge) : null, KA = keep ? (keepOut === undefined ? keep.K : keep.B) : null, less = keepOut ?? 0;
 	if (kept.I.length < n) { const cap = Math.ceil(n * 1.5); kept.I = new Int32Array(cap); kept.U = new Float64Array(cap); kept.V = new Float64Array(cap); kept.A = new Float64Array(cap); kept.D = new Float64Array(cap); kept.H = new Float64Array(cap); }
 	const { I, U, V, A, D: KD, H } = kept, names = [];
 	let m = 0;
@@ -314,6 +315,8 @@ export function keepPattern(gen, piece, opts = {}) {
 		if (r < d / 2 + margin) continue;
 		// finished opening edges: the trim's keep-out (or the group's own), as for every other stone
 		if (KA && r < NEAR_EDGE + less && keepAt(keep, KA, u, v) - less < d / 2) continue;
+		// clear of the patterns before it on this piece
+		if (B && blocked(B, u, v, d)) continue;
 		if (peaks) { alive[i] = 1; continue; }
 		const h = frac(rank * 61.803398875 + 0.137);
 		I[m] = i; U[m] = u; V[m] = v; KD[m] = d; H[m] = h;
@@ -365,23 +368,23 @@ export function packRecords(gen, piece, k) {
 
 // ctx: { cloth(panelId) -> { piece, pending, paired } | null, edge(p, keepOut) }; cache: Map (the group's
 // drawing between frames).
-export function runPattern(gen, ctx, cache = null) {
+export function runPattern(gen, ctx, cache = null, blockers = null) {
 	const panel = ctx.doc.panels.find((p) => p.id === gen.on?.panel);
 	if (!panel) throw new Error('No panel ' + gen.on?.panel);
 	if (panel.removed) return [];
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return []; }
-	return patternStones(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks });
+	return patternStones(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks, blockers });
 }
 // A pattern's kept stones as packed arrays of its own (keepPattern's are reused), for the GPU to place
 // (stones/gpu-view.js); null when there are none to place. -> { piece, k: { n, U, V, A, D, H, stone } }
-export function packPattern(gen, ctx, cache = null) {
+export function packPattern(gen, ctx, cache = null, blockers = null) {
 	const panel = ctx.doc.panels.find((p) => p.id === gen.on?.panel);
 	if (!panel) throw new Error('No panel ' + gen.on?.panel);
 	if (panel.removed) return null;
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return null; }
-	const k = keepPattern(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks }), n = k.n;
+	const k = keepPattern(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks, blockers }), n = k.n;
 	return { piece, k: { n, U: k.U.slice(0, n), V: k.V.slice(0, n), A: k.A.slice(0, n), D: k.D.slice(0, n), H: k.H.slice(0, n), stone: k.stone } };
 }
 

@@ -99,6 +99,27 @@ export function conflictsOf(Cd) {
 	return g;
 }
 
+// Stones of the patterns laid before this one on the same piece (owner, 2026-11-04: patterns on one piece keep apart too, the
+// earlier in the list standing): their places on the flat cloth (U, V) and diameters, as a grid (null: none).
+export function blockersOf(U, V, D) {
+	const n = U.length;
+	return n ? gridOf(Int32Array.from({ length: n }, (_, i) => i), U, V, D, new Int32Array(n), FLAT_CLEAR) : null;
+}
+// Whether a stone of diameter d at (u, v) on the flat cloth comes closer than 0.92 of touching to one of them.
+export function blocked(B, u, v, d) {
+	const { x0, y0, cell, nx, ny, first, x, y, d: bd, maxD } = B, r = ((d + maxD) / 2) * FLAT_CLEAR;
+	const ax = Math.max(0, Math.floor((u - r - x0) / cell)), bx = Math.min(nx - 1, Math.floor((u + r - x0) / cell));
+	const ay = Math.max(0, Math.floor((v - r - y0) / cell)), by = Math.min(ny - 1, Math.floor((v + r - y0) / cell));
+	for (let cy = ay; cy <= by; cy++) for (let cx = ax; cx <= bx; cx++) {
+		const k = cy * nx + cx;
+		for (let e = first[k]; e < first[k + 1]; e++) {
+			const dx = x[e] - u, dy = y[e] - v, c = ((bd[e] + d) / 2) * FLAT_CLEAR;
+			if (dx * dx + dy * dy < c * c) return true;
+		}
+	}
+	return false;
+}
+
 let aliveBuf = new Uint8Array(0), wonBuf = new Uint8Array(0), nextBuf = new Uint8Array(0);
 // A cleared flag per candidate: 1 for those the keep test passed (stones/pattern.js keepPattern).
 export function aliveOf(n) {

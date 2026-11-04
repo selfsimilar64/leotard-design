@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { sizeOf, SHAPES } from './library.js';
 import { motifOutline, insidePoly, distPoly } from './motifs.js';
 import { runPattern, packPattern, packRecords } from './pattern.js';
+import { blockersOf } from './peaks.js';
 import { mirrorFast } from './cloth.js';
 import { hash2 } from './fields.js';
 import { projectNear } from '../curves/evaluate.js';
@@ -539,13 +540,14 @@ function dart(region, rand, candidates, gap, sizeFor, pick, ctx) {
 // cache (optional): what the last run made, per group. A group whose record and whose geometry have not
 // changed keeps its stones, so editing one group costs that group and the final pass.
 
-// A group's stones as they go on the body: mirrored, cut to one side, erased.
-function stonesOfGroup(gen, ctx, errors) {
+// A group's stones as they go on the body: mirrored, cut to one side, erased. blockers: a pattern's, the stones of the patterns
+// before it on its piece (runStones), kept clear of.
+function stonesOfGroup(gen, ctx, errors, blockers = null) {
 	const fn = GENERATORS[gen.kind], surf = ctx.surf, seed = gen.seed ?? 1, isPattern = gen.kind === 'pattern';
 	// a pattern the GPU places (ctx.packs: the app's view can): its kept stones packed, the records made only when asked for
-	if (isPattern && ctx.packs && !gen.params?.symmetric && !gen.side && !gen.erase?.length) return packOfGroup(gen, ctx, errors);
+	if (isPattern && ctx.packs && !gen.params?.symmetric && !gen.side && !gen.erase?.length) return packOfGroup(gen, ctx, errors, blockers);
 	let list;
-	try { list = fn(gen, ctx, rng(seed)); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
+	try { list = isPattern ? runPattern(gen, ctx, ctx.patternCache, blockers) : fn(gen, ctx, rng(seed)); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
 	const shape = gen.shape ?? 'round', keepOut = gen.params?.keepOut;
 	if (!isPattern) list.forEach((s, i) => {
 		s.gen = gen.id; s.shape = s.shape ?? shape; s.layer = gen.layer ?? null; if (keepOut !== undefined) s.keepOut = keepOut;
@@ -579,9 +581,9 @@ function stonesOfGroup(gen, ctx, errors) {
 
 // A pattern group as a pack (stones/gpu-view.js PackView draws it): its own side and its mirrored one as stonesOfGroup lays
 // them, the records (records()) made as stonesOfGroup makes them, only when something asks for each stone.
-function packOfGroup(gen, ctx, errors) {
+function packOfGroup(gen, ctx, errors, blockers = null) {
 	let r;
-	try { r = packPattern(gen, ctx, ctx.patternCache); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
+	try { r = packPattern(gen, ctx, ctx.patternCache, blockers); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
 	if (!r) return [];
 	const surf = ctx.surf, m = gen.mirror, paired = !!ctx.cloth?.(gen.on?.panel)?.paired;
 	const own = m !== 'only', mirrored = m === 'both' || m === 'only' || paired;
@@ -608,7 +610,16 @@ function placedStones(doc, surf) {
 	});
 }
 
-// Each stone against those before it (not a pattern's stones: they may overlap): a cell hash over flat arrays (no strings, nothing allocated per
+// The stones a pattern group laid on its own piece (not mirrored copies), on the flat cloth: what the patterns after it on the
+// piece keep clear of. -> { U, V, D }
+function ownFlat(list) {
+	if (list.pack) return { U: list.k.U, V: list.k.V, D: list.k.D };
+	const own = list.filter((s) => s.fab && !s.mirrored);
+	return { U: Float64Array.from(own, (s) => s.fu), V: Float64Array.from(own, (s) => s.fv), D: Float64Array.from(own, (s) => s.size) };
+}
+const joined = (a, b) => { const o = new Float64Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
+
+// Each stone against those before it (not a pattern's stones: the parallel rule keeps them apart on their piece): a cell hash over flat arrays (no strings, nothing allocated per
 // stone), so this final pass stays cheap enough for every frame of a drag.
 const CELL = 0.012, HASH = 1 << 16;
 const keep = { head: new Int32Array(HASH), next: new Int32Array(0), x: new Float32Array(0), y: new Float32Array(0), z: new Float32Array(0), size: new Float32Array(0), lift: new Float32Array(0) };
@@ -632,8 +643,8 @@ function keepApart(lists, ctx) {
 	};
 	for (const list of lists) for (let n = 0, count = list.length; n < count; n++) {
 		const s = list[n];
-		// a pattern's stones are kept as laid: they neither give way to other stones nor make others give way (stones may
-		// overlap, the designer spaces them: stones/pattern.js patternStones)
+		// a pattern's stones are kept as laid: they neither give way to other kinds of stones nor make them give way (patterns keep
+		// clear of each other on their piece: runStones)
 		if (s.fab) { kept.push(s); continue; }
 		// on fabric (or on their strap) and off opening edges: asked once
 		if (!s.lift) {
@@ -665,15 +676,19 @@ export function runStones(doc, ctx, cache = null) {
 	if (cache && cache.geoRev !== ctx.geoRev) { cache.geoRev = ctx.geoRev; cache.gens = new Map(); cache.placed = null; cache.last = null; }
 	const lists = [], errors = [];
 	let changed = !cache?.last, order = '';
+	// patterns on one piece keep clear of the patterns before them in the list (owner, 2026-11-04): per piece, what they have
+	// laid so far and a signature of them, so a pattern re-runs when one before it on its piece changes
+	const pieces = new Map(), apart = ctx.peaks !== false;
 	for (const gen of doc.stones) {
 		if (gen.hidden) continue;
 		if (!GENERATORS[gen.kind]) { errors.push(gen.id + ': unknown kind ' + gen.kind); continue; }
-		const sig = cache ? JSON.stringify(gen) : null;
+		const onPiece = apart && gen.kind === 'pattern' && gen.on?.panel ? (pieces.get(gen.on.panel) ?? pieces.set(gen.on.panel, { sig: '', U: new Float64Array(0), V: new Float64Array(0), D: new Float64Array(0) }).get(gen.on.panel)) : null;
+		const sig = cache ? JSON.stringify(gen) + (onPiece?.sig ?? '') : null;
 		let rec = cache?.gens.get(gen.id);
 		if (!rec || rec.sig !== sig) {
 			const errs = [];
 			ctx.pending?.delete(gen.id);
-			rec = { sig, list: stonesOfGroup(gen, ctx, errs), errors: errs };
+			rec = { sig, list: stonesOfGroup(gen, ctx, errs, onPiece ? blockersOf(onPiece.U, onPiece.V, onPiece.D) : null), errors: errs };
 			changed = true;
 			// waiting for its piece to be flattened: not an answer worth keeping
 			if (cache) { if (ctx.pending?.has(gen.id)) cache.gens.delete(gen.id); else cache.gens.set(gen.id, rec); }
@@ -681,6 +696,11 @@ export function runStones(doc, ctx, cache = null) {
 		errors.push(...rec.errors);
 		lists.push(rec.list);
 		order += gen.id + ',';
+		if (onPiece) {
+			const f = ownFlat(rec.list);
+			if (f.U.length) { onPiece.U = joined(onPiece.U, f.U); onPiece.V = joined(onPiece.V, f.V); onPiece.D = joined(onPiece.D, f.D); }
+			onPiece.sig += '|' + (sig ?? JSON.stringify(gen));
+		}
 	}
 	if (cache) {
 		const pj = ctx.placedSame && cache.placed ? cache.placed.json : JSON.stringify(doc.placed);

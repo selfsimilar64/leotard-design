@@ -160,8 +160,8 @@ every preset and finds at least 97% of stones away from the edges exactly where 
    ([parallel rule](/engineering/architecture/parallel-stone-spacing.md)). The order: a dart layout by size, biggest
    first; otherwise by what the design hangs on (`P`: joints, nodes), then as drawn. The conflict lists are worked out when
    the candidates are drawn (a typed-array grid, one per size class on a mixed scatter), so a move or turn only re-runs the
-   rounds, and the live preview during a drag is still the design. Two groups over each other may still overlap: the rule
-   works within a pattern. Spacing still comes first from how layouts are made (lines walk `gap x` the stones' sizes,
+   rounds, and the live preview during a drag is still the design. Patterns on one piece keep apart too: in the list's order, a later pattern's candidates
+   that come within 0.92 of touching an earlier one's stones drop out before its own rule runs (`runStones`). Spacing still comes first from how layouts are made (lines walk `gap x` the stones' sizes,
    lattices draw at the spacing, scatters, clusters and galaxies take the blue-noise tile's first points); with the rule
    off (`opts.peaks: false`, tests and comparisons only) a dart layout's stone of diameter `d` keeps the first
    `(d0 x fine / d)^2` of the tile's points instead, and stones may overlap

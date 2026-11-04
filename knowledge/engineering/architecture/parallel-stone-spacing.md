@@ -102,6 +102,9 @@ painted, the 3D frame submitted), Gem Test 3 in Both, the flower of life made de
 # Made the default; conflict grid in typed arrays (2026-11-04, evening)
 
 - **Default**: `render/engine.js` stoneCtx `peaks: true`, and `keepPattern` runs the rule unless `opts.peaks` is `false`.
+- **Across patterns on one piece** (owner): in the list's order, each pattern's candidates first keep clear of the stones
+  the patterns before it laid on that piece (`blockersOf`, `blocked`: the same typed-array grid), then its own rule runs.
+  The cache key of a pattern includes those before it on its piece, so a drag re-runs only the later ones.
 - **Conflict list** (`conflictsOf`): the `Map` of arrays became counting-sort grids in typed arrays; a mixed scatter gets
   one grid per size class (cells sized by that class's reach, or by about one candidate a cell where the class is
   sparse), and a stone searches only the classes not smaller than its own (smaller ones come later in the order). Same

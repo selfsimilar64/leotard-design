@@ -176,7 +176,7 @@ anything that differs; do not simplify a material's look to make a port easier (
 6. Captures and thumbnails (`dev/thumbnails.js`, `viewport.capture`), the photo-match and material tools.
 7. Re-fit: move `fit/refit.js` onto the renderer's device (`renderer.backend.device`) so the fitted garment's points can
    stay on the GPU; keep its bit-for-bit checks (`dev/refit-lab.js`).
-8. Platform: confirm WebGPU on the iPad target (Safari, iPadOS) and the desktop shell; decide the fallback (WebGL2 backend
+8. Platform (owner, 2026-11-04: no iPad testing): confirm WebGPU in the desktop shell; decide the fallback (WebGL2 backend
    of WebGPURenderer for drawing, the CPU twin of the stone engine for stones).
 
 Gate to leave Phase 1: every baseline capture matches or the owner accepts the difference; frame cost at 1792 x 1344 no
@@ -251,10 +251,13 @@ device; nothing read back per frame except a few counts.
 - Show only finished states (no half-made garment or stones between steps); keep busy notes for slow steps.
 - The owner judges realism by eye (works with gymnasts daily, visual arts background): their read beats metrics.
 
-# Open questions for the owner
+# Owner's answers (2026-11-04, evening)
 
-1. Keep the halftone variants of Chladni and wave interference, and the edge rows, when the traced-contour family goes?
-2. Combining several geometries in one pattern (and one parallel rule across groups): goal now or later?
-3. Which design should be the 100 000-stone stress test (one dense piece, or a whole garment)?
+1. **Patterns kept**: any pattern suitable for the shader approach stays (so the halftone variants and the edge rows, as
+   areas and outline offsets, stay; the traced-contour line family goes as decision 4 says).[^owner]
+2. **Patterns on one piece keep apart**, now: done (decision record above, "Patterns on one piece keep apart too").
+3. **Stress test design**: any simple design with every piece fully covered by a generated pattern.
+4. **Density on mixed scatters** under the rule: fine for now, revisit if more control is needed.
+5. **No iPad testing**: Phase 1 step 8 drops the iPad check; the fallback question stays for the desktop shell only.
 
 [^owner]: Conversation with the product owner, 2026-11-04.
