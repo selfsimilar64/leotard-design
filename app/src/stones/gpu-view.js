@@ -8,6 +8,7 @@
 // Twin of the CPU path: stones/view.js StoneView.build / frameOf; keep the two frames alike.
 import * as THREE from 'three';
 import { SHAPES, parseStone } from './library.js';
+import { RENDERER } from '../render/webgpu.js';
 
 // The texel: a millimetre, coarser only on a piece over a metre across (1024 texels at most).
 const TEXEL = 0.001, MAX_TEXELS = 1024;
@@ -190,6 +191,8 @@ export class PackView {
 	// packs: [{ id, gen, shape, layer, piece, k: { n, U, V, A, D, H, stone }, own, mirrored, mirrorSP(sp), mirrorFit(fit) }]
 	set(packs) {
 		this.packs = packs;
+		// WebGPU: the atlas (four float targets, a GLSL program) is not ported yet (plan Phase 1 step 5): no pattern stones drawn
+		if (RENDERER === 'webgpu') { if (!PackView.warned) { PackView.warned = true; console.warn('Pattern stones are not drawn on the WebGPU renderer yet'); } return; }
 		const used = new Set();
 		for (const p of packs) {
 			for (const side of [p.own ? 'own' : null, p.mirrored ? 'mirror' : null]) {

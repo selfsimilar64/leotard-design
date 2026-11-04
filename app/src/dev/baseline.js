@@ -46,10 +46,11 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 async function begin(tag) {
 	if (run?.tag === tag) return run;
 	const old = await fetch(`/__fs/captures/baseline-${tag}/manifest.json`).then((r) => (r.ok ? r.json() : null), () => null);
-	const gl = app.engine.viewport.renderer.getContext(), dbg = gl.getExtension('WEBGL_debug_renderer_info');
+	const vp = app.engine.viewport, gl = vp.webgpu ? null : vp.renderer.getContext(), dbg = gl?.getExtension('WEBGL_debug_renderer_info'), ai = vp.webgpu ? vp.renderer.backend.device?.adapterInfo : null;
 	run = { tag, manifest: {
 		tag, at: new Date().toISOString(), three: THREE.REVISION, renderer: app.engine.viewport.renderer.constructor.name,
-		gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
+		gpu: ai ? [ai.vendor, ai.architecture, ai.description].filter(Boolean).join(' ') : dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+		maxVertexAttribs: gl ? gl.getParameter(gl.MAX_VERTEX_ATTRIBS) : vp.renderer.backend.device?.limits.maxVertexAttributes,
 		devicePixelRatio: window.devicePixelRatio, display: { ...app.engine.viewport.display }, bench: BENCH, colour: COLOUR, shots: old?.shots ?? [],
 	} };
 	return run;
@@ -84,6 +85,10 @@ async function settle(ms = 1200) {
 async function frameTimes() {
 	const vp = app.engine.viewport;
 	if (document.hidden) return { frameMs: null, gpuMs: null };
+	if (vp.webgpu) { // timestamp queries (render/webgpu.js benchmarkFrames)
+		const frameMs = await vp.benchmark(BENCH.frames, { width: BENCH.width, height: BENCH.height });
+		return { frameMs: +frameMs.toFixed(2), gpuMs: vp.lastGpuMs == null ? null : +vp.lastGpuMs.toFixed(2) };
+	}
 	const gl = vp.renderer.getContext(), ext = gl.getExtension?.('EXT_disjoint_timer_query_webgl2'), qs = [];
 	if (ext) vp.render = function () { // each frame of the benchmark in a query (an own property over the prototype's render)
 		const q = gl.createQuery();

@@ -164,6 +164,8 @@ Inventory (2026-11-04) of what must move:
 | environment | `RoomEnvironment`, `HDRLoader`, `GroundedSkybox`, `RectAreaLightUniformsLib`, `render/studio.js` | PMREM, RectAreaLight WebGL | PMREM nodes, `RectAreaLightTexturesLib` |
 | the rest | `render/decals.js`, `straps.js`, `hardware.js`, `pictures.js`, `stand.js`, `garment.js`, `fitted.js`, flat view canvas (`ui/FlatStones.jsx`, WebGL2) | stock materials mostly | stock node materials; flat view: a WebGPU canvas on the same device (Phase 3) |
 
+Progress: [the 3D view on WebGPU](/engineering/rendering/webgpu-port.md) (step 1 in, 2026-11-05).
+
 Steps, each gated by the baseline (Phase 0.2) on the same capture and a pixel-difference report plus the owner's eye for
 anything that differs; do not simplify a material's look to make a port easier (owner's rule during look-dev):
 

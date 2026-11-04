@@ -43,7 +43,7 @@ export class TextureLibrary {
 		const f = await this.info(id);
 		if (!f) throw new Error(`No fabric texture ${id}`);
 		const url = (k) => (f.maps[k] ? ROOT + f.folder + '/' + f.maps[k] : null);
-		const aniso = this.renderer.capabilities.getMaxAnisotropy();
+		const aniso = this.renderer.capabilities?.getMaxAnisotropy() ?? this.renderer.getMaxAnisotropy?.() ?? 1; // (WebGPU: the renderer's own)
 		const tex = async (k, srgb) => {
 			const u = url(k);
 			if (!u) return null;

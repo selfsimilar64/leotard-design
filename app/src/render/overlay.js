@@ -2,8 +2,7 @@
 // current body, their control points, and hover / selection highlights. Curve positions come from
 // their surface points, so the overlay follows any body.
 import * as THREE from 'three';
-import { Line2 } from 'three/addons/lines/Line2.js';
-import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { Line2, lineMaterial } from './lines.js'; // (WebGL or WebGPU lines)
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 
 export const ROLE_COLOURS = { seam: 0xffd166, edge: 0x4cc9f0, print: 0xf72585, guide: 0x9aa0ad, 'strap-path': 0xff9f1c, 'trim-path': 0x80ffdb };
@@ -35,8 +34,7 @@ export class Overlay {
 		const key = colour + ':' + width + ':' + dashed;
 		let m = this.materials.get(key);
 		if (!m) {
-			m = new LineMaterial({ color: colour, linewidth: width, worldUnits: false, dashed, dashSize: 0.006, gapSize: 0.004, depthTest: true, transparent: true, opacity: 0.95 });
-			m.resolution = this.resolution;
+			m = lineMaterial({ color: colour, linewidth: width, worldUnits: false, dashed, dashSize: 0.006, gapSize: 0.004, depthTest: true, transparent: true, opacity: 0.95 }, this.resolution);
 			this.materials.set(key, m);
 		}
 		return m;

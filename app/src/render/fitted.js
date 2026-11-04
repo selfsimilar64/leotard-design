@@ -10,7 +10,7 @@ import { fittedOf } from '../garment/fitted.js';
 import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
 import { Refit, DEFAULTS } from '../fit/refit.js';
 import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
-import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegments2 } from './lines.js'; // (WebGL or WebGPU lines)
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { ROLE_COLOURS } from './overlay.js';
 import { FittedCloth } from '../stones/fitted-cloth.js';

@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-11-05
+* **Creation**: [The 3D view on WebGPU (port in progress)](/engineering/rendering/webgpu-port.md): Phase 1 step 1: `?renderer=webgpu` draws the scene with three's own materials; fabric code, post effects and pattern stones next.
+
 ## 2026-11-04
 * **Update**: [A pattern's stones are kept apart by the parallel rule](/decisions/2026-11-04-pattern-stones-kept-apart.md): owner's answers: patterns on one piece keep apart too (earlier in the list stands), now built; density on mixed scatters accepted for now. Plan: answers recorded, no iPad testing.
 * **Creation**: [WebGL baseline captures](/engineering/rendering/webgl-baseline-captures.md): the parity reference for the WebGPU port (170 shots: fabrics, stones, studios, post effects, designs drawn and fitted) with GPU timer-query and frame timings at 1792 x 1344; `dev/baseline.js` takes it again. Plan Phase 0.2 done.

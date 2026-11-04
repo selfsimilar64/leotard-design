@@ -494,7 +494,7 @@ export class App {
 	get debug() { return { cells: (on = true) => showCells(this.engine, on) }; }
 
 	// ms per frame; { width, height } for a fixed size (gates: 1792x1344)
-	benchmark(n = 60, size = null) { return +this.engine.viewport.benchmark(n, size).toFixed(2); }
+	async benchmark(n = 60, size = null) { return +(await this.engine.viewport.benchmark(n, size)).toFixed(2); } // (WebGPU's is async)
 	stats() { return { ...this.engine.viewport.stats, ...this.engine.timing, legacy: this.engine.legacy.timing }; }
 	// stone counts by size (mm) and colour, and generator problems
 	stoneStats() { return { ...this.engine.stoneView.stats(), dropped: this.engine.stoneRun.dropped, errors: this.engine.stoneRun.errors }; }

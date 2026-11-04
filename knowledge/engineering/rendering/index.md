@@ -7,6 +7,10 @@
 * [fabric-shading/](fabric-shading/) - How each leotard fabric family is shaded in real time: a GGX base plus optional sheen, anisotropy, coat, thin-film, diffraction and coverage layers, the custom techniques (foil dots, diffraction, velvet pile, mesh over skin, stretch, neon), starting values and calibration.
 * [sparkle/](sparkle/) - Techniques for rendering glitter, spangles and crystals in real time: glint models, crystal optics look-alike, the proposed four-level stone LOD, instancing at scale, lighting, observer/glare, tone mapping, temporal stability and validation.
 
+# Component
+
+* [The 3D view on WebGPU (port in progress)](webgpu-port.md) (draft) - Progress of Phase 1 of the WebGPU plan: the second renderer path (?renderer=webgpu, render/webgpu.js), what draws on it so far, what is held back until its step, and what differs from the WebGL reference.
+
 # Reference
 
 * [WebGL baseline captures (the parity reference)](webgl-baseline-captures.md) (draft) - The fixed set of captures and frame timings taken with the WebGL renderer on 2026-11-04 before the WebGPU port: what is in it, the exact settings, how to take it again (dev/baseline.js), where it lives (app/captures/baseline-webgl/, not committed), the frame costs measured, and what not to compare pixel for pixel.

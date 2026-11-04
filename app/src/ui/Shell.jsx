@@ -130,7 +130,7 @@ function Settings({ onClose }) {
 			</details>
 			<h3 class="pop-title">Performance</h3>
 			<Switch label="Show the frame rate" value={showStats.value} onChange={(v) => { showStats.value = v; }} />
-			<div class="pop-row"><Button size="small" title="Measure the true GPU cost of a frame" onClick={() => notify(`Frame cost ${app.benchmark()} ms`)}>Measure frame cost</Button>
+			<div class="pop-row"><Button size="small" title="Measure the true GPU cost of a frame" onClick={async () => notify(`Frame cost ${await app.benchmark()} ms`)}>Measure frame cost</Button>
 				{st.fps ? <span class="pop-meta">{st.width}×{st.height} px · {st.fps.toFixed(0)} fps</span> : null}</div>
 		</div>
 	);

@@ -14,6 +14,7 @@ import { SCENE, RIGS, DEFAULT_RIG } from './presets.js';
 import { GlarePass, GLARE_SIZE, GLARE_STRENGTH } from './glare.js';
 import { ScenePass, SkinPass, AOPass } from './postfx.js';
 import { studioEnvironment, cyclorama } from './studio.js';
+import { RENDERER, createWebGPU, NodePost, stubPasses, initAreaLights, benchmarkFrames } from './webgpu.js';
 
 const _size = new THREE.Vector2(), _Y = new THREE.Vector3(0, 1, 0);
 
@@ -44,8 +45,12 @@ function keyDirection({ width: W, height: H, data }) {
 export class Viewport {
 	constructor(container) {
 		this.container = container;
-		// HDR, MSAA (Display setting, off by default), bloom, Khronos PBR Neutral tone mapping (keeps fabric colours true)
-		const renderer = this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+		// HDR, MSAA (Display setting, off by default), bloom, Khronos PBR Neutral tone mapping (keeps fabric colours true).
+		// WebGL, or WebGPU (?renderer=webgpu: render/webgpu.js), which draws only once it is initialised (ready).
+		const gpu = this.webgpu = RENDERER === 'webgpu' ? createWebGPU() : null;
+		const renderer = this.renderer = gpu ? gpu.renderer : new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+		this.isReady = !gpu;
+		this.ready = gpu ? gpu.ready.then(() => { this.isReady = true; }) : Promise.resolve();
 		renderer.toneMapping = THREE.NeutralToneMapping;
 		// soft shadows from the studio key (variance shadow maps blur into a softbox-like penumbra)
 		renderer.shadowMap.enabled = true;
@@ -73,13 +78,14 @@ export class Viewport {
 		controls.addEventListener('start', () => { this.moving = true; });
 		controls.addEventListener('end', () => { this.moving = false; this.stillAt = performance.now(); });
 
-		const pmrem = this.pmrem = new THREE.PMREMGenerator(renderer);
-		scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture; // until the first studio has loaded
-		scene.background = scene.environment;
+		const pmrem = this.pmrem = gpu ? gpu.pmrem : new THREE.PMREMGenerator(renderer);
+		const room = () => { if (!scene.environment) { scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture; scene.background = scene.environment; } };
+		if (gpu) this.ready.then(room); else room(); // until the first studio has loaded
 		scene.backgroundBlurriness = 0.7;
 
 		// the scene is drawn multisampled into its own target (with depth and stencil); the composer's
-		// buffers are plain (render/postfx.js ScenePass)
+		// buffers are plain (render/postfx.js ScenePass). WebGPU: its own post chain (render/webgpu.js NodePost).
+		if (gpu) { this.composer = new NodePost(renderer, scene, camera); Object.assign(this, stubPasses()); } else {
 		const composer = this.composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false }));
 		this.scenePass = new ScenePass(scene, camera);
 		composer.addPass(this.scenePass);
@@ -92,6 +98,7 @@ export class Viewport {
 		this.glare = new GlarePass(); // star-filter streaks (scene.glare), off for 'plain'
 		composer.addPass(this.glare);
 		composer.addPass(new OutputPass());
+		}
 
 		// Glint lights: placed by placeHdriLights (the first two; the rest stay off).
 		this.rig = new THREE.Group();
@@ -180,6 +187,7 @@ export class Viewport {
 
 	applyScene(s) {
 		Object.assign(this.settings, s);
+		if (!this.isReady) { this.ready.then(() => this.applyScene({})); return; } // (WebGPU: environments need the device)
 		const r = RIGS[this.settings.rig] ?? RIGS[DEFAULT_RIG];
 		this.scene.environmentIntensity = r.env;
 		this.scene.backgroundIntensity = r.bg;
@@ -199,7 +207,7 @@ export class Viewport {
 	hdri(file) {
 		let p = this.hdris.get(file);
 		if (!p) {
-			p = new HDRLoader().loadAsync('/hdri/' + file).then((tex) => {
+			p = Promise.all([new HDRLoader().loadAsync('/hdri/' + file), this.ready]).then(([tex]) => {
 				tex.mapping = THREE.EquirectangularReflectionMapping;
 				return { tex, env: this.pmrem.fromEquirectangular(tex).texture, key: keyDirection(tex.image) };
 			});
@@ -245,7 +253,7 @@ export class Viewport {
 		this.areas.forEach((l) => { l.visible = false; });
 		if (!r) { if (this.studioOn) { this.sun.visible = false; this.rig.rotation.y = 0; } this.studioOn = null; return; }
 		if (!this.areas.length) {
-			RectAreaLightUniformsLib.init();
+			if (this.webgpu) initAreaLights(); else RectAreaLightUniformsLib.init();
 			for (let i = 0; i < 6; i++) { const l = new THREE.RectAreaLight(0xffffff, 0, 1, 1); l.visible = false; this.rig.add(l); this.areas.push(l); }
 		}
 		r.areas.slice(0, this.areas.length).forEach((a, i) => {
@@ -341,6 +349,7 @@ export class Viewport {
 	}
 
 	render() {
+		if (!this.isReady) return;
 		this.renderer.info.reset();
 		this.composer.render();
 	}
@@ -348,7 +357,9 @@ export class Viewport {
 	// Renders frames back to back and waits for the GPU each time, so the number is the true cost
 	// of a frame, not the display's refresh interval. Same method as the POC's "Measure frame cost".
 	// size: { width, height } renders at that fixed size (the gates are measured at 1792x1344)
+	// WebGPU: a Promise of the same number; its GPU time per frame (timestamp queries) is left in lastGpuMs.
 	benchmark(n = 60, size = null) {
+		if (this.webgpu) return this.benchmarkWebGPU(n, size);
 		const gl = this.renderer.getContext(), px = new Uint8Array(4), cam = this.camera, aspect = cam.aspect;
 		if (size) {
 			const { width, height } = size;
@@ -364,6 +375,20 @@ export class Viewport {
 		const ms = (performance.now() - t) / n;
 		this.rig.rotation.y = r0; // the lights stay where they were
 		if (size) { cam.aspect = aspect; this.resize(); }
+		return ms;
+	}
+
+	async benchmarkWebGPU(n, size) {
+		await this.ready;
+		const cam = this.camera, aspect = cam.aspect, r0 = this.rig.rotation.y;
+		if (size) {
+			this.renderer.setPixelRatio(1); this.renderer.setSize(size.width, size.height, false);
+			cam.aspect = size.width / size.height; cam.updateProjectionMatrix();
+		}
+		const { ms, gpuMs } = await benchmarkFrames(this.renderer, n, () => { this.rig.rotation.y += 0.01; this.render(); });
+		this.rig.rotation.y = r0;
+		if (size) { cam.aspect = aspect; this.resize(); }
+		this.lastGpuMs = gpuMs;
 		return ms;
 	}
 
@@ -383,6 +408,7 @@ export class Viewport {
 	// Render once at a fixed size and read back the (2r+1)-pixel square around (x, y) (pixels from
 	// the top left), as sRGB bytes: how a panel's colour comes out under the rig, to match a photo.
 	samplePatch(x, y, width, height, r = 4) {
+		if (this.webgpu) throw new Error('Sampling a patch is not on the WebGPU renderer yet');
 		const R = this.renderer, cam = this.camera, aspect = cam.aspect, n = 2 * r + 1, buf = new Uint8Array(n * n * 4);
 		R.setPixelRatio(1); R.setSize(width, height, false);
 		this.composer.setPixelRatio(1); this.composer.setSize(width, height);
