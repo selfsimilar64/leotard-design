@@ -96,7 +96,11 @@ that later.
    reused while a move or turn stays inside. Gem Test 3 (~17 800 stones): move step 39 -> 23-27 ms (laying 28 -> 13-17),
    turn 25 ms, spacing drag unchanged (~37 ms). `isolines` floors its grid step on powers of two so a slightly bigger box
    draws the same lines.
-3. Room and keep-out rasters; the twin uses them.
+3. Done (2026-11-04): `keepPattern` decides every candidate from two rasters (room: `ClothPiece.edgeAt`'s nodes signed
+   by `find`; keep-out: K = edge(p) and B = edge(p, 0) at 2.5 mm, nodes off the piece placed on the nearest triangle
+   carried on), packed arrays out, no body search. 2.1 ms for 17 700 candidates. `patternStones` builds records from it
+   (find, or the nearest triangle for a stone the room raster keeps just past the last one). The keep set is now
+   decided on the CPU only; the GPU will place, not decide (parity by construction).
 4. Atlases and the 3D placement shader; StoneView draws pattern groups from them.
 5. Flat view from the same arrays and rasters.
 6. Diff test, measurements, owner check.

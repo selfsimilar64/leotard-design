@@ -153,24 +153,58 @@ function ditherSize(d, h) {
 
 const _p3 = { x: 0, y: 0, z: 0 };
 
-// How far a flat point lies from the nearest finished opening edge, past its keep-out: a raster over the piece, made once
-// for each state of the edges. Good to KEEP_SURE of the exact answer: only a stone closer than that to the line asks.
-const KEEP_CELL = 0.006, KEEP_SURE = 0.005;
-function keepGrid(piece, edge, u, v) {
-	let G = piece.keepRaster;
-	if (G?.edge !== edge) {
-		const nx = Math.ceil((piece.x1 - piece.x0) / KEEP_CELL) + 2, ny = Math.ceil((piece.y1 - piece.y0) / KEEP_CELL) + 2, D = new Float32Array(nx * ny), p = { x: 0, y: 0, z: 0 };
-		for (let j = 0, o = 0; j < ny; j++) for (let i = 0; i < nx; i++, o++) {
-			const q = piece.find(piece.x0 + i * KEEP_CELL, piece.y0 + j * KEEP_CELL);
-			if (q < 0) { D[o] = NaN; continue; }
-			piece.posOf(q, p, piece.w1, piece.w2);
-			D[o] = Math.min(edge(p), 0.05);
-		}
-		G = piece.keepRaster = { edge, nx, ny, D };
+// Two rasters over a piece's flat cloth, read bilinearly, so that whether a stone is kept is a few lookups (on the CPU, and
+// the same on the GPU later: knowledge/engineering/architecture/gpu-stone-placement.md), never a search of the body.
+// Room: the distance to the piece's edge (ClothPiece.edgeAt's raster), less than nothing off the piece.
+function roomRaster(piece) {
+	let G = piece.roomRaster;
+	if (G) return G;
+	piece.edgeAt(piece.x0, piece.y0); // (a ClothPiece builds its raster when first asked: this one's nodes, then)
+	const own = !!piece.D, er = own ? piece.er : Math.max(0.003, Math.max(piece.x1 - piece.x0, piece.y1 - piece.y0) / 400);
+	const dx0 = own ? piece.dx0 : piece.x0 - 4 * er, dy0 = own ? piece.dy0 : piece.y0 - 4 * er;
+	const ex = own ? piece.ex : Math.ceil((piece.x1 - piece.x0) / er) + 10, ey = own ? piece.ey : Math.ceil((piece.y1 - piece.y0) / er) + 10, S = new Float32Array(ex * ey);
+	for (let j = 0, o = 0; j < ey; j++) for (let i = 0; i < ex; i++, o++) {
+		const u = dx0 + i * er, v = dy0 + j * er, e = own ? piece.D[o] : piece.edgeAt(u, v);
+		S[o] = piece.find(u, v) >= 0 ? e : -Math.abs(e);
 	}
-	// (a node off the piece knows nothing, NaN: the stone is close to an edge of some kind, so it asks)
-	const fx = (u - piece.x0) / KEEP_CELL, fy = (v - piece.y0) / KEEP_CELL, i = fx | 0, j = fy | 0, o = j * G.nx + i, D = G.D, w = fx - i, h = fy - j;
-	return (D[o] * (1 - w) + D[o + 1] * w) * (1 - h) + (D[o + G.nx] * (1 - w) + D[o + G.nx + 1] * w) * h;
+	return (piece.roomRaster = { S, ex, ey, er, dx0, dy0 });
+}
+function roomAt(G, u, v) {
+	let fx = (u - G.dx0) / G.er, fy = (v - G.dy0) / G.er;
+	fx = fx < 0 ? 0 : fx > G.ex - 1.001 ? G.ex - 1.001 : fx; fy = fy < 0 ? 0 : fy > G.ey - 1.001 ? G.ey - 1.001 : fy;
+	const i = Math.floor(fx), j = Math.floor(fy), a = fx - i, b = fy - j, q = j * G.ex + i, S = G.S, ex = G.ex;
+	return (S[q] * (1 - a) + S[q + 1] * a) * (1 - b) + (S[q + ex] * (1 - a) + S[q + ex + 1] * a) * b;
+}
+// Keep-out: per node, the distance from its place on the body to the nearest finished opening less that opening's keep-out
+// (K, the trim's), and the bare distance (B, for a group's own keepOut), as edge(p, keepOut) answers (render/engine.js
+// edgeKeepOut); 5 cm at most. A node off the piece takes its place on the nearest triangle carried on in its plane. Made once
+// for each state of the edges; only near the piece's edge (further in, nothing is near an opening).
+const KEEP_CELL = 0.0025, KEEP_FAR = 0.05;
+function keepRaster(piece, edge) {
+	let G = piece.keepRaster;
+	if (G?.edge === edge) return G;
+	const R = roomRaster(piece), x0 = piece.x0 - KEEP_CELL, y0 = piece.y0 - KEEP_CELL;
+	const nx = Math.ceil((piece.x1 - x0) / KEEP_CELL) + 3, ny = Math.ceil((piece.y1 - y0) / KEEP_CELL) + 3, K = new Float32Array(nx * ny), B = new Float32Array(nx * ny), p = { x: 0, y: 0, z: 0 };
+	for (let j = 0, o = 0; j < ny; j++) for (let i = 0; i < nx; i++, o++) {
+		const u = x0 + i * KEEP_CELL, v = y0 + j * KEEP_CELL;
+		if (roomAt(R, u, v) > NEAR_EDGE + KEEP_FAR) { K[o] = B[o] = KEEP_FAR; continue; }
+		let q = piece.find(u, v), w1 = piece.w1, w2 = piece.w2;
+		if (q < 0) {
+			q = piece.nearest?.(u, v) ?? -1;
+			if (q < 0) { K[o] = B[o] = KEEP_FAR; continue; }
+			const I = piece.inv, c = q * 6, du = u - I[c], dv = v - I[c + 1];
+			w1 = I[c + 2] * du + I[c + 3] * dv; w2 = I[c + 4] * du + I[c + 5] * dv;
+		}
+		piece.posOf(q, p, w1, w2);
+		K[o] = Math.min(edge(p), KEEP_FAR); B[o] = Math.min(edge(p, 0), KEEP_FAR);
+	}
+	return (piece.keepRaster = { edge, nx, ny, x0, y0, K, B });
+}
+function keepAt(G, A, u, v) {
+	let fx = (u - G.x0) / KEEP_CELL, fy = (v - G.y0) / KEEP_CELL;
+	fx = fx < 0 ? 0 : fx > G.nx - 1.001 ? G.nx - 1.001 : fx; fy = fy < 0 ? 0 : fy > G.ny - 1.001 ? G.ny - 1.001 : fy;
+	const i = Math.floor(fx), j = Math.floor(fy), a = fx - i, b = fy - j, q = j * G.nx + i, nx = G.nx;
+	return (A[q] * (1 - a) + A[q + 1] * a) * (1 - b) + (A[q + nx] * (1 - a) + A[q + nx + 1] * a) * b;
 }
 
 // A pattern's frame split in two: its rigid part (where it lies, its turn, its flip) and the rest (its scale, the plane, the
@@ -234,20 +268,25 @@ export function patternCandidates(gen, piece, cache = null) {
 	return out;
 }
 
-// The stones of a pattern on a piece. opts: { cache: Map (the group's drawing between frames), edge(p, keepOut) }.
-// -> stones on the body (the piece's own side; the caller mirrors)
-export function patternStones(gen, piece, opts = {}) {
+// Which of a pattern's candidates are kept, and how: packed arrays, nothing per stone allocated. opts: { cache, edge(p, keepOut) }.
+// -> { n (kept), I (candidate index), U, V (on the cloth), A (direction on the cloth, the stone's turn applied), D (diameter),
+// H (the stone's own random), stone (crystal names), Cd (the candidates) }.
+// Stones may overlap: each candidate is kept or not on its own (density, room on the piece, the openings' keep-out), never
+// against the others, so what is shown during a drag is the design itself (owner, 2026-11-04: the designer spaces and sizes
+// the stones). Before, each stone was checked against those kept before it, and the piece and the keep-out asked the body.
+const kept = { I: new Int32Array(0), U: new Float64Array(0), V: new Float64Array(0), A: new Float64Array(0), D: new Float64Array(0), H: new Float64Array(0), stone: [] };
+export function keepPattern(gen, piece, opts = {}) {
 	const Cd = patternCandidates(gen, piece, opts.cache), { n, GX, GY, GA, R, K, T, C, D, P, d0, fine, dart, isRound } = Cd, rg = Cd.rigid;
 	const frame = frameOf(P), edgeAt = (u, v) => piece.edgeAt(u, v);
 	const mods = compileMods(P.mods, frame, edgeAt, gen.stone ?? 'Crystal AB');
-	const shape = gen.shape ?? 'round';
 	const overall = P.density ?? 1, margin = P.margin ?? 0, keepOut = P.keepOut, edge = opts.edge;
-	const density = mods.density, colour = mods.colour ?? plainColour(gen), layer = gen.layer ?? null, id = gen.id, out = [];
+	const density = mods.density, colour = mods.colour ?? plainColour(gen);
 	const turn = ((P.stoneTurn ?? 0) * Math.PI) / 180, upright = P.turn === 'fixed', upAngle = ((P.rotate ?? 0) * Math.PI) / 180;
 	const rx = rg.x, ry = rg.y, rc = rg.c, rs = rg.s, rF = rg.F, ra = rg.a;
-	// Stones may overlap: each candidate is kept or not on its own (density, room, the piece, the keep-out), never against the
-	// others, so what is shown during a drag is the design itself, and the same rule can run on the GPU (owner, 2026-11-04:
-	// the designer spaces and sizes the stones). Before, each stone was checked against those kept before it.
+	const room = roomRaster(piece), keep = edge ? keepRaster(piece, edge) : null, KA = keep ? (keepOut === undefined ? keep.K : keep.B) : null, less = keepOut ?? 0;
+	if (kept.I.length < n) { const cap = Math.ceil(n * 1.5); kept.I = new Int32Array(cap); kept.U = new Float64Array(cap); kept.V = new Float64Array(cap); kept.A = new Float64Array(cap); kept.D = new Float64Array(cap); kept.H = new Float64Array(cap); }
+	const { I, U, V, A, D: KD, H } = kept, names = [];
+	let m = 0;
 	for (let i = 0; i < n; i++) {
 		const gx = GX[i], gy = GY[i], u = rx + rc * rF * gx - rs * gy, v = ry + rs * rF * gx + rc * gy, k = K[i], t = T[i], cat = C[i], rank = R[i], d = D[i];
 		let dens = overall;
@@ -257,26 +296,40 @@ export function patternStones(gen, piece, opts = {}) {
 		// stones of one size keep their room by how they are made, not by checking each other (big among small may overlap).
 		if (dart) { const f = (d0 * fine) / d; if (f < 1) dens *= f * f; }
 		if (rank >= dens) continue;
-		const room = piece.edgeAt(u, v);
-		if (room < d / 2 + margin) continue;
-		const q = piece.find(u, v);
-		if (q < 0) continue;
-		const w1 = piece.w1, w2 = piece.w2;
-		piece.posOf(q, _p3, w1, w2);
+		const r = roomAt(room, u, v);
+		if (r < d / 2 + margin) continue;
 		// finished opening edges: the trim's keep-out (or the group's own), as for every other stone
-		if (edge && room < NEAR_EDGE + (keepOut ?? 0)) {
-			// (a raster kept with the piece answers most of them; the exact search only close to the line)
-			const near = keepOut === undefined ? keepGrid(piece, edge, u, v) : NaN, sure = near > d / 2 + KEEP_SURE || near < d / 2 - KEEP_SURE;
-			if (sure ? near < d / 2 : edge(_p3, keepOut) <= d / 2) continue;
-		}
+		if (KA && r < NEAR_EDGE + less && keepAt(keep, KA, u, v) - less < d / 2) continue;
 		const h = frac(rank * 61.803398875 + 0.137);
-		// (its direction on the cloth: the frame's own, turned and mirrored with the frame)
-		const A = ra + (rF < 0 ? Math.PI - GA[i] : GA[i]);
-		const angle = isRound ? h * Math.PI : piece.angleOf(q, (upright ? upAngle : A) + turn);
+		I[m] = i; U[m] = u; V[m] = v; KD[m] = d; H[m] = h;
+		// (its direction on the cloth: the frame's own, turned and mirrored with the frame; a round stone's spin is its own)
+		A[m] = isRound ? NaN : (upright ? upAngle : ra + (rF < 0 ? Math.PI - GA[i] : GA[i])) + turn;
+		names.push(colour(u, v, k, t, cat, rank));
+		m++;
+	}
+	return { n: m, I, U, V, A, D: KD, H, stone: names, Cd };
+}
+
+// The stones of a pattern on a piece, as records. opts: { cache: Map (the group's drawing between frames), edge(p, keepOut) }.
+// -> stones on the body (the piece's own side; the caller mirrors)
+export function patternStones(gen, piece, opts = {}) {
+	const k = keepPattern(gen, piece, opts), { U, V, A, D, H, stone } = k, shape = gen.shape ?? 'round', layer = gen.layer ?? null, id = gen.id, out = [];
+	for (let j = 0; j < k.n; j++) {
+		const u = U[j], v = V[j];
+		// its triangle; one kept by the room raster just past the piece's last triangle takes that one, carried on
+		let q = piece.find(u, v), w1 = piece.w1, w2 = piece.w2;
+		if (q < 0) {
+			q = piece.nearest?.(u, v) ?? -1;
+			if (q < 0) continue;
+			const I = piece.inv, c = q * 6, du = u - I[c], dv = v - I[c + 1];
+			w1 = I[c + 2] * du + I[c + 3] * dv; w2 = I[c + 4] * du + I[c + 5] * dv;
+		}
+		piece.posOf(q, _p3, w1, w2);
+		const angle = Number.isNaN(A[j]) ? H[j] * Math.PI : piece.angleOf(q, A[j]);
 		// fit: where on a fitted garment's fabric (stones/fitted-cloth.js), drawn there rather than on the body under it
 		// flat, fu, fv: the piece it was laid on and where on its flat cloth, so the flat view draws it without finding it again
 		// from its surface point (ui/FlatStones.jsx stonesFor; a mirrored copy keeps them: stones/generators.js mirrored)
-		out.push({ sp: piece.spOf(q, w1, w2), fit: piece.fitOf?.(q, w1, w2), size: d, stone: colour(u, v, k, t, cat, rank), angle, lift: 0, shape, gen: id, layer, x: _p3.x, y: _p3.y, z: _p3.z, r: h, fab: true, flat: piece, fu: u, fv: v });
+		out.push({ sp: piece.spOf(q, w1, w2), fit: piece.fitOf?.(q, w1, w2), size: D[j], stone: stone[j], angle, lift: 0, shape, gen: id, layer, x: _p3.x, y: _p3.y, z: _p3.z, r: H[j], fab: true, flat: piece, fu: u, fv: v });
 	}
 	return out;
 }
