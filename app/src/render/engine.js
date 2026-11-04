@@ -566,6 +566,14 @@ Engine.prototype.clothOf = function (panelId) {
 	return { piece: rec.cloth, pending: false, paired: seeds.length > 1 && seeds[1].cell !== seeds[0].cell && L.view.cells.some((c) => c.cell === seeds[1].cell && c.panelId === panelId) };
 };
 
+// One cell of a layer as flat cloth (the flat view's stones and pattern handles: ui/FlatView.jsx), cached on its record as clothOf
+// caches it; null until the cell is flattened.
+Engine.prototype.clothOfCell = function (layerId, cell, panelId) {
+	const L = this.layers.get(layerId ?? 'L0'), rec = L?.view.cells.find((c) => c.cell === cell && c.panelId === panelId);
+	if (!rec?.hasUV || !L.g) return null;
+	return (rec.cloth ??= new ClothPiece(L.g.arr, this.surf, rec.cell, rec.piece, rec.uv));
+};
+
 // touched: the sections a change touched (null: anything may have). Placement reads the stones, the
 // lines, where the panels are (not their fabric or colour), the straps, trims and layers, all on the
 // reference surface (no pose). What those last ones build is kept until one of them changes; a group

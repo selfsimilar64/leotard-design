@@ -102,6 +102,19 @@ The owner asked for the GPU re-fit, its settings and the 2D + 3D views in the re
 - **Seen:** `lunge-arms-up` re-fitted shows no skin at the leg opening or forearm where the carried fit did; `passe` on the high cut
   clean. A lighter fade at the lower front in `passe` was seen and not explained (lighting or material) **[UNVERIFIED]**.
 
+# Shown only once fitted; seams (2026-11-04, owner's review)
+
+- **Never the unfitted state.** The owner never wants to see the garment carried into a new pose before its re-fit finishes.
+  With re-fit on, a body or pose change holds the 3D view on its last frame (`viewport.holds`) until the re-fit is drawn, fails,
+  or 8 s pass; a steps or friction change keeps the current fit on show until the new one is in. Turning re-fit off shows the
+  carried fit. While held the view does not turn either.
+- **Telling the designer.** "Fitting the leotard…" shows in the stage's busy pill while a re-fit runs, beside the existing
+  "Posing…"; the owner asked that every fit or pose calculation that can take seconds says so.
+- **Seams in 3D.** The fitted pieces carried no seam distance, so the fabric's seam groove never showed and, once the drawn
+  lines were hidden, no seam lines either. Now each point's distance to the nearest sewn edge (from the case: edges whose two
+  triangles sit apart in the flat pattern) feeds `aSeam`, and the garment's seams (yellow) and openings (blue) are drawn as
+  overlay lines 2.2 mm over the fabric, following the lines button.
+
 # Views (2026-11-04)
 
 - **Three layouts** in the top bar: 3D, Both, Pattern (`ui/Shell.jsx` LAYOUTS, `layout` 3d | split | flat). The 3D view stays alive

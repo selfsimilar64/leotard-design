@@ -1,6 +1,8 @@
 # Bundle update log
 
 ## 2026-11-04
+* **Creation**: [The flat view's Look appearance and stones](/engineering/app/flat-view-look-and-stones.md): Sewing and Look appearances; pieces in colour with a fabric hint; stones drawn on their pieces; stone patterns edited in 2D with the 3D handles, in sync. Layout remembered.
+* **Update**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): the view holds its last frame until a re-fit is drawn (never the unfitted garment, owner); a fitting note; seams in 3D (groove and lines).
 * **Update**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): re-fitted live on the GPU after every pose and body change (case built in the app, `fit/fitted-case.js`); re-fit, steps, friction and fabric lift in Settings, Fabric fit; 3D, Both and Pattern layouts with a divider and piece focus; the fitted pieces in the flat view. A pose change about 1-2.3 s. Found: shiny fabric's shader has too many attributes and draws nothing.
 * **Update**: [The re-fit in the app](/engineering/app/refit-in-the-app.md): runs in the main app for fitted garments; `Refit` cache and `destroy()`.
 * **Update**: [Bringing the block-first garment into the app](/product/roadmap/block-first-app-plan.md): progress on steps 2 and 3.

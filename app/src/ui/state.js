@@ -12,7 +12,7 @@ export const selection = signal(null);     // { kind: 'curves' | 'panels' | 'str
 export const tab = signal('shape');        // the panel's tab: 'shape' | 'fabric' | 'sparkle' | 'stage'
 export const drawnLines = signal(null);    // the overlay tool: { lines, areas } waiting for an area to be picked (ui/tools.js)
 export const tool = signal('move');        // what a click on the model does (ui/toolbar.js, ui/tools.js)
-export const layout = signal('3d');        // '3d' | 'split' (the pattern pieces beside the model)
+export const layout = signal('3d');        // '3d' | 'split' (the pattern pieces beside the model) | 'flat'; kept in prefs.layout (below)
 export const stats = signal({});
 export const display = signal(null);       // display settings of this machine (render/display.js), set at start-up
 export const toast = signal(null);         // { text, kind } shown briefly
@@ -66,6 +66,7 @@ const PREFS = 'leotard.ui.v1';
 const PREF_DEFAULTS = { followCamera: true, shapeOpen: 'neck', sections: {} };
 function loadPrefs() { try { return { ...PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREFS) ?? '{}') }; } catch { return { ...PREF_DEFAULTS }; } }
 export const prefs = signal(loadPrefs());
+if (['3d', 'split', 'flat'].includes(prefs.value.layout)) layout.value = prefs.value.layout; // the layout last used
 export function setPref(k, v) {
 	prefs.value = { ...prefs.value, [k]: v };
 	try { localStorage.setItem(PREFS, JSON.stringify(prefs.value)); } catch { /* storage blocked: kept for this session */ }

@@ -18,7 +18,7 @@ import { symmetryOn } from '../doc/symmetry.js';
 // The stage's layouts: the model alone, the model and its flat pattern side by side (a divider between them), the pattern alone.
 // The 3D view stays alive in every layout (its canvas is only narrowed away), so switching back is instant.
 const LAYOUTS = [['3d', '3D', 'The model only'], ['split', 'Both', 'The model and its pattern pieces side by side'], ['flat', 'Pattern', 'The pattern pieces only']];
-const setLayout = (k) => { layout.value = k; };
+const setLayout = (k) => { layout.value = k; setPref('layout', k); };
 
 // Dragging the divider between the 3D view and the pattern: its place is remembered (prefs.split, a share of the stage).
 function SplitHandle() {

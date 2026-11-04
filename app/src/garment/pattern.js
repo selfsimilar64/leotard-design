@@ -192,6 +192,9 @@ export function patternPieces(views, doc, opts = {}) {
 	const out = [], seenMirror = new Set(), viewList = Array.isArray(views) ? views : [views];
 	const overlayLayers = new Set(doc.layers.filter((l) => l.kind === 'overlay').map((l) => l.id));
 	const arrOf = new Map(viewList.flatMap((v) => v.cells.map((c) => [c, v.g?.arr])));
+	// a mirrored panel shows the cell its seed lies in: the one its stone patterns are measured on (render/engine.js clothOf)
+	const seedCell = new Map();
+	for (const v of viewList) for (const sd of v.g?.seeds ?? []) if (sd.cell >= 0 && !seedCell.has(sd.panel)) seedCell.set(sd.panel, sd.cell);
 	for (const c of viewList.flatMap((v) => v.cells)) {
 		if (!c.hasUV) continue;
 		const panel = doc.panels.find((p) => p.id === c.panelId);
@@ -205,7 +208,12 @@ export function patternPieces(views, doc, opts = {}) {
 		if (signedArea(stitch) < 0) stitch.reverse();
 		stitch = simplify(stitch, 0.3);
 		// a mirrored panel is one pattern piece cut twice (the second cell is its mirror image)
-		if (panel.mirror === 'both') { if (seenMirror.has(panel.id)) continue; seenMirror.add(panel.id); }
+		if (panel.mirror === 'both') {
+			const own = seedCell.get(panel.id);
+			if (own !== undefined && c.cell !== own && viewList.some((v) => v.cells.some((x) => x.cell === own && x.panelId === panel.id && x.hasUV))) continue;
+			if (seenMirror.has(panel.id)) continue;
+			seenMirror.add(panel.id);
+		}
 		const applique = overlayLayers.has(panel.layer);
 		const bounds = applique ? doc.layers.find((l) => l.id === panel.layer)?.bounds : null;
 		const held = bounds?.length ? caughtEdges(loops[0], stitch, c, arrOf.get(c), bounds, o) : null;
@@ -216,6 +224,9 @@ export function patternPieces(views, doc, opts = {}) {
 		const s = panel.stack?.[0] ?? {};
 		out.push({
 			rec: c, shift, ease: o,
+			// where the piece came from, to map surface points onto it (ui/FlatView.jsx stones): its cell, its layer, and flat metres
+			// to these mm as mm = uv * 1000 * (1 + ease) - origin
+			cell: c.cell, layer: panel.layer ?? 'L0', origin: [x0, y0], easeUV: [o.easeAcross, o.easeAlong],
 			key: c.sig, panelId: panel.id, name: panel.name || panel.id, colour: s.colour ?? '#888888', fabric: s.fabric, material: doc.materials?.find((m) => m.id === s.material)?.name ?? s.fabric,
 			caught: held ? caughtRuns(stitch, held).map((r) => r.map(shift)) : [],
 			caughtIn: held ? bounds.map((id) => doc.curves.find((x) => x.id === id)?.name).filter(Boolean) : [],
