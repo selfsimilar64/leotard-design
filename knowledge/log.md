@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-04
+* **Creation**: [WebGPU renderer and one GPU stone engine (plan)](/product/roadmap/webgpu-and-stone-engine-plan.md): hand-off plan: shiny fabric fix and WebGL baseline, parallel rule on, WebGPU renderer with parity, stone engine as GPU compute, 100 000-stone gates.
 * **Creation**: [One stone engine for every pattern (proposal)](/engineering/architecture/stone-pattern-engine.md): layouts describe geometry (points, runs, areas, tiling); one data-parallel engine lays the stones; layout classes and build order.
 * **Creation**: [Stones kept apart by a parallel rule](/engineering/architecture/parallel-stone-spacing.md): experiment, off by default: conflicts resolved in parallel rounds reproduce the old spacing with zero overlaps at the overlap version's speed; comparison of the three versions.
 * **Update**: [Stone patterns placed on the GPU](/engineering/architecture/gpu-stone-placement.md): stages 3-4 done: keep test from piece rasters; pattern groups drawn by the GPU from per-piece atlases (move/turn 39 -> 17 ms on 17 700 stones); direction now follows the posed fabric.
