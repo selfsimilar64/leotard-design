@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { sizeOf, SHAPES } from './library.js';
 import { motifOutline, insidePoly, distPoly } from './motifs.js';
-import { runPattern, packPattern, packRecords } from './pattern.js';
+import { runPattern, packPattern, packRecords, posRasters } from './pattern.js';
 import { blockersOf } from './peaks.js';
 import { mirrorFast } from './cloth.js';
 import { hash2 } from './fields.js';
@@ -540,14 +540,15 @@ function dart(region, rand, candidates, gap, sizeFor, pick, ctx) {
 // cache (optional): what the last run made, per group. A group whose record and whose geometry have not
 // changed keeps its stones, so editing one group costs that group and the final pass.
 
-// A group's stones as they go on the body: mirrored, cut to one side, erased. blockers: a pattern's, the stones of the patterns
-// before it on its piece (runStones), kept clear of.
+// A group's stones as they go on the body: mirrored, cut to one side, erased. blockers: a pattern's, the patterns before it on its
+// piece (runStones: { lists, grid }), kept clear of.
 function stonesOfGroup(gen, ctx, errors, blockers = null) {
 	const fn = GENERATORS[gen.kind], surf = ctx.surf, seed = gen.seed ?? 1, isPattern = gen.kind === 'pattern';
-	// a pattern the GPU places (ctx.packs: the app's view can): its kept stones packed, the records made only when asked for
-	if (isPattern && ctx.packs && !gen.params?.symmetric && !gen.side && !gen.erase?.length) return packOfGroup(gen, ctx, errors, blockers);
+	// a pattern the GPU places (ctx.packs: the app's view can): its kept stones packed, the records made only when asked for; one
+	// made symmetric, cut to one side or erased is a pack where the GPU keeps it (ctx.gpuKeep: the GPU cuts it, gpu-keep.js FILTER)
+	if (isPattern && ctx.packs && (ctx.gpuKeep || !filtered(gen))) return packOfGroup(gen, ctx, errors, blockers);
 	let list;
-	try { list = isPattern ? runPattern(gen, ctx, ctx.patternCache, blockers) : fn(gen, ctx, rng(seed)); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
+	try { list = isPattern ? runPattern(gen, ctx, ctx.patternCache, blockers?.grid ?? null) : fn(gen, ctx, rng(seed)); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
 	const shape = gen.shape ?? 'round', keepOut = gen.params?.keepOut;
 	if (!isPattern) list.forEach((s, i) => {
 		s.gen = gen.id; s.shape = s.shape ?? shape; s.layer = gen.layer ?? null; if (keepOut !== undefined) s.keepOut = keepOut;
@@ -579,29 +580,47 @@ function stonesOfGroup(gen, ctx, errors, blockers = null) {
 	return list;
 }
 
-// A pattern group as a pack (stones/gpu-view.js PackView draws it): its own side and its mirrored one as stonesOfGroup lays
-// them, the records (records()) made as stonesOfGroup makes them, only when something asks for each stone.
+// Whether a pattern group is cut after it is kept: made symmetric about the body's centre, cut to one side, or erased in places.
+const filtered = (gen) => !!(gen.params?.symmetric || gen.side || gen.erase?.length);
+// The eraser's marks as places on the body and their reach (stonesOfGroup's).
+const marksOf = (gen, surf) => (gen.erase ?? []).map((e) => ({ p: surf.pos(e.sp ? { f: e.sp.f, b0: 1 - e.sp.b[0] - e.sp.b[1], b1: e.sp.b[0], b2: e.sp.b[1] } : e), r: e.r ?? 0.005 }));
+
+// A pattern group as a pack (stones/gpu-view.js PackView draws it): its own side and its mirrored side as stonesOfGroup lays
+// them, the records (records()) made as stonesOfGroup makes them, only when something asks for each stone. A group cut after it is
+// kept (filtered: symmetric, one side, erased) carries the cut (filter) for the GPU, which cuts each side as stonesOfGroup does.
 function packOfGroup(gen, ctx, errors, blockers = null) {
 	let r;
 	try { r = packPattern(gen, ctx, ctx.patternCache, blockers); } catch (e) { errors.push(gen.id + ': ' + e.message); return []; }
 	if (!r) return [];
-	const surf = ctx.surf, m = gen.mirror, paired = !!ctx.cloth?.(gen.on?.panel)?.paired;
-	const own = m !== 'only', mirrored = m === 'both' || m === 'only' || paired;
+	const surf = ctx.surf, m = gen.mirror, paired = !!ctx.cloth?.(gen.on?.panel)?.paired, sym = !!gen.params?.symmetric;
+	const own = m !== 'only', mirrored = sym || m === 'both' || m === 'only' || paired;
+	const side = gen.side ?? null, marks = gen.erase?.length ? marksOf(gen, surf) : null;
+	const filter = filtered(gen) ? {
+		sym, side, marks,
+		// where each point of the piece's flat cloth is on the body, and where its mirror image is (stones/pattern.js posRasters)
+		rasters: () => posRasters(r.piece, (sp) => surf.pos(mirrorFast(surf, sp), _b)),
+	} : null;
 	let recs = null;
 	return {
-		pack: true, gen: gen.id, shape: gen.shape ?? 'round', layer: gen.layer ?? null, piece: r.piece, own, mirrored,
-		// kept on the GPU (r.gpu: stones/gpu-keep.js): its count as the GPU last read it back, the kept set (k) on the CPU only when asked
+		pack: true, gen: gen.id, shape: gen.shape ?? 'round', layer: gen.layer ?? null, piece: r.piece, own, mirrored, filter,
+		// kept on the GPU (r.gpu: stones/gpu-keep.js): its counts as the GPU last read them back (one a side), the kept set (k) on the
+		// CPU only when asked
 		gpu: r.gpu ?? null,
 		get k() { return r.k; },
 		mirrorSP: (sp) => mirrorFast(surf, sp), mirrorFit: ctx.mirrorFit,
-		get count() { return (r.gpu ? r.gpu.keeper?.count ?? 0 : r.k.n) * ((own ? 1 : 0) + (mirrored ? 1 : 0)); },
+		get count() { return r.gpu ? (r.gpu.keeper?.counts ?? []).reduce((a, c) => a + c, 0) : r.k.n * ((own ? 1 : 0) + (mirrored ? 1 : 0)); },
 		records() {
 			if (recs) return recs;
 			const list = packRecords(gen, r.piece, r.k), mir = (s) => {
 				const sp = mirrorFast(surf, s.sp), p = surf.pos(sp, _a);
 				return { ...s, sp, fit: s.fit ? ctx.mirrorFit?.(s.fit) ?? undefined : undefined, angle: Math.PI - s.angle, mirrored: true, x: p.x, y: p.y, z: p.z, r: (s.r * 7.13 + 0.37) % 1 };
 			};
-			return (recs = (own ? list : []).concat(mirrored ? list.map(mir) : []));
+			// (the cut, as stonesOfGroup cuts: the wearer's left mirrored; one side; the eraser's marks)
+			const half = sym ? list.filter((s) => s.x >= 0) : list;
+			let out = (own ? half : []).concat(mirrored ? half.map(mir) : []);
+			if (side) out = out.filter((s) => (s.x >= 0) === (side === 'left'));
+			if (marks) out = out.filter((s) => { for (const q of marks) { const dx = s.x - q.p.x, dy = s.y - q.p.y, dz = s.z - q.p.z; if (dx * dx + dy * dy + dz * dz < q.r * q.r) return false; } return true; });
+			return (recs = out);
 		},
 	};
 }
@@ -615,12 +634,21 @@ function placedStones(doc, surf) {
 
 // The stones a pattern group laid on its own piece (not mirrored copies), on the flat cloth: what the patterns after it on the
 // piece keep clear of. -> { U, V, D }
-function ownFlat(list) {
-	if (list.pack) return { U: list.k.U, V: list.k.V, D: list.k.D };
+export function ownFlat(list) {
+	if (list.pack && !list.filter) return { U: list.k.U, V: list.k.V, D: list.k.D };
+	if (list.pack) { const own = list.records().filter((s) => !s.mirrored); return { U: Float64Array.from(own, (s) => s.fu), V: Float64Array.from(own, (s) => s.fv), D: Float64Array.from(own, (s) => s.size) }; }
 	const own = list.filter((s) => s.fab && !s.mirrored);
 	return { U: Float64Array.from(own, (s) => s.fu), V: Float64Array.from(own, (s) => s.fv), D: Float64Array.from(own, (s) => s.size) };
 }
 const joined = (a, b) => { const o = new Float64Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
+// The patterns laid so far on a piece, which the next one keeps clear of: lists (a GPU keep reads a pack kept on the GPU from its
+// own buffers: stones/gpu-view.js PackView.keep; the rest by ownFlat), and grid, the CPU twin's (stones/peaks.js blockersOf), made only
+// when the CPU keeps it.
+function blockersFrom(lists) {
+	let grid;
+	const own = [...lists];
+	return { lists: own, flat: ownFlat, get grid() { return grid === undefined ? (grid = blockersOfLists(own)) : grid; } };
+}
 // what the patterns laid so far on a piece put there, as the grid the next one keeps clear of (stones/peaks.js blockersOf)
 function blockersOfLists(lists) {
 	let U = new Float64Array(0), V = U, D = U;
@@ -697,7 +725,7 @@ export function runStones(doc, ctx, cache = null) {
 		if (!rec || rec.sig !== sig) {
 			const errs = [];
 			ctx.pending?.delete(gen.id);
-			rec = { sig, list: stonesOfGroup(gen, ctx, errs, onPiece?.lists.length ? blockersOfLists(onPiece.lists) : null), errors: errs };
+			rec = { sig, list: stonesOfGroup(gen, ctx, errs, onPiece?.lists.length ? blockersFrom(onPiece.lists) : null), errors: errs };
 			changed = true;
 			// waiting for its piece to be flattened: not an answer worth keeping
 			if (cache) { if (ctx.pending?.has(gen.id)) cache.gens.delete(gen.id); else cache.gens.set(gen.id, rec); }

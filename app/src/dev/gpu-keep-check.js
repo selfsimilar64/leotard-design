@@ -100,6 +100,39 @@ export async function gpuKeepCheck({ panel = null, keys = null, variants = null,
 	};
 }
 
+// The design on show, end to end: for every pattern the GPU keeps, each side's stones as the GPU wrote them (its own buffers: what the
+// 3D and flat views draw) against the CPU twin's records of the same pack (stones/generators.js packOfGroup records: kept clear of
+// the patterns before it on its piece, made symmetric, cut to one side, erased), matched by place on the flat cloth.
+//   const { gpuPackCheck } = await import('/src/dev/gpu-keep-check.js'); await gpuPackCheck()
+export async function gpuPackCheck() {
+	const e = window.app.engine, pv = e.stoneView.packView, be = e.stoneView.renderer.backend, device = be.device;
+	await device.queue.onSubmittedWorkDone();
+	await new Promise((r) => setTimeout(r, 300));
+	const out = [];
+	for (const pk of e.stoneRun.packs ?? []) {
+		if (!pk.gpu) { out.push({ gen: pk.gen, gpu: false }); continue; }
+		const recs = pk.records(), row = { gen: pk.gen, filter: !!pk.filter, blockers: pk.gpu.blockers?.lists.length ?? 0 };
+		for (const [side, mir] of [['own', false], ['mirror', true]]) {
+			const S = pv.sides.get(pk.gen + '|' + side);
+			const cpu = recs.filter((s) => !!s.mirrored === mir);
+			if (!S) { row[side] = { cpu: cpu.length, gpu: null }; continue; }
+			const n = new Uint32Array((await readF32(device, be.get(S.ind).buffer, 4)).buffer)[1], A = await readF32(device, be.get(S.geo.attributes.aStone).buffer, Math.max(4, n * 4));
+			const at = new Map(), cell = (x, y) => Math.floor(x * 1e4) * 100003 + Math.floor(y * 1e4);
+			for (let j = 0; j < n; j++) { const c = cell(A[j * 4], A[j * 4 + 1]); (at.get(c) ?? at.set(c, []).get(c)).push(j); }
+			let both = 0;
+			for (const s of cpu) {
+				const cx = Math.floor(s.fu * 1e4), cy = Math.floor(s.fv * 1e4);
+				let hit = false;
+				for (let a = -1; a <= 1 && !hit; a++) for (let b = -1; b <= 1 && !hit; b++) for (const j of at.get((cx + a) * 100003 + cy + b) ?? []) if (Math.hypot(A[j * 4] - s.fu, A[j * 4 + 1] - s.fv) < 1e-5) { hit = true; break; }
+				if (hit) both++;
+			}
+			row[side] = { cpu: cpu.length, gpu: n, both };
+		}
+		out.push(row);
+	}
+	return out;
+}
+
 async function readF32(device, buf, count) {
 	const s = device.createBuffer({ size: Math.max(16, count * 4), usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), enc = device.createCommandEncoder();
 	enc.copyBufferToBuffer(buf, 0, s, 0, count * 4);

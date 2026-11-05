@@ -232,14 +232,40 @@ export class PackView {
 		let K = this.keepers.get(p.gen);
 		if (!K) this.keepers.set(p.gen, (K = new GpuKeep(this.renderer.backend.device)));
 		gpu.keeper = K;
-		K.again = () => { if (this.packs.includes(p) && this.keepers.get(p.gen) === K) this.keep(p); };
+		// (and the patterns after it on its piece, which keep clear of its stones)
+		K.again = () => {
+			if (!this.packs.includes(p) || this.keepers.get(p.gen) !== K) return;
+			this.keep(p);
+			for (const q of this.packs.slice(this.packs.indexOf(p) + 1)) if (q.gpu && q.piece === p.piece && q.gpu.blockers) this.keep(q);
+		};
 		gpu.mods.palette ??= paletteOf(gpu.mods.names);
 		K.setLay(gpu.lay); K.setMods(gpu.mods); K.setRasters(gpu.room, gpu.D, gpu.edges);
+		// a group made symmetric, cut to one side or erased: the cut (stones/generators.js packOfGroup's filter)
+		const f = p.filter;
+		if (f) {
+			const marks = f.marks ? (f.marksF ??= Float32Array.from(f.marks.flatMap((q) => [q.p.x, q.p.y, q.p.z, q.r]))) : null;
+			K.setFilter({ flags: (f.sym ? 1 : 0) | (f.side === 'left' ? 2 : f.side === 'right' ? 4 : 0), ras: f.rasters(), marks });
+		} else K.setFilter(null);
+		K.setBlockers(...this.blockersOf(gpu.blockers));
 		const out = [];
-		for (const side of [p.own ? 'own' : null, p.mirrored ? 'mirror' : null]) if (side) out.push(this.room(this.sides.get(p.gen + '|' + side), K.cap));
+		for (const side of [p.own ? 'own' : null, p.mirrored ? 'mirror' : null]) if (side) out.push({ ...this.room(this.sides.get(p.gen + '|' + side), K.cap), mirror: side === 'mirror' });
 		const fam = SHAPES[p.shape]?.family ?? 'crystal';
 		K.run({ ...gpu.frame, edges: gpu.edges, flags: gpu.frame.flags | (fam === 'crystal' ? GPU_FLAGS.crystal : 0) }, out);
 		for (const f of keptHooks) f();
+	}
+
+	// The patterns before this one on its piece (stones/generators.js blockersFrom), as the GPU keep's blockers: one kept on the GPU
+	// from its own side's buffers (laid before this one, in this frame's order), the rest's stones from the CPU (ownFlat). -> [sources, cpu]
+	blockersOf(B) {
+		if (!B) return [null, null];
+		const src = [], cpu = [], be = this.renderer.backend;
+		for (const l of B.lists) {
+			const S = l.pack && l.gpu && this.keepers.has(l.gen) ? this.sides.get(l.gen + '|own') ?? this.sides.get(l.gen + '|mirror') : null;
+			if (S?.gpu && S.ind && S.geo.attributes.aStone) { src.push({ buf: be.get(S.geo.attributes.aStone).buffer, ind: be.get(S.ind).buffer, cap: S.cap }); continue; }
+			const o = B.flat(l);
+			for (let j = 0; j < o.U.length; j++) cpu.push(o.U[j], o.V[j], o.D[j], 0);
+		}
+		return [src, cpu.length ? Float32Array.from(cpu) : null];
 	}
 
 	// A GPU-kept side's instance buffers, room for n candidates, as three's vertex buffers the GPU keep writes the kept stones

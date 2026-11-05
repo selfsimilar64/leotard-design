@@ -28,8 +28,10 @@ import { layKit, layUniform, workWords, W_HEAD } from './gpu-lay.js';
 
 const WG = 64, MAX_ROUNDS = 48, MAX_SLOTS = 4000000;
 export const GPU_FLAGS = { keep: 1, upright: 2, round: 4, crystal: 8 };
-// The keep's uniform block: 40 words (WGSL struct U below).
-const U_WORDS = 40;
+// The keep's uniform block: 48 words (WGSL struct U below).
+const U_WORDS = 48;
+// the blockers' grid (BMAX..BPUT): its head, then per cell its run's start, a cursor, a count; at most so many cells
+const B_CELLS = 65536, B_START = 16, B_CUR = B_START + B_CELLS + 1, B_CNT = B_CUR + B_CELLS, B_WORDS = B_CNT + B_CELLS;
 
 const HEAD = /* wgsl */ `
 struct U {
@@ -43,7 +45,12 @@ struct U {
 	fx: f32, fy: f32, fc: f32, fs: f32,
 	fS: f32, fF: f32, oD: u32, oK: u32,
 	dart: u32, varied: u32, ncellCap: u32, outCap: u32,
+	filt: u32, oMir: u32, oMarks: u32, nMarks: u32,
+	blk: u32, pad3: u32, pad4: u32, pad5: u32,
 }
+// a float as a number that orders as the floats do, and back
+fn ord(x: f32) -> u32 { let b = bitcast<u32>(x); return select(b | 0x80000000u, ~b, (b & 0x80000000u) != 0u); }
+fn deord(o: u32) -> f32 { return bitcast<f32>(select(~o, o & 0x7fffffffu, (o & 0x80000000u) != 0u)); }
 @group(0) @binding(0) var<uniform> u: U;
 ${WGSL_COMMON}
 `;
@@ -73,8 +80,25 @@ const KEEP = HEAD + /* wgsl */ `
 @group(0) @binding(3) var<storage, read> ras: array<f32>;
 @group(0) @binding(4) var<storage, read> mods: array<vec4f>;
 @group(0) @binding(5) var<storage, read_write> state: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read> bg: array<u32>;
+@group(0) @binding(7) var<storage, read> bpos: array<vec4f>;
 ${RASTERS}
 ${WGSL_MODS}
+// stones/peaks.js blocked: closer than 0.92 of touching to a stone of a pattern before this one on the piece (BMAX..BPUT's grid)
+fn blocked(pu: f32, pv: f32, d: f32) -> bool {
+	let cell = bitcast<f32>(bg[4]); let nx = bg[5]; let ny = bg[6];
+	let cx = i32(floor((pu - bitcast<f32>(bg[2])) / cell)); let cy = i32(floor((pv - bitcast<f32>(bg[3])) / cell));
+	for (var y = max(cy - 1, 0); y <= min(cy + 1, i32(ny) - 1); y++) {
+		for (var x = max(cx - 1, 0); x <= min(cx + 1, i32(nx) - 1); x++) {
+			let k = u32(y) * nx + u32(x);
+			for (var e = bg[${B_START}u + k]; e < bg[${B_START}u + k + 1u]; e++) {
+				let b = bpos[e]; let dx = b.x - pu; let dy = b.y - pv; let r = (b.z + d) * 0.5 * 0.92;
+				if (dx * dx + dy * dy < r * r) { return true; }
+			}
+		}
+	}
+	return false;
+}
 @compute @workgroup_size(${WG}) fn main(@builtin(global_invocation_id) g: vec3u) {
 	let i = g.x;
 	if (i >= u.n) { return; }
@@ -96,6 +120,7 @@ ${WGSL_MODS}
 			if ((u.flags & 1u) == 0u || r >= u.nearEdge + u.less || keepAt(pu, pv) - u.less >= c.w * 0.5) { s = 0u; }
 		}
 	}
+	if (s == 0u && u.blk != 0u && blocked(pu, pv, c.w)) { s = 2u; }
 	// (alive: its colour in the upper bits, which the rounds leave alone)
 	if (s == 0u) { atomicStore(&state[i], modColour(C) << 2u); } else { atomicStore(&state[i], 2u); }
 }`;
@@ -106,8 +131,6 @@ const RULE = HEAD + /* wgsl */ `
 @group(0) @binding(2) var<storage, read> aux: array<vec4f>;
 @group(0) @binding(3) var<storage, read_write> work: array<atomic<u32>>;
 var<workgroup> R: array<atomic<u32>, 10>;
-// a float as a number that orders as the floats do
-fn ord(x: f32) -> u32 { let b = bitcast<u32>(x); return select(b | 0x80000000u, ~b, (b & 0x80000000u) != 0u); }
 @compute @workgroup_size(${WG}) fn main(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index) li: u32) {
 	if (li == 0u) { for (var q = 0u; q < 10u; q += 2u) { atomicStore(&R[q], select(0xffffffffu, 0u, q == 8u)); atomicStore(&R[q + 1u], 0u); } }
 	workgroupBarrier();
@@ -131,7 +154,6 @@ fn ord(x: f32) -> u32 { let b = bitcast<u32>(x); return select(b | 0x80000000u, 
 // clear, at most so many cells) and the rule (stones/peaks.js ruleOf: a scatter of mixed sizes by size, else by P if it differs)
 const GRIDP = HEAD + /* wgsl */ `
 @group(0) @binding(1) var<storage, read_write> work: array<u32>;
-fn deord(o: u32) -> f32 { return bitcast<f32>(select(~o, o & 0x7fffffffu, (o & 0x80000000u) != 0u)); }
 @compute @workgroup_size(1) fn main() {
 	let n = work[13];
 	var x0 = 0.0; var x1 = 1.0; var y0 = 0.0; var y1 = 1.0; var maxD = 0.0;
@@ -216,6 +238,117 @@ ${GRID_OF}
 	items[start[c.y * work[19] + c.x] + off[i]] = i;
 }`;
 
+// The stones of the patterns before this one on its piece (stones/generators.js blockersFrom), from each one's own buffers (a pattern
+// kept on the GPU: its side's aStone and indirect count) or uploaded (one the CPU keeps), in a grid built every run, for KEEP's
+// blocked(): BMAX their biggest, BGRIDP the grid over the piece (cells as wide as two of the biggest may come together x 0.92), BCOUNT
+// per cell, BSCAN the starts, BPUT each in its cell. A source: src (u, v, angle, +-d a stone), sind (word 1: how many).
+const BSRC = HEAD + /* wgsl */ `
+@group(0) @binding(1) var<storage, read> src: array<vec4f>;
+@group(0) @binding(2) var<storage, read> sind: array<u32>;
+@group(0) @binding(3) var<storage, read_write> bg: array<atomic<u32>>;
+fn bcell(p: vec4f) -> u32 {
+	let cell = bitcast<f32>(atomicLoad(&bg[4])); let nx = atomicLoad(&bg[5]); let ny = atomicLoad(&bg[6]);
+	let x = min(u32(max(floor((p.x - bitcast<f32>(atomicLoad(&bg[2]))) / cell), 0.0)), nx - 1u);
+	let y = min(u32(max(floor((p.y - bitcast<f32>(atomicLoad(&bg[3]))) / cell), 0.0)), ny - 1u);
+	return y * nx + x;
+}
+`;
+const BMAX = BSRC + /* wgsl */ `
+var<workgroup> m: atomic<u32>;
+@compute @workgroup_size(${WG}) fn main(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index) li: u32) {
+	if (li == 0u) { atomicStore(&m, 0u); }
+	workgroupBarrier();
+	if (g.x < sind[1] && u.n > 0u) { atomicMax(&m, ord(abs(src[g.x].w))); }
+	workgroupBarrier();
+	if (li == 0u) { atomicMax(&bg[0], atomicLoad(&m)); }
+}`;
+const BGRIDP = HEAD + /* wgsl */ `
+@group(0) @binding(1) var<storage, read_write> bg: array<u32>;
+@group(0) @binding(2) var<storage, read> work: array<u32>;
+@compute @workgroup_size(1) fn main() {
+	var own = 0.0;
+	if (work[13] > 0u) { own = deord(work[12]); }
+	var biggest = own;
+	if (bg[0] != 0u) { biggest = max(biggest, deord(bg[0])); }
+	var cell = max(biggest * 0.92 * 1.0001, 1e-4);
+	let x0 = u.dx0; let y0 = u.dy0; let w = f32(u.ex - 1u) * u.er; let h = f32(u.ey - 1u) * u.er;
+	var nx = 1u; var ny = 1u;
+	for (var guard = 0u; guard < 400u; guard++) {
+		nx = u32(floor(w / cell)) + 1u; ny = u32(floor(h / cell)) + 1u;
+		if (nx * ny <= ${B_CELLS}u) { break; }
+		cell *= 1.05;
+	}
+	bg[2] = bitcast<u32>(x0); bg[3] = bitcast<u32>(y0); bg[4] = bitcast<u32>(cell); bg[5] = nx; bg[6] = ny; bg[7] = nx * ny;
+}`;
+const BCOUNT = BSRC + /* wgsl */ `
+@compute @workgroup_size(${WG}) fn main(@builtin(global_invocation_id) g: vec3u) {
+	if (g.x >= sind[1] || u.n == 0u) { return; }
+	atomicAdd(&bg[${B_CNT}u + bcell(src[g.x])], 1u);
+}`;
+const BSCAN = HEAD + /* wgsl */ `
+@group(0) @binding(1) var<storage, read_write> bg: array<u32>;
+var<workgroup> part: array<u32, 256>;
+@compute @workgroup_size(256) fn main(@builtin(local_invocation_id) l: vec3u) {
+	if (u.n == 0u) { return; } // (and a layout 'auto' keeps binding 0 only where it is read)
+	let t = l.x; let N = bg[7]; let per = (N + 255u) / 256u; let a = min(t * per, N); let b = min(a + per, N);
+	var s = 0u;
+	for (var c = a; c < b; c++) { s += bg[${B_CNT}u + c]; }
+	part[t] = s;
+	workgroupBarrier();
+	if (t == 0u) { var acc = 0u; for (var k = 0u; k < 256u; k++) { let v = part[k]; part[k] = acc; acc += v; } bg[${B_START}u + N] = acc; }
+	workgroupBarrier();
+	var acc = part[t];
+	for (var c = a; c < b; c++) { bg[${B_START}u + c] = acc; bg[${B_CUR}u + c] = acc; acc += bg[${B_CNT}u + c]; }
+}`;
+const BPUT = BSRC + /* wgsl */ `
+@group(0) @binding(4) var<storage, read_write> bpos: array<vec4f>;
+@compute @workgroup_size(${WG}) fn main(@builtin(global_invocation_id) g: vec3u) {
+	if (g.x >= sind[1] || u.n == 0u) { return; }
+	let p = src[g.x];
+	let e = atomicAdd(&bg[${B_CUR}u + bcell(p)], 1u);
+	bpos[e] = vec4f(p.x, p.y, abs(p.w), 0.0);
+}`;
+
+// The cut of a group made symmetric, cut to one side or erased (stones/generators.js stonesOfGroup, packOfGroup's records): per kept
+// stone, where it is on the body (and where its mirror image is: stones/pattern.js posRasters, read bilinearly), whether its own
+// side and its mirrored side show it: bit 30 hides it on its own side, bit 31 on the mirrored one (WRITE). u.filt: 1 symmetric (the
+// wearer's left, mirrored), 2 the left side only, 4 the right, 8 the eraser's marks (x, y, z, reach; u.nMarks of them from u.oMarks).
+const FILTER = HEAD + /* wgsl */ `
+@group(0) @binding(1) var<storage, read> cand: array<vec4f>;
+@group(0) @binding(2) var<storage, read_write> state: array<atomic<u32>>;
+@group(0) @binding(3) var<storage, read> fil: array<f32>;
+fn posAt(o: u32, px: f32, py: f32) -> vec3f {
+	let fx = clamp((px - u.dx0) / u.er, 0.0, f32(u.ex) - 1.001); let fy = clamp((py - u.dy0) / u.er, 0.0, f32(u.ey) - 1.001);
+	let i = u32(floor(fx)); let j = u32(floor(fy)); let a = fx - floor(fx); let b = fy - floor(fy); let q = j * u.ex + i;
+	let p00 = vec3f(fil[o + 3u * q], fil[o + 3u * q + 1u], fil[o + 3u * q + 2u]);
+	let p10 = vec3f(fil[o + 3u * q + 3u], fil[o + 3u * q + 4u], fil[o + 3u * q + 5u]);
+	let q1 = q + u.ex;
+	let p01 = vec3f(fil[o + 3u * q1], fil[o + 3u * q1 + 1u], fil[o + 3u * q1 + 2u]);
+	let p11 = vec3f(fil[o + 3u * q1 + 3u], fil[o + 3u * q1 + 4u], fil[o + 3u * q1 + 5u]);
+	return (p00 * (1.0 - a) + p10 * a) * (1.0 - b) + (p01 * (1.0 - a) + p11 * a) * b;
+}
+fn erased(p: vec3f) -> bool {
+	for (var k = 0u; k < u.nMarks; k++) {
+		let o = u.oMarks + 4u * k; let d = p - vec3f(fil[o], fil[o + 1u], fil[o + 2u]);
+		if (dot(d, d) < fil[o + 3u] * fil[o + 3u]) { return true; }
+	}
+	return false;
+}
+@compute @workgroup_size(${WG}) fn main(@builtin(global_invocation_id) g: vec3u) {
+	let i = g.x;
+	if (i >= u.n) { return; }
+	if ((atomicLoad(&state[i]) & 3u) != 1u) { return; }
+	let c = cand[i];
+	let pu = u.rx + u.rc * u.rF * c.x - u.rs * c.y; let pv = u.ry + u.rs * u.rF * c.x + u.rc * c.y;
+	let po = posAt(0u, pu, pv); let pm = posAt(u.oMir, pu, pv);
+	var ho = false; var hm = false;
+	if ((u.filt & 1u) != 0u && po.x < 0.0) { ho = true; hm = true; }
+	if ((u.filt & 2u) != 0u) { ho = ho || po.x < 0.0; hm = hm || pm.x < 0.0; }
+	if ((u.filt & 4u) != 0u) { ho = ho || po.x >= 0.0; hm = hm || pm.x >= 0.0; }
+	if ((u.filt & 8u) != 0u) { ho = ho || erased(po); hm = hm || erased(pm); }
+	atomicOr(&state[i], select(0u, 1u << 30u, ho) | select(0u, 1u << 31u, hm));
+}`;
+
 // A round: the candidates above this one (a smaller standing key: stones/peaks.js conflictsOf's order) closer than their two
 // sizes allow (x clear), found in the grid
 const ROUND = HEAD + /* wgsl */ `
@@ -293,6 +426,7 @@ const WRITE = HEAD + /* wgsl */ `
 	if (i >= u.n) { return; }
 	let sv = atomicLoad(&state[i]);
 	if (atomicLoad(&ind[5]) == 0u || (sv & 3u) != 1u) { return; }
+	if (((sv >> (30u + u.side)) & 1u) != 0u) { return; } // (cut on this side: FILTER)
 	// packed: the kept stones in the first slots, the draw's instance count (the indirect draw's word 1) counting them
 	let o = atomicAdd(&ind[1], 1u);
 	if (o >= u.outCap) { return; }
@@ -304,7 +438,7 @@ const WRITE = HEAD + /* wgsl */ `
 	if ((u.flags & 4u) != 0u) { ang = select(h * PI, PI - h * PI, mir); d = -d; }
 	else { ang = select(u.ra + select(c.z, PI - c.z, u.rF < 0.0), u.upAngle, (u.flags & 2u) != 0u) + u.turn; }
 	oS[o] = vec4f(pu, pv, ang, d);
-	let p = sv >> 2u; let f0 = pal[2u * p]; let f1 = pal[2u * p + 1u];
+	let p = (sv >> 2u) & 0x0fffffffu; let f0 = pal[2u * p]; let f1 = pal[2u * p + 1u];
 	var k = 1.0;
 	if ((u.flags & 8u) != 0u) { k = 0.88 + 0.12 * fract(r * 31.7); }
 	oC[o] = vec4f(f0.xyz * k, 0.0);
@@ -316,7 +450,7 @@ function kitOf(device) {
 	let k = kits.get(device);
 	if (k) return k;
 	const make = (code) => device.createComputePipeline({ layout: 'auto', compute: { module: device.createShaderModule({ code }), entryPoint: 'main' } });
-	k = { lay: layKit(device), keep: make(KEEP), rule: make(RULE), gridp: make(GRIDP), keys: make(KEYS), gcount: make(GCOUNT), gscan: make(GSCAN), gput: make(GPUT), round: make(ROUND), next: make(NEXT), gate: make(GATE), write: make(WRITE) };
+	k = { lay: layKit(device), keep: make(KEEP), rule: make(RULE), bmax: make(BMAX), bgridp: make(BGRIDP), bcount: make(BCOUNT), bscan: make(BSCAN), bput: make(BPUT), filter: make(FILTER), gridp: make(GRIDP), keys: make(KEYS), gcount: make(GCOUNT), gscan: make(GSCAN), gput: make(GPUT), round: make(ROUND), next: make(NEXT), gate: make(GATE), write: make(WRITE) };
 	kits.set(device, k);
 	return k;
 }
@@ -337,6 +471,8 @@ export class GpuKeep {
 		this.ctl = device.createBuffer({ size: 16, usage: ST | DST | SRC });
 		this.disp = device.createBuffer({ size: 16, usage: ST | DST | BU.INDIRECT });
 		this.stage = device.createBuffer({ size: 48, usage: BU.MAP_READ | DST });
+		this.counts = [];
+		this.filter = null; this.blockers = null;
 		this.staging = false;
 		this.count = 0; this.rounds = 0; this.unsettled = 0; this.laid = 0;
 		this.lay = null; this.mods = null; this.rasters = null;
@@ -388,6 +524,30 @@ export class GpuKeep {
 		this.layDirty ||= !!this.lay?.varied; // (a size modifier from the edge reads it)
 	}
 
+	// A group cut after it is kept (stones/generators.js packOfGroup's filter): f { flags (FILTER's u.filt), ras (stones/pattern.js
+	// posRasters: the room raster's grid), marks (x, y, z, reach a mark) } or null.
+	setFilter(f) {
+		const c = this.filter;
+		if (c === f || (c && f && c.flags === f.flags && c.ras === f.ras && c.marks === f.marks)) return;
+		this.filter = f;
+		if (!f) return;
+		const all = new Float32Array(f.ras.length + (f.marks?.length ?? 0) + 4);
+		all.set(f.ras); if (f.marks) all.set(f.marks, f.ras.length);
+		this.fit('fil', all.byteLength, all);
+	}
+	// The stones of the patterns before this one on its piece (stones/gpu-view.js PackView.keep): sources [{ buf (a side's aStone
+	// buffer), ind (its indirect buffer: word 1 how many), cap }], and cpu: those the CPU keeps, as vec4 (u, v, d, 0), or null.
+	setBlockers(sources, cpu) {
+		const all = [...(sources ?? [])];
+		if (cpu?.length) {
+			this.fit('bcpu', cpu.byteLength, cpu);
+			this.fit('bcpuInd', 32, new Uint32Array([0, cpu.length / 4, 0, 0, 0, 0, 0, 0]));
+			all.push({ buf: this.b.bcpu, ind: this.b.bcpuInd, cap: cpu.length / 4 });
+		}
+		this.blockers = all.length ? all : null;
+		if (this.blockers) { this.fit('bg', B_WORDS * 4, null, ST | DST); this.fit('bpos', all.reduce((a, q) => a + q.cap, 0) * 16 + 16, null, ST); }
+	}
+
 	// The buffers a lay needs, sized for this.cap slots and this.vcap run vertices.
 	sizeLay() {
 		const L = this.lay, cap = this.cap, ncell = Math.min(1000000, 2 * cap + 16);
@@ -412,7 +572,7 @@ export class GpuKeep {
 	// the instance attributes' GPUBuffers, the side's indirect draw buffer (drawIndexedIndirect's five words; drawIndirect's
 	// four when its geometry has no index), how many indices (or vertices) a stone draws.
 	bindsFor(out) {
-		const same = (o, q) => o.stone === q.stone && o.colour === q.colour && o.finish === q.finish && o.ind === q.ind;
+		const same = (o, q) => o.stone === q.stone && o.colour === q.colour && o.finish === q.finish && o.ind === q.ind && o.mirror === q.mirror;
 		if (this.binds && this.binds.out.length === out.length && this.binds.out.every((o, i) => same(o, out[i]))) return this.binds;
 		const d = this.device, k = this.kit, b = this.b, L = k.lay;
 		const group = (pipe, list) => d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: list.map((buffer, binding) => ({ binding, resource: { buffer } })) });
@@ -425,7 +585,10 @@ export class GpuKeep {
 			rule: group(k.rule, [this.ubuf[0], b.cand, b.aux, b.work]),
 			gridp: group(k.gridp, [this.ubuf[0], b.work]),
 			keys: group(k.keys, [this.ubuf[0], b.cand, b.aux, b.work, b.mods, b.key]),
-			keep: group(k.keep, [this.ubuf[0], b.cand, b.aux, b.ras, b.mods, b.state]),
+			keep: group(k.keep, [this.ubuf[0], b.cand, b.aux, b.ras, b.mods, b.state, b.bg ?? this.fit('bg', 64, null, ST | DST), b.bpos ?? this.fit('bpos', 64, null, ST)]),
+			filter: b.fil ? group(k.filter, [this.ubuf[0], b.cand, b.state, b.fil]) : null,
+			bgridp: b.bg ? group(k.bgridp, [this.ubuf[0], b.bg, b.work]) : null,
+			bscan: b.bg ? group(k.bscan, [this.ubuf[0], b.bg]) : null,
 			gcount: group(k.gcount, [this.ubuf[0], b.cand, b.cnt, b.off, b.work]),
 			gscan: group(k.gscan, [this.ubuf[0], b.cnt, b.start, b.work]),
 			gput: group(k.gput, [this.ubuf[0], b.cand, b.start, b.off, b.items, b.work]),
@@ -451,18 +614,22 @@ export class GpuKeep {
 		I[24] = n; I[25] = groups; I[26] = p.flags | (K ? GPU_FLAGS.keep : 0);
 		f[28] = p.fx; f[29] = p.fy; f[30] = p.fc; f[31] = p.fs; f[32] = p.fS; f[33] = p.fF; I[34] = R.oD; I[35] = R.oK;
 		I[36] = L.dart ? 1 : 0; I[37] = L.varied ? 1 : 0; I[38] = this.ncell; I[39] = outCap;
+		const F = this.filter, Bk = this.blockers;
+		I[40] = F ? (F.flags | (F.marks?.length ? 8 : 0)) : 0; I[41] = F ? F.ras.length / 2 : 0; I[42] = F ? F.ras.length : 0; I[43] = F?.marks ? F.marks.length / 4 : 0;
+		I[44] = Bk ? 1 : 0;
 		// rounds: as many as this candidate set last needed, twice over and two more; all of them the first time, and after a run
 		// that did not settle
 		const rounds = GpuKeep.maxRounds ?? (this.need == null ? MAX_ROUNDS : Math.min(MAX_ROUNDS, this.need * 2 + 2));
 		this.budget = rounds; f[18] = rounds >= MAX_ROUNDS ? 1 : 0; // (a run with every round writes what settled, whatever)
 		const q = this.device.queue;
-		for (let s = 0; s < out.length; s++) { I[27] = s; q.writeBuffer(this.ubuf[s], 0, this.u); }
+		for (let s = 0; s < out.length; s++) { I[27] = out[s].mirror ? 1 : 0; q.writeBuffer(this.ubuf[s], 0, this.u); }
 		q.writeBuffer(this.ctl, 0, new Uint32Array(4));
 		// each side's draw: its stone's indices (its instance count is the gate's and the write kernel's to set)
 		for (const o of out) q.writeBuffer(o.ind, 0, new Uint32Array([o.indexCount]));
 		q.writeBuffer(this.disp, 0, new Uint32Array([groups, 1, 1, 0]));
 		const B = this.bindsFor(out), k = this.kit, enc = this.device.createCommandEncoder({ label: 'stone keep' }), b = this.b;
 		if (lay) { enc.clearBuffer(b.cand, 0, n * 16); enc.clearBuffer(b.aux, 0, n * 16); enc.clearBuffer(b.cnt, 0, this.ncell * 4); if (L.joints) enc.clearBuffer(b.tab, 0, this.tsize * 8); }
+		if (Bk) { enc.clearBuffer(b.bg, 0, 64); enc.clearBuffer(b.bg, B_CNT * 4, B_CELLS * 4); }
 		// (GpuKeep.timing: the pass's own GPU time, by timestamp queries, in this.gpuMs: dev/stone-stress.js)
 		const ts = GpuKeep.timing && this.device.features.has('timestamp-query');
 		if (ts && !this.tq) { this.tq = this.device.createQuerySet({ type: 'timestamp', count: 2 }); this.tqBuf = this.device.createBuffer({ size: 16, usage: BU.QUERY_RESOLVE | SRC }); this.tqRead = this.device.createBuffer({ size: 16, usage: BU.MAP_READ | DST }); }
@@ -482,11 +649,21 @@ export class GpuKeep {
 			go(k.gcount, B.gcount, groups); go(k.gscan, B.gscan, 1); go(k.gput, B.gput, groups);
 			this.layDirty = false;
 		}
+		if (Bk) {
+			// the blockers' grid, every run (they move with the patterns before this one)
+			const src = Bk.map((o) => ({ g: Math.ceil(Math.max(o.cap, 1) / WG), m: this.device.createBindGroup({ layout: k.bmax.getBindGroupLayout(0), entries: [this.ubuf[0], o.buf, o.ind, b.bg].map((buffer, binding) => ({ binding, resource: { buffer } })) }), c: this.device.createBindGroup({ layout: k.bcount.getBindGroupLayout(0), entries: [this.ubuf[0], o.buf, o.ind, b.bg].map((buffer, binding) => ({ binding, resource: { buffer } })) }), p: this.device.createBindGroup({ layout: k.bput.getBindGroupLayout(0), entries: [this.ubuf[0], o.buf, o.ind, b.bg, b.bpos].map((buffer, binding) => ({ binding, resource: { buffer } })) }) }));
+			for (const o of src) go(k.bmax, o.m, o.g);
+			go(k.bgridp, B.bgridp, 1);
+			for (const o of src) go(k.bcount, o.c, o.g);
+			go(k.bscan, B.bscan, 1);
+			for (const o of src) go(k.bput, o.p, o.g);
+		}
 		go(k.keep, B.keep, groups);
 		for (let r = 0; r < rounds; r++) {
 			pass.setPipeline(k.round); pass.setBindGroup(0, B.round); pass.dispatchWorkgroupsIndirect(this.disp, 0);
 			go(k.next, B.next, 1);
 		}
+		if (F && B.filter) go(k.filter, B.filter, groups);
 		pass.setPipeline(k.gate);
 		for (let s = 0; s < out.length; s++) { pass.setBindGroup(0, B.gate[s]); pass.dispatchWorkgroups(1); }
 		for (let s = 0; s < out.length; s++) go(k.write, B.write[s], groups);
@@ -499,7 +676,7 @@ export class GpuKeep {
 			this.tqRead.mapAsync(GPUMapMode.READ).then(() => { const t = new BigUint64Array(this.tqRead.getMappedRange().slice(0)); this.tqRead.unmap(); this.gpuMs = Number(t[1] - t[0]) / 1e6; this.tqBusy = false; }, () => { this.tqBusy = false; });
 		}
 		this.last = { p, out, outCap }; // (for timing it again: dev/stone-stress.js)
-		this.lastInd = out[0]?.ind ?? null;
+		this.lastOut = out;
 		this.readCount();
 	}
 	// The counts, read back when the GPU gets to it (not waited for). A run while a read is under way is read after it, so the
@@ -509,17 +686,20 @@ export class GpuKeep {
 		this.stale = false;
 		const enc = this.device.createCommandEncoder({ label: 'stone keep count' });
 		enc.copyBufferToBuffer(this.ctl, 0, this.stage, 0, 16);
-		if (this.lastInd) enc.copyBufferToBuffer(this.lastInd, 4, this.stage, 16, 4);
+		for (let s = 0; s < Math.min(2, this.lastOut.length); s++) enc.copyBufferToBuffer(this.lastOut[s].ind, 4, this.stage, 16 + 4 * s, 4);
 		enc.copyBufferToBuffer(this.b.work, 0, this.stage, 32, 16);
 		this.device.queue.submit([enc.finish()]);
-		const sides = !!this.lastInd;
+		const sides = this.lastOut.length;
 		this.staging = true;
 		this.stage.mapAsync(GPUMapMode.READ).then(() => {
 			const c = new Uint32Array(this.stage.getMappedRange().slice(0));
 			this.stage.unmap();
 			this.staging = false;
 			const over = c[9] !== 0;
-			if (!over) { this.count = sides ? Math.min(c[4], this.last?.outCap ?? Infinity) : 0; this.rounds = c[1] + 1; this.unsettled = c[3]; }
+			if (!over) {
+				this.counts = Array.from({ length: sides }, (_, s) => Math.min(c[4 + s], this.last?.outCap ?? Infinity));
+				this.count = this.counts[0] ?? 0; this.rounds = c[1] + 1; this.unsettled = c[3];
+			}
 			this.laid = c[8];
 			if (!this.gone && !this.stale) {
 				if (over) {
@@ -563,4 +743,4 @@ export class GpuKeep {
 	drop(...bs) { for (const b of bs) b?.destroy(); }
 }
 // (the kernels' sources, for checks: compile times, errors)
-export const KEEP_SOURCES = { KEEP, RULE, GRIDP, KEYS, GCOUNT, GSCAN, GPUT, ROUND, NEXT, GATE, WRITE };
+export const KEEP_SOURCES = { KEEP, RULE, GRIDP, KEYS, GCOUNT, GSCAN, GPUT, ROUND, NEXT, GATE, WRITE, BMAX, BGRIDP, BCOUNT, BSCAN, BPUT, FILTER };

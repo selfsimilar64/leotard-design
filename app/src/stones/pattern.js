@@ -386,6 +386,30 @@ export function packRecords(gen, piece, k) {
 	return out;
 }
 
+// Where each node of a piece's room raster (roomRaster: the same grid) lies on the body, and where its mirror image does
+// (mirrorPos(sp) -> { x, y, z }), as packRecords and stones/generators.js stonesOfGroup place a stone there: what a group made
+// symmetric, cut to one side or erased is cut by on the GPU (stones/gpu-keep.js FILTER, read bilinearly). Made once a piece.
+// -> Float32Array: x, y, z a node, then the mirror's
+export function posRasters(piece, mirrorPos) {
+	if (piece.posRasters) return piece.posRasters;
+	const R = roomRaster(piece), n = R.ex * R.ey, out = new Float32Array(n * 6), p = { x: 0, y: 0, z: 0 };
+	for (let j = 0, o = 0; j < R.ey; j++) for (let i = 0; i < R.ex; i++, o++) {
+		const u = R.dx0 + i * R.er, v = R.dy0 + j * R.er;
+		let q = piece.find(u, v), w1 = piece.w1, w2 = piece.w2;
+		if (q < 0) {
+			q = piece.nearest?.(u, v) ?? -1;
+			if (q < 0) continue;
+			const I = piece.inv, c = q * 6, du = u - I[c], dv = v - I[c + 1];
+			w1 = I[c + 2] * du + I[c + 3] * dv; w2 = I[c + 4] * du + I[c + 5] * dv;
+		}
+		piece.posOf(q, p, w1, w2);
+		out[o * 3] = p.x; out[o * 3 + 1] = p.y; out[o * 3 + 2] = p.z;
+		const m = mirrorPos(piece.spOf(q, w1, w2));
+		out[(n + o) * 3] = m.x; out[(n + o) * 3 + 1] = m.y; out[(n + o) * 3 + 2] = m.z;
+	}
+	return (piece.posRasters = out);
+}
+
 // ctx: { cloth(panelId) -> { piece, pending, paired } | null, edge(p, keepOut) }; cache: Map (the group's
 // drawing between frames).
 export function runPattern(gen, ctx, cache = null, blockers = null) {
@@ -404,10 +428,11 @@ export function packPattern(gen, ctx, cache = null, blockers = null) {
 	if (panel.removed) return null;
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return null; }
-	const own = () => { const k = keepPattern(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks, blockers }), n = k.n; return { n, U: k.U.slice(0, n), V: k.V.slice(0, n), A: k.A.slice(0, n), D: k.D.slice(0, n), H: k.H.slice(0, n), stone: k.stone }; };
-	// kept on the GPU where it can be (ctx.gpuKeep: the WebGPU view): the CPU's kept set only when something asks for it
-	const gpu = ctx.gpuKeep && !blockers && ctx.peaks !== false ? patternGpu(gen, piece, { cache, edge: ctx.edge }) : null;
-	if (gpu) { let k = null; return { piece, gpu, get k() { return (k ??= own()); } }; }
+	const own = () => { const k = keepPattern(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks, blockers: blockers?.grid ?? null }), n = k.n; return { n, U: k.U.slice(0, n), V: k.V.slice(0, n), A: k.A.slice(0, n), D: k.D.slice(0, n), H: k.H.slice(0, n), stone: k.stone }; };
+	// kept on the GPU where it can be (ctx.gpuKeep: the WebGPU view): the CPU's kept set only when something asks for it; the patterns
+	// before it on its piece (blockers: stones/generators.js blockersFrom) kept clear of there too (stones/gpu-keep.js BLOCK)
+	const gpu = ctx.gpuKeep && ctx.peaks !== false ? patternGpu(gen, piece, { cache, edge: ctx.edge }) : null;
+	if (gpu) { gpu.blockers = blockers; let k = null; return { piece, gpu, get k() { return (k ??= own()); } }; }
 	return { piece, k: own() };
 }
 

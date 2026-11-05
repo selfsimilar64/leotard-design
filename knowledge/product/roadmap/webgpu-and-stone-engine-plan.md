@@ -237,9 +237,11 @@ a scatter without modifiers drawn by the GPU (step 1-2 for that class). Every ed
 engine ~1-3 ms CPU and ~1.3-2 ms GPU (spacing was 25-73 ms CPU); see the note. Next: modifiers in WGSL, the other layout
 classes' candidates, the flat view on WebGPU.
 
-Progress (2026-11-05), stage 3 (in progress): the CPU only describes a pattern's geometry; the GPU lays every kind of item
-(stones/gpu-lay.js), evaluates the modifiers (density, size, colour, from the edge) and keeps; the flat view paints from the GPU's
-buffers. Still on the CPU at this point: blockers, symmetric/side/erase groups. See the note.
+Progress (2026-11-05), stage 3: steps 1-7 on the WebGPU view. The CPU describes a pattern's geometry (on arrangement edits) and
+builds per-piece rasters; the GPU lays every kind of item (stones/gpu-lay.js), evaluates the modifiers (density, size, colour, from
+the edge), keeps, keeps clear of the patterns before it on the piece, cuts symmetric / one-side / erased groups and writes; the 3D
+and flat views draw from the same buffers. Twin check 1 192 of 1 197 preset cases identical. What stays on the CPU and why: see the
+note's section of that name. Owner (2026-11-05): no CPU paths unless strongly justified, and say which.
 
 1. **Per run**: sample the size field along it (64 samples), running total of `length / (gap x size)`, stones =
    round(total); keystones at stops. Reserve slots per run for its most (smallest sizes). (Refined 2026-11-05: a run of

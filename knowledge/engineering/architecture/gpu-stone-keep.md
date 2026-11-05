@@ -1,7 +1,7 @@
 ---
 type: Component
-title: Pattern stones kept on the GPU (Phase 3, stage 1)
-description: "Since 2026-11-05, on the WebGPU view, which of a pattern's candidates become stones (density, room on the piece, the openings' keep-out, the parallel rule) and their instance data are worked out by WebGPU compute (stones/gpu-keep.js), written packed into three's vertex buffers and drawn by indirect draws; the CPU keeps only what a move does not change. Identical to the CPU twin on 660 preset cases (839 138 stones); at the 107 543-stone stress design a move, turn or density step costs the CPU 3-4.5 ms instead of 21-25 ms. What it does, how it is checked, the timings, and what stage 2 must do."
+title: Pattern stones laid and kept on the GPU (Phase 3)
+description: "On the WebGPU view a pattern's stones are laid (every kind of geometry), thinned by its modifiers, kept on the piece, kept apart, kept clear of the patterns before it, cut (symmetric, one side, erased) and written into three's vertex buffers by WebGPU compute (stones/gpu-lay.js, stones/gpu-keep.js); the 3D and flat views draw from those buffers. The CPU describes the geometry and builds per-piece rasters. Twin check: 1 192 of 1 197 preset cases identical to the CPU twin (14 of 1.76 million stones differ at float32 edges). Stages, kernels, checks, timings, and what still runs on the CPU and why."
 tags: [stones, patterns, gpu, webgpu, compute, performance, engine]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-05T18:00:00Z }
@@ -20,12 +20,17 @@ sources:
     title: "Continue to Phase 3; measure actual frame time, not fps (readings can be held to the screen's refresh)"
     author: human:mattj
   - id: code
-    resource: "app/src/stones/gpu-keep.js (kernels, GpuKeep), app/src/stones/pattern.js patternGpu (the CPU's share; twin of keepPattern), app/src/stones/gpu-view.js PackView (room, set, gpuKeepOn), app/src/stones/generators.js packOfGroup, blockersOfLists; app/src/render/engine.js syncStones (ctx.gpuKeep); app/src/dev/gpu-keep-check.js (twin check), app/src/dev/stone-stress.js (stress design and timings)"
+    resource: "app/src/stones/gpu-lay.js (laying kernels, layData, variants), app/src/stones/gpu-wgsl.js (hashes, noise, distortions, modifiers, sizes in WGSL), app/src/stones/gpu-keep.js (keep kernels, blockers, the cut, GpuKeep), app/src/stones/pattern.js patternGpu, posRasters (the CPU's share; twins of patternCandidates and keepPattern), app/src/stones/gpu-view.js PackView (room, keep, blockersOf, keptHooks), app/src/stones/generators.js packOfGroup, blockersFrom; app/src/ui/FlatStones.jsx paintGpu; app/src/render/engine.js syncStones (ctx.gpuKeep, layReady); app/src/dev/gpu-keep-check.js (gpuKeepCheck, gpuPackCheck), app/src/dev/stone-stress.js (stress design and timings)"
     title: GPU keep code
     author: claude-code/claude-opus-5-5
 ---
 
 # Takeaway
+
+**Stage 3 (2026-11-05, latest):** every pattern is laid on the GPU too, not only scatters; modifiers (density, size, colour, from the
+edge) are evaluated on the GPU; a pattern keeps clear of the patterns before it on its piece and is cut (symmetric, one side,
+erased) on the GPU; the flat view paints from the same buffers. What the CPU still does, and why, is under "What stays on the CPU".
+The stage-1 text below is kept as the history of how it got here.
 
 On the WebGPU view (`?renderer=webgpu`) a pattern's per-stone work no longer runs on the CPU when it moves, turns or
 thins: the GPU decides which candidates are kept, applies the parallel rule, and writes each kept stone's instance data
@@ -149,16 +154,77 @@ page's own frame loop renders between steps and lands in any wait for the GPU (a
 timestamp); a dev script's dynamic `import()` of an app module can be a second copy of it (set switches through a live
 instance's constructor).
 
-# After stage 2 (open)
+# Stage 3 (2026-11-05): the whole engine on the GPU
 
-1. Modifiers on the GPU (density, colour, size: `modifiers.js` fields in WGSL), so fades and gradients get GPU candidates
-   too; other layouts' candidates (stamped copies, one-size runs in closed form, varying runs one invocation each).
-2. The flat view on a WebGPU canvas on the same device, drawing from the same buffers (today it asks the CPU twin for `k`,
-   so Pattern and Both layouts still pay the CPU's keep).
-3. Blockers (patterns before on the piece), symmetric/side/erase groups, edge-field modifiers on the GPU.
-4. Readers that need lists (picking, hover rings, export, bill of materials) stay on the CPU twin on demand.
-5. The crystals' draw cost at 100 000 (above): options for the owner (a cheaper crystal for stones a few pixels across,
-   fewer facets, impostors) before any change.
+- **Laying** (`stones/gpu-lay.js`, the WGSL twin of `stones/candidates.js` `Candidates.lay`; a change to one is a change to the other):
+  the CPU packs the geometry a layout drew (`layData`: items, points, joints, vertices, lines, runs, copies, each cell's tables, and
+  for copies laid alike everywhere the cell's stones about its origin as `Candidates.stampStones` lays them) and bounds the buffers.
+  Per item (IVCOUNT, a prefix sum, IVERT) the runs' vertices are placed on the cloth; per item (ISLOT counting, a prefix sum, ISLOT
+  laying) its slots are laid in the CPU's order, a slot of size 0 where the CPU lays none; a scatter's points by formula one slot per
+  invocation (SEMIT); joints (`fresh`) deduped by a hash table, the first slot winning (DEDUP1, DEDUP2). Runs whose sizes vary walk
+  stone by stone, twice (count, then lay). Too small a buffer is read back and the pattern laid again bigger, nothing shown meanwhile.
+- **Compile time** (Windows, D3D): one kernel holding every path took 15 to over 20 s to compile (every helper inlined at each call).
+  Restructured so each heavy step has one call site (one `layOne`, one `runSize`, one `runStone`, one `stopStone` ...), and
+  specialised by override constants (`KINDS`: a scatter alone or any geometry; `DIAM`: size modifiers; `BEND`: a distortion): the
+  common variants 0.4-0.8 s (compiled when the GPU keep starts, `layWarm`), with size modifiers or a distortion 1.5-3 s, compiled
+  the first time a pattern needs them while the CPU twin keeps it (`variantReady`, `layKit.onReady` lays every group again).
+- **Modifiers** (`stones/gpu-wgsl.js`, twin of `stones/modifiers.js`): all 18 shapes, stacking, clip and feather, colour stops and the
+  plain palette by chance; "From the edge" reads the piece's edge raster (`ClothPiece.edgeAt`'s). Density and colour are worked out
+  every run in KEEP (colour in the state's upper bits), so a modifier edit uploads a small table and costs no CPU per stone; size in
+  the lay. Ranks' fractions (`frac(rank x 61.8 + 0.137)` and the like) in 32-bit fixed point, as exact as the CPU's float64.
+- **Rule and grid on the GPU**: RULE (the candidates' extremes by workgroup reduction), GRIDP (the grid over them and the rule:
+  `stones/peaks.js ruleOf`), KEYS (standing: class << 22 | slot).
+- **Blockers** (patterns before this one on its piece): each earlier pattern kept on the GPU read from its own side's `aStone` buffer
+  and indirect count, others' stones uploaded; a grid built every run (BMAX, BGRIDP, BCOUNT, BSCAN, BPUT) and `blocked()` in KEEP
+  (`stones/peaks.js blocked`). A keeper's own follow-up run re-runs the patterns after it on the piece.
+- **The cut** (FILTER, `stones/generators.js packOfGroup`'s `filter`): symmetric (the wearer's left, mirrored), one side, the eraser's
+  marks; per kept stone its place on the body and its mirror image's from a raster of the piece (`stones/pattern.js posRasters`, made
+  once a piece, read bilinearly): two bits hide it on its own side or its mirrored side (WRITE). Each side's count read back.
+- **Flat view** (`ui/FlatStones.jsx` `paintGpu`): on the WebGPU view the stones are painted on the renderer's device; a pack kept on the
+  GPU is drawn straight from its instance buffers (as many as its indirect count says); its colour taken back from the 3D view's
+  (linear, with a crystal's own shade) to the swatch's. Pixel-identical to the same painting fed by the CPU twin (0 of 517 024 pixels).
+  Picking builds a pack's arrays from the CPU twin only when a stone is picked.
+- **CPU twin fixes found by the twin check**: a joint on a round number read in two copies (0.11249999 and 0.11250000) became two
+  stones, and a stop's chance and a stone's stray could fall either side of a rounding: their cells now start `OFF` (1/pi of a cell)
+  off the round numbers (and the binary fractions fractal curves land on); a stone's stray is keyed by its place, not its rank; the
+  size dither reads the rank as kept (float32); a cell laid once for its copies no longer dedupes joints in its own frame (each copy
+  does, where it lies).
+- **Checks**: `dev/gpu-keep-check.js gpuKeepCheck`: 133 presets x 9 variants (plain, moved, flipped, thinned, a radial fade with a
+  colour ramp, an edge fade with clouds, a size modifier, a distortion, a stray): 1 192 of 1 197 identical, 14 of 1 758 496 stones
+  differ (strays and one distortion on a float32 edge). `gpuPackCheck`: the design on show end to end, each side as the GPU wrote it
+  against the CPU twin's records: a pattern kept clear of an earlier one, erased, cut to one side (on a pair too), symmetric: all
+  equal but one stone on the centre line of the symmetric one (the raster). The WebGL view (CPU twin throughout) gives the same counts.
+- **Timings** (stress design, before the owner started a game on the same GPU; no timings after): the pattern engine ~0.7-1.5 ms CPU
+  and ~1.6-3 ms GPU for a move, turn, density, spacing or stone-size step, in the 3D and in the Both layout. Drawing the 107 000
+  crystals is the frame's cost, the same whether they were kept on the GPU or the CPU.
+
+# What stays on the CPU, and why
+
+1. **Describing the geometry** (a layout's `make`, `stones/geometry.js`): on an edit that changes the arrangement (spacing, size, a
+   layout's own settings), not on a move, turn, density, margin or modifier edit. It is each layout's own code (40-odd layouts); the
+   result is data the GPU lays. Linear in the geometry's items: for most layouts runs and copies (cheap), but the point-by-point
+   ones (halftones, lattices of single stones, phyllotaxis, Ulam, clusters, fractal dust) record a point per stone. Those could
+   become point sources like the scatter (a WGSL kernel each); not done: each would be a second copy of its layout's maths. The
+   edge rows trace contours of the piece's edge distance here too. Heavy layouts are cached between edits.
+2. **Per-piece rasters**, made when a piece is flattened or its openings change: room (edge distance), keep-out (asks the body's
+   finished openings), body positions for cut groups.
+3. **Readers, on demand**: picking (3D and flat), the stone list, export and bill of materials, stats by colour, and a CPU-kept
+   pattern's blockers: the CPU twin (`pack.k`, `records()`), only when asked.
+4. **The WebGL view**: no compute shaders; the CPU twin throughout (the fallback).
+5. **Stones that are not patterns**: single placed stones, rows along a line (the Rows tool walks the 3D body surface), and the
+   keep-apart pass between them: few stones, geometry on the body mesh.
+6. **Fitted garments, flat view**: a mirrored pattern shown on the other sleeve of a pair is placed there by its fitted triangles,
+   from the CPU twin's records (the 3D view draws it from the GPU's buffers).
+7. **Compiling** a pattern kind's kernels the first time (above): the CPU twin keeps that pattern for those 0.4-3 s.
+
+# Open
+
+1. Point-by-point layouts as GPU point sources (see "What stays on the CPU", 1), if the owner wants arrangement edits of those free
+   of CPU work too.
+2. The fitted-sleeve case of the flat view (above, 6).
+3. The crystals' draw cost at 100 000 stones: options for the owner (a cheaper crystal for stones a few pixels across, fewer facets,
+   impostors) before any change; the owner's word (2026-11-05): the stress test is deliberately extreme, no change for now.
+4. A browser test that runs the twin check (today a dev script run in the test tab).
 
 [^code]: `app/src/stones/gpu-keep.js`, `pattern.js patternGpu`, `gpu-view.js PackView`, `generators.js`; dev:
     `app/src/dev/gpu-keep-check.js`, `app/src/dev/stone-stress.js`.
