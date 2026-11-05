@@ -10,6 +10,12 @@ import * as THREE from 'three';
 import { SHAPES, parseStone } from './library.js';
 import { RENDERER } from '../render/webgpu.js';
 import { AtlasNode, placedNode, nodeTwin } from './stones-node.js';
+import { StorageInstancedBufferAttribute, IndirectStorageBufferAttribute } from 'three/webgpu';
+import { GpuKeep, GPU_FLAGS } from './gpu-keep.js';
+
+// Whether patterns can be kept on the GPU here (stones/gpu-keep.js): the WebGPU view with its device up. A page can turn it off
+// to compare with the CPU twin (window.__cpuKeep = true).
+export function gpuKeepOn(renderer) { return RENDERER === 'webgpu' && !!renderer?.backend?.device && !globalThis.__cpuKeep; }
 
 // The texel: a millimetre, coarser only on a piece over a metre across (1024 texels at most).
 const TEXEL = 0.001, MAX_TEXELS = 1024;
@@ -189,27 +195,75 @@ export class PackView {
 		this.group = new THREE.Group();
 		view.group.add(this.group);
 		this.sides = new Map(); // pack id + side -> { atlas, mesh, piece, geoRev }
+		this.keepers = new Map(); // pack id -> its GpuKeep (stones/gpu-keep.js), for the packs kept on the GPU
 		this.packs = [];
 	}
 
-	// packs: [{ id, gen, shape, layer, piece, k: { n, U, V, A, D, H, stone }, own, mirrored, mirrorSP(sp), mirrorFit(fit) }]
+	// packs: [{ id, gen, shape, layer, piece, k: { n, U, V, A, D, H, stone }, own, mirrored, mirrorSP(sp), mirrorFit(fit) }]; a pack
+	// kept on the GPU has gpu (stones/pattern.js patternGpu) instead, and its k only when something on the CPU asks for it
 	set(packs) {
 		this.packs = packs;
-		const used = new Set();
+		const used = new Set(), kept = new Set();
 		for (const p of packs) {
+			const gpu = p.gpu && this.renderer.backend?.device ? p.gpu : null, out = [];
 			for (const side of [p.own ? 'own' : null, p.mirrored ? 'mirror' : null]) {
 				if (!side) continue;
 				const key = p.gen + '|' + side;
 				used.add(key);
 				let S = this.sides.get(key);
-				if (!S || S.shape !== p.shape) { if (S) this.drop(key); S = this.side(key, p.shape); }
+				if (!S || S.shape !== p.shape || S.gpu !== !!gpu) { if (S) this.drop(key); S = this.side(key, p.shape, !!gpu); }
 				if (S.piece !== p.piece) { S.piece = p.piece; S.stale = true; }
 				S.pack = p;
 				if (S.stale) this.atlas(S, side === 'mirror');
-				this.fill(S, p, side === 'mirror');
+				if (gpu) out.push(this.room(S, gpu.statics.n));
+				else this.fill(S, p, side === 'mirror');
+			}
+			if (gpu && out.length) {
+				kept.add(p.gen);
+				let K = this.keepers.get(p.gen);
+				if (!K) this.keepers.set(p.gen, (K = new GpuKeep(this.renderer.backend.device)));
+				gpu.keeper = K;
+				const st = gpu.statics;
+				st.palette ??= paletteOf(st.names);
+				K.setStatics(st);
+				K.setRasters(gpu.room, gpu.edges);
+				const fam = SHAPES[p.shape]?.family ?? 'crystal';
+				K.run({ ...gpu.frame, edges: gpu.edges, flags: gpu.frame.flags | (fam === 'crystal' ? GPU_FLAGS.crystal : 0) }, out);
 			}
 		}
 		for (const key of [...this.sides.keys()]) if (!used.has(key)) this.drop(key);
+		for (const [gen, K] of this.keepers) if (!kept.has(gen)) { K.dispose(); this.keepers.delete(gen); }
+	}
+
+	// A GPU-kept side's instance buffers, room for n candidates, as three's vertex buffers the GPU keep writes the kept stones
+	// into, packed, and its indirect draw, whose instance count the GPU keep sets. -> { stone, colour, finish, ind, indexCount }
+	room(S, n) {
+		const geo = S.geo, be = this.renderer.backend;
+		if (!S.ind) {
+			S.ind = new IndirectStorageBufferAttribute(new Uint32Array(8), 8); // (the draw's five words, then word 5: the GPU keep's gate)
+			geo.setIndirect(S.ind);
+			be.createIndirectStorageAttribute(S.ind);
+		}
+		if (S.cap < n) {
+			S.cap = Math.ceil(Math.max(n, 32) * 1.25);
+			for (const name of ['aStone', 'aColour', 'aFinish']) {
+				const old = geo.attributes[name];
+				const a = new StorageInstancedBufferAttribute(new Float32Array(S.cap * 4), 4);
+				geo.setAttribute(name, a);
+				be.createStorageAttribute(a);
+				if (old) this.freeAttribute(old);
+			}
+		}
+		geo.instanceCount = n;
+		S.mesh.visible = n > 0;
+		const A = geo.attributes;
+		return { stone: be.get(A.aStone).buffer, colour: be.get(A.aColour).buffer, finish: be.get(A.aFinish).buffer, ind: be.get(S.ind).buffer, indexCount: geo.index ? geo.index.count : A.position.count };
+	}
+	// a GPU-kept side's storage attribute's buffer, given back (three's record of it too, if it drew with it)
+	freeAttribute(a) {
+		if (!a?.isStorageInstancedBufferAttribute && !a?.isIndirectStorageBufferAttribute) return;
+		const R = this.renderer._attributes;
+		if (R?.has?.(a)) R.delete(a); else this.renderer.backend.destroyAttribute?.(a);
 	}
 
 	// The body has moved (a pose, a re-fit, a new garment): every atlas again.
@@ -217,7 +271,7 @@ export class PackView {
 		for (const S of this.sides.values()) if (S.pack) this.atlas(S, S.mirror);
 	}
 
-	side(key, shape) {
+	side(key, shape, gpu = false) {
 		const fam = SHAPES[shape]?.family ?? 'crystal', base = this.view.geometry(shape), geo = new THREE.InstancedBufferGeometry();
 		geo.index = base.index;
 		for (const [name, a] of Object.entries(base.attributes)) geo.setAttribute(name, a);
@@ -229,7 +283,7 @@ export class PackView {
 		mesh.frustumCulled = false;
 		mesh.renderOrder = -8; // (as StoneView's: in front of everything)
 		this.group.add(mesh);
-		const S = { key, shape, fam, atlas, mesh, geo, cap: 0, piece: null, stale: true, mirror: false };
+		const S = { key, shape, fam, atlas, mesh, geo, cap: 0, piece: null, stale: true, mirror: false, gpu };
 		this.sides.set(key, S);
 		return S;
 	}
@@ -239,7 +293,8 @@ export class PackView {
 		if (!S) return;
 		this.group.remove(S.mesh);
 		S.mesh.material.dispose();
-		for (const n of ['aStone', 'aColour', 'aFinish']) S.geo.deleteAttribute(n);
+		for (const n of ['aStone', 'aColour', 'aFinish']) { this.freeAttribute(S.geo.attributes[n]); S.geo.deleteAttribute(n); }
+		if (S.ind) this.freeAttribute(S.ind);
 		S.atlas.dispose();
 		this.sides.delete(key);
 	}
@@ -281,5 +336,13 @@ export class PackView {
 		S.mesh.visible = n > 0;
 	}
 
-	get count() { let c = 0; for (const p of this.packs) c += p.k.n * ((p.own ? 1 : 0) + (p.mirrored ? 1 : 0)); return c; }
+	// (a GPU-kept pack's count is the GPU's, read back a frame or so late: stones/generators.js packOfGroup)
+	get count() { let c = 0; for (const p of this.packs) c += p.count; return c; }
+}
+
+// A pack's crystals as the GPU keep's palette (stones/gpu-keep.js WRITE): per name r, g, b, AB; metallic, opal, 0, 0.
+function paletteOf(names) {
+	const out = new Float32Array(Math.max(1, names.length) * 8);
+	names.forEach((name, i) => { const f = finishOf(name); out.set([f.r, f.g, f.b, f.ab, f.metal, f.opal, 0, 0], i * 8); });
+	return out;
 }

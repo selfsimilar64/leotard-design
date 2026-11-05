@@ -120,7 +120,6 @@ export class StoneView {
 		this.crystal = crystalMaterial();
 		this.mats = FAMILY_MATS();
 		this.meshes = new Map(); // shape -> InstancedMesh, kept and refilled (grown when it must)
-		this.count = 0;
 		this.records = [];  // the stones laid on the CPU, drawn here
 		this.packs = [];    // the patterns the GPU places (stones/gpu-view.js PackView)
 		this.run = null;    // the run they came from: every stone as a record, when asked (stones)
@@ -175,8 +174,9 @@ export class StoneView {
 		this.records = records; this.packs = packs; this.run = run;
 		this.build(heightAt, false);
 		if (this.renderer && (packs.length || this.packView)) (this.packView ??= new PackView(this, this.renderer)).set(packs);
-		this.count = this.man.garmentPos ? this.records.length + (this.packView?.count ?? 0) : 0;
 	}
+	// how many stones are on show (a pattern kept on the GPU: as its count was last read back)
+	get count() { return this.man.garmentPos ? this.records.length + (this.packView?.count ?? 0) : 0; }
 
 	// Where a stone sits on the body on show: position and normal, written to P and N.
 	frameOf(s, fam, P, N) {
@@ -239,7 +239,6 @@ export class StoneView {
 			}
 		}
 		for (const [shape, mesh] of this.meshes) if (!shown.has(shape)) { mesh.count = 0; mesh.visible = false; }
-		this.count = this.man.garmentPos ? this.records.length + (this.packView?.count ?? 0) : 0;
 	}
 
 	// Each stone's place and normal as vectors, for picking and the hover rings: made when first asked

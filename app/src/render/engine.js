@@ -20,6 +20,7 @@ import { TextureLibrary } from '../materials/textures.js';
 import { StrapView } from './straps.js';
 import { HardwareView } from './hardware.js';
 import { StoneView } from '../stones/view.js';
+import { gpuKeepOn } from '../stones/gpu-view.js';
 import { runStones } from '../stones/generators.js';
 import { ClothPiece } from '../stones/cloth.js';
 import { locate, baryOfVertexInFace } from '../garment/arrangement.js';
@@ -623,6 +624,8 @@ Engine.prototype.syncStones = function (doc, touched = null) {
 	// a fitted garment's own openings keep stones off its elastic, not the drawn pieces'
 	ctx.doc = doc; ctx.evaluated = this.evaluated; ctx.edge = this.fitted?.active ? this.fitted.edgeKeepOut() : edge; ctx.geoRev = this.stoneGeoRev;
 	ctx.placedSame = !!touched && !touched.has('placed');
+	// on the WebGPU view a pattern is kept by the GPU (stones/gpu-keep.js): moving, turning, thinning it costs the CPU nothing a stone
+	ctx.gpuKeep = gpuKeepOn(this.stoneView.renderer);
 	const was = this.stoneRun;
 	this.stoneRun = runStones(doc, ctx, this.stoneCache);
 	if (this.stoneRun === was) return;

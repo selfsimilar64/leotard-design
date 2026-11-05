@@ -222,6 +222,15 @@ computed once and cached; the GPU port supersedes a worker): see the note's open
 Every step one element per invocation (WGSL compute, or TSL compute nodes), data in storage buffers on the renderer's
 device; nothing read back per frame except a few counts.
 
+Progress (2026-11-05), stage 1 in, see [pattern stones kept on the GPU](/engineering/architecture/gpu-stone-keep.md):
+steps 3 (parallel rule rounds, compaction, indirect draw count), 4 (room and keep-out rasters), 5 (the stone material
+reads the GPU-written instances), 6 (count read back) and 7 (twin check: 660 preset cases, 839 138 stones, identical) on
+the WebGPU view; step 2's density and colour as per-candidate values the CPU works out once (they do not change on a
+move). At the 107 543-stone stress design a move, turn or density step costs the CPU 3-4.5 ms (was 21-25 ms). Not yet:
+steps 1-2 on the GPU (candidates and conflicts: spacing and size steps still 25-50 ms), the flat view from the same buffers,
+blockers, symmetric/side/erase groups. Found: drawing ~107 000 crystals alone costs 11-14 ms of GPU a frame (frame 15.7-20.8
+ms wall), which breaks the 60 fps gate on its own; options go to the owner.
+
 1. **Per run**: sample the size field along it (64 samples), running total of `length / (gap x size)`, stones =
    round(total); keystones at stops. Reserve slots per run for its most (smallest sizes). (Refined 2026-11-05: a run of
    one size is closed form per slot as now; a run whose sizes vary keeps the CPU twin's stone-by-stone walk, one

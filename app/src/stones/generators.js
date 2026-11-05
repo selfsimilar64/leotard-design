@@ -589,9 +589,12 @@ function packOfGroup(gen, ctx, errors, blockers = null) {
 	const own = m !== 'only', mirrored = m === 'both' || m === 'only' || paired;
 	let recs = null;
 	return {
-		pack: true, gen: gen.id, shape: gen.shape ?? 'round', layer: gen.layer ?? null, piece: r.piece, k: r.k, own, mirrored,
+		pack: true, gen: gen.id, shape: gen.shape ?? 'round', layer: gen.layer ?? null, piece: r.piece, own, mirrored,
+		// kept on the GPU (r.gpu: stones/gpu-keep.js): its count as the GPU last read it back, the kept set (k) on the CPU only when asked
+		gpu: r.gpu ?? null,
+		get k() { return r.k; },
 		mirrorSP: (sp) => mirrorFast(surf, sp), mirrorFit: ctx.mirrorFit,
-		get count() { return r.k.n * ((own ? 1 : 0) + (mirrored ? 1 : 0)); },
+		get count() { return (r.gpu ? r.gpu.keeper?.count ?? 0 : r.k.n) * ((own ? 1 : 0) + (mirrored ? 1 : 0)); },
 		records() {
 			if (recs) return recs;
 			const list = packRecords(gen, r.piece, r.k), mir = (s) => {
@@ -618,6 +621,12 @@ function ownFlat(list) {
 	return { U: Float64Array.from(own, (s) => s.fu), V: Float64Array.from(own, (s) => s.fv), D: Float64Array.from(own, (s) => s.size) };
 }
 const joined = (a, b) => { const o = new Float64Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
+// what the patterns laid so far on a piece put there, as the grid the next one keeps clear of (stones/peaks.js blockersOf)
+function blockersOfLists(lists) {
+	let U = new Float64Array(0), V = U, D = U;
+	for (const l of lists) { const f = ownFlat(l); if (f.U.length) { U = joined(U, f.U); V = joined(V, f.V); D = joined(D, f.D); } }
+	return U.length ? blockersOf(U, V, D) : null;
+}
 
 // Each stone against those before it (not a pattern's stones: the parallel rule keeps them apart on their piece): a cell hash over flat arrays (no strings, nothing allocated per
 // stone), so this final pass stays cheap enough for every frame of a drag.
@@ -682,13 +691,13 @@ export function runStones(doc, ctx, cache = null) {
 	for (const gen of doc.stones) {
 		if (gen.hidden) continue;
 		if (!GENERATORS[gen.kind]) { errors.push(gen.id + ': unknown kind ' + gen.kind); continue; }
-		const onPiece = apart && gen.kind === 'pattern' && gen.on?.panel ? (pieces.get(gen.on.panel) ?? pieces.set(gen.on.panel, { sig: '', U: new Float64Array(0), V: new Float64Array(0), D: new Float64Array(0) }).get(gen.on.panel)) : null;
+		const onPiece = apart && gen.kind === 'pattern' && gen.on?.panel ? (pieces.get(gen.on.panel) ?? pieces.set(gen.on.panel, { sig: '', lists: [] }).get(gen.on.panel)) : null;
 		const sig = cache ? JSON.stringify(gen) + (onPiece?.sig ?? '') : null;
 		let rec = cache?.gens.get(gen.id);
 		if (!rec || rec.sig !== sig) {
 			const errs = [];
 			ctx.pending?.delete(gen.id);
-			rec = { sig, list: stonesOfGroup(gen, ctx, errs, onPiece ? blockersOf(onPiece.U, onPiece.V, onPiece.D) : null), errors: errs };
+			rec = { sig, list: stonesOfGroup(gen, ctx, errs, onPiece?.lists.length ? blockersOfLists(onPiece.lists) : null), errors: errs };
 			changed = true;
 			// waiting for its piece to be flattened: not an answer worth keeping
 			if (cache) { if (ctx.pending?.has(gen.id)) cache.gens.delete(gen.id); else cache.gens.set(gen.id, rec); }
@@ -697,8 +706,9 @@ export function runStones(doc, ctx, cache = null) {
 		lists.push(rec.list);
 		order += gen.id + ',';
 		if (onPiece) {
-			const f = ownFlat(rec.list);
-			if (f.U.length) { onPiece.U = joined(onPiece.U, f.U); onPiece.V = joined(onPiece.V, f.V); onPiece.D = joined(onPiece.D, f.D); }
+			// (their stones gathered only when a pattern after them on the piece is laid: a pack kept on the GPU has none on the CPU
+			// until asked, and asking costs what the GPU saved)
+			onPiece.lists.push(rec.list);
 			onPiece.sig += '|' + (sig ?? JSON.stringify(gen));
 		}
 	}

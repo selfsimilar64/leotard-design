@@ -290,7 +290,8 @@ export function patternCandidates(gen, piece, cache = null) {
 // Each candidate passes or not on its own (density, room on the piece, the openings' keep-out), then the parallel rule
 // (stones/peaks.js) keeps the stones apart: decided from the candidates alone, so what is shown during a drag is the design
 // itself (owner, 2026-11-04: knowledge/decisions/2026-11-04-pattern-stones-kept-apart.md). opts.peaks: false lets them overlap
-// (the superseded 2026-11-04 decision; tests and comparisons). opts.blockers: the stones of patterns before this one on the
+// (the superseded 2026-11-04 decision; tests and comparisons). On the WebGPU view a pattern is kept by its GPU twin,
+// stones/gpu-keep.js (fed by patternGpu below); a change to the tests here is a change there. opts.blockers: the stones of patterns before this one on the
 // piece (stones/peaks.js blockersOf), which this one's stones keep clear of. Before, each stone was checked against those kept before it,
 // and the piece and the keep-out asked the body.
 const kept = { I: new Int32Array(0), U: new Float64Array(0), V: new Float64Array(0), A: new Float64Array(0), D: new Float64Array(0), H: new Float64Array(0), stone: [] };
@@ -391,8 +392,54 @@ export function packPattern(gen, ctx, cache = null, blockers = null) {
 	if (panel.removed) return null;
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return null; }
-	const k = keepPattern(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks, blockers }), n = k.n;
-	return { piece, k: { n, U: k.U.slice(0, n), V: k.V.slice(0, n), A: k.A.slice(0, n), D: k.D.slice(0, n), H: k.H.slice(0, n), stone: k.stone } };
+	const own = () => { const k = keepPattern(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks, blockers }), n = k.n; return { n, U: k.U.slice(0, n), V: k.V.slice(0, n), A: k.A.slice(0, n), D: k.D.slice(0, n), H: k.H.slice(0, n), stone: k.stone }; };
+	// kept on the GPU where it can be (ctx.gpuKeep: the WebGPU view): the CPU's kept set only when something asks for it
+	const gpu = ctx.gpuKeep && !blockers && ctx.peaks !== false ? patternGpu(gen, piece, { cache, edge: ctx.edge }) : null;
+	if (gpu) { let k = null; return { piece, gpu, get k() { return (k ??= own()); } }; }
+	return { piece, k: own() };
+}
+
+// A pattern's share of the GPU's keep (stones/gpu-keep.js, the twin of keepPattern above: a change to one is a change to the
+// other), or null where it cannot keep it (a density or colour modifier from the piece's edge, which a move changes). ->
+// { statics: { n, cand, aux, start, list, names } (one object while the candidates, the density and colour modifiers and the
+// crystals stay: a new one when any changes), frame (this frame's values: the rigid part, density, margin, keep-out, turns),
+// room (roomRaster), edges (the openings' keep-out raster: { A, nx, ny, x0, y0, cell }, or null) }. The GPU keeper
+// (stones/gpu-view.js PackView) hangs its GpuKeep on it as .keeper. opts: { cache, edge }.
+const gpuStatics = new WeakMap(); // per candidate set (its GX array)
+export function patternGpu(gen, piece, opts = {}) {
+	const P0 = gen.params ?? {};
+	if ((P0.mods ?? []).some((m) => !m.off && m.on !== 'size' && m.shape === 'edge')) return null;
+	const Cd = patternCandidates(gen, piece, opts.cache), { n, GX, GY, GA, R, K, T, C, D, P, isRound } = Cd, rg = Cd.rigid;
+	const g = conflictsOf(Cd);
+	const key = JSON.stringify([(P.mods ?? []).filter((m) => !m.off && m.on !== 'size'), gen.stone, gen.palette]);
+	let st = gpuStatics.get(GX);
+	if (st?.key !== key) {
+		const frame = frameOf(P), edgeAt = (u, v) => piece.edgeAt(u, v), mods = compileMods(P.mods, frame, edgeAt, gen.stone ?? 'Crystal AB');
+		const density = mods.density, colour = mods.colour ?? plainColour(gen), names = [], index = new Map();
+		const cand = new Float32Array(n * 4), aux = new Float32Array(n * 4);
+		for (let i = 0; i < n; i++) {
+			// (the density and colour read the frame's own coordinates, which a rigid move leaves alone: worked out here, where the
+			// pattern lies now, for wherever it moves)
+			const gx = GX[i], gy = GY[i], u = rg.x + rg.c * rg.F * gx - rg.s * gy, v = rg.y + rg.s * rg.F * gx + rg.c * gy, rank = R[i];
+			const name = colour(u, v, K[i], T[i], C[i], rank);
+			let q = index.get(name);
+			if (q === undefined) { index.set(name, (q = names.length)); names.push(name); }
+			cand[i * 4] = gx; cand[i * 4 + 1] = gy; cand[i * 4 + 2] = GA[i]; cand[i * 4 + 3] = D[i];
+			aux[i * 4] = rank; aux[i * 4 + 1] = density ? density(u, v, K[i], T[i], C[i], rank) : 1; aux[i * 4 + 2] = frac(rank * 61.803398875 + 0.137); aux[i * 4 + 3] = q;
+		}
+		st = { key, n, cand, aux, start: new Uint32Array(g.start.buffer, g.start.byteOffset, n + 1), list: new Uint32Array(g.list.buffer, g.list.byteOffset, g.list.length), names };
+		gpuStatics.set(GX, st);
+	}
+	const keepOut = P.keepOut, edge = opts.edge, keep = edge ? keepRaster(piece, edge) : null;
+	const turn = ((P.stoneTurn ?? 0) * Math.PI) / 180, upright = P.turn === 'fixed';
+	return {
+		statics: st, room: roomRaster(piece), piece,
+		edges: keep ? { A: keepOut === undefined ? keep.K : keep.B, nx: keep.nx, ny: keep.ny, x0: keep.x0, y0: keep.y0, cell: KEEP_CELL } : null,
+		frame: {
+			rx: rg.x, ry: rg.y, rc: rg.c, rs: rg.s, rF: rg.F, ra: rg.a, overall: P.density ?? 1, margin: P.margin ?? 0, less: keepOut ?? 0,
+			turn, upAngle: ((P.rotate ?? 0) * Math.PI) / 180, nearEdge: NEAR_EDGE, flags: (upright ? 2 : 0) | (isRound ? 4 : 0),
+		},
+	};
 }
 
 // What a pattern's mirror half needs flipped when its two halves live on two pieces (doc/symmetry.js):
