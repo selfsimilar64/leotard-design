@@ -140,6 +140,8 @@ chapter the cap is set ½ in longer than the armhole in total.[^armstrong-ch29][
   measurements to an outline, with the bought block used only as a private fit benchmark.
 - Other sizes need Armstrong's measurement list mapped onto the size charts the app uses
   (see [/domain/sizing/](/domain/sizing/about.md)); sizes 8 and 10 are coded, children's are not in the book's chart.
+- Armstrong is dancewear mechanics; the competition-gymnastics look is checked against
+  [yardsticks from real leotards](/domain/construction/real-leotard-yardsticks.md).
 - Shown in the app as a fitted garment: [fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md).
 - The book's curves ("draw a curved line through…") are freehand; we will need our own curve rule
   (e.g. a spline through the named points) and should record it as our own design.
