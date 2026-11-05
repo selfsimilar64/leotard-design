@@ -134,7 +134,8 @@ embroidery of hip logos; sewing and crystals, consistent with the
 [production order](/domain/construction/production-and-assembly-order.md). The FloGymnastics
 "How It's Made" tour of Alpha Factor (York, PA, 2016-06-07) is the most promising visual source
 of cut pieces and seams but could not be watched by the tools; a human should. No Ozone, Sylvia P,
-Destira or Plum production footage was found.
+Destira or Plum production footage was found. The owner's frames from GK and Alpha Factor footage
+are read in [what factory footage shows](/domain/construction/factory-pattern-footage.md).
 
 [^owner-2026-11-05]: Conversation with the product owner, 2026-11-05.
 [^poshmark-2026-11-05]: Poshmark listings read 2026-11-05.

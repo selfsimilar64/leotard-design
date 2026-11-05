@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-05
+* **Creation**: [What factory footage shows of leotard patterns](/domain/construction/factory-pattern-footage.md): owner's frames from GK (about 2010) and Alpha Factor (FloGymnastics 2016) videos, kept in git-ignored assets/reference/factory-footage/: point-and-curve CAD pieces, a GK back block with alternative curves and internal lines, nested markers, Alpha Factor bodies apparently cut full width.
 * **Creation**: [Yardsticks from real leotards](/domain/construction/real-leotard-yardsticks.md): how drafted blocks are checked against real competition leotards (owner's flat measurements via the Leotard Measuring Log artifact, resale listings, construction evidence, wear failures, comfort pressure); the flat measurement set and its pattern equivalents; 20 resale rows suggesting about 16-27% chest and 8-24% length reduction on GK. Owner: target is the competition look, not dancewear; can measure gym leotards flat, not on athletes.
 * **Creation**: [Fit failures in wear](/domain/construction/fit-failures-in-wear.md): ride-up, tight armholes, straps, leg line, neckline; torso length the most-named cause.
 * **Creation**: [Clothing pressure and comfort](/domain/construction/clothing-pressure-comfort.md): published comfort limits (about 1 kPa trunk, 2 kPa straps and edges, 4 kPa too tight) and how the fit solver could flag them.
