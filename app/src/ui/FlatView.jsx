@@ -10,6 +10,7 @@ import { patternPieces, layoutPieces } from '../garment/pattern.js';
 import { fittedPieces } from '../garment/fitted.js';
 import { thumb, thumbName, Segmented } from './kit.jsx';
 import { PatternHandlesOn, OpeningBands, paintStones, pickStone } from './FlatStones.jsx';
+import { keptHooks } from '../stones/gpu-view.js';
 
 const piecesNow = () => {
 	const f = app.engine?.fitted;
@@ -98,10 +99,13 @@ function Stack({ viewBox, pieces, look, children }) {
 	const svgRef = useRef(null), canvasRef = useRef(null);
 	useEffect(() => {
 		if (!look) return;
-		const paint = () => paintStones(canvasRef.current, svgRef.current, pieces);
+		// (asked for several times in one go, painted once: a run of the GPU keep, the stones laid, the selection)
+		let asked = false;
+		const paint = () => { if (asked) return; asked = true; queueMicrotask(() => { asked = false; paintStones(canvasRef.current, svgRef.current, pieces); }); };
 		const offStones = stonesRun.subscribe(paint), offSel = selection.subscribe(paint), ro = new ResizeObserver(paint);
+		keptHooks.add(paint);
 		ro.observe(svgRef.current);
-		return () => { offStones(); offSel(); ro.disconnect(); };
+		return () => { offStones(); offSel(); ro.disconnect(); keptHooks.delete(paint); };
 	}, [pieces, look, viewBox]);
 	return (
 		<div class="flat-stack">

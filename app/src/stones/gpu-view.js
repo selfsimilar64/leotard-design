@@ -15,6 +15,9 @@ import { GpuKeep, GPU_FLAGS } from './gpu-keep.js';
 
 // Whether patterns can be kept on the GPU here (stones/gpu-keep.js): the WebGPU view with its device up. A page can turn it off
 // to compare with the CPU twin (window.__cpuKeep = true).
+// Called after every GPU keep run, those the keeper starts by itself too (laid again bigger, every round): the flat view paints from
+// the same buffers (ui/FlatView.jsx Stack).
+export const keptHooks = new Set();
 export function gpuKeepOn(renderer) { return RENDERER === 'webgpu' && !!renderer?.backend?.device && !globalThis.__cpuKeep; }
 
 // The texel: a millimetre, coarser only on a piece over a metre across (1024 texels at most).
@@ -205,7 +208,7 @@ export class PackView {
 		this.packs = packs;
 		const used = new Set(), kept = new Set();
 		for (const p of packs) {
-			const gpu = p.gpu && this.renderer.backend?.device ? p.gpu : null, out = [];
+			const gpu = p.gpu && this.renderer.backend?.device ? p.gpu : null;
 			for (const side of [p.own ? 'own' : null, p.mirrored ? 'mirror' : null]) {
 				if (!side) continue;
 				const key = p.gen + '|' + side;
@@ -215,24 +218,28 @@ export class PackView {
 				if (S.piece !== p.piece) { S.piece = p.piece; S.stale = true; }
 				S.pack = p;
 				if (S.stale) this.atlas(S, side === 'mirror');
-				if (gpu) out.push(this.room(S, gpu.statics.n));
-				else this.fill(S, p, side === 'mirror');
+				if (!gpu) this.fill(S, p, side === 'mirror');
 			}
-			if (gpu && out.length) {
-				kept.add(p.gen);
-				let K = this.keepers.get(p.gen);
-				if (!K) this.keepers.set(p.gen, (K = new GpuKeep(this.renderer.backend.device)));
-				gpu.keeper = K;
-				const st = gpu.statics;
-				st.palette ??= paletteOf(st.names);
-				K.setStatics(st);
-				K.setRasters(gpu.room, gpu.edges);
-				const fam = SHAPES[p.shape]?.family ?? 'crystal';
-				K.run({ ...gpu.frame, edges: gpu.edges, flags: gpu.frame.flags | (fam === 'crystal' ? GPU_FLAGS.crystal : 0) }, out);
-			}
+			if (gpu && (p.own || p.mirrored)) { kept.add(p.gen); this.keep(p); }
 		}
 		for (const key of [...this.sides.keys()]) if (!used.has(key)) this.drop(key);
 		for (const [gen, K] of this.keepers) if (!kept.has(gen)) { K.dispose(); this.keepers.delete(gen); }
+	}
+	// A pack kept on the GPU (stones/gpu-keep.js): its keeper given what changed, its sides' buffers sized to what it lays, run. Run
+	// again by the keeper when it must lay again bigger, or with every round (again).
+	keep(p) {
+		const gpu = p.gpu;
+		let K = this.keepers.get(p.gen);
+		if (!K) this.keepers.set(p.gen, (K = new GpuKeep(this.renderer.backend.device)));
+		gpu.keeper = K;
+		K.again = () => { if (this.packs.includes(p) && this.keepers.get(p.gen) === K) this.keep(p); };
+		gpu.mods.palette ??= paletteOf(gpu.mods.names);
+		K.setLay(gpu.lay); K.setMods(gpu.mods); K.setRasters(gpu.room, gpu.D, gpu.edges);
+		const out = [];
+		for (const side of [p.own ? 'own' : null, p.mirrored ? 'mirror' : null]) if (side) out.push(this.room(this.sides.get(p.gen + '|' + side), K.cap));
+		const fam = SHAPES[p.shape]?.family ?? 'crystal';
+		K.run({ ...gpu.frame, edges: gpu.edges, flags: gpu.frame.flags | (fam === 'crystal' ? GPU_FLAGS.crystal : 0) }, out);
+		for (const f of keptHooks) f();
 	}
 
 	// A GPU-kept side's instance buffers, room for n candidates, as three's vertex buffers the GPU keep writes the kept stones

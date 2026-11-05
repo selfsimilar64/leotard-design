@@ -14,6 +14,7 @@ import { patternHandles } from '../stones/handles.js';
 import { mirrorFast } from '../stones/cloth.js';
 import { TONES } from '../render/gizmo.js';
 import { TRIMS } from '../garment/trim.js';
+import { gpuKeepOn } from '../stones/gpu-view.js';
 
 // Stones by the cell they lie on, once per engine run (a run is a new object).
 const byCell = new WeakMap();
@@ -74,18 +75,16 @@ export function stonesFor(p) {
 	// has them packed: its own side, and its mirrored side as the other cut.
 	const records = run.records ?? run.stones ?? [];
 	for (const s of records) if (s.flat === cloth) at(s, [s.fu, s.fv], !!s.mirrored);
-	// (as arrays, not an object a stone: list.packs, painted and picked from directly)
-	list.packs = [];
+	// (as arrays, not an object a stone: list.packs, painted and picked from directly); a pack kept on the GPU (stones/gpu-keep.js)
+	// is painted from the GPU's own buffers (list.gpu: paintGpu) and made into arrays only when picked from (packArrays)
+	list.packs = []; list.gpu = [];
 	for (const pk of run.packs ?? []) {
 		if (pk.piece !== cloth) continue;
-		const k = pk.k, n = k.n, X = new Float32Array(n), Y = new Float32Array(n), R = new Float32Array(n), C = new Float32Array(n * 3);
-		const [ox, oy] = F.toSvg(0, 0);
-		for (let j = 0; j < n; j++) {
-			X[j] = ox + k.U[j] * F.kx; Y[j] = oy - k.V[j] * F.ky; R[j] = k.D[j] * 500;
-			const c = rgbOf(colourOf(k.stone[j]));
-			C[j * 3] = c[0]; C[j * 3 + 1] = c[1]; C[j * 3 + 2] = c[2];
+		for (const twin of [pk.own ? false : null, pk.mirrored ? true : null]) {
+			if (twin === null) continue;
+			if (pk.gpu) list.gpu.push({ pk, twin, F, gen: pk.gen });
+			else list.packs.push({ ...packArrays(pk, F), twin, gen: pk.gen });
 		}
-		for (const twin of [pk.own ? false : null, pk.mirrored ? true : null]) if (twin !== null) list.packs.push({ n, X, Y, R, C, twin, gen: pk.gen });
 	}
 	if (p.fitted) {
 		// (a mirrored pack on another piece, the other sleeve of a pair, lands here by its fitted triangles: its records)
@@ -110,6 +109,22 @@ export function stonesFor(p) {
 	return list;
 }
 
+// A pack's kept stones in the svg's units: from its kept set on the CPU (on the GPU view, the CPU twin's, made when asked for).
+const arrays = new WeakMap(); // per pack, per frame
+function packArrays(pk, F) {
+	let a = arrays.get(pk);
+	if (a?.F === F) return a;
+	const k = pk.k, n = k.n, X = new Float32Array(n), Y = new Float32Array(n), R = new Float32Array(n), C = new Float32Array(n * 3);
+	const [ox, oy] = F.toSvg(0, 0);
+	for (let j = 0; j < n; j++) {
+		X[j] = ox + k.U[j] * F.kx; Y[j] = oy - k.V[j] * F.ky; R[j] = k.D[j] * 500;
+		const c = rgbOf(colourOf(k.stone[j]));
+		C[j * 3] = c[0]; C[j * 3 + 1] = c[1]; C[j * 3 + 2] = c[2];
+	}
+	arrays.set(pk, (a = { n, X, Y, R, C, F }));
+	return a;
+}
+
 // The stones of every piece painted on a canvas laid exactly over the pieces' svg (the same viewBox, read through the svg's own
 // screen transform), drawn as the 3D view draws its stones: one draw on the GPU (WebGL), each stone a point whose disc, outline
 // and shine the shader shades. Drawn by the browser instead, 14 000 stones cost 30-55 ms a step (as svg shapes, as canvas
@@ -119,6 +134,9 @@ export function paintStones(canvas, svg, pieces) {
 	if (!canvas || !svg) return;
 	const r = canvas.getBoundingClientRect(), dpr = devicePixelRatio || 1, w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
 	if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+	// the WebGPU view: painted on the renderer's device, the packs kept on the GPU straight from their buffers
+	const device = gpuKeepOn(app.engine?.stoneView?.renderer) ? app.engine.stoneView.renderer.backend.device : null;
+	if (device || canvas._gpu) { paintGpu(canvas, svg, pieces, device ?? canvas._gpu.device, r, w, h, dpr); return; }
 	const G = glOf(canvas), M = svg.getScreenCTM();
 	if (!G) return;
 	const { gl } = G;
@@ -128,12 +146,25 @@ export function paintStones(canvas, svg, pieces) {
 	if (!M) return;
 	// the svg's units (mm) to the canvas's pixels; the pieces are never turned, so a uniform scale and a shift
 	const k = M.a * dpr, tx = (M.e - r.left) * dpr, ty = (M.f - r.top) * dpr, maxR = G.maxSize / 2 - 2;
+	const { A, n } = strokes(pieces, k, tx, ty, maxR, G);
+	if (!n) return;
+	gl.useProgram(G.prog);
+	gl.uniform2f(G.uSize, w, h);
+	gl.bindVertexArray(G.vao);
+	gl.bindBuffer(gl.ARRAY_BUFFER, G.buf);
+	gl.bufferData(gl.ARRAY_BUFFER, A.subarray(0, n * 8), gl.DYNAMIC_DRAW);
+	gl.enable(gl.BLEND);
+	gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+	gl.drawArrays(gl.POINTS, 0, n);
+}
+
+// Every stone the CPU has a place for (records, and packs not kept on the GPU), as the painters draw them: per stone x, y (canvas
+// pixels), radius, outline width (pixels), r, g, b, look (1: the pair's other cut, 2: chosen). holder.data: the array, grown.
+function strokes(pieces, k, tx, ty, maxR, holder) {
 	const sel = selection.value, isOn = (s) => !!sel && ((sel.kind === 'stones' && sel.id === s.gen) || (sel.kind === 'placed' && sel.id === s.id));
 	let n = 0;
 	for (const p of pieces) { const l = stonesFor(p); n += l.length; for (const pk of l.packs ?? []) n += pk.n; }
-	if (!n) return;
-	// per stone: x, y (canvas pixels), radius, outline width (pixels), r, g, b, look (1: the pair's other cut, 2: chosen)
-	const A = G.data.length >= n * 8 ? G.data : (G.data = new Float32Array(n * 8 * 1.5));
+	const A = holder.data.length >= n * 8 ? holder.data : (holder.data = new Float32Array(Math.ceil(n * 8 * 1.5)));
 	let i = 0;
 	const onW = 0.5 * k; // a chosen group's outline: half a millimetre
 	for (const p of pieces) {
@@ -152,14 +183,107 @@ export function paintStones(canvas, svg, pieces) {
 			}
 		}
 	}
-	gl.useProgram(G.prog);
-	gl.uniform2f(G.uSize, w, h);
-	gl.bindVertexArray(G.vao);
-	gl.bindBuffer(gl.ARRAY_BUFFER, G.buf);
-	gl.bufferData(gl.ARRAY_BUFFER, A.subarray(0, n * 8), gl.DYNAMIC_DRAW);
-	gl.enable(gl.BLEND);
-	gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-	gl.drawArrays(gl.POINTS, 0, n);
+	return { A, n };
+}
+
+// The painter on the WebGPU view (paintStones' twin, the same look: GPU_WGSL's fs is FS): on the renderer's own device, so a pattern
+// kept on the GPU (stones/gpu-keep.js) is drawn straight from the instance buffers its keep wrote (stones/gpu-view.js PackView.room),
+// as many as its indirect count says; nothing about its stones goes through the CPU. Its colour is the 3D view's (linear, with a
+// crystal's own shade: stones/gpu-keep.js WRITE) taken back to the swatch's.
+const GPU_WGSL = /* wgsl */ `
+struct Paint { size: vec2f, k: f32, tx: f32, ty: f32, maxR: f32, onW: f32, pad: f32 }
+struct Draw { ox: f32, oy: f32, kx: f32, ky: f32, look: f32, crystal: f32, on: f32, pad: f32 }
+@group(0) @binding(0) var<uniform> P: Paint;
+@group(0) @binding(1) var<storage, read> rec: array<f32>;
+@group(1) @binding(0) var<uniform> D: Draw;
+@group(1) @binding(1) var<storage, read> st: array<vec4f>;
+@group(1) @binding(2) var<storage, read> co: array<vec4f>;
+@group(1) @binding(3) var<storage, read> fi: array<vec4f>;
+@group(1) @binding(4) var<storage, read> ind: array<u32>;
+struct VO { @builtin(position) pos: vec4f, @location(0) p: vec2f, @location(1) col: vec3f, @location(2) rw: vec2f, @location(3) look: f32 }
+fn quad(c: vec2f, R: f32, W: f32, col: vec3f, look: f32, vi: u32) -> VO {
+	var corner = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0), vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0));
+	let half = ceil(R + W + 1.0); let q = corner[vi] * half; let px = c + q;
+	var o: VO;
+	o.pos = vec4f(px.x / P.size.x * 2.0 - 1.0, 1.0 - px.y / P.size.y * 2.0, 0.0, 1.0); o.p = q; o.col = col; o.rw = vec2f(R, W); o.look = look;
+	return o;
+}
+@vertex fn vsRec(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VO {
+	let b = ii * 8u;
+	return quad(vec2f(rec[b], rec[b + 1u]), rec[b + 2u], rec[b + 3u], vec3f(rec[b + 4u], rec[b + 5u], rec[b + 6u]), rec[b + 7u], vi);
+}
+fn srgb(c: f32) -> f32 { return select(1.055 * pow(max(c, 0.0), 1.0 / 2.4) - 0.055, c * 12.92, c < 0.0031308); }
+@vertex fn vsPack(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VO {
+	var o: VO;
+	if (ii >= ind[1]) { o.pos = vec4f(2.0, 2.0, 2.0, 1.0); return o; } // (past what the keep wrote)
+	let s = st[ii];
+	let X = (D.ox + s.x * D.kx) * P.k + P.tx; let Y = (D.oy - s.y * D.ky) * P.k + P.ty;
+	let R = min(abs(s.w) * 500.0 * P.k, P.maxR); let W = select(max(0.5, R * 0.12), P.onW, D.on > 0.5);
+	var kk = 1.0;
+	if (D.crystal > 0.5) { kk = 0.88 + 0.12 * fract(fi[ii].w * 31.7); }
+	let c = co[ii].xyz / kk;
+	return quad(vec2f(X, Y), R, W, vec3f(srgb(c.x), srgb(c.y), srgb(c.z)), D.look, vi);
+}
+@fragment fn fs(i: VO) -> @location(0) vec4f {
+	let d = length(i.p); let R = i.rw.x; let W = i.rw.y;
+	let twin = i.look - 2.0 * floor(i.look / 2.0) > 0.5; let on = i.look > 1.5;
+	let fill = clamp(R - d + 0.5, 0.0, 1.0);
+	var line = clamp(W * 0.5 - abs(d - R) + 0.5, 0.0, 1.0);
+	let a = atan2(i.p.y, i.p.x) * R; let m = R * 0.85;
+	if (twin && a - m * floor(a / m) > R * 0.5) { line = 0.0; }
+	var c = vec4f(i.col, 1.0) * fill;
+	let ln = select(vec4f(0.078, 0.071, 0.059, 1.0) * 0.55, vec4f(0.122, 0.114, 0.102, 1.0), on);
+	c = ln * line + c * (1.0 - ln.a * line);
+	let sh = clamp(R * 0.32 - length(i.p + R * 0.3) + 0.5, 0.0, 1.0) * 0.75 * fill;
+	c = vec4f(1.0) * sh + c * (1.0 - sh);
+	return c * select(1.0, 0.7, twin);
+}`;
+function gpuOf(canvas, device) {
+	const G = canvas._gpu;
+	if (G?.device === device) return G;
+	const ctx = canvas.getContext('webgpu');
+	if (!ctx) return null;
+	const format = navigator.gpu.getPreferredCanvasFormat();
+	ctx.configure({ device, format, alphaMode: 'premultiplied' });
+	const V = GPUShaderStage.VERTEX, ro = { type: 'read-only-storage' };
+	const b0 = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: V, buffer: { type: 'uniform' } }, { binding: 1, visibility: V, buffer: ro }] });
+	const b1 = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: V, buffer: { type: 'uniform' } }, ...[1, 2, 3, 4].map((binding) => ({ binding, visibility: V, buffer: ro }))] });
+	const module = device.createShaderModule({ code: GPU_WGSL });
+	const blend = { color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } };
+	const pipe = (entry, layouts) => device.createRenderPipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: layouts }), vertex: { module, entryPoint: entry }, fragment: { module, entryPoint: 'fs', targets: [{ format, blend }] }, primitive: { topology: 'triangle-list' } });
+	const U = GPUBufferUsage;
+	return (canvas._gpu = { device, ctx, b0, b1, rec: pipe('vsRec', [b0]), pack: pipe('vsPack', [b0, b1]), paint: device.createBuffer({ size: 32, usage: U.UNIFORM | U.COPY_DST }), recBuf: null, draws: [], data: new Float32Array(0) });
+}
+function paintGpu(canvas, svg, pieces, device, r, w, h, dpr) {
+	const G = device && gpuOf(canvas, device), M = svg.getScreenCTM();
+	if (!G || !w || !h) return;
+	const q = device.queue, U = GPUBufferUsage, enc = device.createCommandEncoder({ label: 'flat stones' });
+	const pass = enc.beginRenderPass({ colorAttachments: [{ view: G.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 0 } }] });
+	if (M) {
+		// the svg's units (mm) to the canvas's pixels, as paintStones
+		const k = M.a * dpr, tx = (M.e - r.left) * dpr, ty = (M.f - r.top) * dpr, maxR = 1e6, onW = 0.5 * k;
+		q.writeBuffer(G.paint, 0, new Float32Array([w, h, k, tx, ty, maxR, onW, 0]));
+		const { A, n } = strokes(pieces, k, tx, ty, maxR, G);
+		if (!G.recBuf || G.recBuf.size < Math.max(n, 1) * 32) { G.recBuf?.destroy(); G.recBuf = device.createBuffer({ size: Math.max(64, Math.ceil(n * 1.5) * 32), usage: U.STORAGE | U.COPY_DST }); }
+		if (n) q.writeBuffer(G.recBuf, 0, A, 0, n * 8);
+		const g0 = device.createBindGroup({ layout: G.b0, entries: [{ binding: 0, resource: { buffer: G.paint } }, { binding: 1, resource: { buffer: G.recBuf } }] });
+		if (n) { pass.setPipeline(G.rec); pass.setBindGroup(0, g0); pass.draw(6, n); }
+		// the packs kept on the GPU: each from its side's own buffers (the pair's other cut from the mirrored side's, else the own's)
+		const pv = app.engine.stoneView.packView, be = app.engine.stoneView.renderer.backend, sel = selection.value;
+		let d = 0;
+		for (const p of pieces) for (const g of stonesFor(p).gpu ?? []) {
+			const S = pv?.sides.get(g.gen + '|' + (g.twin ? 'mirror' : 'own')) ?? pv?.sides.get(g.gen + '|' + (g.twin ? 'own' : 'mirror')), At = S?.geo.attributes;
+			if (!S?.gpu || !S.ind || !At.aStone || !S.cap) continue;
+			const [ox, oy] = g.F.toSvg(0, 0), on = sel?.kind === 'stones' && sel.id === g.gen;
+			const ub = (G.draws[d] ??= device.createBuffer({ size: 32, usage: U.UNIFORM | U.COPY_DST }));
+			q.writeBuffer(ub, 0, new Float32Array([ox, oy, g.F.kx, g.F.ky, (g.twin ? 1 : 0) + (on ? 2 : 0), S.fam === 'crystal' ? 1 : 0, on ? 1 : 0, 0]));
+			const g1 = device.createBindGroup({ layout: G.b1, entries: [ub, be.get(At.aStone).buffer, be.get(At.aColour).buffer, be.get(At.aFinish).buffer, be.get(S.ind).buffer].map((buffer, binding) => ({ binding, resource: { buffer } })) });
+			pass.setPipeline(G.pack); pass.setBindGroup(0, g0); pass.setBindGroup(1, g1); pass.draw(6, S.cap);
+			d++;
+		}
+	}
+	pass.end();
+	q.submit([enc.finish()]);
 }
 
 const rgbs = new Map();
@@ -223,7 +347,8 @@ export function pickStone(p, ev) {
 	let best = null, bd = Infinity;
 	const l = stonesFor(p);
 	for (const s of l) { const d = (s.X - q.x) ** 2 + (s.Y - q.y) ** 2; if (d < bd) { bd = d; best = s; } }
-	for (const pk of l.packs ?? []) for (let j = 0; j < pk.n; j++) { const d = (pk.X[j] - q.x) ** 2 + (pk.Y[j] - q.y) ** 2; if (d < bd) { bd = d; best = { r: pk.R[j], gen: pk.gen }; } }
+	// (a pack kept on the GPU: its stones from the CPU twin, only now that one is picked)
+	for (const pk of [...(l.packs ?? []), ...(l.gpu ?? []).map((g) => ({ ...packArrays(g.pk, g.F), gen: g.gen }))]) for (let j = 0; j < pk.n; j++) { const d = (pk.X[j] - q.x) ** 2 + (pk.Y[j] - q.y) ** 2; if (d < bd) { bd = d; best = { r: pk.R[j], gen: pk.gen }; } }
 	if (!best || Math.sqrt(bd) > best.r * 1.6 + 1) return false;
 	selection.value = best.gen === 'placed' ? { kind: 'placed', id: best.id } : { kind: 'stones', id: best.gen };
 	return true;

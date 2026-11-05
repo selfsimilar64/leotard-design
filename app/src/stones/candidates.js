@@ -17,13 +17,18 @@
 //   a run         between two stops (corners, joints, crossings): the stones of each stretch are a whole number, evenly
 //                 spaced, and a stop can have its own stone
 // Every kind of item is laid on its own (a point, a run, a copy of a cell): the shape of the GPU engine's steps (Phase 3 of
-// knowledge/product/roadmap/webgpu-and-stone-engine-plan.md); this is their CPU twin.
+// knowledge/product/roadmap/webgpu-and-stone-engine-plan.md); this is their CPU twin: stones/gpu-lay.js lays the same on the GPU
+// (a change to one is a change to the other).
 // Spec: knowledge/engineering/architecture/procedural-stone-patterns.md.
 import { frac, hash2 } from './fields.js';
 import { SS } from './library.js';
 import { G_POINT, G_KEY, G_LINE, G_RUN, G_STAMP, G_SOURCE, POINT_W, KEY_W, VERT_W, LINE_W, RUN_W, STAMP_W, SOURCE_W, SOURCES, PRI_LINE, placeHash } from './geometry.js';
 
 export const MAX_CANDIDATES = 150000;
+// Where a place's cell starts (Candidates.fresh's 0.2 mm cells, a stop's chance, a stone's stray): 1/pi of a cell off the round
+// numbers, which layouts use (and the binary fractions fractal curves land on), so that one place read twice, or by the float32 GPU
+// twin (stones/gpu-lay.js OFF), does not fall either side of a cell's edge.
+export const OFF = 0.3183098861837907;
 const GOLD = 0.6180339887498949;
 
 // The sizes stones come in (metres), ascending.
@@ -71,7 +76,7 @@ export class Candidates {
 		const cl = o.clip;
 		this.cx0 = cl?.x0 ?? -Infinity; this.cx1 = cl?.x1 ?? Infinity; this.cy0 = cl?.y0 ?? -Infinity; this.cy1 = cl?.y1 ?? Infinity;
 		this.keys.clear(); this.maxD = 0; this.minP = 255; this.maxP = 0; this.minK = Infinity; this.maxK = 0;
-		this.rn = 0;
+		this.rn = 0; this.open = false;
 		return this;
 	}
 
@@ -81,7 +86,8 @@ export class Candidates {
 		this.mu = this.a * x + this.b * y + this.e; this.mv = this.c * x + this.d * y + this.f;
 	}
 	// a real diameter: the crystal's size x the pattern's own, through the modifiers
-	sizeOf(u, v, k, t, cat, rank) { return this.diam ? this.diam(u, v, k, t, cat, rank) : k === 1 ? this.d1 : realSize(this.d0 * k); }
+	// (the rank as kept, float32: the GPU twin, stones/gpu-lay.js sizeOf, has no other)
+	sizeOf(u, v, k, t, cat, rank) { return this.diam ? this.diam(u, v, k, t, cat, Math.fround(rank)) : k === 1 ? this.d1 : realSize(this.d0 * k); }
 
 	push(u, v, rank, angle, t, k, cat, pri, d) {
 		if (u < this.cx0 || u > this.cx1 || v < this.cy0 || v > this.cy1) return;
@@ -90,7 +96,9 @@ export class Candidates {
 			if (n >= MAX_CANDIDATES) { this.truncated = true; return; }
 			this.alloc(Math.min(this.cap * 2, MAX_CANDIDATES));
 		}
-		if (this.jitter) { const q = Math.floor(rank * 1e7); u += this.jitter * (hash2(q, 1, this.seed) - 0.5) * 2; v += this.jitter * (hash2(q, 2, this.seed) - 0.5) * 2; }
+		// its own stray: by its place (its 0.5 mm cell, off the round numbers: OFF), so the GPU twin (stones/gpu-lay.js push),
+		// which works in float32, finds the same
+		if (this.jitter) { const q1 = Math.floor(u * 2000 + OFF), q2 = Math.floor(v * 2000 + OFF); u += this.jitter * (hash2(q1, q2, this.seed * 4 + 1) - 0.5) * 2; v += this.jitter * (hash2(q1, q2, this.seed * 4 + 2) - 0.5) * 2; }
 		this.X[n] = u; this.Y[n] = v; this.R[n] = rank; this.A[n] = angle; this.T[n] = t; this.K[n] = k; this.D[n] = d; this.C[n] = cat; this.P[n] = pri;
 		if (d > this.maxD) this.maxD = d;
 		if (pri < this.minP) this.minP = pri;
@@ -178,8 +186,11 @@ export class Candidates {
 		this.mu = this.su0 + Math.fround(this.a * xt + this.b * yt + 0); this.mv = this.sv0 + Math.fround(this.c * xt + this.d * yt + 0);
 	}
 	// a place on the cloth not yet taken by a stone the design hangs on (and now it is)
+	// (its 0.2 mm cell, off the round numbers (OFF): a joint on a round number, as layouts put them, read in two copies as 0.11249999
+	// and 0.11250000, fell either side of a rounding at 0.1125; the same on the GPU: stones/gpu-lay.js placeKey)
 	fresh(u, v) {
-		const id = Math.round(u * 5000) * 2097152 + Math.round(v * 5000);
+		if (this.open) return true; // (a cell laid once for its copies: each copy takes its places where it lies, stampFast)
+		const id = Math.floor(u * 5000 + OFF) * 2097152 + Math.floor(v * 5000 + OFF);
 		if (this.keys.has(id)) return false;
 		this.keys.add(id);
 		return true;
@@ -381,8 +392,8 @@ export class Candidates {
 			// the stop's place in the cell, through the map's linear part, as a plain copy has it (not the copy's place less
 			// its origin: a stop on a round number of hash cells would round the other way)
 			const x = c ? this.tbx : this.tax, y = c ? this.tby : this.tay;
-			rank = hash2(Math.round((this.a * x + this.b * y + 0) * 5000), Math.round((this.c * x + this.d * y + 0) * 5000), 11) * 0.4;
-		} else rank = hash2(Math.round(u * 5000), Math.round(v * 5000), 11) * 0.4;
+			rank = hash2(Math.floor((this.a * x + this.b * y + 0) * 5000 + OFF), Math.floor((this.c * x + this.d * y + 0) * 5000 + OFF), 11) * 0.4;
+		} else rank = hash2(Math.floor(u * 5000 + OFF), Math.floor(v * 5000 + OFF), 11) * 0.4; // (fresh's cell, off the round numbers: OFF)
 		if (this.h >= 0) rank = this.stampRank(rank, pri);
 		this.push(u, v, rank, Math.atan2(this.RV[m + 1] - this.RV[m], this.RU[m + 1] - this.RU[m]), this.RT[c], k, this.cat, pri, this.sizeOf(u, v, k, this.RT[c], this.cat, rank));
 	}
@@ -423,6 +434,7 @@ export class Candidates {
 		if (c) return c;
 		const S = (this.sub ??= new Candidates(256));
 		S.reset(EVERYWHERE, this.pitch, this.seed, null, { map: { a: this.a, b: this.b, c: this.c, d: this.d, e: 0, f: 0 }, d0: this.d0, gap: this.gap, fine: this.fine, angles: this.angles });
+		S.open = true;
 		S.lay(T);
 		const n = S.n;
 		c = { n, X: S.X.slice(0, n), Y: S.Y.slice(0, n), R: S.R.slice(0, n), A: S.A.slice(0, n), K: S.K.slice(0, n), D: S.D.slice(0, n), C: S.C.slice(0, n), P: S.P.slice(0, n), reach: 0 };

@@ -26,7 +26,7 @@ export async function stressLoad() {
 	const busy = () => [...e.stonePending].some((id) => !app.doc.stones.find((x) => x.id === id)?.hidden);
 	for (let i = 0; i < 40 && busy(); i++) await wait(500);
 	await wait(1500);
-	return { panels, count: e.stoneCount(), groups: e.stoneRun.packs.map((p) => ({ gen: p.gen, gpu: !!p.gpu, candidates: p.gpu?.statics.n, count: p.count })) };
+	return { panels, count: e.stoneCount(), groups: e.stoneRun.packs.map((p) => ({ gen: p.gen, gpu: !!p.gpu, candidates: p.gpu?.keeper?.cap, count: p.count })) };
 }
 
 // Each edit step taken apart, with the page's own frame loop paused (its frames would land in the waits): the stone engine's CPU
@@ -40,7 +40,7 @@ export async function stressEngine({ steps = 20 } = {}) {
 	const GpuKeep = [...(e.stoneView.packView?.keepers.values() ?? [])][0]?.constructor;
 	if (!GpuKeep) throw new Error('No pattern kept on the GPU');
 	const { gpuTime } = await import(performance.getEntriesByType('resource').map((r) => r.name).find((n) => /render\/webgpu\.js/.test(n)).replace(location.origin, ''));
-	const big = [...e.stoneRun.packs].sort((a, b) => (b.gpu?.statics.n ?? 0) - (a.gpu?.statics.n ?? 0))[0], id = big.gen, g = app.doc.stones.find((x) => x.id === id), g0 = { ...g.params };
+	const big = [...e.stoneRun.packs].sort((a, b) => (b.gpu?.keeper?.cap ?? 0) - (a.gpu?.keeper?.cap ?? 0))[0], id = big.gen, g = app.doc.stones.find((x) => x.id === id), g0 = { ...g.params };
 	const med = (w) => { const s = w.filter((x) => x != null).sort((p, q) => p - q); return s.length ? +s[s.length >> 1].toFixed(2) : null; };
 	const kinds = { move: ['x', g0.x ?? 0, 0.01], turn: ['rotate', g0.rotate ?? 0, 8], density: ['density', (g0.density ?? 1) - 0.2, 0.15], spacing: ['gap', g0.gap ?? 1.1, 0.02], size: ['size', null, 0] };
 	const out = { group: id };
@@ -73,7 +73,7 @@ export async function stressEngine({ steps = 20 } = {}) {
 
 export async function stressTime({ modes = ['gpu', 'cpu'], steps = 30 } = {}) {
 	const S = await state(), app = window.app, e = app.engine, vp = e.viewport;
-	const big = [...e.stoneRun.packs].sort((a, b) => (b.gpu?.statics.n ?? b.k.n) - (a.gpu?.statics.n ?? a.k.n))[0], id = big.gen, g = app.doc.stones.find((x) => x.id === id);
+	const big = [...e.stoneRun.packs].sort((a, b) => (b.gpu?.keeper?.cap ?? b.k.n) - (a.gpu?.keeper?.cap ?? a.k.n))[0], id = big.gen, g = app.doc.stones.find((x) => x.id === id);
 	S.layout.value = '3d';
 	const g0 = { ...g.params }; // (each gesture puts its value back as it was)
 	const stats = (w) => { w.sort((p, q) => p - q); return { median: +w[w.length >> 1].toFixed(1), p90: +w[Math.floor(w.length * 0.9)].toFixed(1) }; };
@@ -107,7 +107,7 @@ export async function stressTime({ modes = ['gpu', 'cpu'], steps = 30 } = {}) {
 	const keepers = [...(e.stoneView.packView?.keepers.values() ?? [])].filter((K) => K.last), dev = vp.renderer.backend?.device;
 	if (dev && keepers.length) {
 		const t = performance.now();
-		for (let i = 0; i < 20; i++) for (const K of keepers) K.run(K.last.p, K.last.out);
+		for (let i = 0; i < 20; i++) for (const K of keepers) K.run(K.last.p, K.last.out, K.last.outCap);
 		await dev.queue.onSubmittedWorkDone();
 		out.keepAllGroupsMs = +((performance.now() - t) / 20).toFixed(2);
 	}

@@ -21,6 +21,7 @@ import { StrapView } from './straps.js';
 import { HardwareView } from './hardware.js';
 import { StoneView } from '../stones/view.js';
 import { gpuKeepOn } from '../stones/gpu-view.js';
+import { layReady, layKit, layWarm } from '../stones/gpu-lay.js';
 import { runStones } from '../stones/generators.js';
 import { ClothPiece } from '../stones/cloth.js';
 import { locate, baryOfVertexInFace } from '../garment/arrangement.js';
@@ -626,6 +627,12 @@ Engine.prototype.syncStones = function (doc, touched = null) {
 	ctx.placedSame = !!touched && !touched.has('placed');
 	// on the WebGPU view a pattern is kept by the GPU (stones/gpu-keep.js): moving, turning, thinning it costs the CPU nothing a stone
 	ctx.gpuKeep = gpuKeepOn(this.stoneView.renderer);
+	if (ctx.gpuKeep && !layReady.device) {
+		layReady.device = this.stoneView.renderer.backend.device;
+		// a kind of pattern's kernels compiled (kept by the CPU twin until then): every group laid again
+		layKit.onReady = () => { this.stoneCache.gens = new Map(); this.stonesDirty = true; };
+		layWarm(layReady.device);
+	}
 	const was = this.stoneRun;
 	this.stoneRun = runStones(doc, ctx, this.stoneCache);
 	if (this.stoneRun === was) return;
