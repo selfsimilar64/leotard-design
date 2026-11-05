@@ -12,6 +12,7 @@
 import { TAU, frac, hash2, rankOf2, clamp01 } from './fields.js';
 import { motifOutline, insidePoly, distPoly } from './motifs.js';
 import { SS, sizeOf } from './library.js';
+import { SOURCES, PRI_FILL } from './geometry.js';
 
 // parameters as the panel shows them: f: mm | deg | n | x (a ratio) | pct. log: a slider that gives small
 // values as much room as big ones. hidden: only a preset sets it. when(P): only shown when it does something.
@@ -106,6 +107,14 @@ export function overTile(B, L, seed, fn) {
 export const SMALLEST_VARIED = (v) => 1 - 0.4 * v;
 export const varied = (h, v) => (v > 0 ? SMALLEST_VARIED(v) + h * h * h * v * 2.6 : 1);
 
+// A scatter's points by formula (stones/geometry.js SOURCES): the blue-noise tile over the box, L wide, each point's rank its
+// place in the tile, its turn and its own size from its index. args: L, seed, variety, turned (1: shaped stones point any way).
+export const SCATTER_SOURCE = 1;
+SOURCES[SCATTER_SOURCE] = (E, a, box, cat, unit) => {
+	const seed = a[1], v = a[2], turned = a[3] === 1;
+	overTile(box, a[0], seed, (x, y, k, rank) => E.layAt(x, y, rank, turned ? hash2(k, 8, seed) * TAU : 0, farT(x, y), v > 0 ? varied(hash2(k, 7, seed), v) : 1, cat, PRI_FILL, unit));
+};
+
 // ---------------------------------------------------------------------------------------------
 // Repeating tiles: the edges of one cell, in units of `spacing`, with the cell's two lattice vectors.
 const S3 = Math.sqrt(3), H3 = S3 / 2, W8 = 1 + Math.SQRT2, CH = (Math.sqrt(28) - 2) / 6; // CH: half a bridge of the Cairo tiling, all edges equal
@@ -199,9 +208,9 @@ export const LATTICE_LAYOUTS = {
 		fine: (P) => SMALLEST_VARIED(P.variety),
 		params: [pct('variety', 'Variety of sizes', 0)],
 		make(P, E) {
-			// (a tile of a fixed size in its own space, so that scaling the pattern spreads its stones apart)
-			const v = P.variety, seed = E.seed, turned = E.angles;
-			overTile(E.box, (E.d0 * E.gap * E.fine) / TILE_R, seed, (x, y, k, rank) => E.add(x, y, rank, turned ? hash2(k, 8, seed) * TAU : 0, farT(x, y), v > 0 ? varied(hash2(k, 7, seed), v) : 1));
+			// (a tile of a fixed size in its own space, so that scaling the pattern spreads its stones apart; laid by the engine
+			// point by point: SCATTER_SOURCE)
+			E.source(SCATTER_SOURCE, [(E.d0 * E.gap * E.fine) / TILE_R, E.seed, P.variety, E.angles ? 1 : 0]);
 		},
 	},
 	clusters: {

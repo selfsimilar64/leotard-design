@@ -201,8 +201,10 @@ Progress (2026-11-05): steps 1, 2 and 4 in, step 3 in part (the traced-contour f
 `stones/geometry.js`, one engine lays it; candidates match the old pen's on 568 preset cases except two old bugs fixed
 (twisted patterns lost their corners; a heavy-layout replay glitch) and an intended rank change for copies of a cell under
 a size modifier, which now stay templates. Decided on the way: copies are an explicit list (not a lattice descriptor);
-runs whose sizes vary are walked stone by stone per run, parallel across runs (Phase 3 step 1 below is refined by it). Not
-done: points by formula as source items, fractals as points by index, the worker.
+runs whose sizes vary are walked stone by stone per run, parallel across runs (Phase 3 step 1 below is refined by it).
+Points by formula: the scatter family is one source item (kernel by index); the other point layouts become kernels with
+their GPU forms in Phase 3. Fractals as points by index and the worker were left out on purpose (their geometry is
+computed once and cached; the GPU port supersedes a worker): see the note's open items.
 
 1. Re-point the pen: `Candidates` (and `Drawing`, whose ops are already a recording) emits runs and points instead of
    stones, so every layout works unchanged on day one.

@@ -218,6 +218,14 @@ describe('arrangements', () => {
 			expect(Array.from(b.R.subarray(0, a.n)), name).toEqual(Array.from(a.R.subarray(0, a.n)));
 		}
 	});
+	it('a scatter is points by formula: one item however many stones, laid by the engine', () => {
+		const o = { d0: 0.0015, gap: 1.15 }, G = new Geometry().reset(BOX, 0.0015 * 1.15, 3, null, o);
+		LAYOUTS.scatter.make(layoutDefaults('scatter'), G);
+		G.finish();
+		expect(G.items).toBe(1);
+		expect(G.np).toBe(0);
+		expect(new Candidates(64).reset(BOX, 0.0015 * 1.15, 3, null, o).lay(G).n).toBeGreaterThan(20000);
+	});
 	it('copies of a cell under a size modifier: laid copy by copy, with the very stones and ranks of plain copies when sizes do not change', () => {
 		for (const key of ['circles', 'scales', 'truchet', 'tenprint', 'tile-honeycomb', 'tile-greekkey', 'polka-heart']) {
 			const P = presetParams(GALLERY_ITEMS.get(key));

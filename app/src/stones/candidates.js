@@ -21,7 +21,7 @@
 // Spec: knowledge/engineering/architecture/procedural-stone-patterns.md.
 import { frac, hash2 } from './fields.js';
 import { SS } from './library.js';
-import { G_POINT, G_KEY, G_LINE, G_RUN, G_STAMP, POINT_W, KEY_W, VERT_W, LINE_W, RUN_W, STAMP_W, PRI_LINE, placeHash } from './geometry.js';
+import { G_POINT, G_KEY, G_LINE, G_RUN, G_STAMP, G_SOURCE, POINT_W, KEY_W, VERT_W, LINE_W, RUN_W, STAMP_W, SOURCE_W, SOURCES, PRI_LINE, placeHash } from './geometry.js';
 
 export const MAX_CANDIDATES = 150000;
 const GOLD = 0.6180339887498949;
@@ -127,11 +127,26 @@ export class Candidates {
 				case G_LINE: this.layLine(G, j, 0, 0); break;
 				case G_RUN: this.layRunOf(G, j, 0, 0); break;
 				case G_STAMP: this.layStamp(G, j); break;
+				case G_SOURCE: this.laySource(G, j); break;
 				default: throw new Error('Bad geometry');
 			}
 		}
 		if (G.truncated) this.truncated = true;
 		return this;
+	}
+
+	// Points by formula: the source's kernel lays each (stones/geometry.js SOURCES).
+	laySource(G, i) {
+		const S = G.Sr, o = i * SOURCE_W, kernel = SOURCES[S[o]];
+		if (!kernel) throw new Error('No point source ' + S[o]);
+		kernel(this, S.subarray(o + 7, o + 12), { x0: S[o + 1], x1: S[o + 2], y0: S[o + 3], y1: S[o + 4] }, S[o + 5], S[o + 6]);
+	}
+	// One point of a source, at (x, y) in the pattern's space (as an added stone: its unit, if set, is what it thins by).
+	layAt(x, y, rank, angle, t, k, cat, pri, unit) {
+		this.place(x, y);
+		const u = this.mu, v = this.mv;
+		if (u < this.cx0 || u > this.cx1 || v < this.cy0 || v > this.cy1) return;
+		this.push(u, v, unit >= 0 ? unit : rank, this.angleAt(x, y, angle), t, k, cat, pri, this.sizeOf(u, v, k, t, cat, rank));
 	}
 
 	// A copy's rank (stamp mode, this.h >= 0): the cell's own rank R moved by the copy's chance h, as the copies of a cell

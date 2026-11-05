@@ -44,6 +44,14 @@ rule's ties and the joints' first-one-wins go by. Tables are `Float64Array` with
 | LINE (free) | 3 | first vertex, vertex count, lineHash |
 | RUN | 12 | first vertex, count, lineHash, keyA, jkA, jpA, keyB, jkB, jpB, closed, cat, unit (cat, unit and keyB's at close time) |
 | STAMP (copy) | 6 | template id, x, y, t, cat, unit |
+| SOURCE (points by formula) | 12 | kernel id, box x0 x1 y0 y1, cat, unit, five arguments |
+
+- A SOURCE's kernel lives with the layout that owns it and registers itself in `geometry.js SOURCES[id] = (E, args,
+  box, cat, unit) => ...`, laying each point by index through `Candidates.layAt` in a fixed order. The scatter is the
+  first (`layouts-lattice.js SCATTER_SOURCE`: the blue-noise tile over the box, `args` = tile width L, seed, variety,
+  turned), so the scatter family (pavé, mixed sizes, pebbles, starry, the fades and gradients: 10 + 4 presets) is one
+  item however many stones; identical candidates to the old `overTile` + `add` (golden, 60 cases). The GPU form needs only
+  the tile's table (fixed, ~13 000 points) uploaded once.
 
 - A run item is appended when it closes (`corner`/`end`), a line when it ends (next `move`/`begin`, `finish`): the same
   moment the old pen laid them, so key order is unchanged. `corner` closes one run and opens the next at the last vertex
@@ -120,9 +128,13 @@ this gets fast; on the CPU it is the twin.
 - **Joint merging by rounding** (`fresh`: a `Set` of rounded cloth places) is sequential and order-dependent. On the GPU:
   joints owned by one copy (the template marks which stops it owns, e.g. by half-open cell bounds), or a hash of the
   rounded place with the lowest item index winning (an atomic min per slot).
-- Points by formula (scatter's blue-noise tile, phyllotaxis, primes, halftones) are still explicit POINT lists drawn on
-  the CPU; a source item (kernel id + parameters, expanded by index) is the GPU form. Fractals as points by index and
-  the worker are not done.
+- Points by formula: only the scatter is a SOURCE so far. Clusters (nested tiles), stardust, galaxy, phyllotaxis, primes,
+  Ulam and the field halftones still add explicit POINTs on the CPU; each becomes a kernel the same way when its GPU form
+  is written (Phase 3), with its CPU twin beside it.
+- Fractals as points by index (plan Phase 2 step 3) were not done, on purpose: a grown curve's points are computed once
+  per curve and order (`curveData`, cached) and do not change with spacing, size or moves, so as runs they can be
+  uploaded once; quasicrystals and Voronoi are kept geometry of heavy layouts. Revisit only if their upload shows in the
+  Phase 3 timings. The worker (proposal build order 3) is not done either: the GPU port supersedes it.
 - The edge rows (`edgelines`) still trace lines of equal distance by marching squares (kept by the owner); an outline
   offset is the GPU-friendly form.
 

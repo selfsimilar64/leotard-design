@@ -13,7 +13,9 @@
 //          stone of its own (keyA, jkA, jpA; keyB, jkB, jpB); closed: a loop with a stone where it meets itself
 //   STAMP  one copy of a cell (stamped): its template (a geometry of its own, drawn once about its origin) at x, y, with
 //          the copy's t, cat (added to the cell's own) and unit; the copies' stones are the cell's moved, so a lattice of
-//          cells costs a few array writes a stone, whatever the size modifiers ask
+//          cells costs a few array writes a stone (under a size modifier or a distortion, each copy's runs are laid where
+//          it lies, the cell still drawn once)
+//   SOURCE points by formula (a scatter's blue-noise tile over the box): a kernel and its arguments, expanded by index
 // Vertices (of lines and runs): x, y, k, t, and for lines the cat and unit each step is laid with.
 // Every number in Float64Array tables with a fixed stride, so the engine's steps read typed arrays (the CPU twin of the
 // GPU engine: Phase 3).
@@ -23,8 +25,13 @@ export const PRI_LINE = 200, PRI_FILL = 240;
 // What a place in the pattern's space stands for: the same place keeps the same chance.
 export const placeHash = (x, y) => hash2(Math.round(x * 5000), Math.round(y * 5000), 11);
 
-export const G_POINT = 0, G_KEY = 1, G_LINE = 2, G_RUN = 3, G_STAMP = 4;
-export const POINT_W = 9, KEY_W = 8, VERT_W = 6, LINE_W = 3, RUN_W = 12, STAMP_W = 6;
+export const G_POINT = 0, G_KEY = 1, G_LINE = 2, G_RUN = 3, G_STAMP = 4, G_SOURCE = 5;
+export const POINT_W = 9, KEY_W = 8, VERT_W = 6, LINE_W = 3, RUN_W = 12, STAMP_W = 6, SOURCE_W = 12;
+// Points by formula (SOURCE items: kernel, box x0 x1 y0 y1, cat, unit, five arguments): a kernel lays its points by index
+// (E.layAt for each, in a fixed order), so a source of a hundred thousand stones is one item, made per point where it is
+// laid (by the GPU in Phase 3). Kernels are registered by the layout module that owns them: SOURCES[id] =
+// (E, args, box, cat, unit) => ...
+export const SOURCES = [];
 const EVERYWHERE = { x0: -1e3, x1: 1e3, y0: -1e3, y1: 1e3, r: 1e3 };
 
 const grown = (a, need) => {
@@ -40,6 +47,7 @@ export class Geometry {
 		this.kind = new Uint8Array(cap); this.idx = new Int32Array(cap);
 		this.Pt = new Float64Array(cap * POINT_W); this.Ky = new Float64Array(cap * KEY_W); this.Vx = new Float64Array(cap * 4 * VERT_W);
 		this.Ln = new Float64Array(cap * LINE_W); this.Rn = new Float64Array(cap * RUN_W); this.St = new Float64Array(cap * STAMP_W);
+		this.Sr = new Float64Array(8 * SOURCE_W);
 		this.templates = [];
 		this.reset(EVERYWHERE, 0.004, 1);
 	}
@@ -49,7 +57,7 @@ export class Geometry {
 	// layouts). o: d0, gap (the crystal's real size and the stones' spacing as a factor of it), fine (the smallest size this
 	// pattern asks for, as a factor of d0), angles (stones have a direction that matters).
 	reset(box, pitch, seed = 1, edgeAt = null, o = {}) {
-		this.items = 0; this.np = 0; this.nk = 0; this.nv = 0; this.nl = 0; this.nr = 0; this.ns = 0; this.templates.length = 0;
+		this.items = 0; this.np = 0; this.nk = 0; this.nv = 0; this.nl = 0; this.nr = 0; this.ns = 0; this.nsr = 0; this.templates.length = 0;
 		this.box = box; this.pitch = Math.max(pitch, 1e-4); this.seed = seed; this.edgeAt = edgeAt; this.truncated = false;
 		this.gap = o.gap ?? 1; this.d0 = o.d0 ?? this.pitch / this.gap; this.fine = o.fine ?? 1; this.angles = !!o.angles;
 		this.t = 0; this.k = 1; this.cat = 0; this.jk = 1; this.jpri = 0; this.unit = -1;
@@ -93,6 +101,18 @@ export class Geometry {
 		A[o] = x; A[o + 1] = y; A[o + 2] = angle; A[o + 3] = t; A[o + 4] = k; A[o + 5] = cat; A[o + 6] = pri;
 		A[o + 7] = this.unit >= 0 ? this.unit : rank0 >= 0 ? rank0 : placeHash(x, y) * 0.4;
 		this.item(G_KEY, this.nk++);
+	}
+
+	// Points by formula over the box: kernel (an id in SOURCES), args (up to five numbers); the stones take this cat and
+	// unit, and pri PRI_FILL unless the kernel says otherwise.
+	source(kernel, args) {
+		const o = this.nsr * SOURCE_W;
+		if (o + SOURCE_W > this.Sr.length) this.Sr = grown(this.Sr, o + SOURCE_W);
+		const S = this.Sr, b = this.box;
+		S.fill(0, o, o + SOURCE_W);
+		S[o] = kernel; S[o + 1] = b.x0; S[o + 2] = b.x1; S[o + 3] = b.y0; S[o + 4] = b.y1; S[o + 5] = this.cat; S[o + 6] = this.unit;
+		for (let i = 0; i < Math.min(5, args.length); i++) S[o + 7 + i] = args[i];
+		this.item(G_SOURCE, this.nsr++);
 	}
 
 	// --- a free line -------------------------------------------------------------------------------------
