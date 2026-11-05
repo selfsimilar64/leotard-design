@@ -13,6 +13,7 @@
 # Component
 
 * [Stone patterns placed on the GPU](gpu-stone-placement.md) (draft) - Design and build plan for laying a stone pattern's stones on the GPU in both the 3D and flat views: candidates drawn on the CPU only when the drawing changes, everything a move or turn changes done per stone in a shader, and a CPU twin of the same rule for counts, picking and export.
+* [The stone engine's geometry (Phase 2, built)](stone-geometry.md) (draft) - Since 2026-11-05 every stone pattern draws its geometry as data (stones/geometry.js: points, joints, free lines, runs between stops, copies of a cell, in the pattern's own space, typed-array tables) and one engine (stones/candidates.js Candidates.lay) lays any geometry as candidates. Reproduces the old pen's candidates exactly on 568 preset cases except two old bugs fixed and an intended rank change; copies of a cell stay templates under a size modifier. Format, engine rules, verification, timings, open items for the GPU port.
 * [One stone engine for every pattern (proposal)](stone-pattern-engine.md) (draft) - Proposal of 2026-11-04: split every stone pattern into a small description of its geometry (points, runs of line and arc pieces, areas, optionally tiled) and one shared, data-parallel stone engine (spacing by size along runs, per-stone fields, the parallel rule, piece and body). Classes of layout, what each costs, and the order to build it in.
 
 # Data Model

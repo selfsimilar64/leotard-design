@@ -16,7 +16,8 @@
 // Each stone on its own: stones may overlap (patternStones). Nothing here searches the body.
 // Spec: knowledge/engineering/architecture/procedural-stone-patterns.md.
 import { LAYOUTS, GALLERY_ITEMS, layoutDefaults } from './layouts.js';
-import { Candidates, Drawing, SIZES } from './candidates.js';
+import { Candidates, SIZES } from './candidates.js';
+import { Geometry } from './geometry.js';
 import { distortion, distortionReach, frac } from './fields.js';
 import { compileMods, modsFromOld, modWithGeometry, presetMods, sizeRange } from './modifiers.js';
 import { sizeOf, SHAPES } from './library.js';
@@ -25,7 +26,7 @@ import { conflictsOf, aliveOf, resolvePeaks, blocked } from './peaks.js';
 // how far from an opening edge a stone can be and still need the elastic's keep-out checked
 const NEAR_EDGE = 0.03;
 
-const scratch = new Candidates(20000);
+const scratch = new Candidates(20000), scratchGeometry = new Geometry();
 
 export const FRAME_DEFAULTS = { rotate: 0, scale: 1, flip: false };
 export const PLANE_DEFAULTS = { px: 0, py: 0, pturn: 0, pscale: 1, sx: 1, sy: 1 };
@@ -102,6 +103,9 @@ function boxOver(P, piece, m) {
 		const [x, y] = clothToPattern(m, u, v);
 		x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); r = Math.max(r, Math.hypot(x, y));
 	}
+	// a twist turns each ring of the pattern by its own angle: what lands on the piece comes from anywhere on the circle
+	// through the piece's furthest corner
+	if (P.twist) { x0 = y0 = -r; x1 = y1 = r; }
 	const reach = distortionReach(P, r) / m.sc;
 	return { x0: x0 - reach, x1: x1 + reach, y0: y0 - reach, y1: y1 + reach, r: r + reach };
 }
@@ -119,19 +123,22 @@ function anchoredBox(b, A = 0.1) {
 	return { x0, x1, y0, y1, r: Math.max(Math.hypot(x0, y0), Math.hypot(x1, y0), Math.hypot(x0, y1), Math.hypot(x1, y1)) };
 }
 
+// A layout's geometry (stones/geometry.js) over the box: drawn afresh, or, for those worth keeping between frames (heavy),
+// kept on a wider box and reused while the pattern's arrangement is the same and the box stays inside it.
 const noCache = new Map();
-function drawInto(gen, layout, P, E, box, pitch, seed, edge, opts, cache) {
-	if (!layout.heavy) { layout.make(P, E); E.finish(); return; }
+function geometryOf(gen, layout, P, box, pitch, seed, edge, opts, cache) {
+	if (!layout.heavy) { const G = scratchGeometry.reset(box, pitch, seed, edge, opts); layout.make(P, G); G.finish(); return G; }
 	cache ??= noCache;
 	let c = cache.get(gen.id);
-	const key = drawingKey(P, layout, pitch, seed, opts.d0);
+	const key = drawingKey(P, layout, pitch, seed, opts.d0) + ':' + opts.angles;
 	if (c?.key !== key || box.x0 < c.box.x0 || box.x1 > c.box.x1 || box.y0 < c.box.y0 || box.y1 > c.box.y1) {
-		const wide = anchoredBox(box), D = c?.D ?? new Drawing();
-		D.reset(wide, pitch, seed, edge, opts);
-		layout.make(P, D);
-		cache.set(gen.id, c = { key, box: wide, D });
+		const wide = anchoredBox(box), G = c?.G ?? new Geometry();
+		G.reset(wide, pitch, seed, edge, opts);
+		layout.make(P, G);
+		G.finish();
+		cache.set(gen.id, c = { key, box: wide, G });
 	}
-	c.D.replay(E);
+	return c.G;
 }
 
 // A colour picker when there are no colour modifiers: one colour, or by chance (a palette).
@@ -270,7 +277,7 @@ export function patternCandidates(gen, piece, cache = null) {
 	const S = flat ? 1 : frameOf(P).S, sizeMods = compileMods(P.mods, { x: 0, y: 0, c: 1, s: 0, S, F: 1 }, edgeLocal, gen.stone ?? 'Crystal AB').size;
 	const diam = sizeMods ? (u, v, k, t, cat, rank) => ditherSize(d0 * k * sizeMods(u, v, k, t, cat, rank), frac(rank * 97.13 + 0.71)) : null;
 	const E = scratch.reset(box, pitch, seed, flat ? edgeAt : null, { map: m, clip: flat ? piece : local, d0, gap, diam, fine, angles: !isRound, jitter: P.jitter ?? 0 });
-	drawInto(gen, layout, P, E, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine }, cache);
+	E.lay(geometryOf(gen, layout, P, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine, angles: !isRound }, cache));
 	const n = E.n, cut = (a) => a.slice(0, n);
 	const out = { n, GX: cut(E.X), GY: cut(E.Y), GA: cut(E.A), R: cut(E.R), K: cut(E.K), T: cut(E.T), C: cut(E.C), D: cut(E.D), PR: cut(E.P), rigid, P, d0, gap, fine, dart, isRound, flat, varied: !!sizeMods };
 	cache?.set(gen.id + '#cand', { key, local, rot: P.rotate, out });

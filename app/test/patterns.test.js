@@ -5,7 +5,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { loadBody } from './helpers.js';
 import { LAYOUTS, LAYOUT_KINDS, layoutDefaults, GALLERY, GALLERY_ITEMS } from '../src/stones/layouts.js';
-import { Candidates, Drawing, SIZES } from '../src/stones/candidates.js';
+import { Candidates, SIZES } from '../src/stones/candidates.js';
+import { Geometry } from '../src/stones/geometry.js';
 import { blueTile, TILE_R, TILES } from '../src/stones/layouts-lattice.js';
 import { wallpaperOps, WALLPAPER_GROUPS } from '../src/stones/layouts-tiling.js';
 import { curvePoints, curveData, CURVES } from '../src/stones/layouts-curves.js';
@@ -13,7 +14,7 @@ import { distortion } from '../src/stones/fields.js';
 import { MOD_SHAPES, compileMods, modGeometry, newModifier, sizeRange } from '../src/stones/modifiers.js';
 import { ClothPiece, mirrorFast } from '../src/stones/cloth.js';
 import { conflictsOf } from '../src/stones/peaks.js';
-import { runPattern, patternStones, keepPattern, patternParams, patternMap, presetPatch, flipPatternParams, minScale, frameOf, frameToCloth, clothToFrame } from '../src/stones/pattern.js';
+import { runPattern, patternStones, keepPattern, patternCandidates, patternParams, patternMap, presetPatch, flipPatternParams, minScale, frameOf, frameToCloth, clothToFrame } from '../src/stones/pattern.js';
 import { patternHandles } from '../src/stones/handles.js';
 import { runStones } from '../src/stones/generators.js';
 import { buildGarment } from '../src/garment/build.js';
@@ -28,10 +29,10 @@ import '../src/doc/symmetry.js';
 
 const BOX = { x0: -0.15, x1: 0.15, y0: -0.2, y1: 0.2, r: 0.25 };
 const candidatesOf = (name, extra = {}, pitch = 0.004, seed = 3) => {
-	const E = new Candidates(1024).reset(BOX, pitch, seed, (u, v) => Math.min(0.15 - Math.abs(u), 0.2 - Math.abs(v)), { d0: pitch / 1.15, gap: 1.15 });
-	LAYOUTS[name].make({ ...layoutDefaults(name), ...extra }, E);
-	E.finish();
-	return E;
+	const edgeAt = (u, v) => Math.min(0.15 - Math.abs(u), 0.2 - Math.abs(v)), o = { d0: pitch / 1.15, gap: 1.15 }, G = new Geometry().reset(BOX, pitch, seed, edgeAt, o);
+	LAYOUTS[name].make({ ...layoutDefaults(name), ...extra }, G);
+	G.finish();
+	return new Candidates(1024).reset(BOX, pitch, seed, edgeAt, o).lay(G);
 };
 
 // A flat rectangle of cloth, for what does not need a body: the place of a stone comes back as its sp.
@@ -201,7 +202,48 @@ describe('arrangements', () => {
 			// (its box is wider and on round numbers, so what the lines start from may differ at the very edge)
 			expect(Math.abs(cached.length - plain.length) / plain.length, name).toBeLessThan(0.12);
 		}
-		expect(new Drawing().reset(BOX, 0.004, 1, null)).toBeInstanceOf(Drawing);
+	});
+
+	// The geometry engine (stones/geometry.js, Candidates.lay): Phase 2 of knowledge/product/roadmap/webgpu-and-stone-engine-plan.md
+	it('a geometry is data: laid twice, or by two engines, it lays the same stones', () => {
+		const o = { d0: 0.004 / 1.15, gap: 1.15 };
+		for (const name of ['circles', 'stripes', 'rings', 'guilloche', 'motifs', 'scatter']) {
+			const G = new Geometry().reset(BOX, 0.004, 3, null, o);
+			LAYOUTS[name].make(layoutDefaults(name), G);
+			G.finish();
+			const a = new Candidates(64).reset(BOX, 0.004, 3, null, o).lay(G), b = new Candidates(64).reset(BOX, 0.004, 3, null, o).lay(G);
+			expect(a.n, name).toBeGreaterThan(5);
+			expect(b.n, name).toBe(a.n);
+			expect(Array.from(b.X.subarray(0, a.n)), name).toEqual(Array.from(a.X.subarray(0, a.n)));
+			expect(Array.from(b.R.subarray(0, a.n)), name).toEqual(Array.from(a.R.subarray(0, a.n)));
+		}
+	});
+	it('copies of a cell under a size modifier: laid copy by copy, with the very stones and ranks of plain copies when sizes do not change', () => {
+		for (const key of ['circles', 'scales', 'truchet', 'tenprint', 'tile-honeycomb', 'tile-greekkey', 'polka-heart']) {
+			const P = presetParams(GALLERY_ITEMS.get(key));
+			const cand = (mods) => patternCandidates({ id: 'g', seed: 3, stone: 'Crystal', shape: 'round', params: { size: 'ss12', gap: 1.15, x: 0, y: 0, px: 0.00123, py: -0.00077, ...P, nodeSize: 1, graded: 0, mods } }, FLAT, null);
+			// (every stone the crystal's size; the pattern off round numbers, so that no stone lies exactly on the drawn box's edge,
+			// where float noise decides in or out)
+			const a = cand(P.mods), b = cand([...P.mods, newModifier('size', 'linear', { from: 1, to: 1 }, 'flat')]);
+			expect(b.varied, key).toBe(true);
+			expect(b.n, key).toBe(a.n);
+			let worst = 0, ranks = 0, sizes = 0;
+			for (let i = 0; i < a.n; i++) {
+				worst = Math.max(worst, Math.abs(a.GX[i] - b.GX[i]) + Math.abs(a.GY[i] - b.GY[i]));
+				if (a.R[i] !== b.R[i]) ranks++;
+				if (a.D[i] !== b.D[i]) sizes++;
+			}
+			expect(worst, key).toBeLessThan(1e-7); // (a float32's step at 0.3 m: the template's place plus the copy's, or the sum)
+			expect(ranks, key).toBe(0);
+			expect(sizes, key).toBe(0);
+		}
+	});
+	it('a twisted pattern reaches every corner of the piece', () => {
+		const list = stonesOf({ layout: 'grid', spacing: 0.01, twist: 0.6 });
+		for (const [cu, cv] of [[-0.2, -0.3], [0.2, -0.3], [-0.2, 0.3], [0.2, 0.3]]) {
+			const near = list.filter((s) => Math.abs(s.sp.u - cu) < 0.04 && Math.abs(s.sp.v - cv) < 0.04).length;
+			expect(near, cu + ' ' + cv).toBeGreaterThan(5);
+		}
 	});
 });
 

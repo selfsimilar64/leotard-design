@@ -23,6 +23,10 @@ sources:
 
 # Takeaway
 
+**Built in part, 2026-11-05**: the geometry description and the engine (build order 1 and 2 below) are in, see
+[the stone engine's geometry](/engineering/architecture/stone-geometry.md); the traced-contour family in the table below
+was removed. What follows is the proposal as written.
+
 Today each of the ~45 layouts both makes its geometry and lays its stones through one sequential pen (`stones/candidates.js`):
 stone spacing, sizes, keystones and the parallel rule are entangled with each layout's drawing. Proposal: a layout only
 **describes geometry**, in a small intermediate form; one **stone engine** turns any such description into stones with

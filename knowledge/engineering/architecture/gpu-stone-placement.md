@@ -56,7 +56,9 @@ coordinates and the transform is the identity.
 1. **Draw (CPU, cached).** `layout.make` into `Candidates` with the map minus the frame's rigid part, over a disc round
    the frame's origin that covers the piece (radius = farthest piece corner from the origin + the distortion's reach,
    rounded up to 5 cm so a move rarely redraws). Kept per group with a key of everything else (layout params, size,
-   gap, S, plane, distortion, seed, size modifiers, jitter); the heavy layouts' `Drawing` replay stays.
+   gap, S, plane, distortion, seed, size modifiers, jitter); the heavy layouts' `Drawing` replay stays. (Since
+   2026-11-05 `layout.make` draws a `Geometry` and `Candidates.lay` lays it; the heavy layouts keep their geometry:
+   [the stone engine's geometry](/engineering/architecture/stone-geometry.md).)
 2. **Per-candidate attributes (CPU, on a key change or a modifier/colour change).** Packed `Float32Array`s: frame-local
    `gx, gy`; direction `ga`; diameter `d` (size modifiers and `ditherSize` applied); `keep` = density modifiers x the
    scatter share `(d0 fine / d)^2`; `rank`; colour/finish index; `h` (the stone's own random). Groups with an `edge`

@@ -142,13 +142,14 @@ every preset and finds at least 97% of stones away from the edges exactly where 
 
 # The pipeline (`stones/pattern.js patternStones`)
 
-1. **Draw** (`stones/candidates.js`): a layout's `make(P, E)` draws in the pattern's own space and what lands in `E` is
-   already on the cloth, through `patternMap` (frame after plane, with the distortion). Each candidate has `X, Y`,
+1. **Draw, then lay** (since 2026-11-05, [the stone engine's geometry](/engineering/architecture/stone-geometry.md)): a
+   layout's `make(P, G)` draws its geometry in the pattern's own space into a `Geometry` (`stones/geometry.js`: points,
+   joints, free lines, runs between stops, copies of a cell), and one engine (`stones/candidates.js Candidates.lay`) lays
+   it on the cloth, through `patternMap` (frame after plane, with the distortion). Each candidate has `X, Y`,
    `rank`, `A` (direction on the cloth), `T` (how far along the pattern), `K` (the pattern's own size), `D` (its real
    diameter), `C` (family), `P` (priority). Spacing along a line is `gap x (d1 + d2) / 2` for the two stones' real sizes
    at their places, so a tapering line, a size modifier or a stretch keep it packed. Layouts flagged `heavy` (Voronoi,
-   quasicrystals, fields, flow, bubbles) keep their pen's moves (`Drawing`) on an anchored box between frames and
-   replay them.
+   quasicrystals, the field halftones) keep their geometry on an anchored box between frames and lay it again.
 2. **Density**: `rank < density x modifiers`, so thinning nests. A `dart` layout's (scatter, clusters, stardust, galaxy)
    candidates come from the ranked blue-noise tile, spaced for its smallest stones (`fine`); a stone of diameter `d`
    keeps the first `(d0 x fine / d)^2` of them, those the tile spaced for its size (with the parallel rule off only: step 4).
@@ -210,8 +211,8 @@ The arrangements have sizes of their own, not only what a gradient lays over the
 | Spirals | a sunflower's seeds grow and take the room they need (the next seed's distance follows the size here); a nautilus's stones grow with its radius; twin primes bigger |
 | Tilings | joints; a Penrose corner by how many rhombs meet there; a star's points; a gem in each Voronoi cell, as big as the cell has room for |
 | Wallpaper | taper along the motif, stones at its ends |
-| Fields | contour lines by height; a calligrapher's flow line; any field as a halftone, a stone's size its strength |
-| Fractals | the turns of a grown curve by the generation that made them; a dust's stones at every level, the first biggest; a gasket's and bubbles' stones the size of their circles |
+| Fields | a field as a halftone, a stone's size its strength |
+| Fractals | the turns of a grown curve by the generation that made them; a dust's stones at every level, the first biggest; a gasket's stones the size of their circles |
 
 # Making the rest of the path live
 
@@ -274,8 +275,8 @@ the group, as for any edit ([the Mirror toggle](/engineering/architecture/mirror
 | Symmetry | all 17 wallpaper groups with a choice of motif, its size, place and turn[^wallpaper]; a test proves each group is rigid and closed |
 | Spirals | phyllotaxis by Vogel's model[^vogel], Sacks prime spiral, Ulam primes (which numbers they keep is the preset's: prime, twin prime, Fibonacci multiples), spiral arms, nautilus |
 | Radial | rings (with spokes, a web), sunburst, rosette, rose curves, guilloche, string art, whirl |
-| Fields | contour map, Chladni figures, wave interference, labyrinth, two ripples (lines of equal value by marching squares, or a halftone), flow lines |
-| Fractals | 10 grown curves, 5 dusts, Apollonian gasket, bubbles |
+| Fields | Chladni figures, wave interference, two ripples, each as a halftone (their traced lines, the contour map, labyrinth, flow lines and bubbles were dropped on 2026-11-05: decision 4 of the [WebGPU and stone engine plan](/product/roadmap/webgpu-and-stone-engine-plan.md)) |
+| Fractals | 10 grown curves, 5 dusts, Apollonian gasket |
 
 Each picture in the gallery is the real pipeline on a square of cloth (`ui/PatternPanel.jsx thumbOf`).
 

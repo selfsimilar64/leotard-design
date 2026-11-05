@@ -1,10 +1,10 @@
-// Stone arrangements from fields and rules: lines of equal value of a field (contour maps, Chladni
-// figures, wave interference), or the field itself as a halftone of stones; flow lines, the edge of the
-// piece, curves grown by rules (Hilbert, dragon, Gosper), fractal dusts and circle packings. A fractal's
+// Stone arrangements from fields and rules: a field as a halftone of stones (Chladni figures, wave
+// interference, ripples), rows along the piece's edge (lines of equal distance from it), curves grown by
+// rules (Hilbert, dragon, Gosper), fractal dusts and the Apollonian gasket. A fractal's
 // sizes come from the fractal: what appears early is big, what each generation adds smaller, down to what
 // its spaces leave room for. See stones/layouts-lattice.js for what a layout is.
-import { TAU, hash2, rankOf1, rankOf2, fbm, noise2, clamp01 } from './fields.js';
-import { mm, num, ratio, deg, pct, opt, when, along, radius, point, lattice } from './layouts-lattice.js';
+import { TAU, hash2, rankOf1, rankOf2, clamp01 } from './fields.js';
+import { mm, num, ratio, deg, pct, opt, along, radius, point, lattice } from './layouts-lattice.js';
 
 // Lines of equal value of f over the box (marching squares), chained and laid out with the pen.
 // levels: the values; step: grid size (metres); kOfLevel: each line's own size.
@@ -130,10 +130,7 @@ function halftone(E, f, P) {
 		E.add(x, y, rankOf2(i, j), 0, v, kMin + (kMax - kMin) * Math.pow(clamp01((v - cut) / (1 - cut)), 0.8), w > 0 ? 0 : 1);
 	});
 }
-const DRAW = opt('draw', 'Drawn as', 'lines', [['lines', 'Lines'], ['halftone', 'Halftone']]);
-const halftonePoints = (P) => P.draw === 'halftone'; // (a halftone has no lines, so no spacing along them)
-const isHalftone = (P) => P.draw === 'halftone', isLines = (P) => P.draw !== 'halftone';
-const DOTS = [when(mm('dots', 'Between stones', 0.007, 0.003, 0.03), isHalftone), when(pct('cut', 'Leave out below', 0.12, 0, 0.8), isHalftone)];
+const DOTS = [mm('dots', 'Between stones', 0.007, 0.003, 0.03), pct('cut', 'Leave out below', 0.12, 0, 0.8)];
 
 // --- curves grown by rules ----------------------------------------------------------------------------
 export const CURVES = {
@@ -252,110 +249,41 @@ const dustDetail = (P) => (DUSTS[P.dust] ?? DUSTS.carpet).most;
 const SQUARE_GRIP = point((P) => [P.extent / 2, P.extent / 2], (P, x, y) => ({ extent: Math.max(Math.abs(x), Math.abs(y)) * 2 }), 'Size', (P) => squareOf(P.extent));
 
 export const CURVE_LAYOUTS = {
-	// --- fields -----------------------------------------------------------------------------------
-	contours: {
-		label: 'Contour map',
-		heavy: true, random: true,
-		params: [mm('spacing', 'Feature size', 0.08, 0.02, 0.3), num('bands', 'Lines', 9, 2, 30), num('sharp', 'Detail', 3, 1, 5), pct('grow', 'Bigger towards the peaks', 0.4, -1, 1.5)],
-		grips: [radius('spacing', 'Feature size')],
-		make(P, E) {
-			const s = E.seed, L = P.spacing, oct = P.sharp, levels = Array.from({ length: P.bands }, (_, k) => -0.72 + (1.44 * (k + 0.5)) / P.bands);
-			isolines(E, (x, y) => fbm(x / L, y / L, s, oct), levels, Math.max(E.pitch, L / 24), (li) => Math.max(0.3, 1 + P.grow * (li / Math.max(1, P.bands - 1) - 0.4)));
-		},
-	},
+	// --- fields as halftones -------------------------------------------------------------------------
+	// (their lines of equal value, traced, and flow lines and bubble packings went on 2026-11-05: the stone engine lays
+	// shapes that are made per element; knowledge/product/roadmap/webgpu-and-stone-engine-plan.md, decision 4)
 	chladni: {
 		label: 'Chladni figure',
-		heavy: true, points: halftonePoints,
-		params: [mm('spacing', 'Plate size', 0.16, 0.04, 0.5), num('modeN', 'Mode n', 3, 1, 12), num('modeM', 'Mode m', 5, 1, 12), ratio('mode', 'Blend', -1, -1, 1), DRAW, when(ratio('level', 'Nodal level', 0, -0.8, 0.8), isLines), ...DOTS],
+		heavy: true, points: true,
+		params: [mm('spacing', 'Plate size', 0.16, 0.04, 0.5), num('modeN', 'Mode n', 3, 1, 12), num('modeM', 'Mode m', 5, 1, 12), ratio('mode', 'Blend', -1, -1, 1), ...DOTS],
 		grips: [radius('spacing', 'Plate size')],
 		make(P, E) {
 			const L = P.spacing, n = P.modeN * Math.PI, m = P.modeM * Math.PI, b = P.mode, f = (x, y) => { const X = x / L, Y = y / L; return Math.cos(n * X) * Math.cos(m * Y) + b * Math.cos(m * X) * Math.cos(n * Y); };
-			if (isHalftone(P)) halftone(E, (x, y) => f(x, y) / (1 + Math.abs(b)), P);
-			else isolines(E, f, [P.level], Math.max(E.pitch, L / (6 * Math.max(P.modeN, P.modeM))));
+			halftone(E, (x, y) => f(x, y) / (1 + Math.abs(b)), P);
 		},
 	},
 	waveforms: {
 		label: 'Wave interference',
-		heavy: true, points: halftonePoints,
-		params: [num('fold', 'Waves', 5, 2, 12), mm('spacing', 'Wavelength', 0.04, 0.012, 0.15), deg('phase', 'Phase', 0), DRAW, when(num('bands', 'Lines', 1, 1, 7), isLines), ...DOTS],
+		heavy: true, points: true,
+		params: [num('fold', 'Waves', 5, 2, 12), mm('spacing', 'Wavelength', 0.04, 0.012, 0.15), deg('phase', 'Phase', 0), ...DOTS],
 		grips: [along('spacing', [1, 0], 'Wavelength')],
 		make(P, E) {
 			const F = P.fold, k = TAU / P.spacing, ph = (P.phase * Math.PI) / 180, dirs = Array.from({ length: F }, (_, j) => [Math.cos((j * Math.PI) / F), Math.sin((j * Math.PI) / F), j * ph]);
 			const f = (x, y) => { let s = 0; for (let j = 0; j < F; j++) { const d = dirs[j]; s += Math.cos(k * (x * d[0] + y * d[1]) + d[2]); } return s; };
-			if (isHalftone(P)) { halftone(E, (x, y) => f(x, y) / F, P); return; }
-			const levels = Array.from({ length: P.bands }, (_, l) => (P.bands > 1 ? (-0.6 + (1.2 * l) / (P.bands - 1)) * F * 0.5 : 0));
-			isolines(E, f, levels, Math.max(E.pitch, P.spacing / 12));
-		},
-	},
-	labyrinth: {
-		label: 'Labyrinth',
-		heavy: true, random: true, points: halftonePoints,
-		params: [mm('spacing', 'Width', 0.03, 0.01, 0.12), DRAW, ...DOTS],
-		grips: [along('spacing', [1, 0], 'Width')],
-		make(P, E) {
-			const seed = E.seed, N = 14, k = TAU / P.spacing, dirs = Array.from({ length: N }, (_, j) => { const a = hash2(j, 1, seed) * TAU; return [Math.cos(a), Math.sin(a), hash2(j, 2, seed) * TAU]; });
-			const f = (x, y) => { let s = 0; for (let j = 0; j < N; j++) { const d = dirs[j]; s += Math.cos(k * (x * d[0] + y * d[1]) + d[2]); } return s; };
-			if (isHalftone(P)) halftone(E, (x, y) => Math.max(-1, Math.min(1, f(x, y) / 5)), P);
-			else isolines(E, f, [0], Math.max(E.pitch, P.spacing / 10));
+			halftone(E, (x, y) => f(x, y) / F, P);
 		},
 	},
 	ripples: {
 		label: 'Two ripples',
-		heavy: true, points: halftonePoints,
-		params: [mm('spacing', 'Wavelength', 0.028, 0.008, 0.12), mm('apart', 'Centres apart', 0.1, 0, 0.4, 0.0005), DRAW, when(num('bands', 'Lines', 1, 1, 5), isLines), ...DOTS],
+		heavy: true, points: true,
+		params: [mm('spacing', 'Wavelength', 0.028, 0.008, 0.12), mm('apart', 'Centres apart', 0.1, 0, 0.4, 0.0005), ...DOTS],
 		grips: [along('spacing', [0, 1], 'Wavelength'), point((P) => [P.apart / 2, 0], (P, x) => ({ apart: Math.abs(x) * 2 }), 'Centres apart')],
 		make(P, E) {
 			const k = TAU / P.spacing, a = P.apart / 2, f = (x, y) => Math.sin(k * Math.hypot(x - a, y)) + Math.sin(k * Math.hypot(x + a, y));
-			if (isHalftone(P)) { halftone(E, (x, y) => f(x, y) / 2, P); return; }
-			const levels = Array.from({ length: P.bands }, (_, l) => (P.bands > 1 ? -1 + (2 * (l + 0.5)) / P.bands : 0));
-			isolines(E, f, levels, Math.max(E.pitch, P.spacing / 10));
+			halftone(E, (x, y) => f(x, y) / 2, P);
 		},
 	},
-	flow: {
-		label: 'Flow lines',
-		heavy: true, random: true,
-		params: [mm('spacing', 'Between lines', 0.016, 0.005, 0.06), mm('swirl', 'Swirl size', 0.09, 0.02, 0.3), ratio('curl', 'Curl', 1.4, 0.2, 4, 0.05), mm('length', 'Longest line', 0.3, 0.03, 1, 0.005), pct('swell', 'Swell in the middle', 0.6, 0, 1.5)],
-		grips: [along('spacing', [1, 0], 'Between lines'), radius('swirl', 'Swirl size', { angle: Math.PI / 2 })],
-		make(P, E) {
-			const B = E.box, s = P.spacing, seed = E.seed, L = P.swirl, cell = s * 0.9, step = Math.min(E.pitch * 0.7, s / 2), ci0 = Math.floor(B.x0 / cell), cj0 = Math.floor(B.y0 / cell);
-			const nx = Math.ceil((B.x1 - B.x0) / cell) + 2, ny = Math.ceil((B.y1 - B.y0) / cell) + 2;
-			if (nx * ny > 400000) return;
-			const used = new Uint8Array(nx * ny), angle = (x, y) => noise2(x / L, y / L, seed) * TAU * P.curl, at = (x, y) => { const i = Math.floor(x / cell) - ci0, j = Math.floor(y / cell) - cj0; return i < 0 || j < 0 || i >= nx || j >= ny ? -1 : j * nx + i; };
-			// in an order that belongs to the cells, not to the box: the same lines however the box lies
-			const seeds = [];
-			for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) seeds.push([hash2(i + ci0, j + cj0, seed + 3), j * nx + i]);
-			seeds.sort((a, b) => a[0] - b[0]);
-			let lineNo = 0;
-			const most = Math.ceil(P.length / step / 2);
-			for (const [, q] of seeds) {
-				if (used[q]) continue;
-				const x0 = (q % nx + ci0 + 0.5) * cell, y0 = (Math.floor(q / nx) + cj0 + 0.5) * cell, line = [];
-				for (const dir of [1, -1]) {
-					let x = x0, y = y0, own = [];
-					for (let k = 0; k < most; k++) {
-						const a = angle(x, y);
-						x += Math.cos(a) * step * dir; y += Math.sin(a) * step * dir;
-						const c = at(x, y);
-						if (c < 0 || (used[c] && c !== q && !own.includes(c) && !line.some((p) => p[2] === c))) break;
-						own.push(c);
-						if (own.length > 12) own.shift();
-						line.push([x, y, c, dir]);
-					}
-				}
-				if (line.length < 6) continue;
-				const back = line.filter((p) => p[3] < 0).reverse(), front = line.filter((p) => p[3] > 0), all = [...back, [x0, y0, q, 0], ...front], n = all.length - 1;
-				E.cat = lineNo % 8; E.t = hash2(lineNo, 5, seed);
-				lineNo++;
-				// a calligrapher's line: thin at its ends, full in the middle
-				const kOf = (i) => Math.max(0.3, 1 + P.swell * (Math.sin((Math.PI * i) / n) - 0.5));
-				E.k = kOf(0);
-				E.begin(all[0][0], all[0][1], false);
-				for (let k = 1; k <= n; k++) { E.k = kOf(k); E.to(all[k][0], all[k][1]); used[all[k][2]] = 1; }
-				E.end(false);
-			}
-			E.k = 1;
-		},
-	},
+	// rows along the piece's edge: lines of equal distance from it (owner, 2026-11-04: they stay)
 	edgelines: {
 		label: 'Rings along the edge',
 		flat: true,
@@ -420,30 +348,6 @@ export const CURVE_LAYOUTS = {
 				E.cat = Math.min(g, 15); E.t = Math.min(g / 8, 1);
 				circleStones(E, x * R, y * R, r * R, rankOf1(g * 13 + Math.round(r * 9973)), P.ringFrom, Math.min(g, 100));
 			}
-		},
-	},
-	bubbles: {
-		label: 'Bubbles',
-		heavy: true, random: true,
-		params: [mm('radius', 'Biggest', 0.022, 0.005, 0.08), pct('small', 'Smallest', 0.15, 0.02, 1), { ...mm('ringFrom', 'Outline circles over', 0.007, 0.002, 0.08), maxOf: (P) => P.radius }, pct('fillOf', 'Coverage', 0.8, 0.2, 1)],
-		grips: [radius('radius', 'Biggest')],
-		make(P, E) {
-			// (over a fixed stretch of the pattern's own space, not the box: its bubbles stay where they are as it moves)
-			const seed = E.seed, DOMAIN = 1.2, mean = P.radius * (0.3 + P.small * 0.7), tries = Math.min(40000, Math.round(((DOMAIN * DOMAIN) / (mean * mean)) * 6));
-			const cell = P.radius * 2.2, grid = new Map(), keyOf = (i, j) => i * 100000 + j, list = [];
-			for (let k = 0; k < tries; k++) {
-				// biggest first
-				const f = 1 - k / tries, r = P.radius * (P.small + (1 - P.small) * f * f * f), x = (hash2(k, 1, seed) - 0.5) * DOMAIN, y = (hash2(k, 2, seed) - 0.5) * DOMAIN;
-				const ci = Math.floor(x / cell), cj = Math.floor(y / cell);
-				let ok = hash2(k, 3, seed) < P.fillOf;
-				for (let j = -1; j <= 1 && ok; j++) for (let i = -1; i <= 1 && ok; i++) for (const q of grid.get(keyOf(ci + i, cj + j)) ?? []) if (Math.hypot(q[0] - x, q[1] - y) < q[2] + r + E.pitch * 0.55) { ok = false; break; }
-				if (!ok) continue;
-				const key = keyOf(ci, cj), c = [x, y, r];
-				if (!grid.has(key)) grid.set(key, []);
-				grid.get(key).push(c);
-				list.push(c);
-			}
-			list.forEach(([x, y, r], i) => { E.cat = i & 3; E.t = r / P.radius; circleStones(E, x, y, r, rankOf1(i), P.ringFrom); });
 		},
 	},
 };

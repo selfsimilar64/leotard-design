@@ -196,6 +196,14 @@ line and arc pieces between stops; a stop may carry a keystone; a whole number o
 plus a point source and a mapping), and **tiling** (one cell of any of these, lattice vectors, the wallpaper group's
 operations; random choices per cell from a hash of the cell index).
 
+Progress (2026-11-05): steps 1, 2 and 4 in, step 3 in part (the traced-contour family removed; no saved design in
+`app/designs` used it), see [the stone engine's geometry](/engineering/architecture/stone-geometry.md). Layouts draw into
+`stones/geometry.js`, one engine lays it; candidates match the old pen's on 568 preset cases except two old bugs fixed
+(twisted patterns lost their corners; a heavy-layout replay glitch) and an intended rank change for copies of a cell under
+a size modifier, which now stay templates. Decided on the way: copies are an explicit list (not a lattice descriptor);
+runs whose sizes vary are walked stone by stone per run, parallel across runs (Phase 3 step 1 below is refined by it). Not
+done: points by formula as source items, fractals as points by index, the worker.
+
 1. Re-point the pen: `Candidates` (and `Drawing`, whose ops are already a recording) emits runs and points instead of
    stones, so every layout works unchanged on day one.
 2. Stamped layouts (`E.stamped`: circles, scales, truchet, tenprint, tilings, motifs, wallpaper) emit one cell + the
@@ -213,7 +221,10 @@ Every step one element per invocation (WGSL compute, or TSL compute nodes), data
 device; nothing read back per frame except a few counts.
 
 1. **Per run**: sample the size field along it (64 samples), running total of `length / (gap x size)`, stones =
-   round(total); keystones at stops. Reserve slots per run for its most (smallest sizes).
+   round(total); keystones at stops. Reserve slots per run for its most (smallest sizes). (Refined 2026-11-05: a run of
+   one size is closed form per slot as now; a run whose sizes vary keeps the CPU twin's stone-by-stone walk, one
+   invocation per run, so spacing follows each stone's real dithered size: see
+   [the stone engine's geometry](/engineering/architecture/stone-geometry.md).)
 2. **Per slot**: position where the running total reaches k/n; direction from the tangent; size snapped per stone;
    colour, density, angle from the modifiers (port `stones/modifiers.js` fields: linear, reflected, radial, oval, diamond,
    square, sweep, spiral, waves, ripple, stripes, checks, clouds (fbm), edge, along, family, random, bysize). Tiling:

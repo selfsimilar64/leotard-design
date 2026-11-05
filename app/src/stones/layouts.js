@@ -139,17 +139,9 @@ export const GALLERY = [
 	},
 	{
 		title: 'Fields', items: [
-			{ key: 'contours', label: 'Contour map', layout: 'contours' },
-			{ key: 'chladni', label: 'Chladni figure', layout: 'chladni' },
-			{ key: 'chladni-2', label: 'Chladni, other mode', layout: 'chladni', params: { modeN: 2, modeM: 7, mode: 1 } },
-			{ key: 'chladni-dots', label: 'Chladni halftone', layout: 'chladni', params: { draw: 'halftone', size: med } },
-			{ key: 'quasi-waves', label: 'Five waves', layout: 'waveforms' },
-			{ key: 'seven-waves', label: 'Seven waves', layout: 'waveforms', params: { fold: 7, bands: 3 } },
-			{ key: 'wave-dots', label: 'Five-wave halftone', layout: 'waveforms', params: { draw: 'halftone', size: med } },
-			{ key: 'labyrinth', label: 'Labyrinth', layout: 'labyrinth' },
-			{ key: 'ripples', label: 'Two ripples', layout: 'ripples' },
-			{ key: 'ripple-dots', label: 'Ripple halftone', layout: 'ripples', params: { draw: 'halftone', size: med } },
-			{ key: 'flow', label: 'Flow lines', layout: 'flow' },
+			{ key: 'chladni-dots', label: 'Chladni halftone', layout: 'chladni', params: { size: med } },
+			{ key: 'wave-dots', label: 'Five-wave halftone', layout: 'waveforms', params: { size: med } },
+			{ key: 'ripple-dots', label: 'Ripple halftone', layout: 'ripples', params: { size: med } },
 		],
 	},
 	{
@@ -157,7 +149,6 @@ export const GALLERY = [
 			...entries(CURVES, 'grown', 'curve').map((e) => ({ ...e, params: { ...e.params, order: CURVES[e.params.curve].order } })),
 			...entries(DUSTS, 'dust', 'dust').map((e) => ({ ...e, params: { ...e.params, order: DUSTS[e.params.dust].order, size: 'ss30' } })),
 			{ key: 'gasket', label: 'Apollonian gasket', layout: 'gasket' },
-			{ key: 'bubbles', label: 'Bubbles', layout: 'bubbles' },
 		],
 	},
 ];
