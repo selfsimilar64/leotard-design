@@ -52,16 +52,30 @@ export async function gpuKeepCheck({ panel = null, keys = null, shape = 'round' 
 				for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const j of at.get((cx + a) * 100003 + cy + b) ?? []) if (Math.hypot(S[j * 4] - x, S[j * 4 + 1] - y) < 1e-5) return true;
 				return false;
 			};
-			// kept by both, by one only; where the GPU put those both kept
-			const cpuKept = new Uint8Array(n);
-			for (let j = 0; j < cpu.n; j++) cpuKept[cpu.I[j]] = 1;
+			// kept by both, by one only; where the GPU put those both kept. The CPU's candidates by index when the GPU was given them;
+			// a scatter the GPU drew itself numbers its own (and may have drawn a little more or less round the piece), so its stones
+			// are matched by place, both ways
 			let both = 0, onlyCpu = 0, onlyGpu = 0, far = 0;
-			for (let j = 0, i = 0; i < n; i++) {
-				const g = state[i] === 1;
-				if (g && cpuKept[i]) both++; else if (g) onlyGpu++; else if (cpuKept[i]) onlyCpu++;
+			if (G.statics.gen) {
+				const cpuAt = new Map();
+				for (let j = 0; j < cpu.n; j++) { const c = cellOf(cpu.U[j], cpu.V[j]); (cpuAt.get(c) ?? cpuAt.set(c, []).get(c)).push(j); }
+				const inCpu = (x, y) => {
+					const cx = Math.floor(x * 1e4), cy = Math.floor(y * 1e4);
+					for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const j of cpuAt.get((cx + a) * 100003 + cy + b) ?? []) if (Math.hypot(cpu.U[j] - x, cpu.V[j] - y) < 1e-5) return true;
+					return false;
+				};
+				for (let j = 0; j < cpu.n; j++) if (found(cpu.U[j], cpu.V[j])) both++; else onlyCpu++;
+				for (let j = 0; j < drawn; j++) if (!inCpu(S[j * 4], S[j * 4 + 1])) onlyGpu++;
+			} else {
+				const cpuKept = new Uint8Array(n);
+				for (let j = 0; j < cpu.n; j++) cpuKept[cpu.I[j]] = 1;
+				for (let i = 0; i < n; i++) {
+					const g = state[i] === 1;
+					if (g && cpuKept[i]) both++; else if (g) onlyGpu++; else if (cpuKept[i]) onlyCpu++;
+				}
+				for (let j = 0; j < cpu.n; j++) { const i = cpu.I[j]; if (state[i] === 1 && !found(cpu.U[j], cpu.V[j])) far++; }
 			}
-			for (let j = 0; j < cpu.n; j++) { const i = cpu.I[j]; if (state[i] === 1 && !found(cpu.U[j], cpu.V[j])) far++; }
-			results.push({ key: it.key, v: vn, n, cpu: cpu.n, drawn, both, onlyCpu, onlyGpu, far, rounds: K.rounds, unsettled: K.unsettled });
+			results.push({ key: it.key, v: vn, n, cpu: cpu.n, drawn, both, onlyCpu, onlyGpu, far, rounds: K.rounds, unsettled: K.unsettled, gen: !!G.statics.gen });
 		}
 	}
 	K.dispose(); out.forEach((b) => b?.destroy()); ind.destroy();
@@ -69,7 +83,7 @@ export async function gpuKeepCheck({ panel = null, keys = null, shape = 'round' 
 	const worst = [...done].sort((a, b) => diff(b) / Math.max(1, b.cpu) - diff(a) / Math.max(1, a.cpu)).slice(0, 12);
 	return {
 		cases: results.length, skipped: results.length - done.length,
-		summary: { exact: done.filter((r) => !diff(r) && !r.far && r.drawn === r.cpu).length, miscounted: done.filter((r) => r.drawn !== r.cpu).length, differ: done.filter((r) => diff(r)).length, stones: done.reduce((a, r) => a + r.cpu, 0), mismatched: done.reduce((a, r) => a + diff(r), 0), misplaced: done.reduce((a, r) => a + r.far, 0), unsettled: done.filter((r) => r.unsettled).length, maxRounds: Math.max(...done.map((r) => r.rounds)) },
+		summary: { drawnByGpu: done.filter((r) => r.gen).length, exact: done.filter((r) => !diff(r) && !r.far && r.drawn === r.cpu).length, miscounted: done.filter((r) => r.drawn !== r.cpu).length, differ: done.filter((r) => diff(r)).length, stones: done.reduce((a, r) => a + r.cpu, 0), mismatched: done.reduce((a, r) => a + diff(r), 0), misplaced: done.reduce((a, r) => a + r.far, 0), unsettled: done.filter((r) => r.unsettled).length, maxRounds: Math.max(...done.map((r) => r.rounds)) },
 		worst,
 	};
 }

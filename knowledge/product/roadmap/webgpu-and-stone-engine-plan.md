@@ -229,7 +229,13 @@ the WebGPU view; step 2's density and colour as per-candidate values the CPU wor
 move). At the 107 543-stone stress design a move, turn or density step costs the CPU 3-4.5 ms (was 21-25 ms). Not yet:
 steps 1-2 on the GPU (candidates and conflicts: spacing and size steps still 25-50 ms), the flat view from the same buffers,
 blockers, symmetric/side/erase groups. Found: drawing ~107 000 crystals alone costs 11-14 ms of GPU a frame (frame 15.7-20.8
-ms wall), which breaks the 60 fps gate on its own; options go to the owner.
+ms wall), which breaks the 60 fps gate on its own; options go to the owner. Owner (2026-11-05): the stress test is deliberately
+extreme so that normal stone counts stay smooth on slower devices; no change to the crystals; carry on.
+
+Progress (2026-11-05), stage 2: the parallel rule's conflicts found in a GPU-built neighbour grid (no CPU conflict lists), and
+a scatter without modifiers drawn by the GPU (step 1-2 for that class). Every edit at the stress size now costs the pattern
+engine ~1-3 ms CPU and ~1.3-2 ms GPU (spacing was 25-73 ms CPU); see the note. Next: modifiers in WGSL, the other layout
+classes' candidates, the flat view on WebGPU.
 
 1. **Per run**: sample the size field along it (64 samples), running total of `length / (gap x size)`, stones =
    round(total); keystones at stops. Reserve slots per run for its most (smallest sizes). (Refined 2026-11-05: a run of

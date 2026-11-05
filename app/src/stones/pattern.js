@@ -16,12 +16,13 @@
 // Each stone on its own: stones may overlap (patternStones). Nothing here searches the body.
 // Spec: knowledge/engineering/architecture/procedural-stone-patterns.md.
 import { LAYOUTS, GALLERY_ITEMS, layoutDefaults } from './layouts.js';
-import { Candidates, SIZES } from './candidates.js';
+import { Candidates, SIZES, realSize } from './candidates.js';
 import { Geometry } from './geometry.js';
-import { distortion, distortionReach, frac } from './fields.js';
+import { distortion, distortionReach, frac, hash2, TAU } from './fields.js';
+import { blueTile, TILE_R, varied } from './layouts-lattice.js';
 import { compileMods, modsFromOld, modWithGeometry, presetMods, sizeRange } from './modifiers.js';
 import { sizeOf, SHAPES } from './library.js';
-import { conflictsOf, aliveOf, resolvePeaks, blocked } from './peaks.js';
+import { conflictsOf, aliveOf, resolvePeaks, blocked, standingKeys, sizeClass } from './peaks.js';
 
 // how far from an opening edge a stone can be and still need the elastic's keep-out checked
 const NEAR_EDGE = 0.03;
@@ -235,6 +236,31 @@ function candidateKey(P, isRound, seed) {
 	return JSON.stringify([kept, sizeMods, isRound, seed]);
 }
 
+// What must be drawn: the piece seen from the frame's own space (rigidOf).
+function neededBox(piece, rigid) {
+	const need = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+	for (const [u, v] of [[piece.x0, piece.y0], [piece.x1, piece.y0], [piece.x0, piece.y1], [piece.x1, piece.y1]]) {
+		const du = u - rigid.x, dv = v - rigid.y, gx = (rigid.c * du + rigid.s * dv) * rigid.F, gy = rigid.c * dv - rigid.s * du;
+		need.x0 = Math.min(need.x0, gx); need.x1 = Math.max(need.x1, gx); need.y0 = Math.min(need.y0, gy); need.y1 = Math.max(need.y1, gy);
+	}
+	return need;
+}
+const inside = (a, b) => a.x0 >= b.x0 && a.x1 <= b.x1 && a.y0 >= b.y0 && a.y1 <= b.y1;
+// What is drawn: what must be, with a few millimetres round it when the arrangement itself changed (a slider of it, say: the
+// next step will be the same; a heavy layout 2 cm); reached past by a turn (last: the drawing of the same arrangement, with the
+// turn it was drawn at, rot): the circle round the frame's origin that holds the piece whichever way it turns, and 5 cm more, so
+// a turn draws again once; by a move: what must be drawn and 5 cm more round it. Shared by patternCandidates and the GPU's
+// scatter (scatterOnGpu).
+function drawnBox(piece, rigid, need, layout, last, P) {
+	if (last && last.rot === P.rotate) return anchoredBox({ x0: need.x0 - 0.05, x1: need.x1 + 0.05, y0: need.y0 - 0.05, y1: need.y1 + 0.05 }, 0.02);
+	if (last) {
+		let rho = 0;
+		for (const [u, v] of [[piece.x0, piece.y0], [piece.x1, piece.y0], [piece.x0, piece.y1], [piece.x1, piece.y1]]) rho = Math.max(rho, Math.hypot(u - rigid.x, v - rigid.y));
+		return anchoredBox({ x0: -rho - 0.05, x1: rho + 0.05, y0: -rho - 0.05, y1: rho + 0.05 }, 0.02);
+	}
+	return anchoredBox(need, layout.heavy ? 0.02 : 0.004);
+}
+
 // A pattern's candidate stones in its frame's own space (rigidOf), drawn again only when something other than the rigid part
 // changes. -> { n, GX, GY, GA (direction), R (rank), K, T, C (family), D (diameter, size modifiers applied), rigid, P, d0,
 // fine, dart, isRound, flat }. cache: the group's Map (the heavy layouts' drawing is kept there too).
@@ -247,27 +273,12 @@ export function patternCandidates(gen, piece, cache = null) {
 	// with a few millimetres round it when the arrangement itself changed (a slider of it, say: the next step will be the
 	// same; a heavy layout, whose pen's moves are kept on their own wider box, 2 to 4 cm), reused while a move or a turn
 	// stays inside
-	let need = null;
-	if (!flat) {
-		need = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
-		for (const [u, v] of [[piece.x0, piece.y0], [piece.x1, piece.y0], [piece.x0, piece.y1], [piece.x1, piece.y1]]) {
-			const du = u - rigid.x, dv = v - rigid.y, gx = (rigid.c * du + rigid.s * dv) * rigid.F, gy = rigid.c * dv - rigid.s * du;
-			need.x0 = Math.min(need.x0, gx); need.x1 = Math.max(need.x1, gx); need.y0 = Math.min(need.y0, gy); need.y1 = Math.max(need.y1, gy);
-		}
-	}
+	const need = flat ? null : neededBox(piece, rigid);
 	const key = candidateKey(P, isRound, seed);
 	const c = cache?.get(gen.id + '#cand');
-	if (c?.key === key && (flat || (need.x0 >= c.local.x0 && need.x1 <= c.local.x1 && need.y0 >= c.local.y0 && need.y1 <= c.local.y1))) return { ...c.out, rigid, P };
+	if (c?.key === key && (flat || inside(need, c.local))) return { ...c.out, rigid, P };
 	const m = flat ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, distortion(P, seed));
-	// (reached past by a turn: the circle round the frame's origin that holds the piece whichever way it turns, and 5 cm
-	// more, so a turn draws again once; by a move: what must be drawn and 5 cm more round it)
-	let local = null;
-	if (!flat && c?.key === key && c.rot === P.rotate) local = anchoredBox({ x0: need.x0 - 0.05, x1: need.x1 + 0.05, y0: need.y0 - 0.05, y1: need.y1 + 0.05 }, 0.02);
-	else if (!flat && c?.key === key) {
-		let rho = 0;
-		for (const [u, v] of [[piece.x0, piece.y0], [piece.x1, piece.y0], [piece.x0, piece.y1], [piece.x1, piece.y1]]) rho = Math.max(rho, Math.hypot(u - rigid.x, v - rigid.y));
-		local = anchoredBox({ x0: -rho - 0.05, x1: rho + 0.05, y0: -rho - 0.05, y1: rho + 0.05 }, 0.02);
-	} else if (!flat) local = anchoredBox(need, layout.heavy ? 0.02 : 0.004);
+	const local = flat ? null : drawnBox(piece, rigid, need, layout, c?.key === key ? c : null, P);
 	const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : boxOver(P, local, m);
 	const pitch = (d0 * gap) / m.sc;
 	// sizes that vary with place: the modifier's answer, some of each of the sizes it falls between; read in the frame's own
@@ -401,19 +412,79 @@ export function packPattern(gen, ctx, cache = null, blockers = null) {
 
 // A pattern's share of the GPU's keep (stones/gpu-keep.js, the twin of keepPattern above: a change to one is a change to the
 // other), or null where it cannot keep it (a density or colour modifier from the piece's edge, which a move changes). ->
-// { statics: { n, cand, aux, start, list, names } (one object while the candidates, the density and colour modifiers and the
+// { statics: { n, cand, aux, key (standing), grid, names } (one object while the candidates, the density and colour modifiers and the
 // crystals stay: a new one when any changes), frame (this frame's values: the rigid part, density, margin, keep-out, turns),
 // room (roomRaster), edges (the openings' keep-out raster: { A, nx, ny, x0, y0, cell }, or null) }. The GPU keeper
 // (stones/gpu-view.js PackView) hangs its GpuKeep on it as .keeper. opts: { cache, edge }.
 const gpuStatics = new WeakMap(); // per candidate set (its GX array)
+
+// A scatter whose candidates the GPU draws itself (stones/gpu-keep.js SGEN, SSCAN, SPUT; Phase 3 stage 2): the blue-noise tile
+// over the drawn box (layouts-lattice.js SCATTER_SOURCE, laid by the CPU twin through Candidates.layAt), as a table of what
+// belongs to each tile point whatever tile it is in (its place in the tile after the seed's turns, its direction, size, rank,
+// chance, size class, colour) and the tiles' range; the GPU numbers the points that land on the cloth in the CPU's order (point,
+// then row, then column of tiles) by a prefix sum, so the standing order is the CPU's. Not yet (stage 2b: the modifiers on the
+// GPU): a scatter with modifiers, a distortion or a stray (jitter): null, the CPU's candidates. -> { st, P, rg, isRound }
+const scatterTables = new Map(); // seed, variety, size, turned, crystals -> table (13 000 points x 8)
+function scatterOnGpu(gen, piece, cache) {
+	const P = patternParams(gen, piece);
+	if (P.layout !== 'scatter' || P.jitter || (P.mods ?? []).some((m) => !m.off) || distortion(P, gen.seed ?? 1)) return null;
+	const layout = LAYOUTS.scatter, seed = gen.seed ?? 1, d0 = sizeOf(P.size ?? 'ss12'), gap = P.gap ?? 1.2, rigid = rigidOf(P, false);
+	const shape = gen.shape ?? 'round', isRound = (SHAPES[shape]?.aspect ?? 1) === 1 && shape !== 'heart' && shape !== 'triangle' && shape !== 'star' && shape !== 'square';
+	const v = P.variety ?? 0, [modLo] = sizeRange(P.mods), fine = Math.min(1, Math.max(0.25, modLo * (layout.fine?.(P) ?? 1)));
+	// the same box as patternCandidates draws (kept under its own name: the CPU twin keeps its own)
+	const need = neededBox(piece, rigid), key = candidateKey(P, isRound, seed), c = cache?.get(gen.id + '#gpucand');
+	if (c?.key === key && inside(need, c.local)) return { st: c.st, P, rg: rigid, isRound };
+	const local = drawnBox(piece, rigid, need, layout, c?.key === key ? c : null, P);
+	const m = patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, null), box = boxOver(P, local, m);
+	const L = (d0 * gap * fine) / TILE_R;
+	// per tile point (overTile's turns of the tile for this seed; scatter's make: its direction and own size)
+	const tkey = [seed, v, d0, !isRound, gen.stone, JSON.stringify(gen.palette)].join('|');
+	let tab = scatterTables.get(tkey);
+	if (!tab) {
+		const T = blueTile(), ox = hash2(seed, 1), oy = hash2(seed, 2), sw = hash2(seed, 3) < 0.5, fx = hash2(seed, 4) < 0.5, fy = hash2(seed, 5) < 0.5;
+		const colour = plainColour(gen), names = [], index = new Map(), d1 = realSize(d0), table = new Float32Array(T.n * 8);
+		let kLo = Infinity, kHi = -Infinity, maxD = 0;
+		for (let k = 0; k < T.n; k++) {
+			let a = frac(T.X[k] + ox), b = frac(T.Y[k] + oy);
+			if (sw) { const t = a; a = b; b = t; }
+			if (fx) a = 1 - a;
+			if (fy) b = 1 - b;
+			const kk = v > 0 ? varied(hash2(k, 7, seed), v) : 1, d = kk === 1 ? d1 : realSize(d0 * kk), rank = Math.fround(k / T.n);
+			const name = colour(0, 0, kk, 0, 0, rank);
+			let q = index.get(name);
+			if (q === undefined) { index.set(name, (q = names.length)); names.push(name); }
+			table.set([a, b, !isRound ? hash2(k, 8, seed) * TAU : 0, d, rank, frac(rank * 61.803398875 + 0.137), sizeClass(d), q], k * 8);
+			kLo = Math.min(kLo, kk); kHi = Math.max(kHi, kk); maxD = Math.max(maxD, d);
+		}
+		scatterTables.clear(); // (one at a time is plenty: they are remade only when the crystal or the seed changes)
+		scatterTables.set(tkey, (tab = { table, n: T.n, names, maxD, mixed: kLo !== kHi }));
+	}
+	const i0 = Math.floor(box.x0 / L), i1 = Math.floor(box.x1 / L), j0 = Math.floor(box.y0 / L), j1 = Math.floor(box.y1 / L), nti = i1 - i0 + 1, ntj = j1 - j0 + 1, slots = tab.n * nti * ntj;
+	if (slots > 4e6) return null;
+	// the neighbour grid over the drawn box (its candidates lie in it), as patternGpu's
+	const clear = gap, cell0 = Math.max(tab.maxD * clear * 1.0001, 1e-4), area = (local.x1 - local.x0) * (local.y1 - local.y0), cell = area / (cell0 * cell0) > 1e6 ? Math.sqrt(area / 1e6) : cell0;
+	const st = {
+		n: slots, names: tab.names,
+		gen: { table: tab.table, L, i0, j0, nti, ntj, tn: tab.n, slots, box, map: m, clip: local, angles: !isRound, mixed: tab.mixed },
+		grid: { x0: local.x0, y0: local.y0, cell, clear, nx: Math.floor((local.x1 - local.x0) / cell) + 1, ny: Math.floor((local.y1 - local.y0) / cell) + 1 },
+	};
+	cache?.set(gen.id + '#gpucand', { key, local, rot: P.rotate, st });
+	return { st, P, rg: rigid, isRound };
+}
 export function patternGpu(gen, piece, opts = {}) {
 	const P0 = gen.params ?? {};
 	if ((P0.mods ?? []).some((m) => !m.off && m.on !== 'size' && m.shape === 'edge')) return null;
+	// a scatter the GPU draws itself (stage 2), or the CPU's candidates
+	const sc = scatterOnGpu(gen, piece, opts.cache);
+	const { st, P, rg, isRound } = sc ?? cpuStatics(gen, piece, opts);
+	return gpuShare(gen, piece, opts, st, P, rg, isRound);
+}
+// The per-candidate values of the CPU's candidates (patternCandidates), one object per candidate set, modifiers and crystals.
+function cpuStatics(gen, piece, opts) {
 	const Cd = patternCandidates(gen, piece, opts.cache), { n, GX, GY, GA, R, K, T, C, D, P, isRound } = Cd, rg = Cd.rigid;
-	const g = conflictsOf(Cd);
-	const key = JSON.stringify([(P.mods ?? []).filter((m) => !m.off && m.on !== 'size'), gen.stone, gen.palette]);
+	const sig = JSON.stringify([(P.mods ?? []).filter((m) => !m.off && m.on !== 'size'), gen.stone, gen.palette]);
 	let st = gpuStatics.get(GX);
-	if (st?.key !== key) {
+	if (st?.sig !== sig) {
 		const frame = frameOf(P), edgeAt = (u, v) => piece.edgeAt(u, v), mods = compileMods(P.mods, frame, edgeAt, gen.stone ?? 'Crystal AB');
 		const density = mods.density, colour = mods.colour ?? plainColour(gen), names = [], index = new Map();
 		const cand = new Float32Array(n * 4), aux = new Float32Array(n * 4);
@@ -427,9 +498,23 @@ export function patternGpu(gen, piece, opts = {}) {
 			cand[i * 4] = gx; cand[i * 4 + 1] = gy; cand[i * 4 + 2] = GA[i]; cand[i * 4 + 3] = D[i];
 			aux[i * 4] = rank; aux[i * 4 + 1] = density ? density(u, v, K[i], T[i], C[i], rank) : 1; aux[i * 4 + 2] = frac(rank * 61.803398875 + 0.137); aux[i * 4 + 3] = q;
 		}
-		st = { key, n, cand, aux, start: new Uint32Array(g.start.buffer, g.start.byteOffset, n + 1), list: new Uint32Array(g.list.buffer, g.list.byteOffset, g.list.length), names };
+		// the parallel rule's order as a standing a candidate (stones/peaks.js standingKeys) and the neighbour grid the GPU builds:
+		// cells as wide as two of the biggest stones may come together, over the candidates' extent (at most ~1M cells)
+		const S = standingKeys(Cd);
+		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, maxD = 0;
+		for (let i = 0; i < n; i++) { const x = GX[i], y = GY[i]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (D[i] > maxD) maxD = D[i]; }
+		if (!n) { x0 = y0 = 0; x1 = y1 = 1; }
+		let cell = Math.max(maxD * S.clear * 1.0001, 1e-4);
+		const area = (x1 - x0) * (y1 - y0);
+		if (area / (cell * cell) > 1e6) cell = Math.sqrt(area / 1e6);
+		const grid = { x0, y0, cell, clear: S.clear, nx: Math.floor((x1 - x0) / cell) + 1, ny: Math.floor((y1 - y0) / cell) + 1 };
+		st = { sig, n, cand, aux, key: S.key, grid, names };
 		gpuStatics.set(GX, st);
 	}
+	return { st, P, rg, isRound };
+}
+// The rest of a pattern's GPU share: this frame's values and the piece's rasters.
+function gpuShare(gen, piece, opts, st, P, rg, isRound) {
 	const keepOut = P.keepOut, edge = opts.edge, keep = edge ? keepRaster(piece, edge) : null;
 	const turn = ((P.stoneTurn ?? 0) * Math.PI) / 180, upright = P.turn === 'fixed';
 	return {

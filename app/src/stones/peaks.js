@@ -8,12 +8,12 @@
 import { SIZES } from './candidates.js';
 
 // how close two stones of one pattern may lie, as a share of touching (the old check's): measured on the flat cloth
-const FLAT_CLEAR = 0.92;
+export const FLAT_CLEAR = 0.92;
 
 const graphs = new WeakMap(); // per candidate set (its GX array): the conflicts
 
 // a stone size's class: its place among the sold sizes, biggest first (the order a mixed scatter is decided in)
-const sizeClass = (d) => { let q = 0; while (q < SIZES.length - 1 && SIZES[q] < d - 1e-7) q++; return SIZES.length - 1 - q; };
+export const sizeClass = (d) => { let q = 0; while (q < SIZES.length - 1 && SIZES[q] < d - 1e-7) q++; return SIZES.length - 1 - q; };
 
 // A counting-sort grid of some candidates (ids): cells as big as the reach between two of their biggest, or, where the
 // candidates are sparser than that (one size of a mixed scatter), as big as holds about one of them. -> { x0, y0, cell, nx, ny, first (CSR by cell), items, and their x, y, d, order (pos) in cell order; maxD }
@@ -37,22 +37,37 @@ function gridOf(ids, GX, GY, D, pos, clear) {
 
 // The conflicts of a candidate set (stones/pattern.js patternCandidates' output): for each candidate, those above it in the
 // order that it conflicts with. -> { n, order (candidates, first first), start, list (CSR: list[start[i]..start[i+1]]) }
+// The order's rule for a candidate set: a scatter of mixed sizes by size, biggest first; otherwise by what the design hangs on
+// (P) if that differs, then as drawn. And how close two may come (a share of touching). Shared by conflictsOf and the GPU's
+// standing keys (standingKeys: stones/gpu-keep.js ROUND compares them).
+function ruleOf(Cd) {
+	const { n, PR, K, dart, gap, varied } = Cd;
+	let minK = Infinity, maxK = -Infinity, minP = Infinity, maxP = -Infinity;
+	for (let i = 0; i < n; i++) { minK = Math.min(minK, K[i]); maxK = Math.max(maxK, K[i]); minP = Math.min(minP, PR[i]); maxP = Math.max(maxP, PR[i]); }
+	return { clear: dart ? gap : FLAT_CLEAR, mixed: dart && (minK !== maxK || varied), byP: minP !== maxP };
+}
+// Each candidate's standing as one number, smaller first: its class in the rule (size class, or P) then its index, as the
+// order conflictsOf makes (a counting sort, stable). Indices below 2^18 (MAX_CANDIDATES 150 000). -> { key: Uint32Array, clear }
+export function standingKeys(Cd) {
+	const { n, D, PR } = Cd, R = ruleOf(Cd), key = new Uint32Array(n);
+	for (let i = 0; i < n; i++) key[i] = (R.mixed ? sizeClass(D[i]) : R.byP ? PR[i] : 0) * 262144 + i;
+	return { key, clear: R.clear };
+}
+
 export function conflictsOf(Cd) {
 	let g = graphs.get(Cd.GX);
 	if (g) return g;
-	const { n, GX, GY, D, PR, K, dart, gap, varied } = Cd, clear = dart ? gap : FLAT_CLEAR;
+	const { n, GX, GY, D, PR } = Cd, { clear, mixed, byP } = ruleOf(Cd);
 	// the order: a scatter by size, biggest first; otherwise by what the design hangs on (P), then as drawn
 	const order = new Int32Array(n);
-	let minK = Infinity, maxK = -Infinity, minP = Infinity, maxP = -Infinity;
-	for (let i = 0; i < n; i++) { minK = Math.min(minK, K[i]); maxK = Math.max(maxK, K[i]); minP = Math.min(minP, PR[i]); maxP = Math.max(maxP, PR[i]); }
-	const mixed = dart && (minK !== maxK || varied), cls = mixed ? new Int32Array(n) : null;
+	const cls = mixed ? new Int32Array(n) : null;
 	if (mixed) {
 		for (let i = 0; i < n; i++) cls[i] = sizeClass(D[i]);
 		const by = new Int32Array(SIZES.length + 2);
 		for (let i = 0; i < n; i++) by[cls[i] + 1]++;
 		for (let q = 1; q < by.length; q++) by[q] += by[q - 1];
 		for (let i = 0; i < n; i++) order[by[cls[i]]++] = i;
-	} else if (minP !== maxP) {
+	} else if (byP) {
 		const by = new Int32Array(258);
 		for (let i = 0; i < n; i++) by[PR[i] + 1]++;
 		for (let q = 1; q < 258; q++) by[q] += by[q - 1];

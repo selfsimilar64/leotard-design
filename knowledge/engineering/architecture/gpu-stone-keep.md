@@ -109,11 +109,50 @@ screen's refresh): the edit and one `Viewport.frame` called directly, median of 
   100 000 stones**, whatever the pattern engine does; the crystal's look is the owner's call (no simplifying a material
   without asking).
 
-# Stage 2 and after (open)
+# Stage 2 (2026-11-05): conflicts and scatter candidates on the GPU
 
-1. Candidates and conflict lists on the GPU, so spacing and size steps stop costing 25-50 ms: the SOURCE kernels (scatter
-   first), stamped copies, one-size runs in closed form, varying runs one invocation each, and the conflict grid as a GPU
-   counting sort; `statics` built on the GPU from them.
+- **Neighbour grid instead of conflict lists.** The CPU no longer makes `conflictsOf`'s lists for a GPU pack (they cost 6-31 ms
+  at ~28k candidates). It gives each candidate a standing key (`peaks.js standingKeys`: the rule's class, size class or P,
+  x 2^18 + index, the same order as `conflictsOf`'s stable counting sort; `ruleOf` is shared by both) and the grid's size
+  (cells >= the biggest stone x clear, so conflicts lie in the 3 x 3 cells round a candidate; at most ~1M cells). When the
+  candidates change the GPU builds the grid: GCOUNT (atomic count per cell, each candidate's offset), GSCAN (one workgroup:
+  each of 256 threads sums a stretch, thread 0 runs the 256 sums, each writes its stretch's starts), GPUT. ROUND searches the
+  3 x 3 cells for candidates with a smaller key within `(d1 + d2) / 2 x clear` (the same relation as the lists).
+- **A scatter's candidates drawn by the GPU** (`pattern.js scatterOnGpu`): for a scatter with no modifiers, distortion or
+  stray (the stress design; pave, mixed sizes, pebbles), the CPU sends a table per tile point (~13 000 x 8 floats: its place
+  in the tile after the seed's turns, direction, diameter, rank, chance, size class, colour index; rebuilt only when the
+  seed, variety, size or crystal changes) and the tiles' range. SGEN marks each (tile point, row, column) slot that lands in
+  the drawn box and region, SSCAN numbers them by a prefix sum (the CPU's index order: point, then row, then column), SPUT
+  writes cand, aux and the standing key. Slots that land nowhere stay a candidate of size 0 (the buffer is cleared first),
+  which the other kernels pass over, so `n` is the slot count (an upper bound) and nothing is read back. The drawn box is
+  the CPU's (`drawnBox`, shared with `patternCandidates`, cached as `#gpucand`), so a move inside it draws nothing again.
+- Twin check: still 660/660 exact (12 cases drawn by the GPU, matched by place both ways since the GPU numbers its own
+  candidates).
+
+## Timings after stage 2 (stress design, biggest group 92 376 slots / 36 139 kept)
+
+Taken apart per edit step with the page's frame loop paused (`dev/stone-stress.js stressEngine`; its frames otherwise land in
+the waits), GPU times by timestamp queries:
+
+| edit | stone engine CPU | stone engine GPU | frame CPU | frame GPU |
+|---|---|---|---|---|
+| move | 1.0 ms | 1.4 ms | 5.2 ms | 19.7 ms |
+| turn | 0.9 | 1.3 | 5.1 | 14.8 |
+| density | 0.8 | 1.3 | 5.0 | 14.3 |
+| spacing | 1.0 | 1.9 | 4.3 | 14.6 |
+| stone size | 2.7 | 2.0 | 4.4 | 14.5 |
+
+(Spacing before stage 2: 25-73 ms CPU.) The pattern engine now costs ~1-3 ms CPU and ~1.3-2 ms GPU for any edit at 107 543
+stones; what is left of a frame is the scene, the crystals' drawing above all. Measuring pitfalls met: steps fired back to back
+without waiting for the GPU make a "CPU" timing include waits for earlier frames (17 ms readings that were the GPU's); the
+page's own frame loop renders between steps and lands in any wait for the GPU (a keep that looked 5-12 ms is 0.5 ms by
+timestamp); a dev script's dynamic `import()` of an app module can be a second copy of it (set switches through a live
+instance's constructor).
+
+# After stage 2 (open)
+
+1. Modifiers on the GPU (density, colour, size: `modifiers.js` fields in WGSL), so fades and gradients get GPU candidates
+   too; other layouts' candidates (stamped copies, one-size runs in closed form, varying runs one invocation each).
 2. The flat view on a WebGPU canvas on the same device, drawing from the same buffers (today it asks the CPU twin for `k`,
    so Pattern and Both layouts still pay the CPU's keep).
 3. Blockers (patterns before on the piece), symmetric/side/erase groups, edge-field modifiers on the GPU.
