@@ -87,9 +87,10 @@ export function stonesFor(p) {
 		}
 	}
 	if (p.fitted) {
-		// (a mirrored pack on another piece, the other sleeve of a pair, lands here by its fitted triangles: its records)
-		const others = (run.packs ?? []).filter((pk) => pk.mirrored && pk.piece !== cloth).flatMap((pk) => pk.records());
-		for (const s of others.length ? records.concat(others) : records) {
+		// (stones placed on the body, not laid on a piece, found here by their fitted triangle. Packs are not searched: a fitted
+		// garment shows each piece once, Front and Back whole and one sleeve that carries its pair's mirrored cut (above, twin), so a
+		// pack's stones never land on another piece, and asking a GPU-kept pack for its records ran the CPU twin on every paint.)
+		for (const s of records) {
 			if (!s.fit || s.flat === cloth) continue;
 			const own = cloth.uvOfFit(s.fit);
 			if (own) { at(s, own, false); continue; }

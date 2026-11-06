@@ -1,5 +1,9 @@
 # Bundle update log
 
+## 2026-11-06
+* **Update**: [The 3D view on WebGPU](/engineering/rendering/webgpu-port.md): owner closed the studios' window glow (the HDRI is never a background), accepted parity, and dropped fallback work; frame cost against WebGL measured (new section): WebGPU 20-50% more GPU per frame after one fix (the contact shadows' denoise drawn once at half resolution: 9.4 -> 6.8 ms; all effects 19 -> 16 ms against WebGL's 10.9), every design under 11 ms; the "no worse than WebGL" gate not met, for the owner. [Plan](/product/roadmap/webgpu-and-stone-engine-plan.md) progress and the owner's answers of 2026-11-06.
+* **Update**: [Pattern stones laid and kept on the GPU](/engineering/architecture/gpu-stone-keep.md): the flat view's fitted-sleeve case closed (the CPU search never placed a stone, only made mirrored GPU packs run the CPU twin on every paint; removed); the twin check as a browser test skipped and 100 000 stones confirmed a moonshot (real leotards: under 50 000), owner.
+
 ## 2026-11-05
 * **Creation**: [What factory footage shows of leotard patterns](/domain/construction/factory-pattern-footage.md): owner's frames from GK (about 2010) and Alpha Factor (FloGymnastics 2016) videos, kept in git-ignored assets/reference/factory-footage/: point-and-curve CAD pieces, a GK back block with alternative curves and internal lines, nested markers, Alpha Factor bodies apparently cut full width.
 * **Creation**: [Yardsticks from real leotards](/domain/construction/real-leotard-yardsticks.md): how drafted blocks are checked against real competition leotards (owner's flat measurements via the Leotard Measuring Log artifact, resale listings, construction evidence, wear failures, comfort pressure); the flat measurement set and its pattern equivalents; 20 resale rows suggesting about 16-27% chest and 8-24% length reduction on GK. Owner: target is the competition look, not dancewear; can measure gym leotards flat, not on athletes.

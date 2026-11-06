@@ -19,6 +19,10 @@ sources:
     resource: conversation with the product owner, 2026-11-05 (Claude Code session)
     title: "Continue to Phase 3; measure actual frame time, not fps (readings can be held to the screen's refresh)"
     author: human:mattj
+  - id: owner2
+    resource: conversation with the product owner, 2026-11-06 (Claude Code session)
+    title: "Real leotards carry under 50 000 stones (100 000 was a moonshot); skip the twin check as a browser test; tidy the flat view's fitted-sleeve case"
+    author: human:mattj
   - id: code
     resource: "app/src/stones/gpu-lay.js (laying kernels, layData, variants), app/src/stones/gpu-wgsl.js (hashes, noise, distortions, modifiers, sizes in WGSL), app/src/stones/gpu-keep.js (keep kernels, blockers, the cut, GpuKeep), app/src/stones/pattern.js patternGpu, posRasters (the CPU's share; twins of patternCandidates and keepPattern), app/src/stones/gpu-view.js PackView (room, keep, blockersOf, keptHooks), app/src/stones/generators.js packOfGroup, blockersFrom; app/src/ui/FlatStones.jsx paintGpu; app/src/render/engine.js syncStones (ctx.gpuKeep, layReady); app/src/dev/gpu-keep-check.js (gpuKeepCheck, gpuPackCheck), app/src/dev/stone-stress.js (stress design and timings)"
     title: GPU keep code
@@ -213,18 +217,22 @@ instance's constructor).
 4. **The WebGL view**: no compute shaders; the CPU twin throughout (the fallback).
 5. **Stones that are not patterns**: single placed stones, rows along a line (the Rows tool walks the 3D body surface), and the
    keep-apart pass between them: few stones, geometry on the body mesh.
-6. **Fitted garments, flat view**: a mirrored pattern shown on the other sleeve of a pair is placed there by its fitted triangles,
-   from the CPU twin's records (the 3D view draws it from the GPU's buffers).
+6. (Was: fitted garments in the flat view, a mirrored pattern on the other sleeve from the CPU twin's records. Checked 2026-11-06:
+   a fitted garment's flat view shows each piece once (Front and Back whole, one sleeve carrying its pair's mirrored cut), so a
+   pack's stones never land on another piece; the search found nothing (0 of 1 362 on Gem Test 3 with a sleeve pattern) and only
+   made every mirrored GPU pack run the CPU twin on each paint. Removed from `ui/FlatStones.jsx stonesFor`; the sleeve's own and
+   mirrored cuts are drawn from the GPU's buffers, as on a drawn garment. Six moves of a sleeve pattern: no `records()` call.)
 7. **Compiling** a pattern kind's kernels the first time (above): the CPU twin keeps that pattern for those 0.4-3 s.
 
 # Open
 
 1. Point-by-point layouts as GPU point sources (see "What stays on the CPU", 1), if the owner wants arrangement edits of those free
    of CPU work too.
-2. The fitted-sleeve case of the flat view (above, 6).
+2. ~~The fitted-sleeve case of the flat view~~: closed 2026-11-06 (above, 6).
 3. The crystals' draw cost at 100 000 stones: options for the owner (a cheaper crystal for stones a few pixels across, fewer facets,
-   impostors) before any change; the owner's word (2026-11-05): the stress test is deliberately extreme, no change for now.
-4. A browser test that runs the twin check (today a dev script run in the test tab).
+   impostors) before any change. Owner (2026-11-05, again 2026-11-06): 100 000 was a moonshot; the most stones ever put on a real
+   leotard is under 50 000 (about 32-40 000), so missing 60 fps at 100 000 is accepted. No change.
+4. ~~A browser test that runs the twin check~~: owner (2026-11-06): skip; the dev script stays.
 
 [^code]: `app/src/stones/gpu-keep.js`, `pattern.js patternGpu`, `gpu-view.js PackView`, `generators.js`; dev:
     `app/src/dev/gpu-keep-check.js`, `app/src/dev/stone-stress.js`.

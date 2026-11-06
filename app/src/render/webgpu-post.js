@@ -117,7 +117,10 @@ export class NodePost {
 			a.radius.value = 0.06; a.distanceExponent.value = 1.5; a.thickness.value = 0.6; a.scale.value = 1; a.samples.value = 8;
 			const d = denoise(a.getTextureNode(), depth, null, camera);
 			d.lumaPhi.value = 10; d.depthPhi.value = 2; d.normalPhi.value = 3; d.radius.value = 4;
-			col = vec4(col.rgb.mul(mix(vec3(1), vec3(d.r), 0.85)), 1);
+			// denoised into a half-resolution target of its own, as the WebGL GTAOPass's denoise pass is: inline, the denoise ran
+			// per full-resolution pixel and again for every node that read col (glow, glare, output): 9.4 ms of GPU against 4.4
+			const dn = rtt(d, null, null, { type: THREE.HalfFloatType, resolutionScale: 0.5 });
+			col = vec4(col.rgb.mul(mix(vec3(1), vec3(dn.sample(uv()).r), 0.85)), 1);
 		}
 		if (this.bloom.enabled) {
 			// UnrealBloomPass(strength, radius 0.1, threshold 1.6), added

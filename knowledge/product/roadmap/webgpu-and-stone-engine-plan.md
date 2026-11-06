@@ -170,6 +170,12 @@ stones changed after the baseline). Not passed yet: four bright photographed stu
 the frame-cost gate is not measured. The person figure (step 3) is not shown by the app (the body is always the headless
 mannequin), so it was not ported; the athlete-skin finishes and the skin pass are.
 
+Progress (2026-11-06), owner: the studios' window glow does not matter (the HDRI is never shown as a background); parity
+accepted; no fallback work (step 8: the product may go native, WebGPU is widely supported). Frame cost measured: WebGPU
+20-50% more GPU per frame than WebGL after one fix (the contact shadows' denoise at half resolution), every design under
+11 ms at 1792 x 1344, all effects 16 ms against 10.9; the gate is not met, for the owner (accept or tune). WebGL still the
+default and not retired. Details: [the 3D view on WebGPU](/engineering/rendering/webgpu-port.md).
+
 Steps, each gated by the baseline (Phase 0.2) on the same capture and a pixel-difference report plus the owner's eye for
 anything that differs; do not simplify a material's look to make a port easier (owner's rule during look-dev):
 
@@ -299,5 +305,16 @@ note's section of that name. Owner (2026-11-05): no CPU paths unless strongly ju
 3. **Stress test design**: any simple design with every piece fully covered by a generated pattern.
 4. **Density on mixed scatters** under the rule: fine for now, revisit if more control is needed.
 5. **No iPad testing**: Phase 1 step 8 drops the iPad check; the fallback question stays for the desktop shell only.
+
+# Owner's answers (2026-11-06)
+
+1. Studio window glow: not needed (the HDRI is never shown as a background).
+2. Parity: accepted (about one level of 255; their own use looked right).
+3. Frame cost against WebGL: measure it (done, see Phase 1 progress).
+4. WebGL 2 fallback: no work now (may go native; WebGPU widely supported).
+5. Flat view's fitted-sleeve case: do it (done: the CPU path was removed, nothing it drew was lost).
+6. Twin check as a browser test: skip.
+7. 100 000 stones at 60 fps was a moonshot; the most stones ever put on a real leotard is under 50 000.
+8. Then commit and push.
 
 [^owner]: Conversation with the product owner, 2026-11-04.

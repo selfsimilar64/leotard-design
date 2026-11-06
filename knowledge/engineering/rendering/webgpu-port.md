@@ -16,6 +16,10 @@ sources:
     resource: "app/src/render/webgpu.js, webgpu-post.js, outline-node.js, rings-node.js, viewport.js, lines.js; app/src/materials/fabric-node.js, fabric-light.js; app/src/stones/stones-node.js, gpu-view.js, view.js; app/src/dev/baseline.js, wgsl-scope-check.js; app/test/webgpu-parity/"
     title: WebGPU path code
     author: claude-code/claude-opus-5-5
+  - id: owner
+    resource: conversation with the product owner, 2026-11-06 (Claude Code session)
+    title: "Window glow does not matter (the HDRI is never shown as a background); parity accepted; no WebGL fallback work; measure the frame cost against WebGL"
+    author: human:mattj
   - id: run
     resource: "Claude Code session of 2026-11-04/05 (test copy of the app on port 5177)"
     title: Port checks and parity runs
@@ -97,8 +101,42 @@ Capture set `webgpu-s12` against the WebGL baseline (170 shots), mean difference
   of Green loft hall, the baseline and one taken now, differ by 32 themselves; a fresh WebGL capture and WebGPU differ by 28.
   The glow shaders, kernel sizes, mip chain, resolution (a quarter of the image) and composite (UnrealBloomPass's 3 x
   strength, added times its own peak, ported in `webgpu-post.js`) are the same on both sides; the cause is not found.
-- Not measured yet (the browser pane was hidden, which stops frames): frame cost at 1792 x 1344 against WebGL (the plan's
-  gate), and a parity run on the WebGL 2 fallback.
+  **Closed by the owner (2026-11-06)**: the photographed studios' HDRI will not be shown as a background (it looks warped), so
+  the window's glow does not matter.[^owner]
+- **Parity signed off by the owner (2026-11-06)**: about one level of 255 on average, and their own use of the WebGPU view
+  looked right.[^owner]
+- Frame cost: measured 2026-11-06, see "Frame cost against WebGL" below (WebGPU 20-50% more GPU per frame; gate not met).
+
+## Frame cost against WebGL (2026-11-06, the plan's gate)
+
+`dev/baseline.js` `post` and `designs(tag, GEM_TESTS)` with timings on, each renderer in the same tab one after the other
+(tags `timing-webgl`, `timing-webgpu`, `timing-webgpu2` after the fix below; `timing-*3`: Gem Test 3 alone, back to back).
+1792 x 1344, GTX 1650; GPU ms by timer queries (WebGL) and timestamp queries (WebGPU), median of the benchmark's frames;
+wall = `Viewport.benchmark` per frame, GPU waited for.
+
+| scene | WebGL GPU | WebGPU GPU before | WebGPU GPU after |
+|---|---|---|---|
+| post: none | 3.5 | 4.6 | 4.1 |
+| post: MSAA 4x | 4.9 | 6.3 | 7.0 |
+| post: skin | 4.1 | 5.6 | 6.2 |
+| post: contact shadows | 4.4 | 9.4 | 6.8 |
+| post: glow | 3.8 | 4.8 | 5.4 |
+| post: glare | 4.2 | 5.3 | 5.8 |
+| post: all | 10.9 | 19.0 | 16.0 |
+| Gem Tests 1-3, drawn and fitted, 3 views (median of 18) | 3.9 | 6.2 | 5.8 |
+| Gem Test 3 alone, back to back (6 shots) | 6.4-8.3 | | 7.3-10.7 |
+
+- **Fixed**: the contact shadows' denoise ran inline at full resolution and again for every node reading the colour (glow,
+  glare, output); now drawn once into a half-resolution target (`rtt`, as the WebGL GTAOPass's denoise pass): 9.4 -> 6.8 ms,
+  all effects 19 -> 16 ms. Parity unchanged (post 0.1 median, 0.4 worst; designs 0.8 median).
+- **Run to run noise is large on this machine**: WebGL alone measured Gem Test 3 at 4.4-5.3 ms in one run and 6.4-8.3 ms in
+  the next. Compare only shots taken back to back.
+- **Result**: WebGPU costs ~20-50% more GPU per frame than WebGL (the default view's effects: skin, contact shadows, glow), and
+  under 1 ms more wall time a frame on the back-to-back run; every design shot stays under 11 ms, inside a 60 fps frame. With
+  every effect on (MSAA 4x and glare too) it is 16 ms against 10.9. The plan's gate ("no worse than WebGL") is **not met**;
+  each pass costs more than its WebGL twin (skin +2.0 ms against +0.6, MSAA +2.8 against +1.4), not one outlier. Not found
+  yet: whether it is Dawn's D3D12 path itself or something in three's node passes (formats, the output pass's extra copy).
+  For the owner: accept it (the stone engine's savings at large stone counts are far bigger: 21 -> 3 ms CPU an edit), or tune.
 
 Captures: `app/captures/baseline-<tag>/` (gitignored); `python app/test/webgpu-parity/report.py <tag>` and `compare.py` (side by
 side sheets in `app/captures/parity-<tag>/`). Taken with `b.TIMINGS.on = false` (captures only); timings: below.
@@ -112,6 +150,10 @@ it loads without errors with everything ported here (2026-11-05); its parity run
 the re-fit (`fit/refit.js`, compute shaders) has no device: a fitted garment keeps its saved fit. The stone engine's CPU twin
 (Phase 3) is the stones' fallback the plan names.
 
+**Owner (2026-11-06): no fallback work for now.** The product may become a native app; WebGPU is widely supported and any
+machine expected to run a demanding app has it. The WebGL 2 backend stays as it is (untested), nothing more is built for it.[^owner]
+
+[^owner]: Conversation with the product owner, 2026-11-06.
 [^plan]: WebGPU renderer and one GPU stone engine (plan).
 [^code]: WebGPU path code.
 [^run]: Port checks and parity runs, 2026-11-04/05.
