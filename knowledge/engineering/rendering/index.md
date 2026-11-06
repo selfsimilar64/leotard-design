@@ -11,6 +11,10 @@
 
 * [The 3D view on WebGPU (Phase 1)](webgpu-port.md) (draft) - Phase 1 of the WebGPU plan: the second renderer path (?renderer=webgpu), every part of the WebGL view ported (fabric with its lighting, stones and their GPU placement, post effects, outline, captures, swatches, the re-fit's device), how each is built, the pitfalls met and the parity against the WebGL baseline.
 
+# Environment
+
+* [Why the WebGPU view costs more per frame than WebGL (Windows, 2026-11-06)](webgpu-frame-cost-on-windows.md) (draft) - Root-cause hunt for the WebGPU view's higher frame cost on the owner's laptop (GTX 1650, Windows, Chromium 152): the same three.js node shaders run as fast as the WebGL view through three's WebGL 2 backend, but 30-40% slower on the GPU through Chromium's WebGPU (Dawn, D3D12); Dawn's IEEE-strict shader compiling is ~7-10% of it; compiler (DXC/FXC), robustness, Dawn's D3D11 backend, GPU clocks, draw counts and the stones' storage-buffer path ruled out. three's WebGPU renderer also costs ~4.5 ms CPU a frame against <1 ms. Hybrid-GPU laptops can put WebGPU on the integrated GPU (10x slower). Method, numbers, tools.
+
 # Reference
 
 * [WebGL baseline captures (the parity reference)](webgl-baseline-captures.md) (draft) - The fixed set of captures and frame timings taken with the WebGL renderer on 2026-11-04 before the WebGPU port: what is in it, the exact settings, how to take it again (dev/baseline.js), where it lives (app/captures/baseline-webgl/, not committed), the frame costs measured, and what not to compare pixel for pixel.

@@ -137,6 +137,9 @@ wall = `Viewport.benchmark` per frame, GPU waited for.
   each pass costs more than its WebGL twin (skin +2.0 ms against +0.6, MSAA +2.8 against +1.4), not one outlier. Not found
   yet: whether it is Dawn's D3D12 path itself or something in three's node passes (formats, the output pass's extra copy).
   For the owner: accept it (the stone engine's savings at large stone counts are far bigger: 21 -> 3 ms CPU an edit), or tune.
+- **Root cause (later the same day)**: Chromium's WebGPU path on Windows (Tint and Dawn, D3D12), not our materials or three's
+  shaders: the same node shaders through three's WebGL 2 backend are as fast as the WebGL view. See
+  [why the WebGPU view costs more per frame](/engineering/rendering/webgpu-frame-cost-on-windows.md).
 
 Captures: `app/captures/baseline-<tag>/` (gitignored); `python app/test/webgpu-parity/report.py <tag>` and `compare.py` (side by
 side sheets in `app/captures/parity-<tag>/`). Taken with `b.TIMINGS.on = false` (captures only); timings: below.
