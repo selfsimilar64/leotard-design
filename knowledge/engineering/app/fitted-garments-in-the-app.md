@@ -192,6 +192,24 @@ Close to the Armstrong block's tension (1.20 / 1.06), tighter lengthwise (the fo
 Seen in the app (port 5176): front and back smooth, no fold at the small of the back, a high-cut leg; the cuff ends about
 1 cm short of the wrist landmark.
 
+# The purchased block, local only (2026-11-08)
+
+The owner asked to see the [purchased block](/domain/construction/basicpatternblock-leotard-block.md) fitted in the app, as the
+yardstick beside the drafted blocks. Its licence bars redistribution, so it never ships: `wrap_block.py XS` refits it on `young`
+into the git-ignored `app/captures/`; the dev server serves `wrap-*.json` from there at `/fitted-local/` (`vite.config.js`, beside
+the other never-bundled routes); `garment/fitted.js` lists **Purchased block (local)** and **Purchased block, high cut (local)** only
+when `import.meta.env.DEV`; `render/fitted.js` loads entries marked `local` from that route. A release build has neither the
+entries nor the files. A Vite config change restarts the dev server once per save; a second quick save can be missed (restart it).
+
+| Stage | Across | Along | Inside out |
+|---|---|---|---|
+| Torso alone, 240 iterations | 1.114 | 1.005 | 0.00% |
+| Sleeve alone, 240 iterations | 1.042 | 0.929 | 0.25% |
+| Settled together, 60 iterations | 1.090 | 0.972 | 0.07% |
+
+Back waist along 0.719: the purchased block also gathers lengthwise at the small of the back on `young`, as Aldrich's did (0.669)
+and Armstrong's far less; some of that fold is the body and the fit, not only the patterns. Its sleeve is wide and long (0.93 along).
+
 # Known limits **[INFERRED]**
 
 - **Fitted on one body.** On other bodies the young standing fit is carried by surface coordinates and then re-fitted by the GPU

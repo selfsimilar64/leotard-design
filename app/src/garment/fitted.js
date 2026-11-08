@@ -4,8 +4,16 @@
 // Files: app/public/fitted/, copied there by pipeline/publish_fitted.py from the fit's output (twin: its OWNED list).
 // Only blocks the project owns are listed: a block derived from a bought pattern stays out (its licence bars
 // redistributing it). knowledge/engineering/app/fitted-garments-in-the-app.md
+// The purchased block (BasicPatternBlock 0005, XS on `young`), for comparison only: its fits stay in app/captures, served by the
+// dev server at /fitted-local/ (vite.config.js) and listed only in dev, so they are never bundled or shipped (licence).
+const LOCAL = [
+	{ key: 'bought-XS', label: 'Purchased block (local)', leg: 'Thigh leg', file: 'wrap-XS-block', fittedOn: 'young', local: true, hint: 'The purchased block, size XS, thigh leg; fitted by simulation on the young body. Shown only on this computer (its licence bars shipping it)' },
+	{ key: 'bought-XS-high', label: 'Purchased block, high cut (local)', leg: 'High-hips leg', file: 'wrap-XS-high-resolved', fittedOn: 'young', local: true, hint: 'The purchased block, size XS, high-hips leg; fitted by simulation on the young body. Shown only on this computer (its licence bars shipping it)' },
+];
+
 export const FITTED = [
-	{ key: 'armstrong-6', label: 'Textbook leotard', leg: 'Basic leg', file: 'armstrong-6-block', fittedOn: 'young' },
+	...(import.meta.env.DEV ? LOCAL : []),
+	{ key: 'armstrong-6',label: 'Textbook leotard', leg: 'Basic leg', file: 'armstrong-6-block', fittedOn: 'young' },
 	{ key: 'armstrong-6-high', label: 'Textbook leotard, high cut', leg: 'High-cut leg', file: 'armstrong-6-high-resolved', fittedOn: 'young' },
 	// Aldrich's bodyshaper (pipeline/draft_aldrich.py), size 6, gusset joined to the back and the crotch sewn shut
 	{ key: 'aldrich-6', label: 'Bodyshaper leotard', leg: "The book's leg", file: 'aldrich-6-block', fittedOn: 'young' },

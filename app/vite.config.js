@@ -14,6 +14,8 @@ import path from 'node:path';
 //   GET  /textures/<...>                  owner's licensed textures from ../assets/textures (never bundled)
 //   GET  /moodboard/<file>                the owner's moodboard photos from ../moodboard (never bundled)
 //   GET  /hdri/<file>.hdr                 studio HDRIs from ../assets/hdri (Poly Haven, CC0; never bundled)
+//   GET  /fitted-local/wrap-<name>.json   fits of the purchased block from captures (its licence bars redistribution; never
+//                                         bundled; garment/fitted.js lists them in dev only)
 // Paths are confined to their folder; anything else is refused.
 const ROOT = path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1'));
 const DIRS = { designs: path.join(ROOT, 'designs'), captures: path.join(ROOT, 'captures'), references: path.join(ROOT, 'references'), exports: path.join(ROOT, 'exports'), thumbs: path.join(ROOT, 'public', 'thumbs'), scanthumbs: path.join(ROOT, '..', 'assets', 'textures', 'vmod', 'thumbs', 'cloth') };
@@ -69,9 +71,10 @@ function fileBridge() {
 							return;
 						}
 					}
-					m = url.match(/^\/(textures|moodboard|hdri)\/(.*)$/);
+					m = url.match(/^\/(textures|moodboard|hdri|fitted-local)\/(.*)$/);
 					if (m) {
-						const p = inside({ textures: TEXTURES, moodboard: MOODBOARD, hdri: HDRI }[m[1]], m[2]);
+						if (m[1] === 'fitted-local' && !/^wrap-[\w-]+\.json$/.test(m[2])) { res.statusCode = 404; res.end('missing'); return; }
+						const p = inside({ textures: TEXTURES, moodboard: MOODBOARD, hdri: HDRI, 'fitted-local': DIRS.captures }[m[1]], m[2]);
 						if (!p || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.statusCode = 404; res.end('missing'); return; }
 						res.setHeader('Content-Type', MIME[path.extname(p).toLowerCase()] || 'application/octet-stream');
 						res.setHeader('Cache-Control', 'max-age=3600');

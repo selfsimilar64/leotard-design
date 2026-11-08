@@ -35,7 +35,7 @@ function Garment({ doc }) {
 	return (
 		<Section title="Garment">
 			<Segmented wrap value={f?.key ?? null} onPick={pick}
-				options={[[null, 'Drawn', null, 'The pieces drawn on the body, shaped by the options below'], ...FITTED.map((x) => [x.key, x.label, null, `${x.leg}; drafted from a textbook block and fitted by simulation on the ${x.fittedOn} body`])]} />
+				options={[[null, 'Drawn', null, 'The pieces drawn on the body, shaped by the options below'], ...FITTED.map((x) => [x.key, x.label, null, x.hint ?? `${x.leg}; drafted from a textbook block and fitted by simulation on the ${x.fittedOn} body`])]} />
 			{f ? <Hint>Fitted on the {f.fittedOn} body. The options below shape the drawn pieces, not this one; its fabric comes from the Front, Back and Sleeve pieces.</Hint> : null}
 		</Section>
 	);

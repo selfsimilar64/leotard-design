@@ -134,7 +134,7 @@ export class FittedView {
 	}
 
 	async load(f, doc) {
-		const want = this.key, url = import.meta.env.BASE_URL + 'fitted/' + f.file + '.json';
+		const want = this.key, url = import.meta.env.BASE_URL + (f.local ? 'fitted-local/' : 'fitted/') + f.file + '.json'; // local: dev-only, garment/fitted.js
 		let data;
 		try { data = await (await fetch(url)).json(); } catch (e) { console.error('fitted garment', url, e); return; }
 		if (this.key !== want) return; // asked for another meanwhile
