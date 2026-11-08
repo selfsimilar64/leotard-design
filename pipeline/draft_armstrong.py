@@ -150,7 +150,9 @@ def back_bodice(c):
 	return dict(D=D, F=F, H=H, T=T, N=N, angle=angle)
 
 
-def leotard(c, cut='basic'):
+def leotard(c, cut='basic', shift=0.0, crotch_half=1.75):
+	"""shift (in): the crotch seam moved forward, the front's crotch raised and the back's lowered by it, legs drawn to the moved
+	points by the same rules; crotch_half (in): the crotch's half width. Defaults are the book's (draft_hybrid.py sets both)."""
 	b = back_bodice(c)
 	sh = lambda p: np.asarray(p, float) - np.array([SEAM, 0])  # back pattern laid 3/8 in past the centre line
 	D_, F, H, T, Nb = (sh(b[k]) for k in ('D', 'F', 'H', 'T', 'N'))
@@ -171,8 +173,7 @@ def leotard(c, cut='basic'):
 	E = np.array([0.0, C[1] - (c['28'] / 2 - 1.25)])  # C to E = half crotch length - 1 1/4
 	Fh = np.array([0.0, E[1] + (C[1] - E[1]) / 2 + 1])  # hip level
 	G = np.array([c['23f'] - 0.5, Fh[1]])  # F to G = front hip arc - 1/2
-	Hc = np.array([1.75, E[1]])  # crotch half width
-	I = Hc
+	Hc = np.array([crotch_half, E[1]])  # crotch half width
 	up = -down  # the neck arrives square to the shoulder
 	pieces = {}
 	side_dir = norm(Dw - B2)
@@ -185,6 +186,8 @@ def leotard(c, cut='basic'):
 	Gx = G + np.array([-SEAM, 0.5])  # crossmark 3/8 in and up 1/2 in from G: where the basic leg leaves the side
 
 	for name in ('front', 'back'):
+		dy = shift if name == 'front' else -shift
+		I, Ec = Hc + np.array([0, dy]), E + np.array([0, dy])  # this piece's crotch point and crotch on the fold
 		# side seam: armpit -> waist (front bowed in 3/16 in, back straight) -> hip -> leg end
 		if name == 'front':
 			mid = (B2 + Dw) / 2 + 3 / 16 * inward
@@ -215,14 +218,14 @@ def leotard(c, cut='basic'):
 				n = -n
 			K = (leg_end + Iq) / 2 + n * (1.0 if cut == 'basic' else 0.25)
 			leg = spline([leg_end, K, Iq, I], start_dir=norm(chord), end_dir=(0, -1))
-		crotch = even(np.vstack([I, E]))
+		crotch = even(np.vstack([I, Ec]))
 		centre_top = D_[1] if name == 'back' else D_[1] - 1.5  # front neckline 1 1/2 in below the back's
 		start = np.array([0.0, centre_top])
 		if name == 'back':
 			neck = through(start, (1, 0), F, up, angle, (1.0, 1.0))
 		else:
 			neck = bezier(start, (1, 0), 0.55 * F[0], F, up, 0.35 * (F[1] - start[1]))
-		centre = even(np.vstack([E, start]))
+		centre = even(np.vstack([Ec, start]))
 		pieces[name] = {'neck': neck, 'shoulder': shoulder, 'armhole': armhole, 'side': side, 'leg': leg, 'crotch': crotch, 'centre': centre}
 	return pieces
 
@@ -259,11 +262,11 @@ def arclen(p):
 	return np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(p, axis=0), axis=1))])
 
 
-def draft(size='6', body='young'):
+def draft(size='6', body='young', shift=0.0, crotch_half=1.75):
 	c = CHART[size]
 	with open(MEASURES, encoding='utf-8') as f:
 		m = json.load(f)[body]
-	basic, high = leotard(c, 'basic'), leotard(c, 'high')
+	basic, high = leotard(c, 'basic', shift, crotch_half), leotard(c, 'high', shift, crotch_half)
 	pieces = {}
 	for name in ('front', 'back'):
 		b = inset(basic[name], ORDER, SEAM)

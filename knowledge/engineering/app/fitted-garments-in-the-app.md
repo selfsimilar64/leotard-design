@@ -215,31 +215,37 @@ and Armstrong's far less; some of that fold is the body and the fit, not only th
 Owner's read of the fits on `young`: crotch best on the purchased high cut and the bodyshaper; seat best on the purchased block and
 Armstrong; sleeve best on the purchased block and Armstrong; torso best on Armstrong. Asked to combine them into one block.
 Armstrong already carries torso, seat and sleeve, and is ours, so it is the base. What the two best crotches share and Armstrong
-lacks is a seam placed forward, under the body (the back runs further through the crotch). `pipeline/draft_hybrid.py` takes
-Armstrong size 6 (`draft_armstrong.draft`), cuts a strip off the bottom of the front square across at SHIFT above the crotch line and
-joins it to the bottom of the back, turned over the old seam: Aldrich's gusset-on-the-back method. Crotch width stays Armstrong's
-(34.9 mm half, stitching line); the basic front leg is vertical there, so the strip is a rectangle. The high-cut front leg flares
-there, and the crotch edge is shared by both legs, so its last 45 mm is re-blended to arrive square at the basic width [INFERRED].
+lacks is a seam placed forward, under the body (the back runs further through the crotch, as Aldrich's gusset joined to the back).
+`pipeline/draft_hybrid.py` runs Armstrong size 6 with two options added to `draft_armstrong.leotard` / `draft` (defaults keep the
+book's block byte-identical): `shift`, the front's crotch point raised and the back's lowered by it, every leg line (basic and high,
+front and back) drawn to the moved point by the book's own rules; and `crotch_half`, the crotch's half width.
 
-**SHIFT = 29 mm**, from the armpit heights above the crotch (side seams are sewn front to back, so they are the fair reference):
-Armstrong 456 / 456 mm front / back, purchased XS 481 / 539 (58 mm), Aldrich 6 402 / 559 (158 mm). Half the purchased difference
-is 29 mm. Centre lengths mislead (they carry the neck depths; they gave 39 mm at first). Only this number comes from the bought
-pattern, as a target; none of its lines.
+Two numbers come from the purchased block as targets; none of its lines:
+- **SHIFT = 29 mm**, from the armpit heights above the crotch (side seams are sewn front to back, so they are the fair reference):
+  Armstrong 456 / 456 mm front / back, purchased XS 481 / 539 (58 mm), Aldrich 6 402 / 559 (158 mm). Half the purchased difference.
+  Centre lengths mislead (they carry the neck depths; they gave 39 mm at first).
+- **Crotch half width 1 1/2 in** on the cutting line (28.6 mm stitched; purchased 29.3). Armstrong's 1 3/4 in gives 34.9; Aldrich,
+  Cole and Richardson give 35-38 mm, so no book gives the narrower crotch.
 
-Checks: 31 of 42, the same failures as Armstrong's own draft, none new; all crotch-seam rules pass. Outline against purchased XS:
-front 11.4 mm, back 8.0 mm (Armstrong 10.2 / 6.3): the purchased block is taller overall and the move shortens our front, so the
-outline score cannot judge the crotch. Fit (`wrap_block.py --drafted hybrid-6 young`), high cut settled 1.191 across, 1.067 along;
-spare fabric per region within a point or two of Armstrong's everywhere (moving the seam relocates fabric, it adds none).
+First version (owner: "the crotch still doesn't fit the same as the purchased block"): a strip cut off the front and joined to the
+back, legs trimmed, crotch at Armstrong's width. Trimming cut away the steep, narrow rise of the book's high front leg out of the
+crotch; on the body its front leg line sat 8-17 mm wider each side than the purchased one. Redrawn as above.
 
-Where the front crotch seam lands on the body (fitted, mean of its points; + is towards the body's front, 0 at the body's crotch
-level within 2 mm vertically):
+Checks: 31 of 42, the same failures as Armstrong's own draft, none new; fitted outlines 12 of 12. High-cut front leg half width on
+the pattern at 40 / 80 mm above the crotch: purchased 32 / 42, hybrid 36 / 59 (first version 51 / 81). Fit
+(`wrap_block.py --drafted hybrid-6 young`), high cut settled 1.194 across, 1.063 along.
 
-| Fit | Seam, mm |
-|---|---|
-| Armstrong / high cut | -52 / -38 |
-| Hybrid / high cut | -16 / 0 |
-| Purchased thigh / high cut | +4 / -24 |
-| Aldrich 6 | +37 |
+On the body (`young`, fitted), front crotch seam position (+ towards the body's front, mean of its points) and the leg line's
+inner-most distance from the midline at heights above the body's crotch, mm:
+
+| Fit | Seam | Front leg at 10 / 30 / 50 / 80 / 120 | Back leg at 10 / 30 / 50 / 80 / 120 |
+|---|---|---|---|
+| Purchased high cut | -24 | 18 / 34 / 52 / 78 / 120 | 45 / - / 85 / 107 / 131 |
+| Hybrid high cut | -9 | 16 / 34 / 57 / 82 / 130 | 45 / 68 / 91 / 112 / 132 |
+| Armstrong high cut | -38 | 21 / 42 / 62 / 96 / 136 | 40 / 63 / 86 / 110 / 131 |
+| Hybrid basic leg | -21 | 14 / 32 / 39 / 59 / 149 | 73 / 108 / 125 / 140 / 153 |
+
+Purchased thigh leg seam +4, Aldrich 6 +37.
 
 Offered as **Hybrid leotard** and **Hybrid leotard, high cut** (Garment row; starting points `fitted-hybrid`, `fitted-hybrid-high`),
 published by `publish_fitted.py` as `hybrid-6-block`, `hybrid-6-high-resolved`.
