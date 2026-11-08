@@ -1,9 +1,11 @@
 """Copy owned fitted garments from the fit's output into the app (app/public/fitted/), where garment/fitted.js lists them.
 
-Only blocks the project owns: the Armstrong drafts (pipeline/draft_armstrong.py). Fits of the bought block or of blocks
+Only blocks the project owns: the Armstrong drafts (pipeline/draft_armstrong.py) and Aldrich's bodyshaper (pipeline/draft_aldrich.py). Fits of the bought block or of blocks
 using its lines stay in app/captures (git-ignored); its licence bars redistributing it.
     python pipeline/draft_armstrong.py 6 young
     python pipeline/wrap_block.py --drafted armstrong-6 young
+    python pipeline/draft_aldrich.py 6 young
+    python pipeline/wrap_block.py --drafted aldrich-6 young
     python pipeline/publish_fitted.py
 """
 import json
@@ -12,7 +14,7 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 CAPTURES = os.path.join(HERE, '..', 'app', 'captures')
 OUT = os.path.join(HERE, '..', 'app', 'public', 'fitted')
-OWNED = ['armstrong-6-block', 'armstrong-6-high-resolved']  # twin: FITTED in app/src/garment/fitted.js
+OWNED = ['armstrong-6-block', 'armstrong-6-high-resolved', 'aldrich-6-block']  # twin: FITTED in app/src/garment/fitted.js
 
 
 def main():

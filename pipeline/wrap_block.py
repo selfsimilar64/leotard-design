@@ -268,7 +268,8 @@ def seed_piece(piece, name, seed, zsign, side):
 		prev = None
 		last = None
 		# the seed is cut at the high leg: its side and leg match the block's high leg and that much side
-		high = piece.line['high']
+		# (a block with no high leg, draft_aldrich.py: its own leg and whole side stand in; this is only the solve's start)
+		high = piece.line['high'] if 'high' in piece.line else piece.edge['leg']
 		if np.linalg.norm(piece.V[high[0]] - piece.V[piece.edge['crotch'][0]]) < np.linalg.norm(piece.V[high[-1]] - piece.V[piece.edge['crotch'][0]]):
 			high = high[::-1]  # from the side seam to the crotch
 		side_ids = piece.edge['side']
@@ -567,6 +568,8 @@ def main(after=None):
 	side = 1 if (s0 > 0) == ('Cuff' in loop_names) else -1  # the side the unmirrored names lie on
 
 	P = block['pieces']
+	# a drafted block without a high-cut leg (draft_aldrich.py) is fitted as drafted only
+	has_high = all('high_hips' in P[n].get('variants', {}) for n in ('front', 'back'))
 	count = lambda *lens: max(2, round(sum(lens) / len(lens) / STEP))
 
 	# ---- what is cut: exact lines, and a mesh made from them ------------------------------------------------------------
@@ -642,8 +645,8 @@ def main(after=None):
 		def high(name):
 			leg = np.array(P[name]['variants']['high_hips']['leg'], float)
 			return [('high', resample(leg, max(4, round(float(arclen(leg)[-1]) / STEP))))]
-		front = Piece('front', runs_of(f, n_af), high('front') if seed_lines else ())
-		back = Piece('back', runs_of(b, n_ab), high('back') if seed_lines else ())
+		front = Piece('front', runs_of(f, n_af), high('front') if seed_lines and has_high else ())
+		back = Piece('back', runs_of(b, n_ab), high('back') if seed_lines and has_high else ())
 		cap = s['cap']
 		top = int(np.argmax(cap[:, 1]))  # the crown
 		n_u = count(ln(s['under_f']), ln(s['under_b']))
@@ -855,7 +858,7 @@ def main(after=None):
 		np.savez(os.path.join(DERIVED, f'wrap-{size}.npz'), base=base, tris=B['tris'], rest=B['rest'], tag=B['tag'])
 	report(body, surface, base, B['tris'], B['rest'], B['tag'], B['pieces'], B['offs'], B['welded'])
 
-	for label, cut in (('high', ('high',)),) if drafted else (('high', ('high',)), ('scoop', ('scoop',)), ('cuff', ('cuff',)), ('high-cuff', ('high', 'cuff'))):
+	for label, cut in ((('high', ('high',)),) if has_high else ()) if drafted else (('high', ('high',)), ('scoop', ('scoop',)), ('cuff', ('cuff',)), ('high-cuff', ('high', 'cuff'))):
 		G = build(design(cut))
 		start = from_block(G)
 		print('solving', label)

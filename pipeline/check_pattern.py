@@ -62,6 +62,8 @@ def check(block):
 	rows = []
 	# Legs taken from the purchased block answer to it, not to our rules for a line we draw ourselves: it fails some of those, and it is the authority
 	own_legs = block.get('legs') != 'purchased'
+	# a block may come without a high-cut leg (draft_aldrich.py): its high-leg rules are then skipped
+	has_high = all('high_hips' in block['pieces'][p].get('variants', {}) for p in ('front', 'back'))
 
 	def add(rule, name, value, limit, unit):
 		rows.append((rule, name, value, limit, unit, value <= limit))
@@ -89,8 +91,8 @@ def check(block):
 			fold_end = 0 if abs(r[0, 0]) < abs(r[-1, 0]) else -1
 			d = direction(r, fold_end)
 			add('square at the fold', f'{piece}.{edge}', abs(math.degrees(math.atan2(d[1], abs(d[0])))), FOLD_DEG, 'deg')
-		high = np.array(block['pieces'][piece]['variants']['high_hips']['leg'], float)
-		E['leg_high'] = high
+		if has_high:
+			E['leg_high'] = np.array(block['pieces'][piece]['variants']['high_hips']['leg'], float)
 
 	def join(name, a, b):
 		"""Two pieces laid edge to edge: a and b are (line, its end at the seam, the seam line, its end at that point)."""
@@ -107,7 +109,7 @@ def check(block):
 		r = P[piece]['neck']
 		q = r if abs(r[0, 0]) < abs(r[-1, 0]) else r[::-1]
 		add('neck never dips', f'{piece}.neck', float(max(0.0, q[0, 1] - q[:, 1].min())), 0.1, 'mm')
-		for leg_name in ('leg', 'leg_high') if own_legs else ():
+		for leg_name in (('leg', 'leg_high') if has_high else ('leg',)) if own_legs else ():
 			l = P[piece][leg_name]
 			d = np.diff(l, axis=0)
 			d = d[np.linalg.norm(d, axis=1) > 1e-6]
@@ -130,8 +132,13 @@ def check(block):
 		join('leg over the crotch (thigh)', pair('front', 'leg', 'crotch'), pair('back', 'leg', 'crotch'))
 	join('armhole under the arm', pair('front', 'armhole', 'side'), pair('back', 'armhole', 'side'))
 	join('wrist over the underarm', pair('sleeve', 'wrist', 'underarm_f'), pair('sleeve', 'wrist', 'underarm_b'))
-	if own_legs:
+	if own_legs and has_high:
 		join('high leg over the crotch', pair('front', 'leg_high', 'crotch'), pair('back', 'leg_high', 'crotch'))
+	if not has_high:
+		for name, E in P.items():
+			for e, r in E.items():
+				add('no wobble', f'{name}.{e}', wobble(r), WOBBLE_MM, 'mm')
+		return rows
 	# a high leg meets the side part way down: both pieces must arrive at the same place on it
 	hf, hb = block['pieces']['front']['variants']['high_hips'], block['pieces']['back']['variants']['high_hips']
 	add('high leg meets the side level', 'front / back', abs(hf['side_to'] - hb['side_to']), SEAM_MM, 'mm')

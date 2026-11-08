@@ -18,6 +18,10 @@ sources:
     resource: "Ann Haggar, Pattern Cutting for Lingerie, Beachwear and Leisurewear, 2nd ed. (Wiley-Blackwell, 2004), ISBN 978-1-4051-1858-3; contents at wiley-vch.de"
     title: Haggar, Pattern Cutting for Lingerie, Beachwear and Leisurewear
     author: human:ann-haggar
+  - id: cole
+    resource: "Julie Cole, Patternmaking with Stretch Knit Fabrics (Fairchild/Bloomsbury), ISBN 9781501305047; owner's scanned PDF assets/Patternmaking with Stretch Knit Fabrics.pdf (git-ignored), extended contents pp. v-vii"
+    title: Cole, Patternmaking with Stretch Knit Fabrics
+    author: human:julie-cole
   - id: shin
     resource: "Kristina Shin, Patternmaking for Underwear Design, 2nd ed. (CreateSpace, 2015), ISBN 9781515098416"
     title: Shin, Patternmaking for Underwear Design
@@ -44,7 +48,8 @@ whether each contains a body or leotard block is **[UNVERIFIED]** until read (bo
 |---|---|---|---|
 | Aldrich, *Women's Wear*, 5th ed. 2008 (owner's copy; 6th ed. 2015 numbers it ch. 13) | **Read 2026-11-07.** Ch. 11 has a bodyshaper and a swimwear block, leotard-shaped, metric; see [Aldrich's stretch blocks](/domain/construction/aldrich-stretch-body-and-swimwear-blocks.md)[^aldrich-women] | A second, metric stretch method to compare with Armstrong's fixed reductions | High |
 | Aldrich, *Children's Wear*, 4th ed. 2009 | **Read 2026-11-07.** No leotard block; swimwear from vest and briefs blocks, too loose for competition; girls' charts by height, developing figures, crotch and thigh girths; see [Aldrich's children's charts](/domain/sizing/aldrich-childrens-size-charts.md)[^aldrich-children] | Children's proportions, which Armstrong and the bought block lack | High |
-| Haggar, 2nd ed. 2004 | Part 2 beach and leisurewear and blocks for stretch fabrics; one-fifth-scale blocks[^haggar] | Swimsuit and body blocks, closest relatives of a leotard | High |
+| Cole, *Patternmaking with Stretch Knit Fabrics*, 1st ed. (owner's copy, a 242-page scan, no text layer) | **Contents read 2026-11-07.** Ch. 5 drafts two-way stretch hip and top foundations from measurements on a taped form, grades them into four stretch categories (minimal, moderate, very, super stretchy) and reduces them to four-way stretch (pp. 66-95); ch. 6 top and sleeve slopers; ch. 11 panty slopers from the four-way hip foundation; ch. 12 swimsuit slopers, with a leotard (p. 450) and bodysuit (p. 451) as swimsuit variations[^cole] | A stretch method by fabric category, not a fixed reduction; its leotard sits in the swimwear chapter, which the owner wants kept out of the foundation, so the foundations (ch. 5) are the part to read first | High |
+| Haggar, 2nd ed. 2004 (owner: cannot be acquired) | Part 2 beach and leisurewear and blocks for stretch fabrics; one-fifth-scale blocks[^haggar] | Swimsuit and body blocks, closest relatives of a leotard | High |
 | Porter, *Sewing for Gymnasts*, 2013 | Exists; Porter's formulas already in the bundle[^porter-gymnasts] | The one gymnastics-specific method book | Medium (partly read) |
 | Shin, 2nd ed. 2015 | Bra-focused; leggings section; no bodysuit or swim chapter found[^shin] | Little for leotards | Low |
 | Udemy, "Leotards and swimsuits made to measure" | Exists; rhythmic, skating, ballet[^misc-2026-11-05] | Rhythmic, not WAG | Low |
@@ -56,3 +61,4 @@ whether each contains a body or leotard block is **[UNVERIFIED]** until read (bo
 [^shin]: Shin, Patternmaking for Underwear Design.
 [^porter-gymnasts]: Porter, Sewing for Gymnasts.
 [^misc-2026-11-05]: Online course and base pattern pages, read 2026-11-05.
+[^cole]: Cole, Patternmaking with Stretch Knit Fabrics, extended contents.

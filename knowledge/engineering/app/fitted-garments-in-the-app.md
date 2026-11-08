@@ -1,7 +1,7 @@
 ---
 type: Component
 title: Fitted garments in the app
-description: "How a block drafted by pattern-making rules and fitted by the fit solver is shown in the main app as a design choice beside the drawn pieces: meta.fitted, render/fitted.js, the Garment row of the Shape tab and two starting points; first the textbook (Armstrong) leotard."
+description: "How a block drafted by pattern-making rules and fitted by the fit solver is shown in the main app as a design choice beside the drawn pieces: meta.fitted, render/fitted.js, the Garment row of the Shape tab and starting points; the textbook (Armstrong) leotard, and since 2026-11-07 Aldrich's bodyshaper leotard."
 tags: [app, fit, block, armstrong, garment, ui]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-04T01:00:00Z }
@@ -14,8 +14,12 @@ sources:
     resource: conversation with the product owner, 2026-11-04 (Claude Code session)
     title: "Do all three: the 2D + 3D views, the live re-fit case in the app, and the solver's settings"
     author: human:mattj
+  - id: owner3
+    resource: "conversation with the product owner, 2026-11-07 (Claude Code session): offer the bodyshaper as its own block, sizing at Claude's discretion; avoid swimwear"
+    title: Owner on the bodyshaper block
+    author: human:mattj
   - id: code
-    resource: "app/src/render/fitted.js, app/src/garment/fitted.js, app/src/render/engine.js (fitted), app/src/doc/commands-garment.js (fitted.set), app/src/garment/starts.js, app/src/ui/ShapeTab.jsx (Garment), pipeline/draft_armstrong.py, pipeline/publish_fitted.py"
+    resource: "app/src/render/fitted.js, app/src/garment/fitted.js, app/src/render/engine.js (fitted), app/src/doc/commands-garment.js (fitted.set), app/src/garment/starts.js, app/src/ui/ShapeTab.jsx (Garment), pipeline/draft_armstrong.py, pipeline/draft_aldrich.py, pipeline/publish_fitted.py"
     title: Fitted garment code
     author: claude-code/claude-opus-5-5
 ---
@@ -145,6 +149,33 @@ the hidden drawn pieces and drawn on the body's surface, where the fitted fabric
   Esc to go back. Choosing a piece in either view chooses its panel (the Fabric tab follows). The 3D view does not yet highlight a
   fitted piece.
 
+# Second block: Aldrich's bodyshaper, size 6 (2026-11-07)
+
+The owner asked for Aldrich's bodyshaper as its own block, sizing left to us and swimwear kept out.[^owner3]
+Drafted by `pipeline/draft_aldrich.py` ([the method and our choices](/domain/construction/aldrich-stretch-body-and-swimwear-blocks.md)),
+fitted with `wrap_block.py --drafted aldrich-6 young`, published as `aldrich-6-block`. Offered as **Bodyshaper leotard** in the
+Garment row and as the starting point "Fitted: bodyshaper leotard". It has no high-cut variant; `wrap_block.py` and
+`check_pattern.py` now skip the high leg when a block has none (the seed then matches the block's own leg).
+
+**Size chosen for tension.** Fitted on `young`, median stretch round the torso after the torso solve:
+
+| Chart size (bust) | Torso across / along | Settled, all pieces | Back waist, along |
+|---|---|---|---|
+| 12 (88 cm) | 1.005 / 0.983 | 0.954 / 0.965 | 0.825 |
+| 8 (80 cm) | 1.075 / 1.007 | 1.011 / 0.981 | not read |
+| **6 (76 cm), offered** | 1.117 / 1.019 | 1.044 / 0.984 | 0.669 |
+| Armstrong 6, for comparison | 1.14 / 1.11 | 1.20 / 1.06 | not read |
+
+Size 12 lies on the body unstretched and ripples across the back; size 6 is taut in front, nearest the Armstrong block's tension.
+
+**Seen in the app (port 5176):** the front smooth and close; the back gathers into a band of folds at the small of the back
+(the fabric there about 33% shorter than flat), far more than the Armstrong block's faint crease. Cause **[INFERRED]**: the book
+takes no length out for stretch, and with the gusset joined the bodyshaper's centre lines run about 7 cm longer front plus back
+than Armstrong's (size 6: back about 77 cm with the gusset, front about 57 cm), so the spare length gathers where the fabric bridges
+the lumbar hollow. A length reduction for four-way fabric is the fix to source (Cole ch. 5 reduces two-way foundations to four-way
+stretch), not to invent. The sleeve ends about 1 cm short of the wrist landmark and lies about 7% wider than the arm (settled across
+0.93): the book's sleeve is roomy.
+
 # Known limits **[INFERRED]**
 
 - **Fitted on one body.** On other bodies the young standing fit is carried by surface coordinates and then re-fitted by the GPU
@@ -158,3 +189,4 @@ the hidden drawn pieces and drawn on the body's surface, where the fitted fabric
 [^owner]: Conversation with the product owner, 2026-11-03.
 [^owner2]: Conversation with the product owner, 2026-11-04: do the views, the live case and the settings.
 [^code]: Fitted garment code.
+[^owner3]: Owner on the bodyshaper block, 2026-11-07.

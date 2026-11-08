@@ -90,7 +90,7 @@ asks.[^owner-authority] The corrections are for woven fabric; each needs a stret
 # What not to take
 
 Woven form cutting, collars, tailoring, nightwear; the children's swimwear (too loose); Aldrich's
-own leg lines as a fix to the purchased block. **First step instead:** draft the bodyshaper from
+own leg lines as a fix to the purchased block. **First step (done 2026-11-07, offered in the app as Bodyshaper leotard, size 6):** draft the bodyshaper from
 Aldrich's method in code beside `pipeline/draft_armstrong.py`, run it through the pattern checks,
 and compare it with the Armstrong block and the purchased block as a yardstick; where two
 independent methods agree, the foundation is stronger.

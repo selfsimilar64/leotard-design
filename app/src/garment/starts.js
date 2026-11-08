@@ -53,5 +53,10 @@ export const STARTS = [
 		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
 		fabric: { fabric: 'shiny', colour: '#b3122e' }, fitted: 'armstrong-6-high',
 	},
+	{
+		key: 'fitted-bodyshaper', label: 'Fitted: bodyshaper leotard', hint: "Drafted by the book (Aldrich's bodyshaper, size 6) and fitted by simulation; long sleeves, the book's leg",
+		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
+		fabric: { fabric: 'mystique', colour: '#2e5c3a' }, fitted: 'aldrich-6',
+	},
 ];
 export const DEFAULT_START = 'plain-tank';

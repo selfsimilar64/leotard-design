@@ -16,6 +16,10 @@ sources:
   - id: ref
     resource: /engineering/app/drafted-blocks.md
     title: Drafted blocks (REF reductions)
+  - id: owner-1107
+    resource: "conversation with the product owner, 2026-11-07 (Claude Code session): offer the bodyshaper as its own block, sizing at Claude's discretion; avoid swimwear"
+    title: Owner on the bodyshaper block
+    author: human:mattj
   - id: yard
     resource: /domain/construction/real-leotard-yardsticks.md
     title: Yardsticks from real leotards
@@ -134,7 +138,40 @@ from the customer's measures; parametric systems define a pattern by dimensions 
 when one changes. Aldrich reports 3D "wireframe" pattern generation succeeding for bras and some
 athletic wear but unlikely for fashion.[^aldrich-women]
 
+# Our implementation (`pipeline/draft_aldrich.py`) **[INFERRED]**
+
+Built 2026-11-07 at the owner's request: the bodyshaper as its own owned block, sizing left to us,
+swimwear kept out of the foundation.[^owner-1107] Choices the book leaves open or that a sewn leotard forces:
+
+- **Crotch sewn shut.** The bodyshaper is shapewear: its gusset's end overlaps a short front tab by
+  2 cm (a fastened crotch). Both overlaps are dropped and the gusset end is sewn to the front's crotch
+  end; the front's end is widened from 2 to 3.5 cm (half widths) so the two sides of that seam match.
+- **Gusset joined to the back** in one piece (the fitter sews front, back and sleeve only); the back
+  leg runs on down the gusset's side through point 21 in one smooth curve.
+- **Widths as printed** (no swimwear widths). Lines meet the fold square; neck and armhole leave the
+  shoulder square and the armhole meets the side square, each trued over its last 0.5 cm; the side seam
+  leaves the underarm vertically. The leg keeps the book's line, including its angle at the side seam
+  (the bought block has one too).
+- **Sleeve.** Length from the body (the book allows personal measurements): shoulder top over the
+  elbow to the wrist, 51.9 cm on `young` (`wrap-measures` armLength starts at the joint, about 6 cm
+  lower); jersey length = that - 4, pattern = jersey + 3. The head is trued to our armhole's length
+  (the book's diagonal + 0.5 cm stands in for its freehand armhole).
+- **Girls' sizes** (g98-g164) use the girls' charts. The book's fixed centimetres would take about 40%
+  off a 3-year-old's waist, so for girls the same *shares* of girth are taken as at women's size 12,
+  from each girl's own chest, waist and girth a quarter of the rise below the waist; the fixed crotch
+  widths and leg bows scale with the chest; the sleeve is the chart's arm less 2 cm (Children's Wear
+  p. 97).
+
+Checks (`check_pattern.py`): every size, women's 6-16 and girls' 98-164, passes 33 of 35. The two
+misses are the book's leg: the back leg's S (seat bowed out, gusset in) and the angle where front
+and back legs meet at the side. For comparison the shipped Armstrong block passes 30 of 42.
+
+**Size offered in the app: 6 on `young`**, chosen for tension (size 12, the nearest by bust, lies on the body unstretched).
+Its back gathers at the small of the back because the book takes no length out; see
+[fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md).
+
 [^aldrich-women]: Aldrich, Women's Wear, 5th ed.: pp. 5-7, 149-176, 177-190, 203-205.
 [^calc]: Implied reductions, our arithmetic.
 [^ref]: Drafted blocks.
 [^yard]: Yardsticks from real leotards.
+[^owner-1107]: Owner on the bodyshaper block.
