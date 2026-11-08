@@ -4,6 +4,7 @@
 
 # Catalog
 
+* [Aldrich's children's size charts and measuring rules](aldrich-childrens-size-charts.md) (draft) - Aldrich's Children's Wear (4th ed., 2009): girls' body measurements by height 98-164 cm (75th centile, waist relaxed), a developing-figure chart 146-164 cm with bust-dart stages, crotch arc, thigh and underbust girths, the measurement definitions (including the vertical trunk, our torso loop), size-group constants, and why its own swimwear is too loose for competition.
 * [Body measurement targets by age](body-measurement-targets-by-age.md) - Target body measurements (height, chest, waist, hip, neck, cross-shoulder, back length) for girl/woman bodies at about 8, 13, 18 and 30 years, derived from vendor charts, and the leotard size each falls into.
 * [GK Elite and Nike leotard size chart](gk-and-nike-size-chart.md) - GK Elite's girls'/women's leotard chart CXXS to A4XL (chest, waist, hip, torso in inches) and the metric version with heights from Nike's identical gymnastics chart; the reference size system for the app.
 * [Other brands' leotard size systems](other-brand-size-systems.md) - Size labels and the few published measurements for Sylvia P, Quatro (sized by chest inches), Snowflake, Destira and others, compared with GK; which charts were not captured.

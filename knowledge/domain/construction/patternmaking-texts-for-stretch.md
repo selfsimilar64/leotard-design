@@ -38,12 +38,12 @@ like [Armstrong](/domain/construction/armstrong-leotard-foundation-draft.md); no
 competition gymnastics.** The gymnastics look still has to come from the
 [yardsticks](/domain/construction/real-leotard-yardsticks.md). No book or blog by a former GK (or
 other brand) patternmaker was found. Chapter contents below are from publishers' tables of contents;
-whether each contains a body or leotard block is **[UNVERIFIED]** until read.
+whether each contains a body or leotard block is **[UNVERIFIED]** until read (both Aldrich books read 2026-11-07; how to use them: [proposal](/engineering/app/aldrich-integration-proposal.md)).
 
 | Text | What is confirmed | Why it matters | Priority **[INFERRED]** |
 |---|---|---|---|
-| Aldrich, *Women's Wear*, 6th ed. 2015 | Ch. 12 easy-fitting jersey, ch. 13 close-fitting stretch and jersey (5th ed. ch. 9-11)[^aldrich-women] | A second, metric, more recent stretch method to compare with Armstrong's fixed reductions | High |
-| Aldrich, *Children's Wear*, 4th ed. 2009 | Ch. 4 flat blocks incl. jersey; ch. 7 sport and leisurewear; ch. 14 blocks and size charts for ages 11-14; ch. 15 grading[^aldrich-children] | Children's sizes, which Armstrong lacks and most gymnasts wear | High |
+| Aldrich, *Women's Wear*, 5th ed. 2008 (owner's copy; 6th ed. 2015 numbers it ch. 13) | **Read 2026-11-07.** Ch. 11 has a bodyshaper and a swimwear block, leotard-shaped, metric; see [Aldrich's stretch blocks](/domain/construction/aldrich-stretch-body-and-swimwear-blocks.md)[^aldrich-women] | A second, metric stretch method to compare with Armstrong's fixed reductions | High |
+| Aldrich, *Children's Wear*, 4th ed. 2009 | **Read 2026-11-07.** No leotard block; swimwear from vest and briefs blocks, too loose for competition; girls' charts by height, developing figures, crotch and thigh girths; see [Aldrich's children's charts](/domain/sizing/aldrich-childrens-size-charts.md)[^aldrich-children] | Children's proportions, which Armstrong and the bought block lack | High |
 | Haggar, 2nd ed. 2004 | Part 2 beach and leisurewear and blocks for stretch fabrics; one-fifth-scale blocks[^haggar] | Swimsuit and body blocks, closest relatives of a leotard | High |
 | Porter, *Sewing for Gymnasts*, 2013 | Exists; Porter's formulas already in the bundle[^porter-gymnasts] | The one gymnastics-specific method book | Medium (partly read) |
 | Shin, 2nd ed. 2015 | Bra-focused; leggings section; no bodysuit or swim chapter found[^shin] | Little for leotards | Low |
