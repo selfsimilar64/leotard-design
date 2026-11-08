@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-07
+* **Update**: [Using Aldrich in our blocks and design model](/engineering/app/aldrich-integration-proposal.md): revised for the owner's rule (2026-11-03, restated) that foundation blocks must be shippable, drafted from published methods; first step is now drafting Aldrich's bodyshaper beside the Armstrong block; made-to-measure items demoted.
 * **Creation**: [Aldrich's stretch body, bodyshaper and swimwear blocks](/domain/construction/aldrich-stretch-body-and-swimwear-blocks.md): owner's Women's Wear PDF (5th ed. 2008) read; ch. 11 has a leotard-shaped swimwear block taking fixed centimetres (about 16-21% bust, 5-7% waist, 11-15% low waist, no length reduction), an ease ladder, point grade rules, fault corrections.
 * **Creation**: [Aldrich's children's size charts and measuring rules](/domain/sizing/aldrich-childrens-size-charts.md): girls' chart by height 98-164 cm, developing figures 146-164 with bust-dart stages, crotch arc, thigh and underbust girths, the vertical trunk definition; no leotard block, own swimwear too loose; our 13-year target torso looks about 3 cm short.
 * **Creation**: [Using Aldrich in our blocks and design model](/engineering/app/aldrich-integration-proposal.md) (proposal): named measurement set, child proportions from the charts, reduction as a model, front bust share, grade rules for export, fit-fault table.

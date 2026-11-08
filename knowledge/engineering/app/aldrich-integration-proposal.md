@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: Using Aldrich in our blocks and design model (proposal)
-description: "Proposal of 2026-11-07: how the two Aldrich books feed garment shaping and the internal representation without overriding the purchased block: a named measurement set with the vertical trunk, crotch arc and thigh, Aldrich's girls' charts as child proportions, a reduction model held per girth, size group and fabric class (with fixed-cm and percentage models side by side), a front-only bust share for teens, grade rules derived from parametric drafts for export, and a fault-to-correction table for fit diagnosis. Nothing built yet."
+description: "Proposal of 2026-11-07, revised for the owner's rule that foundations must be shippable: draft Aldrich's bodyshaper as a second method-based block beside Armstrong's and use the girls' charts for child sizes; secondary ideas: a named measurement set with the vertical trunk, crotch arc and thigh, Aldrich's girls' charts as child proportions, a reduction model held per girth, size group and fabric class (with fixed-cm and percentage models side by side), a front-only bust share for teens, grade rules derived from parametric drafts for export, and a fault-to-correction table for fit diagnosis. Nothing built yet."
 tags: [proposal, block, drafting, sizing, data-model, grading, fit, aldrich]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-07T23:30:00Z }
@@ -18,15 +18,24 @@ sources:
   - id: owner-authority
     resource: "conversation with the product owner, 2026-11-02 (Claude Code session): purchased patterns are the authority; no band-aid fit fixes"
     title: Owner's rules on purchased patterns and fit fixes
+  - id: owner-ship
+    resource: "conversation with the product owner, 2026-11-07 (Claude Code session): a pattern we cannot ship is next to useless; the Armstrong-drafted block is the best so far; the bodyshaper is the only Aldrich shape close to a gymnastics leotard"
+    title: Owner on shippable foundation blocks
 ---
 
 # Takeaway
 
-**Aldrich is a second opinion and a source of proportions, not a new authority.** The purchased
-block stays the authority for lines;[^owner-authority] Aldrich adds what it lacks (child and teen
-proportions, leg and crotch girths, a front bust share, grading conventions, fault corrections) and
-an independent check on our reductions.[^women][^children] Every item below is **[INFERRED]**
-design; none is built.
+**Owner's direction (2026-11-07, restating 2026-11-03): foundations must be blocks we can ship,
+drafted by us from published methods, as close to a gymnastics leotard as possible; bought blocks
+are yardsticks only.**[^owner-ship] On that test Aldrich's **bodyshaper** is the useful part: a
+second method we may follow (after Armstrong), metric, with a sleeve, a sleeveless variant and a
+gusset, and the owner's pick as the shape nearest a gymnastics leotard. Its own looseness is not
+disqualifying, since the reduction is a parameter set from the
+[yardsticks](/domain/construction/real-leotard-yardsticks.md). The **girls' charts** supply the
+child proportions any method needs to draft child sizes; measurements are facts, so they ship.
+Sections 1-6 below are secondary; items aimed at made-to-measure (fault corrections, individual
+measuring) matter little while studios sell fixed sizes. Every item is **[INFERRED]** design; none
+is built.
 
 # 1. A named measurement set
 
@@ -81,10 +90,13 @@ asks.[^owner-authority] The corrections are for woven fabric; each needs a stret
 # What not to take
 
 Woven form cutting, collars, tailoring, nightwear; the children's swimwear (too loose); Aldrich's
-own leg lines in place of the purchased block's. A shippable Aldrich-drafted block, like the
-Armstrong route, is possible but not proposed until items 1-3 show it is needed.
+own leg lines as a fix to the purchased block. **First step instead:** draft the bodyshaper from
+Aldrich's method in code beside `pipeline/draft_armstrong.py`, run it through the pattern checks,
+and compare it with the Armstrong block and the purchased block as a yardstick; where two
+independent methods agree, the foundation is stronger.
 
 [^women]: Aldrich's stretch body, bodyshaper and swimwear blocks.
 [^children]: Aldrich's children's size charts and measuring rules.
 [^drafted]: Drafted blocks.
 [^owner-authority]: Owner's rules on purchased patterns and fit fixes.
+[^owner-ship]: Owner on shippable foundation blocks.
