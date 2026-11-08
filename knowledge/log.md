@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-08
+* **Update**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): hybrid block (`pipeline/draft_hybrid.py`), Armstrong 6 with its crotch seam moved 29 mm forward (front strip joined to the back, Aldrich's method; amount from the purchased block's armpit heights, no lines); same checks as Armstrong; on `young` the seam now lands where the purchased block's does; offered as Hybrid leotard and Hybrid, high cut.
 * **Update**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): the purchased block (XS, thigh and high-cut legs) refitted on `young` and shown in the app in dev only, served from the git-ignored captures at `/fitted-local/`, never bundled (licence); it too gathers at the small of the back (0.72 along).
 * **Creation**: [Cole's stretch-knit leotard block](/domain/construction/cole-leotard-block.md): owner asked for Cole's leotard in the app after comparing Jalie patterns; drafted in `pipeline/draft_cole.py` (top and hip foundations graded super stretchy and reduced four-way, leg-line panty, one-piece, set-in sleeve with cap equal to the armhole), 32 of 35 checks, second closest to the purchased block (front closest of all); fitted on `young` and offered as Stretch-knit leotard.
 

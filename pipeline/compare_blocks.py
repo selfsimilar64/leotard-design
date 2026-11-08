@@ -25,7 +25,7 @@ DERIVED = os.path.join(HERE, '..', 'assets', 'patterns', 'basicpatternblock-leot
 OUT = os.path.join(HERE, '..', 'app', 'captures')
 REGIONS = {'top': ('neck', 'shoulder', 'armhole'), 'side': ('side',), 'leg': ('leg', 'crotch')}
 NAMES = {'armstrong-6': 'Armstrong (size 6)', 'body-young': 'Our drafter (purchased proportions)', 'aldrich-6': 'Aldrich bodyshaper (6)',
-	'aldrich-12': 'Aldrich bodyshaper (12)', 'richardson-M': 'Richardson leotard (M)'}
+	'aldrich-12': 'Aldrich bodyshaper (12)', 'richardson-M': 'Richardson leotard (M)', 'hybrid-6': 'Hybrid (Armstrong 6, seam forward)'}
 
 
 def load(path, cut='standard'):

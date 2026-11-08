@@ -19,6 +19,9 @@ export const FITTED = [
 	{ key: 'aldrich-6', label: 'Bodyshaper leotard', leg: "The book's leg", file: 'aldrich-6-block', fittedOn: 'young' },
 	// Cole's one-piece (pipeline/draft_cole.py): four-way super-stretchy top and leg-line panty foundations, set-in sleeve
 	{ key: 'cole-young', label: 'Stretch-knit leotard', leg: 'Leg-line leg', file: 'cole-young-block', fittedOn: 'young' },
+	// The hybrid (pipeline/draft_hybrid.py): Armstrong's block with its crotch seam moved 29 mm forward, a front strip joined to the back
+	{ key: 'hybrid-6', label: 'Hybrid leotard', leg: 'Basic leg', file: 'hybrid-6-block', fittedOn: 'young' },
+	{ key: 'hybrid-6-high', label: 'Hybrid leotard, high cut', leg: 'High-cut leg', file: 'hybrid-6-high-resolved', fittedOn: 'young' },
 ];
 
 export const fittedOf = (doc) => FITTED.find((f) => f.key === doc?.meta?.fitted) ?? null;

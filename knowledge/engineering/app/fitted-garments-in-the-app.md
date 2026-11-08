@@ -1,7 +1,7 @@
 ---
 type: Component
 title: Fitted garments in the app
-description: "How a block drafted by pattern-making rules and fitted by the fit solver is shown in the main app as a design choice beside the drawn pieces: meta.fitted, render/fitted.js, the Garment row of the Shape tab and starting points; the textbook (Armstrong) leotard, and since 2026-11-07 Aldrich's bodyshaper leotard."
+description: "How a block drafted by pattern-making rules and fitted by the fit solver is shown in the main app as a design choice beside the drawn pieces: meta.fitted, render/fitted.js, the Garment row of the Shape tab and starting points; the textbook (Armstrong) leotard, since 2026-11-07 Aldrich's bodyshaper leotard, and since 2026-11-08 the hybrid (Armstrong with the crotch seam forward)."
 tags: [app, fit, block, armstrong, garment, ui]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-04T01:00:00Z }
@@ -19,7 +19,7 @@ sources:
     title: Owner on the bodyshaper block
     author: human:mattj
   - id: code
-    resource: "app/src/render/fitted.js, app/src/garment/fitted.js, app/src/render/engine.js (fitted), app/src/doc/commands-garment.js (fitted.set), app/src/garment/starts.js, app/src/ui/ShapeTab.jsx (Garment), pipeline/draft_armstrong.py, pipeline/draft_aldrich.py, pipeline/publish_fitted.py"
+    resource: "app/src/render/fitted.js, app/src/garment/fitted.js, app/src/render/engine.js (fitted), app/src/doc/commands-garment.js (fitted.set), app/src/garment/starts.js, app/src/ui/ShapeTab.jsx (Garment), pipeline/draft_armstrong.py, pipeline/draft_aldrich.py, pipeline/draft_hybrid.py, pipeline/publish_fitted.py"
     title: Fitted garment code
     author: claude-code/claude-opus-5-5
 ---
@@ -209,6 +209,40 @@ entries nor the files. A Vite config change restarts the dev server once per sav
 
 Back waist along 0.719: the purchased block also gathers lengthwise at the small of the back on `young`, as Aldrich's did (0.669)
 and Armstrong's far less; some of that fold is the body and the fit, not only the patterns. Its sleeve is wide and long (0.93 along).
+
+# Hybrid block: Armstrong with the crotch seam forward (2026-11-08)
+
+Owner's read of the fits on `young`: crotch best on the purchased high cut and the bodyshaper; seat best on the purchased block and
+Armstrong; sleeve best on the purchased block and Armstrong; torso best on Armstrong. Asked to combine them into one block.
+Armstrong already carries torso, seat and sleeve, and is ours, so it is the base. What the two best crotches share and Armstrong
+lacks is a seam placed forward, under the body (the back runs further through the crotch). `pipeline/draft_hybrid.py` takes
+Armstrong size 6 (`draft_armstrong.draft`), cuts a strip off the bottom of the front square across at SHIFT above the crotch line and
+joins it to the bottom of the back, turned over the old seam: Aldrich's gusset-on-the-back method. Crotch width stays Armstrong's
+(34.9 mm half, stitching line); the basic front leg is vertical there, so the strip is a rectangle. The high-cut front leg flares
+there, and the crotch edge is shared by both legs, so its last 45 mm is re-blended to arrive square at the basic width [INFERRED].
+
+**SHIFT = 29 mm**, from the armpit heights above the crotch (side seams are sewn front to back, so they are the fair reference):
+Armstrong 456 / 456 mm front / back, purchased XS 481 / 539 (58 mm), Aldrich 6 402 / 559 (158 mm). Half the purchased difference
+is 29 mm. Centre lengths mislead (they carry the neck depths; they gave 39 mm at first). Only this number comes from the bought
+pattern, as a target; none of its lines.
+
+Checks: 31 of 42, the same failures as Armstrong's own draft, none new; all crotch-seam rules pass. Outline against purchased XS:
+front 11.4 mm, back 8.0 mm (Armstrong 10.2 / 6.3): the purchased block is taller overall and the move shortens our front, so the
+outline score cannot judge the crotch. Fit (`wrap_block.py --drafted hybrid-6 young`), high cut settled 1.191 across, 1.067 along;
+spare fabric per region within a point or two of Armstrong's everywhere (moving the seam relocates fabric, it adds none).
+
+Where the front crotch seam lands on the body (fitted, mean of its points; + is towards the body's front, 0 at the body's crotch
+level within 2 mm vertically):
+
+| Fit | Seam, mm |
+|---|---|
+| Armstrong / high cut | -52 / -38 |
+| Hybrid / high cut | -16 / 0 |
+| Purchased thigh / high cut | +4 / -24 |
+| Aldrich 6 | +37 |
+
+Offered as **Hybrid leotard** and **Hybrid leotard, high cut** (Garment row; starting points `fitted-hybrid`, `fitted-hybrid-high`),
+published by `publish_fitted.py` as `hybrid-6-block`, `hybrid-6-high-resolved`.
 
 # Known limits **[INFERRED]**
 

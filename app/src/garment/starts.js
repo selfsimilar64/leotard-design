@@ -63,5 +63,15 @@ export const STARTS = [
 		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
 		fabric: { fabric: 'mystique', colour: '#5a2e6e' }, fitted: 'cole-young',
 	},
+	{
+		key: 'fitted-hybrid', label: 'Fitted: hybrid leotard', hint: 'The textbook block with its crotch seam moved forward, under the body; fitted by simulation; long sleeves, basic leg',
+		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
+		fabric: { fabric: 'mystique', colour: '#1f4e5c' }, fitted: 'hybrid-6',
+	},
+	{
+		key: 'fitted-hybrid-high', label: 'Fitted: hybrid, high cut', hint: 'The hybrid block with its high-cut leg, fitted by simulation',
+		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
+		fabric: { fabric: 'shiny', colour: '#c4632a' }, fitted: 'hybrid-6-high',
+	},
 ];
 export const DEFAULT_START = 'plain-tank';
