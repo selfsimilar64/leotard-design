@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-11-08
+* **Creation**: [Cole's stretch-knit leotard block](/domain/construction/cole-leotard-block.md): owner asked for Cole's leotard in the app after comparing Jalie patterns; drafted in `pipeline/draft_cole.py` (top and hip foundations graded super stretchy and reduced four-way, leg-line panty, one-piece, set-in sleeve with cap equal to the armhole), 32 of 35 checks, second closest to the purchased block (front closest of all); fitted on `young` and offered as Stretch-knit leotard.
+
 ## 2026-11-07
 * **Creation**: [Block shapes compared with the purchased block](/engineering/app/block-shape-comparison.md): Richardson's leotard sloper drafted (pipeline/draft_richardson.py, owner's photos of ch. 13); every block overlaid on purchased XS (pipeline/compare_blocks.py); Armstrong closest of the shippable methods (8 mm), Aldrich 6 next (11 mm), Richardson (12 mm).
 * **Update**: [Sources of leotard pattern blocks](/domain/construction/sources-of-leotard-pattern-blocks.md): second search for shippable sources (Sylvia P StudioSP, Richardson's stretch text, GarmentCode, CLO-SET Connect, a WVU thesis); owner judged Aldrich's and Cole's one-pieces not close; Armstrong stays the best fit.

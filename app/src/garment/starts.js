@@ -58,5 +58,10 @@ export const STARTS = [
 		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
 		fabric: { fabric: 'mystique', colour: '#2e5c3a' }, fitted: 'aldrich-6',
 	},
+	{
+		key: 'fitted-stretch-knit', label: 'Fitted: stretch-knit leotard', hint: "Drafted by the book (Cole's four-way stretch one-piece) and fitted by simulation; long sleeves, leg-line leg",
+		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
+		fabric: { fabric: 'mystique', colour: '#5a2e6e' }, fitted: 'cole-young',
+	},
 ];
 export const DEFAULT_START = 'plain-tank';

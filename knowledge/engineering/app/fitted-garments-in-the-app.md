@@ -176,6 +176,22 @@ the lumbar hollow. A length reduction for four-way fabric is the fix to source (
 stretch), not to invent. The sleeve ends about 1 cm short of the wrist landmark and lies about 7% wider than the arm (settled across
 0.93): the book's sleeve is roomy.
 
+# Third block: Cole's stretch-knit leotard (2026-11-08)
+
+At the owner's request, after comparing Jalie patterns: [Cole's one-piece](/domain/construction/cole-leotard-block.md),
+drafted by `pipeline/draft_cole.py` from the `young` body's measures, fitted with `wrap_block.py --drafted cole-young young`,
+published as `cole-young-block`, offered as **Stretch-knit leotard** and the starting point "Fitted: stretch-knit leotard".
+
+| Stage | Across | Along | Inside out |
+|---|---|---|---|
+| Torso alone, 240 iterations | 1.123 | 1.179 | 0.00% |
+| Sleeve alone, 240 iterations | 1.283 | 1.000 | 0.75% |
+| Settled together, 60 iterations | 1.184 | 1.104 | 0.10% |
+
+Close to the Armstrong block's tension (1.20 / 1.06), tighter lengthwise (the four-way length reductions on a short torso).
+Seen in the app (port 5176): front and back smooth, no fold at the small of the back, a high-cut leg; the cuff ends about
+1 cm short of the wrist landmark.
+
 # Known limits **[INFERRED]**
 
 - **Fitted on one body.** On other bodies the young standing fit is carried by surface coordinates and then re-fitted by the GPU

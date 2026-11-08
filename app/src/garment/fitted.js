@@ -9,6 +9,8 @@ export const FITTED = [
 	{ key: 'armstrong-6-high', label: 'Textbook leotard, high cut', leg: 'High-cut leg', file: 'armstrong-6-high-resolved', fittedOn: 'young' },
 	// Aldrich's bodyshaper (pipeline/draft_aldrich.py), size 6, gusset joined to the back and the crotch sewn shut
 	{ key: 'aldrich-6', label: 'Bodyshaper leotard', leg: "The book's leg", file: 'aldrich-6-block', fittedOn: 'young' },
+	// Cole's one-piece (pipeline/draft_cole.py): four-way super-stretchy top and leg-line panty foundations, set-in sleeve
+	{ key: 'cole-young', label: 'Stretch-knit leotard', leg: 'Leg-line leg', file: 'cole-young-block', fittedOn: 'young' },
 ];
 
 export const fittedOf = (doc) => FITTED.find((f) => f.key === doc?.meta?.fitted) ?? null;
