@@ -6,7 +6,7 @@ import { toSP } from '../body/surface.js';
 import { makeBlock, blockFabric, blockKeyOf, blockOf, fitToStrap, BLOCK_OPTIONS, DEFAULT_BLOCK, ELEMENT_CURVES, ELEMENT_PANELS } from '../garment/blocks.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { STARTS } from '../garment/starts.js';
-import { FITTED } from '../garment/fitted.js';
+import { FITTED, FIT_SIZE_RANGE } from '../garment/fitted.js';
 import { buildGarment, cellSeed, evaluateAll, isStroke, overlayLines, panelAt, pickableRegions, strokeId, strokeRegions, whyNotPickable } from '../garment/build.js';
 import { locate } from '../garment/arrangement.js';
 import { LOOK, lookOf, setLook, assign, usage, freshName, keepMaterial, dropAutoMaterial } from './materials.js';
@@ -110,6 +110,7 @@ defineCommand('start.apply', {
 		}
 		tx.set('meta/start', st.key);
 		tx.set('meta/fitted', st.fitted ?? null);
+		tx.set('meta/fitSize', null); // a starting point comes at its pattern's own size
 	},
 });
 
@@ -121,6 +122,20 @@ defineCommand('fitted.set', {
 		const key = a.key ?? null;
 		if (key !== null && !FITTED.some((f) => f.key === key)) throw new Error('key must be one of: ' + FITTED.map((f) => f.key).join(', ') + ', or null');
 		tx.set('meta/fitted', key);
+	},
+});
+
+// The fitted garment's size (garment/fitted.js fitSizeOf): its pattern scaled across (width) and along (length) the grain before the
+// re-fit; 1 is the pattern as drafted. Either may be left out to keep it. Kept when another fitted garment is picked.
+defineCommand('fitted.size', {
+	label: 'Fitted garment size', args: `{ width?: ${FIT_SIZE_RANGE.join('..')}, length?: ${FIT_SIZE_RANGE.join('..')} }`,
+	run(tx, a) {
+		const cur = tx.doc.meta.fitSize ?? {}, next = { width: a.width ?? cur.width ?? 1, length: a.length ?? cur.length ?? 1 };
+		for (const k of ['width', 'length']) {
+			if (!(next[k] >= FIT_SIZE_RANGE[0] && next[k] <= FIT_SIZE_RANGE[1])) throw new Error(`${k} must be within ${FIT_SIZE_RANGE.join(' and ')}`);
+			next[k] = Math.round(next[k] * 1000) / 1000;
+		}
+		tx.set('meta/fitSize', next.width === 1 && next.length === 1 ? null : next);
 	},
 });
 

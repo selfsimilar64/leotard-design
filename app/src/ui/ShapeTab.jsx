@@ -9,14 +9,14 @@ import { useEffect, useState } from 'preact/hooks';
 import { app } from '../instance.js';
 import { rev, selection, tool, prefs, setPref, notify, slow } from './state.js';
 import { toolOptions } from './tools.js';
-import { run, Section, Field, Tiles, Segmented, Slider, Switch, Stepper, Button, IconButton, PartHeader, PartRow, Hint, thumb } from './kit.jsx';
+import { run, Section, Field, Tiles, Segmented, Slider, CommitSlider, Switch, Stepper, Button, IconButton, PartHeader, PartRow, Hint, thumb } from './kit.jsx';
 import { I, EDGE_ICONS, FINISH_ICONS } from './icons.jsx';
 import { LookControls, MaterialChoice, MaterialUse, fabricLabel } from './FabricTab.jsx';
 import { TRIMS } from '../garment/trim.js';
 import { overlayLines, panelAt } from '../garment/build.js';
 import { focusOn } from './camera.js';
 import { BLOCK_OPTIONS, blockOf, blockAllows, blockKeyOf } from '../garment/blocks.js';
-import { FITTED, fittedOf } from '../garment/fitted.js';
+import { FITTED, fittedOf, fitSizeOf, FIT_SIZE_RANGE } from '../garment/fitted.js';
 
 export function ShapeTab() {
 	rev.value;
@@ -37,8 +37,20 @@ function Garment({ doc }) {
 			<Segmented wrap value={f?.key ?? null} onPick={pick}
 				options={[[null, 'Drawn', null, 'The pieces drawn on the body, shaped by the options below'], ...FITTED.map((x) => [x.key, x.label, null, x.hint ?? `${x.leg}; drafted from a textbook block and fitted by simulation on the ${x.fittedOn} body`])]} />
 			{f ? <Hint>Fitted on the {f.fittedOn} body. The options below shape the drawn pieces, not this one; its fabric comes from the Front, Back and Sleeve pieces.</Hint> : null}
+			{f ? <FitSize doc={doc} /> : null}
 		</Section>
 	);
+}
+
+// The fitted garment's pattern size: smaller sits tauter on the body, larger looser. Applied when let go (each change re-fits it).
+function FitSize({ doc }) {
+	const size = fitSizeOf(doc), pct = (v) => Math.round(v * 100) + '%';
+	const set = (k) => (v) => run({ op: 'fitted.size', [k]: v });
+	return <>
+		<Field label="Width"><CommitSlider value={size.width} min={FIT_SIZE_RANGE[0]} max={FIT_SIZE_RANGE[1]} step={0.01} format={pct} onCommit={set('width')} /></Field>
+		<Field label="Length"><CommitSlider value={size.length} min={FIT_SIZE_RANGE[0]} max={FIT_SIZE_RANGE[1]} step={0.01} format={pct} onCommit={set('length')} /></Field>
+		<Hint>The pattern's size, across and along the grain, against the block as drafted (100%). Smaller pulls the fabric tauter.</Hint>
+	</>;
 }
 
 // --- the silhouette, element by element ---------------------------------------------------------

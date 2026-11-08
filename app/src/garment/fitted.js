@@ -26,13 +26,21 @@ export const FITTED = [
 
 export const fittedOf = (doc) => FITTED.find((f) => f.key === doc?.meta?.fitted) ?? null;
 
+// The fitted garment's size: its pattern made wider (across the grain) and longer (along it) by these factors, op fitted.size.
+// The re-fit takes the scaled pattern as its rest shape (fit/fitted-case.js garmentArrays): smaller sits tauter, larger looser.
+// Without a re-fit (none run yet, re-fit off, no WebGPU) the fit shown is the file's, at 1 x 1. The range is ours, not a maker's.
+export const FIT_SIZE_RANGE = [0.8, 1.1];
+export const fitSizeOf = (doc) => ({ width: doc?.meta?.fitSize?.width ?? 1, length: doc?.meta?.fitSize?.length ?? 1 });
+
 // A fitted garment's pieces for the flat view (ui/FlatView.jsx), in the shape garment/pattern.js patternPieces gives: each piece
 // once (a cell's half 0), its outline as drafted, in mm with its corner at the origin. The outlines are stitching lines (the fit
 // works on those), so no separate stitch line is drawn. Colour and choosing a piece go through the panel of the same name.
 // fitted: the FittedView (render/fitted.js); its clothFor gives each piece's flat frame for the stones on it (stones/fitted-cloth.js).
 export function fittedPieces(data, doc, fitted = null) {
 	const L0 = doc.panels.filter((p) => (p.layer ?? 'L0') === 'L0' && !p.removed), byName = new Map(L0.map((p) => [p.name, p])), front = byName.get('Front') ?? L0[0];
-	const out = [];
+	const out = [], size = fitSizeOf(doc);
+	// the outlines stay as drafted (the stones' frames are laid in them); a resized pattern says so on its label
+	const sized = size.width === 1 && size.length === 1 ? '' : ` · cut at ${Math.round(size.width * 100)}% wide, ${Math.round(size.length * 100)}% long`;
 	for (const c of data.cells) {
 		if (c.half !== 0) continue;
 		const raw = c.outline.map(([x, y]) => [x * 1000, y * 1000]);
@@ -43,7 +51,7 @@ export function fittedPieces(data, doc, fitted = null) {
 		// the frame the stones are laid in: mm = uv * 1000 - origin, uv the cloth's (its origin at its points' mean)
 		const frame = cloth ? { cell: cloth.cell, layer: 'L0', origin: [x0 - cloth.shift[0] * 1000, y0 - cloth.shift[1] * 1000], easeUV: [0, 0], fitted: true } : {};
 		out.push({ ...frame, key: c.piece, panelId: panel?.id, name: c.name, cutLine: pts, stitch: null, grain: { at: [w / 2, h / 2], angle: 0 },
-			cut: (c.name === 'Sleeve' ? 'Cut 2, mirrored' : 'Cut 1') + ' · stitching line', colour: panel?.stack?.[0]?.colour ?? '#8f8a82', size: [w, h] });
+			cut: (c.name === 'Sleeve' ? 'Cut 2, mirrored' : 'Cut 1') + ' · stitching line' + sized, colour: panel?.stack?.[0]?.colour ?? '#8f8a82', size: [w, h] });
 	}
 	return out;
 }

@@ -6,10 +6,11 @@
 // Grew out of the dev viewer, dev/wrap-eval.js (show, cover, finish): change one, look at the other.
 import * as THREE from 'three';
 import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
-import { fittedOf } from '../garment/fitted.js';
+import { fittedOf, fitSizeOf } from '../garment/fitted.js';
 import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
 import { Refit, DEFAULTS } from '../fit/refit.js';
 import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
+import { foldsOf } from '../fit/folds.js';
 import { LineSegments2 } from './lines.js'; // (WebGL or WebGPU lines)
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { ROLE_COLOURS } from './overlay.js';
@@ -73,6 +74,7 @@ export class FittedView {
 	constructor(engine) {
 		this.engine = engine;
 		this.key = null;        // the fitted garment asked for
+		this.size = { width: 1, length: 1 }; // its pattern's size (meta.fitSize, garment/fitted.js fitSizeOf): the re-fit's rest shape
 		this.data = null;       // its loaded file
 		this.garment = null;    // its part of a re-fit case (fitted-case.js garmentArrays)
 		this.near = null;       // per whole-garment point, its neighbours (an opening's inward direction)
@@ -124,13 +126,21 @@ export class FittedView {
 	// After every document change the engine has applied.
 	sync(doc) {
 		const f = fittedOf(doc), key = f?.key ?? null;
+		const size = fitSizeOf(doc), resized = size.width !== this.size.width || size.length !== this.size.length;
+		this.size = size;
 		if (key !== this.key) {
 			this.key = key;
 			this.clear(doc);
 			if (f) this.load(f, doc);
 			return;
 		}
-		if (this.active) this.dress(doc);
+		if (!this.active) return;
+		if (resized && this.data.case) {
+			this.garment = garmentArrays(this.data, size);
+			if (this.cache) delete this.cache.matrix; // made from the rest shape (fit/refit.js); the body's parts and trees stay
+			this.place(); // re-fit at the new size, the view held until it is in
+		}
+		this.dress(doc);
 	}
 
 	async load(f, doc) {
@@ -141,7 +151,7 @@ export class FittedView {
 		this.data = data;
 		this.on = new Set(data.cells.flatMap((c) => c.hostI));
 		if (data.case) {
-			this.garment = garmentArrays(data);
+			this.garment = garmentArrays(data, this.size);
 			const n = data.case.n, T = data.case.tris, near = Array.from({ length: n }, () => new Set());
 			for (let t = 0; t < T.length; t += 3) for (let k = 0; k < 3; k++) { near[T[t + k]].add(T[t + (k + 1) % 3]); near[T[t + k]].add(T[t + (k + 2) % 3]); }
 			this.near = near.map((s) => [...s]);
@@ -181,7 +191,7 @@ export class FittedView {
 			if (c.fold) setFabricSlot(geo, 'fold', c.fold); // the fit's own folds (pipeline/wrap_block.py)
 			const mesh = new THREE.Mesh(geo, HIDDEN); // dress() gives it its panel's material
 			mesh.frustumCulled = false;
-			mesh.userData = { fitted: c.name, piece: c.piece };
+			mesh.userData = { fitted: c.name, piece: c.piece, cell: c };
 			mesh.hosts = { i: Uint32Array.from(c.hostI), w: Float32Array.from(c.hostW) };
 			mesh.cid = c.cid ? Int32Array.from(c.cid) : null;
 			view.group.add(mesh);
@@ -215,6 +225,14 @@ export class FittedView {
 				P[l * 3 + k] = v + N[l * 3 + k] * lift;
 			}
 			geo.attributes.aLift.array.fill(0);
+			// folds from the fit shown: the re-fit's own (fit/folds.js, at the pattern's size), else the file's (the fit it was made with)
+			const c = mesh.userData.cell;
+			if (X && mesh.cid) {
+				const q = new Float32Array(n * 3), sx = this.size.width, sy = this.size.length;
+				for (let l = 0; l < n; l++) for (let k = 0; k < 3; k++) q[3 * l + k] = X[3 * mesh.cid[l] + k];
+				setFabricSlot(geo, 'fold', foldsOf(q, Float32Array.from(c.uv, (v, i) => v * (i % 2 ? sy : sx)), c.I));
+			} else if (c.fold) setFabricSlot(geo, 'fold', c.fold);
+			else setFabricSlot(geo, 'fold', 0);
 			geo.attributes.aLift.needsUpdate = geo.attributes.position.needsUpdate = true;
 			geo.computeBoundingSphere();
 			// where each whole-garment point is drawn, for the stones on it (frameAt)

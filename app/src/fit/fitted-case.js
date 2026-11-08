@@ -75,10 +75,13 @@ export function startOf(data, Q) {
 	return out;
 }
 
-// The garment's part of a case: depends only on the fitted file, so it is made once per garment.
-export function garmentArrays(data) {
-	const c = data.case, nt = c.tris.length / 3;
-	const Dinv = new Float32Array(nt * 4), area = new Float32Array(nt), R = c.rest;
+// The garment's part of a case: depends only on the fitted file and its size, so it is made once per garment and size.
+// size (meta.fitSize): the pattern made wider (x, across the grain) and longer (y, along it) by these factors before the re-fit, as
+// a pattern maker grades a block: every piece's flat rest shape, and each elastic span's rest length by its own direction.
+export function garmentArrays(data, size = { width: 1, length: 1 }) {
+	const c = data.case, nt = c.tris.length / 3, sx = size.width ?? 1, sy = size.length ?? 1;
+	const R = sx === 1 && sy === 1 ? c.rest : Float64Array.from(c.rest, (v, i) => v * (i % 2 ? sy : sx));
+	const Dinv = new Float32Array(nt * 4), area = new Float32Array(nt);
 	for (let t = 0; t < nt; t++) {
 		// Dm's columns are the rest edges from corner 0: [[e1x, e2x], [e1y, e2y]]; Dinv row-major, as export_app
 		const e1x = R[6 * t + 2] - R[6 * t], e1y = R[6 * t + 3] - R[6 * t + 1], e2x = R[6 * t + 4] - R[6 * t], e2y = R[6 * t + 5] - R[6 * t + 1];
@@ -88,8 +91,24 @@ export function garmentArrays(data) {
 	}
 	return {
 		tris: Int32Array.from(c.tris), Dinv, area, facing: Float32Array.from(c.facing), si: Int32Array.from(c.si), sj: Int32Array.from(c.sj),
-		rest_len: Float32Array.from(c.rest_len), k: Float32Array.from(c.k), sleeve: Int32Array.from(c.sleeve),
+		rest_len: sx === 1 && sy === 1 ? Float32Array.from(c.rest_len) : spanLengths(c, sx, sy), k: Float32Array.from(c.k), sleeve: Int32Array.from(c.sleeve),
 	};
+}
+
+// Elastic spans' rest lengths with the pattern scaled: each by its direction on the flat piece (the flat edge of a triangle holding both
+// ends; a span with no such edge, by the mean of the two factors).
+function spanLengths(c, sx, sy) {
+	const T = c.tris, R = c.rest, n = c.n, flat = new Map();
+	for (let t = 0; t < T.length / 3; t++) for (let k = 0; k < 3; k++) {
+		const a = T[3 * t + k], b = T[3 * t + (k + 1) % 3], key = a < b ? a * n + b : b * n + a;
+		if (!flat.has(key)) flat.set(key, [R[6 * t + 2 * ((k + 1) % 3)] - R[6 * t + 2 * k], R[6 * t + 2 * ((k + 1) % 3) + 1] - R[6 * t + 2 * k + 1]]);
+	}
+	return Float32Array.from(c.rest_len, (L, s) => {
+		const a = c.si[s], b = c.sj[s], d = flat.get(a < b ? a * n + b : b * n + a);
+		if (!d) return L * (sx + sy) / 2;
+		const len = Math.hypot(d[0], d[1]) || 1;
+		return L * Math.hypot(d[0] * sx, d[1] * sy) / len;
+	});
 }
 
 // A case for Refit: the garment (garmentArrays), the start, and the body's garment surface Q on the canonical faces idx, split by

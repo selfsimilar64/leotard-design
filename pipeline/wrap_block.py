@@ -375,7 +375,8 @@ def closest_on_triangle(p, tri):
 
 def folds_of(q, uv, tri):
 	"""Where fabric lies smaller than flat, the folds its spare length goes into: per point, as twice the angle of the squeezed direction on the flat piece, x and y scaled
-	by height, then height, from height = wavelength / pi * sqrt(flat / now - 1). Smoothed over the mesh."""
+	by height, then height, from height = wavelength / pi * sqrt(flat / now - 1). Smoothed over the mesh.
+	Twin: foldsOf in app/src/fit/folds.js (the app recomputes them after every re-fit); keep the steps and FOLD_* constants alike."""
 	a, b = uv[tri], q[tri]
 	Dm = np.stack([a[:, 1] - a[:, 0], a[:, 2] - a[:, 0]], axis=2)
 	det = Dm[:, 0, 0] * Dm[:, 1, 1] - Dm[:, 0, 1] * Dm[:, 1, 0]

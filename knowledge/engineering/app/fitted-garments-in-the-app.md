@@ -250,6 +250,37 @@ Purchased thigh leg seam +4, Aldrich 6 +37.
 Offered as **Hybrid leotard** and **Hybrid leotard, high cut** (Garment row; starting points `fitted-hybrid`, `fitted-hybrid-high`),
 published by `publish_fitted.py` as `hybrid-6-block`, `hybrid-6-high-resolved`.
 
+# Pattern size, and folds from every re-fit (2026-11-08)
+
+Owner: "Can we also edit the size of the whole garment? That way we could control how taut the fabric sits and then potentially
+remove the bumps and folds."
+
+- **Size.** `meta.fitSize` `{ width, length }` (op `fitted.size`, 0.8-1.1, null = 1 x 1; a starting point resets it, picking another
+  fitted garment keeps it): the pattern scaled across (x) and along (y, the grain) before the GPU re-fit. `fit/fitted-case.js
+  garmentArrays(data, size)` scales the case's flat rest shape, and each elastic span's rest length by its own flat direction (the
+  edge of a triangle holding both ends). `render/fitted.js sync` rebuilds the garment arrays on a size change, drops only the cached
+  constant matrix (`cache.matrix`, made from the rest shape; body parts and trees stay) and re-fits (view held). Shape tab, Garment:
+  Width and Length sliders (CommitSlider: applied on release, each change re-fits). The flat view keeps the drafted outlines (the
+  stones' frames are laid in them) and says "cut at W% wide, L% long" on each piece's label.
+- **Folds follow the re-fit.** Before, a fitted garment always drew its file's folds (`cells[].fold`, from the standing fit on
+  `young`), whatever the body, pose or size. Now `show()` recomputes them from the re-fit's points (`fit/folds.js foldsOf`, twin of
+  `wrap_block.folds_of`, checked by `test/folds.test.js` against a fixture the Python made) at the scaled pattern; without a re-fit
+  (off, no WebGPU, none run yet) the file's folds are drawn as before. On `young` in the A-pose at 1 x 1 the live folds equal the
+  file's (folded area back 15%, front 4%, sleeve 28% both ways). Other bodies and poses now show their own: the hybrid high cut on
+  `teen` standing, back 50% / front 18%; `lunge-arms-up` back 57% / front 32%.
+
+Hybrid high cut on `young`, A-pose, share of each piece's points with a fold over 1 mm (mean height):
+
+| Size (width x length) | Back | Front | Sleeve |
+|---|---|---|---|
+| 100 x 100 | 15% (0.47 mm) | 4% | 28% (1.22) |
+| 95 x 95 | 9% | 4% | 26% |
+| 95 x 90 | 7% (0.27) | 4% | 25% (1.01) |
+| 90 x 90 | 6% | 3% | 25% |
+
+The crease across the small of the back at 100% is gone at 95 x 90 (seen in the app, back view). Sleeve folds barely move with size
+(they are not spare length). On `teen` standing, 95 x 90 halves the back's (50% to 25%). A re-fit of 150 steps takes about 0.6 s.
+
 # Known limits **[INFERRED]**
 
 - **Fitted on one body.** On other bodies the young standing fit is carried by surface coordinates and then re-fitted by the GPU
