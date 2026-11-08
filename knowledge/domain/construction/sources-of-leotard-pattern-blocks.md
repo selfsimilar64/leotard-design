@@ -45,6 +45,26 @@ sources:
     resource: https://browzwear.com/tutorials/creating-swimwear-fabric-and-bathing-suit-fabric-in-3d
     title: Browzwear tutorial on swimwear blocks in the Cloud Library
     author: org:browzwear
+  - id: sp-studio
+    resource: https://teamwear.sylviap.com.au/pages/design-with-sylvia-p-teamwear
+    title: Sylvia P teamwear design page (read 2026-11-07)
+    author: org:sylvia-p
+  - id: richardson
+    resource: https://eld.bl.uk/catalog/019405742
+    title: Richardson, Designing and Patternmaking for Stretch Fabrics, British Library record and listings
+    author: human:keith-richardson
+  - id: garmentcode
+    resource: https://github.com/maria-korosteleva/garmentcode
+    title: GarmentCode (pygarment, MIT) and GarmentCodeData (ETH Zurich research collection)
+    author: human:maria-korosteleva
+  - id: clo-connect
+    resource: https://legal.clo-set.com/modal-tou-connect
+    title: CLO-SET CONNECT additional terms
+    author: org:clo
+  - id: wvu
+    resource: https://researchrepository.wvu.edu/etd/11464
+    title: WVU MFA thesis on competitive gymnastics and dance leotards (2022)
+    author: org:west-virginia-university
   - id: taasinc
     resource: https://taasincdigital.sellfy.store/
     title: Taasinc Digital DXF block store (page and search snippets)
@@ -69,6 +89,19 @@ is the nearest thing to a systematic source, because it generates a pattern from
 | Browzwear VStitcher Cloud Library | Ungraded swimwear blocks, including a cut-out one-piece[^browzwear-swim] | Export and reuse terms not stated | Paid tool ([pricing](/domain/market/professional-fashion-cad.md)); no size range |
 | Taasinc DXF store | DXF/AAMA blocks for leggings, tees, dresses and joggers, plus development services[^taasinc] | Terms not retrieved | No leotard block found |
 
+# Second search (2026-11-07), for sources we could ship
+
+After Armstrong, Aldrich and Cole: the owner judged Aldrich's and Cole's one-pieces (swimwear and
+bodyshaper) not close to a gymnastics leotard; the Armstrong block stays the best fit.
+
+| Source | What it gives | Shippable? | Notes |
+|---|---|---|---|
+| Sylvia P StudioSP | "3D virtual" customiser of their catalogue: fabrics, colours, crystals[^sp-studio] | No: a closed service | No vendor or pattern data named; nothing to suggest flat pieces are exposed **[UNVERIFIED]** |
+| Richardson (and Michaud), *Designing and Patternmaking for Stretch Fabrics* (Fairchild 2008; later editions) | A whole stretch-knit drafting text; a library record lists four-way stretch and a bodysuits, leotards and swimsuits chapter[^richardson] | A method, so results are ours | Contents not seen first-hand; an online upload seen in search looked unauthorised and was not opened |
+| GarmentCode / pygarment (ETH Zurich) | Parametric sewing patterns as code, from body measurements; GarmentCodeData, 115 000 made-to-measure garments with patterns[^garmentcode] | Code MIT; dataset licence not confirmed | Fashion garments (bodices, skirts, pants); no leotard seen; SMPL bodies not shareable |
+| CLO-SET Connect, ArtStation pattern packs | 3D garment files (.zprj) that carry their 2D pieces[^clo-connect] | Per item; typical marketplace licences allow renders, not redistributing the pieces | No leotard item confirmed |
+| WVU MFA thesis on competition leotards (2022) | Design, construction, absorbent fabrics, product development[^wvu] | Findings citable | Not a drafting method |
+
 # Not confirmed
 
 - Whether a preloaded leotard block exists in CLO, Style3D, Seamly2D or Wild Ginger. Searches found
@@ -88,3 +121,8 @@ is the nearest thing to a systematic source, because it generates a pattern from
 [^fs-licence]: FreeSewing licence file
 [^browzwear-swim]: Browzwear swimwear tutorial
 [^taasinc]: Taasinc Digital store
+[^sp-studio]: Sylvia P teamwear design page
+[^richardson]: Richardson, Designing and Patternmaking for Stretch Fabrics: listings and library record
+[^garmentcode]: GarmentCode, pygarment and GarmentCodeData
+[^clo-connect]: CLO-SET Connect terms and pattern marketplaces
+[^wvu]: WVU thesis on competition leotards

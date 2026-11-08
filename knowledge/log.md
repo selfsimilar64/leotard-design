@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-07
+* **Update**: [Sources of leotard pattern blocks](/domain/construction/sources-of-leotard-pattern-blocks.md): second search for shippable sources (Sylvia P StudioSP, Richardson's stretch text, GarmentCode, CLO-SET Connect, a WVU thesis); owner judged Aldrich's and Cole's one-pieces not close; Armstrong stays the best fit.
 * **Update**: [Fitted garments in the app](/engineering/app/fitted-garments-in-the-app.md): second owned block, Aldrich's bodyshaper (`pipeline/draft_aldrich.py`), size 6 on `young`, in the Garment row and as a starting point; sizes 12/8/6 fitted and compared for tension; back gathers at the small of the back (no length reduction in the book). Fitter and checker accept blocks without a high leg.
 * **Update**: [Aldrich's stretch blocks](/domain/construction/aldrich-stretch-body-and-swimwear-blocks.md): our implementation (crotch sewn shut, gusset joined, bodyshaper widths, sleeve from the body's shoulder top, girls' sizes by shares of girth); every size passes 33 of 35 pattern checks.
 * **Update**: [Patternmaking texts](/domain/construction/patternmaking-texts-for-stretch.md): Cole's contents (owner's scan): foundations by stretch category and four-way reduction in ch. 5; leotard and bodysuit sit in the swimwear chapter. Haggar cannot be acquired; FreeSewing Onyx ruled out by the owner (attached shorts, buttons).
