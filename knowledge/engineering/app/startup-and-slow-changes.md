@@ -7,7 +7,7 @@ status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-08T18:00:00Z }
 sources:
   - id: code
-    resource: "app/index.html (#curtain), app/src/ui/curtain.js, app/src/main.jsx (start, reveal), app/src/render/viewport.js (prepare, checkShaders, mayDraw, envReady), app/src/render/engine.js (settled), app/src/render/fitted.js (loading), app/src/ui/state.js (slow, settle, compiling), app/src/ui/Shell.jsx (Busy), app/src/ui/StageTab.jsx, app/src/ui/ShapeTab.jsx (Garment), app/src/render/warmup.js, app/src/materials/fabric.js (fabricDefines), app/src/render/engine.js (setFinish) on build/designer-app"
+    resource: "app/index.html (#curtain), app/src/ui/curtain.js, app/src/main.jsx (start, reveal), app/src/render/viewport.js (prepare, checkShaders, mayDraw, envReady), app/src/render/engine.js (settled), app/src/render/fitted.js (loading), app/src/ui/state.js (slow, settle, compiling), app/src/ui/Shell.jsx (Busy), app/src/ui/StageTab.jsx, app/src/ui/ShapeTab.jsx (Garment), app/src/render/warmup.js, app/src/materials/fabric.js (fabricDefines, fabricSide), app/src/render/engine.js (setFinish), app/src/render/garment.js (setDoubleSided) on build/designer-app"
     title: Source
     author: claude-code/claude-opus-5-5
   - id: owner-2026-11-08
@@ -297,6 +297,36 @@ so neither the browser's nor the driver's cache can match; one-sided stand-in co
   cold start **[INFERRED]**; a lettering pass of its own would add its own program(s) back. Warm starts read cached
   binaries (~0.06-0.12 s a fabric variant) and would gain little **[INFERRED]**.
 
+**Done the same day** (owner: "implement the both-side fix"): `materials/fabric.js fabricSide(m, inside)` sets each fabric
+material's side and `uCullBack`; called by `render/garment.js` (`material`, `applyMaterials` after `bindScan`,
+`setDoubleSided`), `render/rims.js` and `render/straps.js` (inside never shown), and by `bindScan` again when a scan arrives
+(`m.userData.inside`), since a sheer scan makes the material transparent.
+
+- Opaque fabrics: always `DoubleSide`, back faces discarded while the inside is hidden. Trims and straps share the panels'
+  program (zone is a uniform), so they had to switch too, or the one-sided program would still be needed.
+- See-through fabrics (mesh, illusion, glitter mesh, sheer scans) keep switching `FrontSide` / `DoubleSide`: three draws a
+  transparent `DoubleSide` material in two passes (`WebGLRenderer.renderObject` and `prepareMaterial`: a `BackSide` and a
+  `FrontSide` program, unless `forceSinglePass`), so a single `DOUBLE_SIDED` program would change their hidden-mannequin
+  look (draw order inside one pass) and two-pass always gains no program.
+- WebGPU (`fabric-node.js`, no `uCullBack`): the side still switches, as before (note on both sides).
+- `render/warmup.js` compiles each fabric as `fabricSide` gives it, inside hidden and shown, one material when both give
+  the same side.
+
+Checked (test tab, B12):
+
+- Programs at the start 89 (30 the fabric shader), from 104 (45).
+- Warm start: warm-up 4.9 s with no cache miss (fabrics 2.7 s), from 7.4 s (fabrics 5.0 s); the app ready at 11.7 s. Two
+  of three warm starts still had the one random miss (Crushed velvet 2.5 s, Satin 2.5 s): 7.2 s and 7.8 s.
+- First start after the change: warm-up 14.6 s; not a true cold start (other shaders cached), cold not re-measured.
+  ~15 fewer fabric programs at ~0.75-1.75 s each cold suggests ~15-20 s off a cold start **[INFERRED]**.
+- Looks: all 24 fabrics on every panel, trim and strap (mannequin shown, stones hidden), new against `FrontSide`: every
+  pixel identical.
+- Mannequin hidden: every fabric applied to the panels compiled nothing (89 programs before and after); shader tour 194
+  steps, nothing compiled.
+- Frame: scene pass 1.051 ms against 1.065 ms with the panels forced back to `FrontSide` (25 readings each), whole frame
+  4.67 against 4.81 ms: no measurable cost in this view (the earlier +0.12 ms was another framing).
+- Unit tests: 229 pass, the same 4 failing as before.
+
 # Left to do [INFERRED]
 
 Ways to shorten the start now (put to the owner 2026-11-09; estimates from the measurements above):
@@ -304,10 +334,6 @@ Ways to shorten the start now (put to the owner 2026-11-09; estimates from the m
 - Compile beside the loading: the fabric, finish and crystal jobs need only the studio (lit within ~1-2 s), not the
   bodies or the design, so they could start while those load: ~3 s off every start, if the early cache misses do not
   grow.
-- One side per fabric: the inside of the leotard (mannequin hidden) doubles every fabric variant. Drawing it another
-  way (always both sides, or the inside in a plain material) halves them: ~17-23 s off a cold start, ~2.5 s off a warm
-  one. Measured (above): always both sides, back faces discarded while the mannequin shows, costs +0.12 ms a frame and
-  draws the same picture; the owner's call.
 - Decals (lettering and stamps) are 20-41% of a fabric variant's cold compile (above); drawn in a pass of their own
   they would leave every variant (a rewrite: their own surface following fit and pose, their own lighting and fold
   bumps, the stamps staying in the cloth, see-through fabrics, outline and picking).

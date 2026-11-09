@@ -68,6 +68,7 @@ varying vec3 vRef;
 varying float vKeep;
 varying vec2 vForm;
 uniform float uClip;       // 1 = dress form: discard everything outside the cut (keep < 0)
+uniform float uCullBack;   // 1 = the inside is hidden: back faces are discarded (fabricSide)
 uniform float uTape;       // 1 = dress-form style tapes on the mannequin
 uniform vec4 uTapeY;       // reference-body heights of the waist, bust, hip and neck tapes
 uniform vec3 uTapeColor;
@@ -235,6 +236,7 @@ vec3 bumpN( vec3 n, float hgt ) {
 
 const FABRIC_FRAGMENT = /* glsl */`
 {
+	if ( uCullBack > .5 && ! gl_FrontFacing ) discard; // (fabricSide: the inside, while the mannequin hides it)
 	if ( uClip > .5 && vKeep < 0. ) discard;
 
 	// --- dress-form style tapes: centre front/back, side seams, princess lines, waist, bust, hip
@@ -1209,7 +1211,7 @@ export function createFabricMaterial(zone) {
 		uTexFlags: { value: new THREE.Vector4() }, uMaskOn: { value: new THREE.Vector4() },
 		uMaskCol0: { value: new THREE.Color() }, uMaskCol1: { value: new THREE.Color() }, uMaskCol2: { value: new THREE.Color() }, uMaskCol3: { value: new THREE.Color() },
 		uOmbre: { value: 0 }, uOmbreColor: { value: new THREE.Color(0, 0, 0) }, uOmbreY: { value: new THREE.Vector2(0.82, 1.32) },
-		uSkin: { value: 0 }, uSeam: { value: 0 }, uSeamAllow: { value: 0.006 }, uClipShell: { value: 0 },
+		uCullBack: { value: 0 }, uSkin: { value: 0 }, uSeam: { value: 0 }, uSeamAllow: { value: 0.006 }, uClipShell: { value: 0 },
 		uDuo: { value: 0 }, uDuoColor: { value: new THREE.Color() }, uDuoPow: { value: 2 },
 		uFilm: { value: 0 }, uFilmScale: { value: 0.04 }, uFilmRange: { value: new THREE.Vector2(250, 700) }, uFilmWarp: { value: 1.5 }, uFilmTint: { value: 0 }, uFilmHue: { value: new THREE.Vector2(1.6, 0.45) },
 		uPrint: { value: 0 }, tPrint: { value: null }, uPrintSize: { value: new THREE.Vector2(0.2, 0.2) }, uPrintOffset: { value: new THREE.Vector2() },
@@ -1516,6 +1518,22 @@ export function fabricDefines(f) {
 	return d;
 }
 
+// Which side of a piece is drawn (owner, 2026-11-09: one shader per fabric, not one for the outside and another for the
+// inside). An opaque fabric is always drawn on both sides (three's DOUBLE_SIDED program, which draws the outside exactly as
+// a one-sided one does) and, while the inside is hidden (the mannequin shown; trims and straps always), its back faces are
+// discarded first thing in the shader (uCullBack): +0.12 ms a frame against culling them, measured. A see-through fabric
+// (mesh, a sheer scan) keeps switching side: three draws a transparent two-sided material as two passes (its back-side and
+// front-side programs), the front-side one being its one-sided program, so it gains nothing and would pay the empty pass.
+// Call after applyFabric and bindScan (they set `transparent`). render/warmup.js compiles what this gives, both ways.
+// Twin: on WebGPU (materials/fabric-node.js, no uCullBack) the side still switches with the mannequin.
+// knowledge/engineering/app/startup-and-slow-changes.md (Both sides always).
+export function fabricSide(m, inside) {
+	const side = inside || (!m.transparent && !m.isNodeMaterial) ? THREE.DoubleSide : THREE.FrontSide;
+	if (m.side !== side) { m.side = side; m.needsUpdate = true; }
+	m.userData.inside = inside; // (bindScan: a scan arriving later may make it see-through)
+	if (m.userData.u?.uCullBack) m.userData.u.uCullBack.value = inside ? 0 : 1;
+}
+
 const _c = new THREE.Color();
 // colour2: an explicit second colour (hex) for the foil, the ombre's far end or the duochrome
 // shift, instead of the `second` choice; on the thread-model satin, the cross threads' colour (a shot
@@ -1619,7 +1637,7 @@ export function bindScan(m, look, textures) {
 	const s = textures ? scanOf(look) : null, key = s ? s.id + JSON.stringify(s.opts) : null;
 	if (m.userData.scanId !== s?.id) applyTexture(m, null);
 	m.userData.scan = key; m.userData.scanId = s?.id;
-	if (s) textures.get(s.id).then((set) => { if (m.userData.scan === key) applyTexture(m, set, s.opts); }, (e) => console.warn('texture', s.id, e.message));
+	if (s) textures.get(s.id).then((set) => { if (m.userData.scan === key) { applyTexture(m, set, s.opts); if (m.userData.inside !== undefined) fabricSide(m, m.userData.inside); } }, (e) => console.warn('texture', s.id, e.message)); // (a sheer scan arrives see-through: its side again)
 }
 
 // Bind a scanned texture set (materials/textures.js) to a fabric material, or unbind it (set = null).

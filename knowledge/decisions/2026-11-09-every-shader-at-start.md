@@ -40,6 +40,9 @@ To make that a wait of seconds rather than minutes the variants were cut where t
   more variants (104 programs, from 84) but each far smaller. With every cache missed the curtain lifts at 52-69 s; a
   warm start's warm-up is ~7.4 s, ~9.7 s on the starts where one program misses the cache. Looks unchanged (within
   1/765 on every fabric).
+- Then the owner had opaque fabrics drawn on both sides always, the inside discarded in the shader while hidden
+  (`materials/fabric.js fabricSide`): one program per fabric instead of two, 89 programs at the start; a warm start's
+  warm-up ~4.9 s; looks identical.
 - `?quick` in the address compiles only what the design shows, for look-dev reloads after a shader change.
 - The shader tour (`app/src/dev/shader-tour.js`) is the check: after the start it walks every option a designer can
   reach and lists any step that compiled. When the app gains a material, a mesh kind or a lighting change, the warm-up

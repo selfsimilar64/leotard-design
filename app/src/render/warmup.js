@@ -5,7 +5,7 @@
 // fabric holds only its own code, 2026-11-09). knowledge/engineering/app/startup-and-slow-changes.md.
 //
 // What makes a variant (three's program key): a material's features (sheen, clearcoat, anisotropy, iridescence, sheer,
-// the fabric's own effects: materials/fabric.js fabricDefines, the satin's switches, one side or both), the mesh's
+// the fabric's own effects: materials/fabric.js fabricDefines, the satin's switches, one side or both: fabricSide), the mesh's
 // (instanced, vertex colours, tangents) and the scene's (lights,
 // environment, shadows). The scene's are fixed: one kind of lighting (the photographed studios share one set; the softbox
 // studios were removed for this), and shadows off draws no shadow without changing a shader (render/viewport.js
@@ -15,7 +15,7 @@
 // Compiled into the scene pass's target, as Viewport.prepare does (a variant drawn into a target differs from one
 // drawn to the screen), one at a time (the GPU process compiles one at a time anyway), each waited for before the next.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, FABRICS } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, fabricSide, FABRICS } from '../materials/fabric.js';
 import { MANNEQUIN_FINISHES } from './presets.js';
 import { setFinish } from './engine.js';
 import { finishSurface } from './figure.js';
@@ -58,19 +58,21 @@ function jobs(engine, scans) {
 	const mesh = (m) => new THREE.Mesh(g, m);
 	// the scene as it is, hidden parts too (the studio room's dome, the floor that shows shadows, a stand, the overlays)
 	out.push(['the scene', () => [v.scene]]);
-	// every fabric, on one side (the mannequin shown) and on both (hidden: the leotard is drawn from inside too,
-	// render/garment.js setDoubleSided); a sheer scan makes its base fabric sheer (materials/fabric.js applyTexture)
+	// every fabric, with its inside hidden (the mannequin shown) and shown (hidden: the leotard is drawn from inside too,
+	// render/garment.js setDoubleSided), sides as materials/fabric.js fabricSide gives them: one program for an opaque fabric,
+	// a see-through one's one-sided and two-sided; a sheer scan makes its base fabric sheer (materials/fabric.js applyTexture)
 	for (const key of Object.keys(FABRICS)) {
 		if (SKIP.has(key)) continue;
-		out.push([`fabric ${key}`, () => [THREE.FrontSide, THREE.DoubleSide].flatMap((side) => {
-			const make = (sheerScan) => {
+		out.push([`fabric ${key}`, () => (scans && SCAN_BASES.has(key) ? [false, true] : [false]).flatMap((sheerScan) => {
+			const make = (inside) => {
 				const m = createFabricMaterial(5);
-				m.side = side;
 				applyFabric(m, key, '#808080', 'Tone-on-tone');
 				if (sheerScan) { m.transparent = true; m.alphaToCoverage = false; m.depthWrite = true; }
-				return mesh(m);
+				fabricSide(m, inside);
+				return m;
 			};
-			return scans && SCAN_BASES.has(key) ? [make(false), make(true)] : [make(false)];
+			const out = make(false), ins = make(true);
+			return (ins.side === out.side ? [out] : [out, ins]).map(mesh);
 		})]);
 	}
 	// the mannequin's finishes (its skin is the fabric shader, both sides: render/engine.js), and the caps of a cut body:

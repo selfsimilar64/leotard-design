@@ -4,7 +4,7 @@
 // garment normal, AO, reference position) and the same fabric shader as the POC draws it
 // (zone 5: no region discards, cloth-space UVs). Changing body only re-interpolates.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, bindScan, texScaleOf } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, bindScan, texScaleOf, fabricSide } from '../materials/fabric.js';
 import { addFabricAttributes, setFabricSlot, FABRIC_SLOTS } from '../materials/fabric-attributes.js';
 import { cellPiece, cellSignature } from '../garment/pieces.js';
 import { Flattener } from '../garment/flattener.js';
@@ -125,7 +125,7 @@ export class GarmentView {
 			m.userData.u.uOffset.value = z >= 0 ? 0.0012 + 0.0009 * z : 0.0007;
 			m.userData.u.uSeam.value = 1; // panels carry aSeam
 			m.userData.u.uClipShell.value = z < 0 ? 1 : 0; // linings: aCover is the shell's cover (setClip)
-			if (this.doubleSided) m.side = THREE.DoubleSide;
+			fabricSide(m, this.doubleSided);
 			this.materials.set(id, m);
 		}
 		return m;
@@ -156,6 +156,7 @@ export class GarmentView {
 			this.applyDecals(m);
 			if (this.wrinkles) { u.uWrinkle.value = this.wrinkles.Z; u.uWrinkleN.value = this.wrinkles.N; }
 			bindScan(m, s, this.textures); // its own scan, or its fabric's default
+			fabricSide(m, this.doubleSided); // (after the fabric and scan: a see-through one is drawn differently)
 			// opaque panels take shadows (and so cast them: variance shadow maps); sheer ones do
 			// neither, so a lining under lace or mesh is not blacked out by it
 			for (const c of this.cells) if (c.panelId === p.id) c.mesh.castShadow = c.mesh.receiveShadow = !m.transparent;
@@ -239,7 +240,7 @@ export class GarmentView {
 	// as in a ghost-mannequin photo, instead of showing the backdrop through the openings.
 	setDoubleSided(v) {
 		this.doubleSided = v;
-		for (const m of this.materials.values()) { m.side = v ? THREE.DoubleSide : THREE.FrontSide; m.needsUpdate = true; }
+		for (const m of this.materials.values()) fabricSide(m, v); // (materials/fabric.js: no new shader for an opaque fabric)
 	}
 	// A short glow over a piece as it is chosen (the Fabric tab, or a click on the model), so the eye
 	// finds which piece the panel is showing.

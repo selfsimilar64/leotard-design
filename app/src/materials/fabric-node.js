@@ -7,6 +7,7 @@
 // Not ported: zones 0-2 (the legacy painted garment, not shown by the app).
 // Not specialised per fabric as fabric.js is (fabricDefines, its FAB_* switches, 2026-11-09): the graph here is built before
 // the fabric is known, so every effect stays a runtime switch on WebGPU. The looks are the same either way.
+// Nor drawn both sides always (fabric.js fabricSide, uCullBack, 2026-11-09): here the side still switches with the mannequin.
 import * as THREE from 'three';
 import { MeshPhysicalNodeMaterial } from 'three/webgpu';
 import { FABRIC_ATTRIBUTES } from './fabric-attributes.js';

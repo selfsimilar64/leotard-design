@@ -3,7 +3,7 @@
 // (garment/edges.js). The finish of a loop comes from the document's trims (the trim naming one
 // of the loop's curves), else turned self-fabric elastic. Rebuilt when the cut or the body changes.
 import * as THREE from 'three';
-import { createFabricMaterial, applyFabric, bindScan, texScaleOf } from '../materials/fabric.js';
+import { createFabricMaterial, applyFabric, bindScan, texScaleOf, fabricSide } from '../materials/fabric.js';
 import { TRIMS, KAPPA_MAX, trimAtWidth, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 import { lookOf } from '../doc/materials.js';
 import { openingLoops } from '../garment/edges.js';
@@ -146,6 +146,7 @@ export class Rims {
 			m = createFabricMaterial(4);
 			applyFabric(m, fin.fabric, fin.colour, fin.second, fin.colour2 ?? null, texScaleOf(fin), fin.satin);
 			bindScan(m, fin, this.textures); // its fabric's default scan, as on the panels
+			fabricSide(m, false); // the outside only, in the panels' shader (materials/fabric.js)
 			const T = trimAtWidth(fin.kind, fin.width);
 			m.userData.u.uRows.value.set(T.rows[0], T.rows[1]);
 			m.userData.u.uZig.value = T.zigzag ? T.width / 2 : 0;
