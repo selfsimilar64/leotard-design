@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-11-09
+* **Update**: [Start-up and slow changes](/engineering/app/startup-and-slow-changes.md): owner asked for every shader variant compiled at the start; measured that compiles do not run in parallel (4 at once 18.8 s), a cached fabric variant still costs 0.3-0.6 s every launch, and the new shader tour (`app/src/dev/shader-tour.js`, 178 steps) found 125 first-time compiles after today's start, mostly studio kinds and shadows off multiplying everything on show. Options put to the owner.
+
 ## 2026-11-08
 * **Decision**: [One fit simulation carries the whole fit](/decisions/2026-11-08-one-fit-simulation.md): owner wants the fit sim to become the one simulation for the total fit; the pose slide is removed now (`body/slide.js` and its test deleted, `Engine.setSlide` → `setLift`, its settings and Settings controls gone; [garment sliding](/engineering/app/garment-sliding.md) deprecated); the membrane and seat sheet stay until the fit sim spans hollows itself. Pose and body changes with a fitted garment: ~1.5 s including the re-fit, from ~3.1 s plus the re-fit on default settings.
 * **Update**: [Start-up and slow changes](/engineering/app/startup-and-slow-changes.md): every fabric compiled in the background after the start and after a studio change (`render/prewarm.js`), kept in three's cache; checked: 15 fabrics switched with no compile.

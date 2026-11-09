@@ -130,6 +130,30 @@ and no `'shaders'` hold, 70-100 ms each (the command and a frame).
 Not covered: a scanned texture with alpha (`applyTexture` makes the piece sheer), the shadow setting (Settings), and
 the WebGPU renderer; those compile when first drawn, through `prepare`.
 
+# Could every variant compile at the start? (measured 2026-11-09)
+
+The owner asked for every shader variant to be compiled at the start, behind the curtain, so nothing compiles later.
+What that costs, measured on the GTX 1650 (Chrome 152, ANGLE/D3D11):[^measured-2026-11-08]
+
+- **No parallel compiling.** Four fabric variants issued at once took 18.8 s, one alone 4.7-6.1 s: the GPU process
+  compiles one shader at a time here (12 CPU threads). The first-run wait is the sum of every variant.
+- **A cached variant still costs every launch.** Re-creating a fabric variant whose compiled shader is in the disk
+  cache took 0.31-0.58 s (the 141k-character GLSL is translated again; only the driver's compile is skipped). Three's
+  own material takes 0.16-0.32 s even cold.
+- **The tour** (`dev/shader-tour.js`: designs b6 and b12, every fabric, crystal cut and stone, lettering look,
+  selection, studio and backdrop, shadow setting, glare, post effect, mannequin finish, pose, body and fitted
+  garment, 178 steps) found 125 programs compiled for the first time after today's start and background pass. The
+  biggest sources: a studio of another kind (photographed, softbox of six lights, softbox of two: 15-18 each) and
+  shadows off (13-14 each), which recompile everything on show; opening a design with straps, bindings and hardware
+  (29); then the special crystal cuts (pearl, spangle, holo dot), glare (4), mannequin finishes (2 each), fitted
+  garments (1 each). Every fabric on every kind of mesh in every lighting multiplies: roughly 150 fabric-shader
+  variants in all **[INFERRED]** from the tour's counts.
+
+So with the shader as it is, all of them at the start would be about ten minutes the first time and most of a minute
+added to every launch **[INFERRED]**. Ways down, none changing a look: shadows off drawn as an empty shadow map
+(no variant), the two-light softbox padded to six dark lights, one attribute set for every fabric mesh, satin's
+model only in satin, and the fabric code specialised per fabric. **[INFERRED]** estimates in the owner's report.
+
 # Left to do [INFERRED]
 
 - Shorter compiles: gate the satin model to satin (above); then specialise the fabric code by the
