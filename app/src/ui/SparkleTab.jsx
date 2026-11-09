@@ -163,7 +163,8 @@ function OnDesign({ doc }) {
 function GroupEditor({ id, doc }) {
 	const g = doc.stones.find((x) => x.id === id), back = () => { selection.value = null; };
 	if (!g) return <PartHeader back="Sparkle" onBack={back} title="These crystals no longer exist" />;
-	const run = app.engine?.stoneRun, count = run ? run.countOf?.(g.id) ?? run.stones.filter((s) => s.gen === g.id).length : 0, p = g.params ?? {};
+	// (the engine's laid stones: not called `run`, which would hide kit's run() that every button below edits with)
+	const laid = app.engine?.stoneRun, count = laid ? laid.countOf?.(g.id) ?? laid.stones.filter((s) => s.gen === g.id).length : 0, p = g.params ?? {};
 	const set = (patch, gesture) => run({ op: 'stones.set', id: g.id, ...patch, ...(gesture ? { gesture } : {}) });
 	const param = (k, v, gesture) => set({ params: { [k]: v } }, gesture);
 	const known = new Set(['size', 'rows', 'offset', 'gap', 'pattern']);
