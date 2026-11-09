@@ -4,7 +4,7 @@
 // design hangs on (a corner, a crossing, a joint) has a stone of its own, and the line between two such stops
 // holds a whole number of stones. The pattern's own sizes (a bigger stone at a crossing, a swelling line) are
 // E.k and the joints' E.jk. dart: candidates may collide, so they are accepted in turn, biggest first, each
-// kept clear of those before it (stones/pattern.js); random: the seed matters (the panel offers Reshuffle);
+// kept clear of those before it (stones/pattern.js); random: the seed matters (the card offers Reshuffle);
 // points: single stones, no lines, so the spacing of stones along a line means nothing here; own: a design of
 // its own size, laid where it is clicked (the rest fill the piece from its middle). Everything is anchored to the
 // pattern's own origin: moving a pattern moves its stones rigidly.
@@ -14,7 +14,7 @@ import { motifOutline, insidePoly, distPoly } from './motifs.js';
 import { SS, sizeOf } from './library.js';
 import { SOURCES, PRI_FILL } from './geometry.js';
 
-// parameters as the panel shows them: f: mm | deg | n | x (a ratio) | pct. log: a slider that gives small
+// parameters as the card shows them: f: mm | deg | n | x (a ratio) | pct. log: a slider that gives small
 // values as much room as big ones. hidden: only a preset sets it. when(P): only shown when it does something.
 export const mm = (k, l, d, min, max, step = 0.0001) => ({ k, l, d, min, max, step, f: 'mm', log: min > 0 && max / min >= 6 });
 export const num = (k, l, d, min, max, step = 1, f = 'n') => ({ k, l, d, min, max, step, f });

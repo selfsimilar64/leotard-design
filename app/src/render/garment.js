@@ -242,8 +242,8 @@ export class GarmentView {
 		this.doubleSided = v;
 		for (const m of this.materials.values()) fabricSide(m, v); // (materials/fabric.js: no new shader for an opaque fabric)
 	}
-	// A short glow over a piece as it is chosen (the Fabric tab, or a click on the model), so the eye
-	// finds which piece the panel is showing.
+	// A short glow over a piece as it is chosen (Fabric's list, or a click on the model), so the eye
+	// finds which piece the card is showing.
 	flash(id) {
 		const m = this.materials.get(id);
 		if (!m) return;

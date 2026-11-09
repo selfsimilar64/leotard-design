@@ -1,8 +1,9 @@
-// The design library, over the whole window: the starting points (simple leotards, yours to
-// change), the finished moodboard designs and the designer's own saves, each a front-and-back
-// picture of the leotard on the matte white mannequin (src/dev/thumbnails.js starts and designs;
-// app.save renders a save's). Opening one changes only the leotard: the mannequin, its pose and the
-// studio stay.
+// The design library: a sheet of frosted glass over the whole stage, three shelves across its top. Start fresh (the
+// starting points: simple leotards, yours to change), Finished designs (the moodboard designs) and Your designs (the
+// designer's own saves), each a front-and-back picture of the leotard on the matte white mannequin
+// (src/dev/thumbnails.js starts and designs; app.save renders a save's). Opening one changes only the leotard: the
+// mannequin, its pose and the studio stay. A shelf is the one place a long page of pictures scrolls: what a designer
+// has saved has no limit.
 import { useEffect, useState } from 'preact/hooks';
 import { app } from '../instance.js';
 import { libraryOpen, designsRev, selection, notify, slow, savedRev, rev } from './state.js';
@@ -24,9 +25,9 @@ export const designThumb = (f) => `/__fs/designs/thumbs/${encodeURIComponent(f)}
 export function Library() {
 	const open = libraryOpen.value, files = useDesigns(open);
 	rev.value;
-	const [busy, setBusy] = useState(null), [confirm, setConfirm] = useState(null);
+	const [busy, setBusy] = useState(null), [confirm, setConfirm] = useState(null), [shelf, setShelf] = useState(null);
 	useEffect(() => {
-		if (!open) { setConfirm(null); return; }
+		if (!open) { setConfirm(null); setShelf(null); return; }
 		const onKey = (e) => { if (e.key === 'Escape') libraryOpen.value = false; };
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
@@ -52,16 +53,19 @@ export function Library() {
 		setBusy(null);
 	};
 	const current = (k, file) => (file ? app.file === k : !app.file && app.doc.meta.start === k);
+	const shelves = [['start', 'Start fresh'], ['finished', 'Finished designs'], ['own', 'Your designs']];
+	const on = shelf ?? (app.file ? (/^b\d+-/.test(app.file) ? 'finished' : 'own') : 'start');
 	return (
 		<div class="library" role="dialog" aria-modal="true" aria-label="Designs" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-			<div class="lib-sheet">
+			<div class="lib-sheet glass">
 				<header class="lib-head">
-					<div>
-						<h1 class="lib-title">Designs</h1>
-						<p class="lib-sub">Start from a simple leotard or a finished design. Only the leotard changes: the mannequin, its pose and the studio stay as they are.</p>
-					</div>
+					<h1 class="lib-title">Designs</h1>
+					<nav class="faces" role="tablist">
+						{shelves.map(([k, l]) => <button key={k} class={`face ${k === on ? 'on' : ''}`} role="tab" aria-selected={k === on} onClick={() => setShelf(k)}>{l}</button>)}
+					</nav>
 					<button class="icon-btn lib-close" title="Close (Esc)" aria-label="Close" onClick={close}><I.close size={22} /></button>
 				</header>
+				<p class="lib-sub">{on === 'start' ? 'Simple leotards to make your own.' : on === 'finished' ? 'Rebuilt from the moodboard.' : 'Saved with Save.'} Only the leotard changes: the mannequin, its pose and the studio stay as they are.</p>
 				{confirm ? (
 					<div class="lib-confirm" role="alert">
 						<span><strong>{app.doc.meta.name || 'This design'}</strong> has changes that are not saved. Opening {designLabel(confirm)} replaces it.</span>
@@ -72,33 +76,21 @@ export function Library() {
 						</span>
 					</div>
 				) : null}
-				<LibSection title="Start fresh" note="Simple leotards to make your own">
-					{STARTS.map((s) => <Card key={s.key} img={thumb('starts', s.key)} name={s.label} hint={s.hint} on={current(s.key)} busy={busy === s.key} onClick={() => start(s.key)} />)}
-				</LibSection>
-				{finished.length ? <LibSection title="Finished designs" note="Rebuilt from the moodboard">
-					{finished.map((f) => <Card key={f} img={designThumb(f)} name={designLabel(f)} on={current(f, true)} busy={busy === f} onClick={() => openFile(f)} />)}
-				</LibSection> : null}
-				{own.length ? <LibSection title="Your designs" note="Saved with Save">
-					{own.map((f) => <Card key={f} img={designThumb(f)} name={designLabel(f)} on={current(f, true)} busy={busy === f} onClick={() => openFile(f)} />)}
-				</LibSection> : null}
+				<div class="lib-grid" key={on}>
+					{on === 'start' ? STARTS.map((s) => <Card key={s.key} img={thumb('starts', s.key)} name={s.label} hint={s.hint} on={current(s.key)} busy={busy === s.key} onClick={() => start(s.key)} />)
+						: (on === 'finished' ? finished : own).map((f) => <Card key={f} img={designThumb(f)} name={designLabel(f)} on={current(f, true)} busy={busy === f} onClick={() => openFile(f)} />)}
+					{on === 'own' && !own.length ? <p class="lib-empty">Nothing saved yet. Save keeps the design on show here.</p> : null}
+					{on === 'finished' && !finished.length ? <p class="lib-empty">No finished designs here yet.</p> : null}
+				</div>
 			</div>
 		</div>
-	);
-}
-
-function LibSection({ title, note, children }) {
-	return (
-		<section class="lib-sec">
-			<div class="lib-sec-head"><h2>{title}</h2>{note ? <span>{note}</span> : null}</div>
-			<div class="lib-grid">{children}</div>
-		</section>
 	);
 }
 
 function Card({ img, name, hint, on, busy, onClick }) {
 	const [loaded, setLoaded] = useState(false);
 	return (
-		<button class={`card ${on ? 'on' : ''} ${busy ? 'busy' : ''}`} onClick={onClick} title={hint ?? name}>
+		<button class={`card-lib ${on ? 'on' : ''} ${busy ? 'busy' : ''}`} onClick={onClick} title={hint ?? name}>
 			<span class={`card-pic ${loaded ? 'loaded' : ''}`}>
 				<img src={img} alt="" loading="lazy" draggable={false} onLoad={() => setLoaded(true)} onError={(e) => { e.currentTarget.style.visibility = 'hidden'; setLoaded(true); }} />
 				<span class="card-sides"><span>Front</span><span>Back</span></span>

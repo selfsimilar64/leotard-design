@@ -117,7 +117,7 @@ export function swatch(viewport, look, frames = 1) {
 }
 
 // --- picker tiles: a close-up of a pinched, twisted sheet ---------------------------------------------
-// The material grid's tiles (ui/FabricTab.jsx MaterialGrid) are pre-rendered by src/dev/thumbnails.js
+// The material grid's tiles (ui/PieceCard.jsx FabricBook) are pre-rendered by src/dev/thumbnails.js
 // (materials) with swirlThumb: as fabric shops photograph a swatch, a flat sheet pinched at its
 // centre and twisted, so folds spiral in towards the pinch, seen from above (the camera pitched
 // down) and so close that the fabric fills the whole picture and its texture shows. The folds turn

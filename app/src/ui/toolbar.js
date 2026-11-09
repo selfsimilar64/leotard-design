@@ -1,7 +1,7 @@
 // What a click on the model does (ui/tools.js implements each). 'move' is the default: drag turns
 // the model, a click picks a piece or a line, a selected line's points drag. The others are modes
-// started from the panel's tab they belong to (and by their key); the view shows a bar with the
-// mode's instructions and a way out while one is on (ui/Shell.jsx ModeBar).
+// started from the card of the kind of work they belong to (and by their key); the view shows a bar with the
+// mode's instructions and a way out while one is on (ui/Studio.jsx Prompter).
 export const tools = [
 	{ id: 'move', label: 'Select', key: 'V', tab: null },
 	{ id: 'pen', label: 'Draw a seam', key: 'P', tab: 'shape' },

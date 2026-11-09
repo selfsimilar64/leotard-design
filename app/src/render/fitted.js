@@ -60,7 +60,7 @@ function cellSeams(c, keys, n) {
 	return out;
 }
 
-// The designer's settings (ui/Shell.jsx Fabric fit, kept with the display settings).
+// The designer's settings (ui/Studio.jsx Fabric fit, kept with the display settings).
 export const FIT_DEFAULTS = {
 	refit: true,              // re-fit on the GPU after every body or pose change (off: the carried fit only)
 	steps: DEFAULTS.maxSteps, // the re-fit's length: speed against accuracy (about 2 ms a step on the GTX 1650)

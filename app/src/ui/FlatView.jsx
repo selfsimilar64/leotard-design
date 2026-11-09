@@ -1,6 +1,6 @@
 // The flat view: every pattern piece as cut (solid line), its stitch line (dashed), grain line and
 // name, laid out like the printable pattern. Updates when the garment is re-cut and flattened; a
-// click on a piece chooses it (the Fabric tab), a double-click focuses on it alone: zoomed to fit at
+// click on a piece chooses it (its card opens), a double-click focuses on it alone: zoomed to fit at
 // true proportion, with a strip of the other pieces to switch to and Esc or All pieces to go back.
 // With a fitted garment on (garment/fitted.js) the pieces are its own, as drafted.
 import { useEffect, useRef, useState } from 'preact/hooks';

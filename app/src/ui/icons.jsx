@@ -11,19 +11,19 @@ const svg = (body, fill = false) => function Icon({ size = 20, class: cls = '', 
 };
 
 export const I = {
-	// --- the panel's tabs
+	// --- the spine: the four kinds of work
 	shape: svg(<path d="M9 3.2q3 3.2 6 0h1.6q.1 4.6 2.6 6l-1 6.1q-2.7 1.3-4.3 5.5h-3.8Q8.5 16.6 5.8 15.3l-1-6.1q2.5-1.4 2.6-6z" />),
 	fabric: svg(<><path d="M4 6.5c2.7-2 5.3 2 8 0s5.3-2 8 0v11c-2.7-2-5.3 2-8 0s-5.3-2-8 0z" /><path d="M8 5.6v11.1" opacity=".45" /></>),
 	sparkle: svg(<><path d="M6 9.2 9 4.8h6l3 4.4-6 10z" /><path d="M6 9.2h12M10.4 9.2 12 19.2l1.6-10M9 4.8l1.4 4.4M15 4.8l-1.4 4.4" opacity=".6" /></>),
 	stage: svg(<><path d="M9.6 3.4h4.8l-.9 3.8h-3z" /><path d="M10.4 7.2 6.4 16.6M13.6 7.2l4 9.4" opacity=".55" /><ellipse cx="12" cy="18.4" rx="7" ry="2.2" /></>),
-	// --- top bar
+	// --- the top row's chips
 	designs: svg(<><rect x="4" y="4" width="7" height="7" rx="1.8" /><rect x="13" y="4" width="7" height="7" rx="1.8" /><rect x="4" y="13" width="7" height="7" rx="1.8" /><rect x="13" y="13" width="7" height="7" rx="1.8" /></>),
 	undo: svg(<><path d="M9 7.5 5 11.5l4 4" /><path d="M5.2 11.5H14a5 5 0 0 1 0 10h-2.5" /></>),
 	redo: svg(<><path d="m15 7.5 4 4-4 4" /><path d="M18.8 11.5H10a5 5 0 0 0 0 10h2.5" /></>),
 	pattern: svg(<><path d="M6 3.5h8.5l3.5 3.5v13.5H6z" /><path d="M14.5 3.5V7H18" /><path d="M9 10.5c2 1.2 4 1.2 6 0v6.5H9z" stroke-dasharray="1.6 1.9" /></>),
 	export: svg(<><path d="M12 4v10.5M7.8 10.5 12 14.7l4.2-4.2" /><path d="M5 17.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-1.5" /></>),
 	settings: svg(<><path d="M4 7.5h9M17.5 7.5H20M4 16.5h2.5M11 16.5h9" /><circle cx="15.2" cy="7.5" r="2.2" /><circle cx="8.8" cy="16.5" r="2.2" /></>),
-	// --- the view bar
+	// --- the view chip
 	handles: svg(<><rect x="5" y="5" width="14" height="14" rx="1" stroke-dasharray="2.2 2.4" /><circle cx="5" cy="5" r="1.9" /><circle cx="19" cy="5" r="1.9" /><circle cx="19" cy="19" r="1.9" /><circle cx="5" cy="19" r="1.9" /></>),
 	lines: svg(<><path d="M4.5 18.5C9 6 15 18 19.5 5.5" /><rect x="3" y="17" width="3" height="3" rx=".8" /><rect x="18" y="4" width="3" height="3" rx=".8" /></>),
 	mannequin: svg(<><path d="M10.6 3.5h2.8v1.4c2 .3 3.7 1 4.1 2.6.4 1.6-.7 2.8-1.5 4-.4.7-.4 1.4 0 2.1.6 1.1 1 2.3.9 3.6H7.1c-.1-1.3.3-2.5.9-3.6.4-.7.4-1.4 0-2.1-.8-1.2-1.9-2.4-1.5-4 .4-1.6 2.1-2.3 4.1-2.6z" /><path d="M12 17.2v3.3M9 20.5h6" /></>),

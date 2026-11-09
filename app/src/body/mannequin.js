@@ -48,7 +48,7 @@ const LIFT_MAX = 0.03, LIFT_ITER = 220;
 // hollow), max (the cap, metres) and reach (a multiple of LIFT_ITER's reach: iterations x reach^2).
 // method 'ball' replaces the membrane with the rolling-ball fit (body/ball.js), ball its radius (m);
 // seat adds the taut sheet across the gluteal cleft (body/seat.js) on top of either, seatAlong its
-// tension up the seat over its tension across (1 / the panel's "stretch across").
+// tension up the seat over its tension across (1 / the settings' "Stretch across the seat").
 export const LIFT_DEFAULTS = { taut: 1, max: LIFT_MAX, reach: 1, method: 'membrane', ball: 0.05, seat: true, seatAlong: 0.25 };
 
 // Dress form cuts, in reference-body metres: neck 2.2 cm above the neck base, legs at mid-thigh

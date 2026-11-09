@@ -1,5 +1,5 @@
-// Camera moves of the interface: the view bar's views (front, three-quarter, side, back, fit) and
-// the close-ups the Shape tab turns to when an element is opened (prefs.followCamera). Each move
+// Camera moves of the interface: the view chip's views (front, three-quarter, side, back, fit) and
+// the close-ups the Shape card turns to when an element of the cut is opened (prefs.followCamera). Each move
 // glides there (an orbit about the moving target, eased) and stops as soon as the person takes the
 // view themselves.
 import * as THREE from 'three';
@@ -35,7 +35,7 @@ export function flyTo({ position, target }, ms = 560) {
 }
 export function cancel() { if (flight) flight.stop = true; flight = null; }
 
-// The view bar's views: the same target and distance, from another side; fit frames the leotard.
+// The view chip's views: the same target and distance, from another side; fit frames the leotard.
 const DIRS = { front: [0, 0.06, 1], threeq: [0.62, 0.08, 0.78], side: [1, 0.06, 0], back: [0, 0.06, -1] };
 export function viewTo(name) {
 	const vp = app.engine?.viewport;
@@ -83,4 +83,19 @@ export function focusView(key) {
 	const d = (f.h / 2) / Math.tan(THREE.MathUtils.degToRad(vp.camera.fov) / 2), dir = new THREE.Vector3().fromArray(f.dir).normalize();
 	return { target: t.toArray(), position: t.clone().addScaledVector(dir, d).toArray() };
 }
-export function focusOn(key) { const v = focusView(key); if (v) flyTo(v); }
+export function focusOn(key) { const v = focusView(key); if (v) flyTo(clearOfCard(v)); }
+
+// A close-up the interface turns to lands in the middle of the stage that is clear of the glass over it: between the
+// spine (left) and the card (right), not behind the card. The view slides sideways by that many pixels, at the
+// target's distance. (The views a person asks for themselves, the view chip's and Fit, stay centred in the window.)
+const SPINE = 92;
+function clearOfCard(view) {
+	const vp = app.engine.viewport, box = vp.container.getBoundingClientRect(), card = document.querySelector('.inspector')?.getBoundingClientRect();
+	if (!card || !box.width || card.top > box.top + box.height * 0.4 || card.left > box.right) return view; // no card over this view, or one at its foot
+	const px = box.width / 2 - (SPINE + (card.left - box.left)) / 2; // how far left of the middle the clear part's middle is
+	if (px <= 0) return view;
+	const t = new THREE.Vector3().fromArray(view.target), dir = new THREE.Vector3().fromArray(view.position).sub(t);
+	const perPx = (2 * dir.length() * Math.tan(THREE.MathUtils.degToRad(vp.camera.fov) / 2)) / box.height;
+	const slide = new THREE.Vector3(0, 1, 0).cross(dir).normalize().multiplyScalar(px * perPx); // towards the screen's right: the subject moves left
+	return { target: t.add(slide).toArray(), position: new THREE.Vector3().fromArray(view.position).add(slide).toArray() };
+}

@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { app } from './instance.js';
 import { withKnownPose } from './app.js';
-import { Shell, useShortcuts } from './ui/Shell.jsx';
+import { Studio, useShortcuts } from './ui/Studio.jsx';
 import { rev, stats, display, hideMannequin, libraryOpen, savedRev, fitStatus, compiling, settle } from './ui/state.js';
 import { warmEarly, warmUp } from './render/warmup.js';
 import { curtainStep, curtainNote, liftCurtain } from './ui/curtain.js';
@@ -84,7 +84,7 @@ async function reveal(engine) {
 
 function Root() {
 	useShortcuts();
-	return <Shell onViewport={start} />;
+	return <Studio onViewport={start} />;
 }
 
 render(<Root />, document.getElementById('root'));

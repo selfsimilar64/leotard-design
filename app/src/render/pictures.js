@@ -1,10 +1,10 @@
 // Pictures of a design for the interface's tiles. Every one shows the design on the headless
 // mannequin in matte white plastic in the mannequin stance (presets.js MANNEQUIN), in the white loft
-// studio over a plain backdrop the colour of the panel's tiles (PICTURE_SCENE). Used by app.save
+// studio over a plain backdrop the colour of the cards' tiles (PICTURE_SCENE). Used by app.save
 // (a saved design's library picture, standardDiptych) and src/dev/thumbnails.js (every tile).
 import { MANNEQUIN, RIGS } from './presets.js';
 
-// the backdrop: chosen so that, tone-mapped, it comes out as the panel's tile colour (ui/styles.css --tile)
+// the backdrop: chosen so that, tone-mapped, it comes out as the cards' tile colour (ui/styles.css --tile)
 export const PICTURE_BACKDROP = '#ebe9e4';
 // (less glow than the view's 0.18: at tile size the crystals' glow swallowed them)
 export const PICTURE_SCENE = { rig: 'White loft studio', envRotation: 0, exposure: 1, backdrop: 'plain', backdropColour: PICTURE_BACKDROP, glare: 'plain', bloom: 0.07 };

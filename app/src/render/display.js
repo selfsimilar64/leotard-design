@@ -11,7 +11,7 @@ export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 0, shad
 	// (the garment sliding over a posed body, body/slide.js, and its slide/slideTension/slideGrip settings: removed 2026-11-08;
 	// a stored value of them is ignored)
 	// how the fabric bridges the body's hollows, in every pose (Man.computeLift; defaults also
-	// LIFT_DEFAULTS in body/mannequin.js): tautness 0..1 (the slider is logarithmic, ui/Shell.jsx
+	// LIFT_DEFAULTS in body/mannequin.js): tautness 0..1 (the slider is logarithmic, ui/Studio.jsx
 	// tautOf), deepest span (m), reach (x the default)
 	liftTaut: 1, liftMax: 0.03, liftReach: 1,
 	// or the rolling-ball fit instead (body/ball.js, experiment: left a crevice and artifacts from

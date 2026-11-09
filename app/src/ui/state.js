@@ -9,7 +9,10 @@ import { targetOf } from '../doc/symmetry.js';
 export const rev = signal(0);
 export const stonesRun = signal(0);        // bumped when a drag's stones have been laid (a frame after its command)
 export const selection = signal(null);     // { kind: 'curves' | 'panels' | 'straps' | 'stones' | 'decals' | ..., id }
-export const tab = signal('shape');        // the panel's tab: 'shape' | 'fabric' | 'sparkle' | 'stage'
+export const tab = signal(null);           // the kind of work whose card is open (ui/Inspector.jsx): 'shape' | 'fabric' | 'sparkle' | 'stage', or null: the leotard alone
+export const facets = signal({});          // the face each kind of card was last on ({ piece: 'fabric', ... }), for this session (ui/kit.jsx useFacet)
+export const shapeElement = signal(null);  // the element of the cut whose options are on show ('neck', 'leg', ...): the Shape card and the callouts on the body (ui/Callouts.jsx)
+export const zen = signal(false);          // the interface hidden, the leotard alone on screen (the \ key, the view chip's eye)
 export const drawnLines = signal(null);    // the overlay tool: { lines, areas } waiting for an area to be picked (ui/tools.js)
 export const tool = signal('move');        // what a click on the model does (ui/toolbar.js, ui/tools.js)
 export const layout = signal('3d');        // '3d' | 'split' (the pattern pieces beside the model) | 'flat'; kept in prefs.layout (below)
@@ -19,7 +22,7 @@ export const toast = signal(null);         // { text, kind } shown briefly
 export const designsRev = signal(0);       // bumped when designs/ changes (a save), so the library lists it
 export const showStats = signal(false);    // the frame-rate read-out over the view (Settings)
 export const hideOverlay = signal(false);  // hide the editing lines and points to preview the look (H)
-export const showHandles = signal(true);   // a chosen pattern's handles on the body (the view bar's switch)
+export const showHandles = signal(true);   // a chosen pattern's handles on the body (the view chip's switch)
 export const patternFocus = signal('frame'); // what a chosen pattern's handles work on: 'frame' | 'plane' | a modifier's id (stones/handles.js)
 export const hideMannequin = signal(false); // the leotard floats with the mannequin hidden (M)
 export const libraryOpen = signal(false);  // the designs library over the whole window
@@ -28,7 +31,7 @@ export const busy = signal(null);          // { text } while a slow change (a ne
 export const compiling = signal(false);    // new shaders compiling before they are drawn (render/viewport.js prepare)
 export const savedRev = signal(-1);        // the design's revision when it was last saved or opened
 
-// Which tab shows a selected part: a piece's fabric, a line's or strap's shape, stones and logos.
+// Which kind of work a selected part belongs to: a piece's fabric, a line's or strap's shape, stones and logos.
 const TAB_OF = { panels: 'fabric', curves: 'shape', straps: 'shape', trims: 'shape', stones: 'sparkle', placed: 'sparkle', decals: 'sparkle' };
 selection.subscribe((s) => { if (s && TAB_OF[s.kind]) tab.value = TAB_OF[s.kind]; patternFocus.value = 'frame'; });
 
@@ -71,7 +74,7 @@ export async function slow(text, fn) {
 
 // Interface preferences of this computer (not the design's): kept in the browser.
 const PREFS = 'leotard.ui.v1';
-const PREF_DEFAULTS = { followCamera: true, shapeOpen: 'neck', sections: {} };
+const PREF_DEFAULTS = { followCamera: true };
 function loadPrefs() { try { return { ...PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREFS) ?? '{}') }; } catch { return { ...PREF_DEFAULTS }; } }
 export const prefs = signal(loadPrefs());
 if (['3d', 'split', 'flat'].includes(prefs.value.layout)) layout.value = prefs.value.layout; // the layout last used

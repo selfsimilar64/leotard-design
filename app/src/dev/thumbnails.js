@@ -24,7 +24,7 @@ import { catalogue } from '../body/mannequin.js';
 import { BLOCK_OPTIONS } from '../garment/blocks.js';
 import { STARTS } from '../garment/starts.js';
 import { thumbName } from '../ui/kit.jsx';
-import { FABRIC_KEYS } from '../ui/FabricTab.jsx';
+import { FABRIC_KEYS } from '../ui/PieceCard.jsx';
 import { baseFabricFor } from '../materials/textures.js';
 import { swirlThumb } from '../materials/swatches.js';
 import { studioEnvironment, PRODUCT_ROOM } from '../render/studio.js';

@@ -15,7 +15,7 @@ export const REALISTIC_SKIN = 'Realistic skin (Daz)';
 // Every tile picture shows designs on this body (src/dev/thumbnails.js).
 export const MANNEQUIN = { form: 'full', head: 'none', finish: 'Matte white fibreglass', headFinish: 'Matte white fibreglass' };
 
-// The mannequin's finish choice (ui/StageTab.jsx): a finish each, in the finish's own colour until
+// The mannequin's finish choice (ui/StageCard.jsx): a finish each, in the finish's own colour until
 // the body's colour (body.colour, '#rrggbb') is set; that colour then stays across finishes.
 export const MANNEQUIN_MATERIALS = [
 	['Matte white fibreglass', 'Matte plastic'],

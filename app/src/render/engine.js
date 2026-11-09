@@ -169,7 +169,7 @@ export class Engine {
 		const stone = this.stoneAt(h.distance, this.viewport.renderer.domElement.clientHeight);
 		if (stone) return { kind: stone.gen === 'placed' ? 'placed' : 'stones', id: stone.gen === 'placed' ? stone.id : stone.gen, stone };
 		// a strap before the line it runs along (that line lies under it), unless the line is the one
-		// being edited; the line's list in the Shape tab reaches it otherwise
+		// being edited; the Shape card's Draw list reaches it otherwise
 		const strap = this.raycaster.intersectObjects(this.straps.meshes.filter((m) => m.userData.strap), false)[0];
 		const sid = strap && strap.distance < h.distance + BEHIND ? strap.object.userData.strap : null;
 		const c = this.curveAt(x, y);
@@ -505,7 +505,7 @@ export class Engine {
 		if (reframe) this.frameCamera(b.form);
 	}
 
-	// The mannequin hidden (the view bar's switch, ui/state.js hideMannequin; not part of the
+	// The mannequin hidden (the view chip's switch, ui/state.js hideMannequin; not part of the
 	// design): the leotard floats in the studio, drawn from inside too (GarmentView.setDoubleSided),
 	// with no stand, cut caps or contact shadow under it. The key's shadow on the floor stays.
 	setBodyHidden(v) {

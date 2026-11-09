@@ -499,7 +499,7 @@ describe('no dead controls', () => {
 			const run = (patch) => look(stonesOf({ ...layoutP, mods: [{ ...m0, ...patch }] }));
 			const was = run({});
 			if (was === look(stonesOf({ ...layoutP, mods: [] }))) dead.push(`${on}.${shape} itself`);
-			// what the panel offers for this modifier, as ui/PatternPanel.jsx ModCard does
+			// what the card offers for this modifier, as ui/PatternCard.jsx ModifierCard does
 			const tries = {}, cls = MOD_SHAPES[shape].cls, g = m0;
 			if (shape !== 'family' && shape !== 'random' && shape !== 'stripes' && shape !== 'checks') tries.power = { power: 3 };
 			if (shape !== 'family' && shape !== 'random') tries.reverse = { reverse: true };

@@ -3,7 +3,7 @@
 //   layout, preset: the arrangement (stones/layouts.js), its parameters, the gallery entry it started from
 //   x, y, rotate (degrees), scale, flip: where the whole of it lies on the flat piece, its frame: the
 //     arrangement and its modifiers move, turn and scale together
-//   px, py, pturn, pscale, sx, sy: the arrangement's plane inside its frame, last in the panel: this shifts
+//   px, py, pturn, pscale, sx, sy: the arrangement's plane inside its frame (the card's Place, the crystals under it): this shifts
 //     the crystals under the modifiers, which stay
 //   mods: the modifiers on density, size and colour (stones/modifiers.js)
 //   size, gap, density: the crystal and how close and how many; stone, shape on the record

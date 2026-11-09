@@ -3,7 +3,8 @@ type: Requirement
 title: One-screen interface proposal (no scrolling)
 description: "Proposal of 2026-11-08, awaiting the owner's review: the panel always shows one part of the leotard (the cut, a piece, a line or edge, a crystal group, lettering, the stage) named in a header with its own actions, and splits what can be changed about it into 2-5 faces (a segmented bar), each fitting one screen at 1400 x 850 and 1180 x 820; every current control mapped to a new home; four open questions. A clickable prototype is published as a private artifact."
 tags: [ux, interface, panel, layout, proposal, scrolling]
-status: draft
+status: deprecated
+superseded_by: /engineering/app/glass-studio-interface.md
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-08T19:30:00Z }
 sources:
   - id: owner-2026-11-08
@@ -21,6 +22,12 @@ sources:
 ---
 
 # Takeaway
+
+**Superseded on 2026-11-09** by [the glass studio interface](/engineering/app/glass-studio-interface.md),
+built to [the owner's direction of that day](/decisions/2026-11-09-full-screen-stage-glass-interface.md).
+The faces proposed here were adopted there; the open questions below were settled by building (a
+click where crystals lie chooses the crystals; Fabric fit stays in Settings; faces remember the last
+one per kind of card; counts are a face of the Sparkle card).
 
 The owner asked for an interface without scrolling, built around what the designer is trying to do
 at each moment.[^owner-2026-11-08] The proposal: the designer repeats one loop (look, pick one part,

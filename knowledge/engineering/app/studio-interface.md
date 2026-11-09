@@ -17,6 +17,12 @@ sources:
 
 # Takeaway
 
+**Since 2026-11-09 the layout below (top bar, inset stage, panel of four scrolling tabs) is replaced
+by [the glass studio interface](/engineering/app/glass-studio-interface.md)**, and the files
+`Shell.jsx`, `Panel.jsx` and the four `*Tab.jsx` are gone. What still holds here: tools as modes,
+the mannequin, the tile pictures, hover in Select, and the pitfalls. What follows is the record as
+written on 2026-10-29.
+
 The 3D mannequin is the canvas; everything else is a catalogue of choices about the leotard or
 about how it is shown. The window is a **top bar**, the **stage** (the 3D view, rounded, inset in
 a warm paper-grey room) and a **panel of four task tabs**: **Shape** (silhouette elements, drawn

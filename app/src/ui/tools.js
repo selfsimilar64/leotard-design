@@ -12,10 +12,10 @@
 //   overlay like the pen, but a line from one line to another waits, cutting nothing: the areas such
 //           lines enclose tint, and a click on one makes the overlay piece
 //           (knowledge/engineering/ux/one-drawing-grammar.md)
-//   stones, single, erase   stone generators, one stone, the eraser (options in the panel)
-//   pattern a click on a piece lays the pattern chosen in the panel; in Select, a chosen pattern's
+//   stones, single, erase   stone generators, one stone, the eraser (options in the Sparkle card)
+//   pattern a click on a piece lays the pattern chosen in the Sparkle card; in Select, a chosen pattern's
 //           handles (render/gizmo.js, stones/handles.js) change it and its modifiers, live
-//   decal   click the body to place a logo or lettering (options in the panel), or to move the
+//   decal   click the body to place a logo or lettering (options in its card), or to move the
 //           one being moved (toolOptions.moveDecal)
 //   eyedrop (from the piece's match-colour button) while looking through a reference photo, click the photo
 //           where the piece is: its colour is matched to it under the rig
@@ -220,7 +220,7 @@ export class ToolController {
 		const id = this.run({ op: 'stones.add', kind: 'pattern', on: { panel: h.panel }, stone: st.stone, shape: st.shape, ...this.pieceSymmetry(h), ...(h.layer && h.layer !== 'L0' ? { layer: h.layer } : {}), name: item.label, params: this.patternAt(h, item) });
 		if (id) { selection.value = { kind: 'stones', id }; tool.value = 'move'; }
 	}
-	// A new pattern's parameters: its preset, the crystal chosen in the panel. It lies in the middle of the piece
+	// A new pattern's parameters: its preset, the crystal chosen in the Sparkle card. It lies in the middle of the piece
 	// (a pattern that fills the piece, a gradient), or, for a design of its own size, where it was clicked.
 	patternAt(h, item) {
 		const st = toolOptions.value.stone, piece = this.engine.clothOf(h.panel)?.piece, uv = piece?.uvOf(h.sp), layout = LAYOUTS[item.layout];

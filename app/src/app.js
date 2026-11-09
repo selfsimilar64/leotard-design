@@ -200,7 +200,7 @@ export class App {
 		if (!r.ok) throw new Error(`${url}: ${r.status}`);
 		return url;
 	}
-	// body, scene: fields to keep from the current design (the panel's Designs row keeps the whole
+	// body, scene: fields to keep from the current design (the library keeps the whole
 	// model and environment: picking a design changes only the leotard)
 	async open(name, body = null, scene = null) {
 		const r = await fetch('/__fs/designs/' + safeName(name) + '.json');

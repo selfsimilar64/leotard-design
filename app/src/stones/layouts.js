@@ -1,4 +1,4 @@
-// The stone arrangements a pattern can use, and the gallery the Sparkle tab shows: named presets, each an
+// The stone arrangements a pattern can use, and the gallery the Sparkle card shows: named presets, each an
 // arrangement with some settings and sometimes modifiers. See
 // knowledge/engineering/architecture/procedural-stone-patterns.md.
 import { LATTICE_LAYOUTS, TILES } from './layouts-lattice.js';

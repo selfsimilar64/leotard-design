@@ -2,7 +2,7 @@
 // dragging it does. Which ones show depends on what is being worked on (the focus):
 //   frame     the whole pattern: a dial to move, turn and scale it, and the handles of its own arrangement
 //             (its spacing, its size, the motif in its cell: the layouts' grips)
-//   plane     the arrangement's plane inside the frame (the panel's Pattern positioning)
+//   plane     the arrangement's plane inside the frame (the pattern card's Place, the crystals under it)
 //   a modifier's id   that modifier: a box with its ends and sides for a linear one, a circle for a radial one,
 //             a repeat length for waves...; the others show as faint outlines with a dot to pick them by
 // Nothing here knows about the screen but how big a pixel is (pxPerM), so that handles stay far enough apart to
