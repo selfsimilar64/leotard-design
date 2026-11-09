@@ -41,9 +41,9 @@ finished frame, shaders are compiled off the page, and a curtain covers the star
    design's studio starts loading beside the bodies (`applyScene` before the engine exists).
 3. Steps, each a `performance.mark('start: …')` and a curtain step (`ui/curtain.js`): Dressing the
    mannequin (bodies, engine, design) → Lighting the studio (`viewport.envReady`) → Fitting the
-   leotard (a fitted garment's file and re-fit) → Finishing the fabric (`viewport.prepare()`; after
-   3 s the curtain adds that a first start after an update takes longer) → the hold is let go,
-   two frames, the curtain lifts.
+   leotard (a fitted garment's file and re-fit) → Preparing every fabric (`render/warmup.js` since
+   2026-11-09, below; `viewport.prepare()` with `?quick`; after 4 s the curtain adds that this happens
+   once after an update) → the hold is let go, two frames, the curtain lifts.
 
 # Compiling off the page (`Viewport.prepare`, `checkShaders`)
 
@@ -108,27 +108,43 @@ target, then a blocking `LINK_STATUS`), GTX 1650, ANGLE/D3D11:[^measured-2026-11
 - Variants are three's feature switches (sheen, clearcoat, anisotropy, iridescence, transparency)
   plus the satin's `MICRO_SPEED` defines: one per distinct combination on show.
 
-# Every fabric compiled in the background (`render/prewarm.js`, 2026-11-08)
+# Every shader at the start (`render/warmup.js`, 2026-11-09)
 
-Once the curtain lifts, every fabric in `FABRICS` (not the debug checker) is applied to a hidden copy of each kind of
-fabric mesh on show (a piece, an edge, a strap: one host per zone, side and attribute set) and compiled into the scene
-pass's target, one at a time, giving way to any compile the designer is waiting for (`Viewport.compiling`). The
-materials are kept, so their programs stay in three's cache and a piece switched to that fabric reuses one. It runs
-again when the studio changes (`main.jsx`, on a new `scene.rig`, after `envReady`): new lighting, new variants. The
-stage shows a quiet "Getting every fabric ready" pill bottom left, only when the pass takes over 1.2 s.
+The owner chose to compile every variant behind the curtain, so nothing compiles once the designer is working and
+nothing runs in the background ([decision](/decisions/2026-11-09-every-shader-at-start.md)). It replaced the
+background pass of 2026-11-08 (`render/prewarm.js`, which compiled the fabrics after the curtain lifted; removed).
+`main.jsx reveal` runs `warmUp` at the curtain step "Preparing every fabric", its thread filling job by job; after
+4 s the curtain adds that this happens once after an update. `?quick` in the address skips it (only what the design
+shows is compiled, `Viewport.prepare`), for look-dev reloads.
 
-Why not all at the start, behind the curtain (the owner's first thought, 2026-11-08): the browser keeps compiled
-shaders on disk, so either way it is once per machine until the fabric shader or the browser changes; but at the start
-it would hold the curtain for about a minute on every look-dev reload, and in the background the design is usable after
-~24 s while the rest compiles. **[INFERRED]** The cold pass is estimated from the per-variant table (roughly nine
-distinct variants, ~45-55 s); measured warm, with five new variants, it ended within ~5 s.
+Jobs, each compiled into the scene pass's target and waited for before the next (the GPU process compiles one at a
+time), the objects kept so their programs stay in three's cache:
 
-Checked 2026-11-08: after the pass, the design's material switched through Shiny, Wet, Satin, Duotone satin, Mystique,
-Foil, Velvet, Iridescent, Liquid holo, Mesh, Glitter mesh, Illusion, Hologram, Duochrome and Matte with no new program
-and no `'shaders'` hold, 70-100 ms each (the command and a frame).
+- the scene itself, hidden parts too (the studio room's dome, the floor's shadow catcher, a stand, the overlays);
+- every fabric in `FABRICS` (not the checker), on one side and on both (the mannequin hidden draws the leotard from
+  inside, `GarmentView.setDoubleSided`), and Matte and Shiny sheer too when scans are installed (a sheer scan,
+  `applyTexture`); on a stand-in with position, normal and tangent (the custom attributes never change a shader);
+- every mannequin finish in `MANNEQUIN_FINISHES`, not only those the picker offers (saved designs carry the athlete
+  skins, marked for the skin pass), on the skin (fabric shader, both sides) and on the caps (both sides, as
+  `stand.js` sets them);
+- every crystal family (crystal, pearl, spangle, holo dot, nailhead) two ways: instanced as `StoneView.meshFor` builds
+  them and placed by the GPU as `PackView.side` does (`placed`, now exported), with the atlas's own material;
+- hardware and stand materials (`hardware.js MATS`, `stand.js STAND_MATERIALS`), fat lines solid and dashed;
+- what editing shows, on position-only stand-ins as theirs are: the overlay tool's areas (RGBA colours), the mirror's
+  centre line, a flashed piece, hovered crystals' rings;
+- one frame drawn with glow, contact shadows, skin and crystal glare on and a piece hovered (the outline's mask and
+  quad), then everything as it was; one outline mask is kept (each hover makes its own and frees the last).
 
-Not covered: a scanned texture with alpha (`applyTexture` makes the piece sheer), the shadow setting (Settings), and
-the WebGPU renderer; those compile when first drawn, through `prepare`.
+Twins: each stand-in mirrors where the app makes that material (notes on both sides: `stones/view.js meshFor`,
+`stones/gpu-view.js side`, `render/overlay.js`, `render/highlight.js`, `render/stand.js`). The shader tour
+(`dev/shader-tour.js`) is the check that ties them: every option a designer can reach, after the start, listing any
+step that compiled.
+
+Measured 2026-11-09 (dev server, GTX 1650): a warm start's warm-up 7.3 s (84 programs; the curtain lifts at ~15 s,
+against ~12 s before); with every shader's cache missed (a nonce on each source) 149 s, the curtain lifting at 160 s.
+Shadows Off is pixel-identical to the old Off (sun not casting; largest difference 2/765) with no new program. Found and fixed with the tour: the caps drawn
+from both sides, saved designs' athlete skins, the outline mask freed after each hover, overlay stand-ins that carried
+normals.
 
 # Could every variant compile at the start? (measured 2026-11-09)
 
@@ -158,8 +174,9 @@ whether the sun casts shadows (Settings › Shadows Off; Soft and Detailed only 
 edge and a strap in the same fabric share one program (compared directly on b6): the mesh kind does not split them.
 "Contact shadows" is the AO post pass and does not touch the fabric shader.
 
-So with the shader as it is, all of them at the start would be about ten minutes the first time and most of a minute
-added to every launch **[INFERRED]**. Ways down, none changing a look: shadows off drawn as an empty shadow map
+So with the shader as it was, all of them at the start would have been about ten minutes the first time and most of a
+minute added to every launch **[INFERRED]**; the owner then removed the softbox studios and kept shadows off as a
+no-shadow draw (above). Ways down, none changing a look: shadows off drawn as an empty shadow map
 (no variant), the two-light softbox padded to six dark lights, one attribute set for every fabric mesh, satin's
 model only in satin, and the fabric code specialised per fabric. **[INFERRED]** estimates in the owner's report.
 
@@ -168,8 +185,7 @@ model only in satin, and the fabric code specialised per fabric. **[INFERRED]** 
 - Shorter compiles: gate the satin model to satin (above); then specialise the fabric code by the
   effects a piece uses (compile-time switches per effect group, parameters staying uniforms), so a
   plain knit compiles little more than three's own 0.2-0.3 s, at the price of more, smaller
-  variants (compiled ahead off the page: `Viewport.prepare`). Pre-compile the catalogue's variants in
-  the background after the start so a fabric picked later is instant. In a desktop shell, measure
+  variants (all compiled at the start: `render/warmup.js`). In a desktop shell, measure
   ANGLE's OpenGL or Vulkan backends against D3D11's FXC compiler. The fabric code is look-dev, so the
   owner decides when (memory: no simplifying during look-dev; the specialising cuts nothing a look uses).
 - Cache the lift per body and pose (an instant switch back), or solve it in a worker so a pose

@@ -27,7 +27,7 @@ import { thumbName } from '../ui/kit.jsx';
 import { FABRIC_KEYS } from '../ui/FabricTab.jsx';
 import { baseFabricFor } from '../materials/textures.js';
 import { swirlThumb } from '../materials/swatches.js';
-import { studioEnvironment } from '../render/studio.js';
+import { studioEnvironment, PRODUCT_ROOM } from '../render/studio.js';
 
 // The running app (instance.js sets window.app). Not imported: after a hot reload a console import
 // of instance.js can resolve to a fresh module and build a second, engine-less App.
@@ -192,14 +192,14 @@ export const MATERIAL_COLOURS = {
 };
 const ZOOM = { mesh: 2, illusion: 2, glittermesh: 1.6, glitter: 1.5, hologlitter: 1.5, glitterfoil: 1.4, mystique: 1.4, opalmystique: 1.4, hologram: 1.4, matte: 1.6, shiny: 1.4, crushed: 1.2 };
 
-// Lit as a product photo: the softbox studio's reflection room (render/studio.js: dim walls round
+// Lit as a product photo: the softbox studio's reflection room (render/studio.js PRODUCT_ROOM: dim walls round
 // bright softboxes), so glossy fabric shows bright streaks against dark ones, as in a shop's photo.
 // Mirror-like fabrics need a busy room to mirror instead: the white loft's photograph (ROOM).
 let softboxEnv = null;
 const ROOM = { chrome: 3.2, oilslick: 3.2, liquidholo: 3.2, pearl: 3.2 };
 export async function materials(only = null, { envTurn = 0.6 } = {}) { // only: fabric keys to render ('mystique', ...), else all and the scans
 	const e = app.engine, vp = e.viewport, renderer = vp.renderer;
-	softboxEnv ??= vp.pmrem.fromScene(studioEnvironment(RIGS['Softbox studio']), 0.01).texture;
+	softboxEnv ??= vp.pmrem.fromScene(studioEnvironment(PRODUCT_ROOM), 0.01).texture;
 	const loft = (await vp.hdri(RIGS['White loft studio'].hdri)).env;
 	for (const k of only ?? FABRIC_KEYS) { // the fabrics the material grid offers
 		const [colour, second, colour2] = MATERIAL_COLOURS[k] ?? ['#888888'];

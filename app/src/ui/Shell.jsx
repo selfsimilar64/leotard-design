@@ -4,7 +4,7 @@
 // library (ui/Library.jsx) opens over everything.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { drawnLines, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, fitStatus, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, compiling, prewarming, savedRev, prefs, setPref } from './state.js';
+import { drawnLines, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, fitStatus, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, compiling, savedRev, prefs, setPref } from './state.js';
 import { Panel, pickTab } from './Panel.jsx';
 import { Library } from './Library.jsx';
 import { FlatView } from './FlatView.jsx';
@@ -48,7 +48,6 @@ export function Shell({ onViewport }) {
 				<ModeBar />
 				<StageHint />
 				<Busy />
-				<Prewarm />
 				<ViewBar />
 				<Hud />
 				<Toast />
@@ -285,18 +284,6 @@ function Busy() {
 	// (render/viewport.js prepare): the view holds its last frame meanwhile
 	const b = busy.value ?? (fitStatus.value.state === 'fitting' ? { text: 'Fitting the leotard…' } : compiling.value ? { text: 'Preparing the materials…' } : null);
 	return b ? <div class="stage-busy" role="status"><span class="spinner" /><span>{b.text}</span><span class="busy-sheen" /></div> : null;
-}
-
-// Every fabric being compiled in the background (main.jsx prewarm), shown only when it takes a while: quiet, out of the way.
-function Prewarm() {
-	const p = prewarming.value;
-	if (!p) return null;
-	return (
-		<div class="stage-prep" role="status" title="Each fabric is prepared once on this computer, so switching to any of them is instant">
-			<span>Getting every fabric ready</span>
-			<span class="prep-track"><span style={{ transform: `scaleX(${Math.max(0.04, p.share)})` }} /></span>
-		</div>
-	);
 }
 
 function Hud() {

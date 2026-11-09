@@ -1,14 +1,32 @@
-// A softbox studio (presets.js RIGS 'Softbox studio'): large rectangular area lights for the broad,
-// soft highlights fabric shows in catalogue photos, the same boxes drawn into the reflection
-// environment so glossy fabric, foil and crystals mirror them, and a seamless paper backdrop
-// (cyclorama) sweeping from the floor up into the wall. Restored from the rigs removed on
-// 2026-10-27 (owner: analytic lights again, to test satin; knowledge/decisions/
-// 2026-10-27-softbox-studio-for-satin.md).
+// The product-photo reflection room the fabric picker's thumbnails are rendered in (dev/thumbnails.js, materials and
+// scans): dim walls round very bright softboxes, so glossy fabric shows bright streaks against dark ones, as in a shop's
+// photo. It was the Softbox studio's (presets.js RIGS, 2026-10-27, owner: analytic lights to test satin;
+// knowledge/decisions/2026-10-27-softbox-studio-for-satin.md); the studio itself, its rect area lights and its seamless
+// paper, was taken out of the app on 2026-11-09 (owner: one kind of lighting, so every shader variant is compiled once).
+// Only the room is kept, so the thumbnails can be rendered again as they were.
 import * as THREE from 'three';
 
-// The room the studio's reflections come from, for PMREMGenerator.fromScene: a box whose walls
-// carry the paper's brightness on the subject's far side and a darker photographer's side, plus
-// one emissive quad per softbox and per bounce card.
+// The Softbox studio's backdrop, walls, boxes and bounce card, as they were in presets.js. area: { p, s: [w, h] m, at,
+// L: luminance, c }
+export const PRODUCT_ROOM = {
+	backdrop: 0xf2f2f0,
+	// in its reflections a softbox is about ten times its surroundings (at walls near paper white, glossy fabric showed
+	// no highlights at all)
+	room: { back: 0.3, sides: 0.18, top: 0.1, floor: 0.25, front: 0.08 },
+	areas: [
+		{ p: [-1.6, 2.1, 2.1], s: [1.5, 1.5], at: [0, 1.1, 0], L: 2.6, c: 0xfffaf2 },     // key: octabox front left, above
+		{ p: [2.0, 1.4, 2.2], s: [1.2, 1.8], at: [0, 1.0, 0], L: 1.2, c: 0xf6f8ff },      // fill: tall softbox front right
+		{ p: [-1.6, 1.4, -1.1], s: [0.4, 1.8], at: [0, 1.1, 0], L: 3.5 },               // rim: strip box behind left
+		{ p: [1.6, 1.4, -1.1], s: [0.4, 1.8], at: [0, 1.1, 0], L: 3.5 },                // rim: strip box behind right
+		{ p: [0, 3.0, 0.5], s: [1.8, 1.2], at: [0, 1.0, 0.3], L: 1.6 },                   // overhead scrim
+		{ p: [0, 0.45, 2.2], s: [1.6, 0.8], at: [0, 0.9, 0], L: 0.8 },                  // low front bounce
+	],
+	// a large white bounce card beside the camera (what glossy fabric and foil mirror when they face the lens)
+	envLights: [{ p: [0.4, 1.3, 3.4], s: [3.0, 2.2], at: [0, 1.1, 0], L: 2 }],
+};
+
+// The room the reflections come from, for PMREMGenerator.fromScene: a box whose walls carry the paper's brightness on
+// the subject's far side and a darker photographer's side, plus one emissive quad per softbox and per bounce card.
 // rig.room: { back, sides, front, top, floor } brightness of each wall (linear, x backdrop colour)
 export function studioEnvironment(rig) {
 	const env = new THREE.Scene(), room = rig.room ?? {}, tone = new THREE.Color(rig.backdrop ?? 0xffffff);
@@ -29,19 +47,4 @@ export function studioEnvironment(rig) {
 		env.add(q);
 	}
 	return env;
-}
-
-// Seamless paper all round (an infinity cove): a floor disc that curves up (radius r) into a round
-// wall, so the figure sits in white paper from every camera angle. A one-sided sweep showed its
-// edge as a hard horizon once the camera went round the figure.
-export function cyclorama() {
-	const prof = [], r = 1.4, R = 4.6;
-	prof.push(new THREE.Vector2(0, 0), new THREE.Vector2(R - r, 0));
-	for (let i = 1; i <= 16; i++) { const a = (i / 16) * Math.PI / 2; prof.push(new THREE.Vector2(R - r + Math.sin(a) * r, r - Math.cos(a) * r)); }
-	prof.push(new THREE.Vector2(R, 9));
-	const geo = new THREE.LatheGeometry(prof, 96);
-	const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, side: THREE.DoubleSide }));
-	mesh.position.y = -0.0086;
-	mesh.renderOrder = 5; // drawn after the figure: most of it is hidden behind
-	return mesh;
 }

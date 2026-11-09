@@ -2,8 +2,8 @@ import { render } from 'preact';
 import { app } from './instance.js';
 import { withKnownPose } from './app.js';
 import { Shell, useShortcuts } from './ui/Shell.jsx';
-import { rev, stats, display, hideMannequin, libraryOpen, savedRev, fitStatus, compiling, prewarming, settle } from './ui/state.js';
-import { prewarmFabrics } from './render/prewarm.js';
+import { rev, stats, display, hideMannequin, libraryOpen, savedRev, fitStatus, compiling, settle } from './ui/state.js';
+import { warmUp } from './render/warmup.js';
 import { curtainStep, curtainNote, liftCurtain } from './ui/curtain.js';
 import { loadDisplay, fitOptions } from './render/display.js';
 import { Viewport } from './render/viewport.js';
@@ -50,31 +50,13 @@ async function start(el) {
 	setInterval(() => { stats.value = { ...viewport.stats, stones: engine.stoneCount?.() ?? 0 }; }, 500);
 	performance.mark?.('start: design applied');
 	await reveal(engine);
-	prewarm(engine);
-	// a new studio lights the fabric differently: its variants are compiled once it is in (not for its sliders, which change no shader)
-	let rig = app.doc.scene.rig;
-	app.onChange((touched) => {
-		if (!touched.has('scene') || app.doc.scene.rig === rig) return;
-		rig = app.doc.scene.rig;
-		viewport.envReady?.then(() => prewarm(engine));
-	});
 }
 
-// Every fabric compiled in the background (render/prewarm.js), so picking one later is instant. The stage says so only
-// when it takes a while (a cold shader cache: about a minute; a warm one finishes in well under a second).
-function prewarm(engine) {
-	let timer = null;
-	prewarmFabrics(engine, ({ done, total, waiting }) => {
-		const share = done / total;
-		if (prewarming.value) prewarming.value = { share };
-		else if (waiting && !timer) timer = setTimeout(() => { prewarming.value = { share }; }, 1200);
-	}).finally(() => { clearTimeout(timer); prewarming.value = null; });
-}
-
-// The first frame, and the curtain lifted off it: the studio lit, a fitted garment fitted, then every shader the scene draws
-// with compiled off the page (render/viewport.js prepare), so the first frame is the finished design and the curtain's
-// animation never stops. (Stones are laid once frames run, after this; their shaders compile the same way, the stage's busy
-// note saying so.)
+// The first frame, and the curtain lifted off it: the studio lit, a fitted garment fitted, then every shader the app can draw
+// with compiled off the page (render/warmup.js; owner, 2026-11-09: nothing compiles once working), so the first frame is
+// the finished design, the curtain's animation never stops, and no later change waits for a shader. ?quick in the address
+// compiles only what the design shows (render/viewport.js prepare), for look-dev reloads after a shader change; anything
+// else then compiles when first shown, the stage's busy note saying so.
 async function reveal(engine) {
 	const v = engine.viewport, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 	curtainStep('Lighting the studio', 0.5);
@@ -82,10 +64,11 @@ async function reveal(engine) {
 	curtainStep('Fitting the leotard', 0.62);
 	const t = performance.now();
 	while ((engine.pendingBody || engine.fitted.loading || [...v.holds].some((h) => h !== 'startup')) && performance.now() - t < 30000) await sleep(50);
-	curtainStep('Finishing the fabric', 0.78);
-	// a cold shader cache (the first start after the fabric's shader changed) takes 10-40 s here; a warm one well under a second
-	const long = setTimeout(() => curtainNote('The first start after an update takes a little longer.'), 3000);
-	await v.prepare();
+	curtainStep('Preparing every fabric', 0.7);
+	// a cold shader cache (the first start after a shader or the browser changed) takes about a minute here; a warm one seconds
+	const long = setTimeout(() => curtainNote('Setting up every fabric once after an update. Afterwards it starts quickly.'), 4000);
+	if (new URLSearchParams(location.search).has('quick')) await v.prepare();
+	else await warmUp(engine, ({ done, total }) => curtainStep('Preparing every fabric', 0.7 + 0.28 * (done / total)));
 	clearTimeout(long);
 	v.shaderKey = null; // (the frames look again for themselves from here)
 	v.holds.delete('startup');

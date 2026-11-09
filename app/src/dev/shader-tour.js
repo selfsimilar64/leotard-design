@@ -6,7 +6,7 @@
 // -> { steps, compiled: [[step, n]], total }. Each step: the change, then frames until nothing is held (prepare compiles what
 // is shown), then the programs three holds that it did not before.
 import { FABRICS } from '../materials/fabric.js';
-import { RIGS, MANNEQUIN_MATERIALS } from '../render/presets.js';
+import { RIGS, MANNEQUIN_FINISHES } from '../render/presets.js';
 import { FITTED } from '../garment/fitted.js';
 
 const state = async () => {
@@ -60,6 +60,20 @@ export async function shaderTour({ designs = ['b6-six-strap-fan', 'b12-lace-over
 		const line = doc().curves[0];
 		if (line) await step(`${name}: line chosen`, async () => { S.selection.value = { kind: 'curves', id: line.id }; });
 		await step(`${name}: nothing chosen`, async () => { S.selection.value = null; });
+		// what editing draws: a hovered piece's outline, hovered crystals' rings, a flashed piece (Mirror off), the overlay
+		// tool's areas, the pen's preview
+		const L0 = e.layers.get('L0'), piece = L0?.view.cells.find((c) => c.mesh)?.mesh, arr = L0?.g?.arr;
+		if (piece) { await step(`${name}: hover a piece`, async () => e.highlight.setParts([{ mesh: piece }])); await step(`${name}: hover off`, async () => e.highlight.setParts([])); }
+		const ring = { at: { x: 0, y: 1, z: 0.1 }, up: { x: 0, y: 0, z: 1 }, size: 0.003 }; // (as StoneView's: at, up, size)
+		await step(`${name}: hover crystals`, async () => e.highlight.setStones([ring], ring));
+		await step(`${name}: crystals off`, async () => e.highlight.setStones([]));
+		if (arr) {
+			await step(`${name}: flash a piece`, async () => e.overlay.flashCell(e.cellSps(arr, 0)));
+			await step(`${name}: overlay areas`, async () => e.overlay.setRegions([{ cell: 0, hue: 0.3, sps: e.cellSps(arr, 0) }]));
+			await step(`${name}: overlay areas off`, async () => e.overlay.setRegions(null));
+		}
+		const ev = [...(e.evaluated?.values() ?? [])].find((c) => c?.sps?.length > 2);
+		if (ev) { await step(`${name}: pen preview`, async () => e.overlay.setPreview(ev, ev)); await step(`${name}: pen preview off`, async () => e.overlay.setPreview(null)); }
 	}
 	for (const rig of Object.keys(RIGS)) {
 		await step(`studio ${rig}`, async () => { run({ op: 'scene.set', rig }); await v.envReady; });
@@ -70,7 +84,7 @@ export async function shaderTour({ designs = ['b6-six-strap-fan', 'b12-lace-over
 	}
 	for (const g of GLARES) await step(`glare ${g}`, () => run({ op: 'scene.set', glare: g }));
 	for (const k of ['bloom', 'ao', 'skin']) { await step(`${k} off`, () => setDisplay({ [k]: false })); await step(`${k} on`, () => setDisplay({ [k]: true })); }
-	for (const [finish] of MANNEQUIN_MATERIALS) await step(`mannequin ${finish}`, () => run({ op: 'body.set', finish }));
+	for (const finish of Object.keys(MANNEQUIN_FINISHES)) await step(`mannequin ${finish}`, () => run({ op: 'body.set', finish }));
 	await step('mannequin hidden', async () => { S.hideMannequin.value = true; });
 	await step('mannequin shown', async () => { S.hideMannequin.value = false; });
 	await step('pose stag-jump', () => run({ op: 'body.set', pose: 'stag-jump' }));

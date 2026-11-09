@@ -2,8 +2,7 @@
 // renderer path beside WebGL, chosen per page (?renderer=webgpu, or localStorage 'leotard.renderer' = 'webgpu'), so the two
 // can be compared on one machine, scene and camera. The WebGL path stays untouched until parity is signed off.
 // Here: the renderer and its tools (capture, benchmark, area lights); the post chain is render/webgpu-post.js.
-import { WebGPURenderer, PMREMGenerator, RectAreaLightNode, RenderTarget, UnsignedByteType } from 'three/webgpu';
-import { RectAreaLightTexturesLib } from 'three/addons/lights/RectAreaLightTexturesLib.js';
+import { WebGPURenderer, PMREMGenerator, RenderTarget, UnsignedByteType } from 'three/webgpu';
 import { Refit } from '../fit/refit.js';
 
 export const RENDERER = (() => {
@@ -62,10 +61,6 @@ export async function readPixels(renderer, rt, x, y, w, h) {
 	for (let j = 0; j < h; j++) out.set(px.subarray(j * per, j * per + row), j * row);
 	return out;
 }
-
-// Rect area lights' lookup tables (the softbox studio), as RectAreaLightUniformsLib.init() is for WebGL.
-let ltc = false;
-export function initAreaLights() { if (!ltc) { RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init()); ltc = true; } }
 
 // Renders n frames back to back and waits for the GPU to finish them: -> { ms (wall time per frame), gpuMs (median GPU time of a
 // frame, timestamp queries, or null) }. render: one frame. The GPU time is sampled a frame at a time (three resolves the last

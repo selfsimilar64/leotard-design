@@ -3,7 +3,8 @@ type: Decision
 title: "A softbox studio lit by analytic area lights, added back to test satin"
 description: "Owner decision of 2026-10-27, hours after removing every non-HDRI rig: add one analytic studio (Softbox studio) with many large, bright softboxes over white seamless paper, to test the microcylinder satin under exact light shapes before making it work in the HDRI studios."
 tags: [decision, lighting, studio, satin, rendering]
-status: stable
+status: deprecated
+superseded_by: /decisions/2026-11-09-every-shader-at-start.md
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-27T21:30:00Z }
 sources:
   - id: owner
@@ -13,6 +14,10 @@ sources:
 ---
 
 # Decision
+
+**Superseded on 2026-11-09:** the softbox studios were removed so that every shader variant can be compiled once
+at the start ([every shader at the start](/decisions/2026-11-09-every-shader-at-start.md)); their reflection room lives on
+in `render/studio.js` for the picker's thumbnails.
 
 The Scene panel gains **Softbox studio**, the one analytic studio alongside the five HDRI
 studios. It exists to test the

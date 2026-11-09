@@ -82,8 +82,9 @@ void placeStone() {
 }`;
 
 // A material that places its stones from the atlas: the same look (its onBeforeCompile first), instanceMatrix's part done by
-// stoneM, the colour per stone from aColour.
-function placed(material, uniforms) {
+// stoneM, the colour per stone from aColour. (Also compiled at the start for every stone family: render/warmup.js, a twin
+// of PackView.side's set-up.)
+export function placed(material, uniforms) {
 	const was = material.onBeforeCompile;
 	material.onBeforeCompile = (shader, r) => {
 		was?.call(material, shader, r);
@@ -304,6 +305,7 @@ export class PackView {
 		for (const S of this.sides.values()) if (S.pack) this.atlas(S, S.mirror);
 	}
 
+	// (render/warmup.js builds the same material and geometry once per stone family at the start: change both)
 	side(key, shape, gpu = false) {
 		const fam = SHAPES[shape]?.family ?? 'crystal', base = this.view.geometry(shape), geo = new THREE.InstancedBufferGeometry();
 		geo.index = base.index;

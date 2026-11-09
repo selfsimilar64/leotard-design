@@ -6,7 +6,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mirrorSP } from '../curves/points.js';
 import { fromSP } from '../body/surface.js';
 
-const MATS = {
+// (exported for render/warmup.js, which compiles them at the start)
+export const MATS = {
 	clear: new THREE.MeshPhysicalMaterial({ color: 0xf4f6f8, roughness: 0.06, metalness: 0, transparent: true, opacity: 0.38, clearcoat: 1, clearcoatRoughness: 0.05 }),
 	metal: new THREE.MeshPhysicalMaterial({ color: 0xd9dce2, roughness: 0.18, metalness: 1 }),
 };

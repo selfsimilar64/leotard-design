@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-09
+* **Decision**: [Every shader compiled at the start](/decisions/2026-11-09-every-shader-at-start.md): owner wants nothing compiled once working and nothing in the background; the softbox studios are removed (supersedes [the softbox studio for satin](/decisions/2026-10-27-softbox-studio-for-satin.md); its room kept for the picker's thumbnails in `render/studio.js`), and Shadows Off now draws no shadow without changing a shader. [Start-up and slow changes](/engineering/app/startup-and-slow-changes.md): `render/warmup.js` compiles every fabric (both sides, sheer scans), mannequin finish, crystal family (both paths), hardware, stand, lines, editing visuals and effects behind the curtain; the background pass is removed; the shader tour ran 194 steps after the start with nothing compiled; warm-up 7.3 s on a warm start, 149 s with every shader's cache missed.
 * **Update**: [Start-up and slow changes](/engineering/app/startup-and-slow-changes.md): owner asked for every shader variant compiled at the start; measured that compiles do not run in parallel (4 at once 18.8 s), a cached fabric variant still costs 0.3-0.6 s every launch, and the new shader tour (`app/src/dev/shader-tour.js`, 178 steps) found 125 first-time compiles after today's start, mostly studio kinds and shadows off multiplying everything on show. Options put to the owner.
 
 ## 2026-11-08

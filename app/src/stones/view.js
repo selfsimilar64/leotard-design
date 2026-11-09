@@ -142,6 +142,7 @@ export class StoneView {
 		return g;
 	}
 
+	// (render/warmup.js builds the same instanced mesh once per stone family at the start: change both)
 	meshFor(shape, n) {
 		let mesh = this.meshes.get(shape);
 		if (mesh && mesh.userData.cap >= n) return mesh;

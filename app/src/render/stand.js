@@ -12,6 +12,8 @@ const blackMetal = new THREE.MeshPhysicalMaterial({ color: 0x1c1c20, metalness: 
 const wood = new THREE.MeshPhysicalMaterial({ color: 0x7a4a26, roughness: 0.45, clearcoat: 0.5, clearcoatRoughness: 0.2 });
 const glass = new THREE.MeshPhysicalMaterial({ color: 0xa9c4c0, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.32, clearcoat: 1, depthWrite: false });
 const glassEdge = new THREE.MeshPhysicalMaterial({ color: 0x5f8a84, roughness: 0.08, transparent: true, opacity: 0.75 });
+// every material of the stands (render/warmup.js compiles them at the start)
+export const STAND_MATERIALS = [chrome, blackMetal, wood, glass, glassEdge];
 
 const cyl = (r0, r1, h, mat, seg = 40) => new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), mat);
 const at = (mesh, x, y, z) => { mesh.position.set(x, y, z); return mesh; };
@@ -88,7 +90,7 @@ export function cutCaps(body, capMaterial) {
 	const g = new THREE.Group();
 	for (const loop of body.cutLoops()) {
 		const m = new THREE.Mesh(capGeometry(loop).geometry, capMaterial);
-		m.material.side = THREE.DoubleSide;
+		m.material.side = THREE.DoubleSide; // (render/warmup.js compiles the caps' finishes so: change both)
 		g.add(m);
 	}
 	return g;
@@ -101,7 +103,7 @@ function neckCaps(body, capMaterial, g) {
 	loops.sort((a, b) => b.centre.y - a.centre.y);
 	for (const L of loops) {
 		const m = new THREE.Mesh(L.geometry, capMaterial);
-		m.material.side = THREE.DoubleSide;
+		m.material.side = THREE.DoubleSide; // (render/warmup.js compiles the caps' finishes so: change both)
 		g.add(m);
 	}
 	// Neck cap: the highest loop. A turned wooden disc a little wider than the neck, and a knob.

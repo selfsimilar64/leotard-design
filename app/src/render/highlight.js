@@ -135,6 +135,7 @@ export class HoverHighlight {
 		this.pass = RENDERER === 'webgpu' ? new OutlineNode(viewport, isOn) : new OutlinePass(viewport, isOn);
 		viewport.composer.addPass(this.pass); // after the tone mapping
 		this.rings = null;
+		// (render/warmup.js compiles it at the start on a stand-in with aSize and aStrong: change both)
 		this.ringMat = new THREE.ShaderMaterial({
 			uniforms: { uPx: { value: 1000 }, uPr: { value: 1 } },
 			vertexShader: /* glsl */`

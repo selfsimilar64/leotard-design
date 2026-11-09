@@ -155,7 +155,7 @@ export class Overlay {
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 		g.setAttribute('color', new THREE.BufferAttribute(col, 4));
-		const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+		const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide })); // (render/warmup.js compiles a stand-in of this material at the start: change both)
 		mesh.renderOrder = 9;
 		this.group.add(mesh);
 		this.regions = { mesh, ranges, lit: [] };
@@ -212,7 +212,7 @@ export class Overlay {
 		for (const sp of this.centreSps) { this.place(sp, v); pos.push(v.x, v.y, v.z); }
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-		this.centreMat ??= new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+		this.centreMat ??= new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 }); // (render/warmup.js compiles a stand-in of this material at the start: change both)
 		this.centre = new THREE.LineSegments(g, this.centreMat);
 		this.centre.renderOrder = 9;
 		this.group.add(this.centre);
@@ -226,7 +226,7 @@ export class Overlay {
 		cellSps.forEach((sp, i) => { this.place(sp, v); pos.set([v.x, v.y, v.z], i * 3); });
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-		const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide });
+		const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide }); // (render/warmup.js compiles a stand-in of this material at the start: change both)
 		const glow = this.glow = new THREE.Mesh(g, m);
 		glow.renderOrder = 9;
 		this.group.add(glow);

@@ -558,7 +558,8 @@ export class Engine {
 }
 
 // A mannequin finish (render/presets.js) on a skin piece's material.
-function setFinish(m, f) {
+// (exported for render/warmup.js, which compiles every mannequin finish at the start)
+export function setFinish(m, f) {
 	const u = m.userData.u;
 	finishSurface(m, f);
 	u.uKnit.value = f.knit ?? 0;

@@ -38,7 +38,7 @@ export async function putJpeg(url, cv, q = 0.88) {
 // turned by `turn` (radians) for fn, then back.
 export async function lightsTurned(app, turn, fn) {
 	const vp = app.engine.viewport, was = vp.settings.envRotation ?? 0;
-	const place = () => { vp.placeHdriLights(); vp.placeStudioLights(); };
+	const place = () => vp.placeHdriLights();
 	vp.settings.envRotation = was + turn; place();
 	try { return await fn(); } finally { vp.settings.envRotation = was; place(); }
 }
