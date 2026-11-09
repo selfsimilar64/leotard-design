@@ -101,7 +101,9 @@ function microModel(u, env, xn) {
 		// (MICRO_KDENV, MICRO_LUT)
 		const lenK = float(0).toVar();
 		Loop(7, ({ i: seg }) => { lenK.addAssign(len(seg)); });
-		const eN = microEnv(n, float(1)).toVar();
+		// zero where the view is behind the normal: the table only spans the front, and its edge texel over Q's 1e-3 floor
+		// blew out to the dye's colour (twin: fabric.js MICRO_FRAGMENT's eN, which says more)
+		const eN = select(dot(wr, n).greaterThan(0), microEnv(n, float(1)), vec3(0)).toVar();
 		If(u.T1.z.greaterThan(0), () => { acc1.addAssign(eN.mul(texture(u.lut, microLutUV(T1, n, wr)).b).mul(u.A1).mul(lenK)); });
 		const kc = texture(u.lut, microLutUV(T2, n, wr)).rg;
 		const acc2 = eN.mul(kc.x.add(u.A2.mul(kc.y))).toVar(); // (MICRO_XNARROW: the table holds their kd share only)

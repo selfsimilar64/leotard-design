@@ -1100,7 +1100,12 @@ const MICRO_FRAGMENT = /* glsl */`
 		float lenK = 0.;
 		for ( int seg = 0; seg < 7; seg ++ ) lenK += uMicroLen[ seg ];
 #if defined( MICRO_LUT )
-		vec3 eN = microEnv( n, 1. ); // MICRO_LUT: one blurriest lookup about the normal for the kd share and the cross threads
+		// MICRO_LUT: one blurriest lookup about the normal for the kd share and the cross threads. Zero where
+		// the view is behind the shading normal (a fold turning away): the full model's masking is zero there
+		// (Pr, Mr <= 0), but the table only spans the front (phi_r within 90 degrees) and its clamped edge
+		// texel, over Q at its 1e-3 floor, blew out to the dye's colour (armpit fold, owner, 2026-11-08).
+		// Twin: fabric-light.js envLight.
+		vec3 eN = dot( wr, n ) > 0. ? microEnv( n, 1. ) : vec3( 0. );
 		if ( uMicroT1.z > 0. ) acc1 += eN * texture2D( tMicroLut, microLutUV( T1, n, wr ) ).b * uMicroA1 * lenK;
 #else
 		if ( uMicroT1.z > 0. ) acc1 += microEnv( n, 1. ) * microBroadKdK( T1, n, cross( T1, n ), n, bx1, wr, uMicroT1, uMicroA1, eta, 1. ) * lenK;
