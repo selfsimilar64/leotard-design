@@ -36,6 +36,10 @@ To make that a wait of seconds rather than minutes the variants were cut where t
   measured on the GTX 1650 with every shader's cache missed, the curtain lifting at 160 s on the dev server; most of
   it the fabric shader's size); every other start spends ~7 s here, each variant set up again from the browser's
   shader cache.
+- Later the same day the owner asked for each fabric to hold only its own code (`materials/fabric.js fabricDefines`):
+  more variants (104 programs, from 84) but each far smaller. With every cache missed the curtain lifts at 52-69 s; a
+  warm start's warm-up is ~7.4 s, ~9.7 s on the starts where one program misses the cache. Looks unchanged (within
+  1/765 on every fabric).
 - `?quick` in the address compiles only what the design shows, for look-dev reloads after a shader change.
 - The shader tour (`app/src/dev/shader-tour.js`) is the check: after the start it walks every option a designer can
   reach and lists any step that compiled. When the app gains a material, a mesh kind or a lighting change, the warm-up
@@ -44,7 +48,7 @@ To make that a wait of seconds rather than minutes the variants were cut where t
 # Revisit if
 
 A new studio or effect needs another kind of lighting (it multiplies the variants again), or the start's wait grows:
-then shrink the fabric shader per fabric (the satin model only in satin first).
+the ways left are listed in [start-up and slow changes](/engineering/app/startup-and-slow-changes.md) (Left to do).
 
 [^owner]: Conversation with the product owner, 2026-11-09.
 [^measured]: Start-up and slow changes, sections on variant costs and what splits a variant.

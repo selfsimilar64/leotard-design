@@ -310,11 +310,14 @@ const FABRIC_FRAGMENT = /* glsl */`
 			normal = normalize( cotangentFrame( normal, - vViewPosition, tuv ) * tn );
 		}
 	}
+#ifdef FAB_MICRO
 	if ( uMicro > 0. ) diffuseColor.rgb = vec3( 0. ); // the thread model has no separate diffuse: all of its light is in MICRO_FRAGMENT
+#endif
 	if ( uPrint > .5 ) {
 		vec4 pc = texture2D( tPrint, ( q - uPrintOffset ) / uPrintSize );
 		diffuseColor.rgb = mix( diffuseColor.rgb, pc.rgb, pc.a );
 	}
+#ifdef FAB_CHECKER
 	if ( uChecker > 0. ) {
 		vec2 cq = floor( q / uChecker );
 		float ck = mod( cq.x + cq.y, 2. );
@@ -322,6 +325,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 		float arrow = step( abs( fq.x - .5 ), .06 ) * step( .2, fq.y ) * step( fq.y, .8 ); // grain line up each cell
 		diffuseColor.rgb = mix( diffuseColor.rgb * mix( .55, 1., ck ), vec3( 1. ), arrow * .8 );
 	}
+#endif
 	float ombre = 1.;
 	if ( uOmbre > .5 ) {
 		ombre = uOmbre > 1.5 ? 1. - smoothstep( 0., 1., vGrad ) // along a line or a direction (render/garment.js)
@@ -329,8 +333,11 @@ const FABRIC_FRAGMENT = /* glsl */`
 		diffuseColor.rgb = mix( uOmbreColor, diffuseColor.rgb, ombre );
 	}
 	// duochrome foil: the colour turns towards a second hue as the surface turns away
+#ifdef FAB_DUO
 	if ( uDuo > 0. ) diffuseColor.rgb = mix( diffuseColor.rgb, uDuoColor, uDuo * pow( 1. - saturate( dot( normal, viewDir ) ), uDuoPow ) );
+#endif
 	// thin-film thickness swirls: folded value noise (oil-slick, liquid hologram), read in lights_physical_fragment
+#ifdef FAB_FILM
 	if ( uFilm > 0. ) {
 		vec2 fq = q / uFilmScale;
 		vec2 wq = fq + ( vec2( vnoise( fq * .6 + 3.1 ), vnoise( fq * .6 + 8.7 ) ) - .5 ) * uFilmWarp;
@@ -342,6 +349,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 			diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * ( .62 + .5 * ft ), uFilmTint );
 		}
 	}
+#endif
 
 	// --- knit: the technical face of a warp-knit tricot. Columns of V-shaped loops along the grain
 	// (wales, ~26 per cm), stacked in courses (~44 per cm), the counts on Carvico's matte tricot data
@@ -352,6 +360,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 	// between the wales are deeper than the gap between a loop's legs, and a little darker.
 	// A scanned texture brings its own knit, so this one is off under a scan.
 	vec3 nCloth = normal; // before the knit: what mystique's foil dots lie on (below)
+#ifdef FAB_KNIT
 	if ( uKnit > 0. && uTex < .5 ) {
 		const vec2 kp = vec2( .00038, .00023 ); // wale, course pitch (m)
 		float fw = 1. - smoothstep( .3, .5, fp / kp.x ), fc = 1. - smoothstep( .3, .5, fp / kp.y );
@@ -368,7 +377,9 @@ const FABRIC_FRAGMENT = /* glsl */`
 			diffuseColor.rgb *= 1. + ( loop - .53 ) * .1 * uKnit * fw;           // .53: the loop's average
 		}
 	}
+#endif
 
+#ifdef FAB_BUMP
 	if ( uBumpAmp > 0. ) {
 		float fade = 1. - smoothstep( .25, .6, fp / uBumpScale );
 		if ( fade > 0. ) {
@@ -377,8 +388,10 @@ const FABRIC_FRAGMENT = /* glsl */`
 			normal = bumpN( normal, hgt * uBumpAmp * uBumpScale * fade );
 		}
 	}
+#endif
 
 	float flakeMask = 0.;
+#ifdef FAB_FLAKE
 	if ( uFlake > .5 ) {
 		vec2 qc = q / uPitch;
 		float r = fp / uPitch; // pixel size in cells
@@ -398,6 +411,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 			// grain's edge). The lattice is looked up in gently bent coordinates (uBend), and the offset to
 			// the dot's centre is taken back through the bend (its Jacobian) so the dots stay round.
 			vec2 qn = qc, off = vec2( 9. ), did = vec2( 0. ); mat2 unbend = mat2( 1. );
+#ifdef FAB_BEND
 			if ( uBend > 0. ) {
 				vec2 b0 = bendOf( qc );
 				qn = qc + b0;
@@ -419,7 +433,9 @@ const FABRIC_FRAGMENT = /* glsl */`
 					vec2 o2 = transpose( rot ) * ( hk.xy - jit ), cw = qn - o2; // offset from the dot, and its centre
 					if ( dot( cw - c, cw - c ) <= dot( cw - o, cw - o ) && dot( o2, o2 ) < dot( off, off ) ) { off = o2; did = hk.zw + k * 131.7; }
 				}
-			} else {
+			} else
+#endif
+			{
 				vec4 hc = hexCell( qc );
 				// Nudge each flake off the lattice centre (it still fits its own cell): a perfect grid
 				// beats against the pixel grid and shows moire at mid distance.
@@ -486,7 +502,9 @@ const FABRIC_FRAGMENT = /* glsl */`
 		roughnessFactor = mix( roughnessFactor, foilRough, flakeMask );
 		normal = normalize( mix( normal, nF, mix( nearMask, coverage > .3 ? 1. : farOn, w ) * gw ) );
 	}
+#endif
 
+#ifdef FAB_MESH
 	if ( uMesh > .5 ) {
 		float r = fp / uMeshPitch;
 		vec4 hc = hexCell( q / uMeshPitch );
@@ -502,6 +520,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 		if ( uSeam > .5 ) a = mix( 1. - ( 1. - a ) * ( 1. - a ), a, smoothstep( uSeamAllow - .0006, uSeamAllow + .0006, vSeam ) );
 		diffuseColor.a *= max( a, flakeMask );
 	}
+#endif
 
 	// Heights from flock, stamps, wrinkles and seams are summed and bumped once, after the loops:
 	// screen-space derivatives inside loops with per-pixel branches are undefined on GPUs (on
@@ -618,7 +637,7 @@ const FABRIC_FRAGMENT = /* glsl */`
 
 	// the thread model's frame, for its environment light (MICRO_FRAGMENT) and direct lights (MICRO_PARS):
 	// the cross threads T2 round the body (the tangent), the floats T1 across it
-#ifdef USE_ANISOTROPY
+#if defined( USE_ANISOTROPY ) && defined( FAB_MICRO )
 	if ( uMicro > 0. ) { gMicroN = normal; gMicroT2 = normalize( tbn[ 0 ] - normal * dot( tbn[ 0 ], normal ) ); gMicroT1 = cross( normal, gMicroT2 ); }
 #endif
 }
@@ -655,10 +674,12 @@ const MICRO_DIRECT = (head, call) => {
 	const re = new RegExp('void ' + head + '\\([^{]*\\{');
 	if (!re.test(LIGHTS_PARS)) console.warn(`fabric: three.js changed ${head}; the thread model's direct light is off`);
 	return (src) => src.replace(re, (m) => m + `
+#ifdef FAB_MICRO
 	if ( uMicro > 0. ) {
 ${call}
 		return;
 	}
+#endif
 `);
 };
 // The softboxes (microRect) are not hooked in: at the model's full sampling each box cost about
@@ -674,7 +695,7 @@ const LIGHTS_MICRO = [
 
 // Thin-film thickness from the fabric's swirl field instead of one value (oil-slick, liquid hologram).
 const FILM_FRAGMENT = /* glsl */`
-#ifdef USE_IRIDESCENCE
+#if defined( USE_IRIDESCENCE ) && defined( FAB_FILM )
 	if ( uFilm > 0. ) material.iridescenceThickness = mix( uFilmRange.x, uFilmRange.y, gFilm );
 #endif
 `;
@@ -767,6 +788,7 @@ vec3 ${name}( vec3 t, vec3 nl, vec3 bl, vec3 n, vec3 bx, vec3 wr, vec4 T, vec3 A
 }
 `;
 const MICRO_PARS = /* glsl */`
+#ifdef FAB_MICRO
 #define MICRO_NT 8
 #define MICRO_NP 12
 // Speed-up switches (MICRO_SPEED, set per fabric as material defines)
@@ -1044,9 +1066,10 @@ ${MICRO_BROAD('microBroadKd', { NT: 2, NP: 3, QR: 1 })}
 ${MICRO_BROAD('microBroadKdK', { NT: 2, NP: 3, QR: 1, ENV: false })}
 #endif
 #endif
+#endif
 `;
 const MICRO_FRAGMENT = /* glsl */`
-#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV ) && defined( USE_ANISOTROPY )
+#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV ) && defined( USE_ANISOTROPY ) && defined( FAB_MICRO )
 	if ( uMicro > 0. ) {
 		vec3 n = normal, wr = normalize( vViewPosition );
 		vec3 T2 = normalize( tbn[ 0 ] - n * dot( tbn[ 0 ], n ) ), T1 = cross( n, T2 ); // T2 round the body; the floats T1 run across it
@@ -1149,6 +1172,7 @@ const MICRO_FRAGMENT = /* glsl */`
 // metalness blend) tinted the knit with the foil, so a burgundy knit with teal dots read teal all
 // over, not burgundy where the dots face away from the light (two-tone mystique, 2026-10-27).
 const FOIL_FRAGMENT = /* glsl */`
+#ifdef FAB_FLAKE
 	if ( uGlint > 0. && gFlake > 0. ) {
 		material.specularColorBlended = mix( material.specularColorBlended, gFoil, gFlake * uGlint ); // yarn glints: part-white specular, the diffuse stays the dye
 		// A glint is one fibre facet, not the knit's grain: unstretched. Stretched at its low roughness it
@@ -1163,6 +1187,7 @@ const FOIL_FRAGMENT = /* glsl */`
 		material.diffuseContribution = gDye * ( 1. - metalnessFactor );
 		material.specularColorBlended = mix( material.specularColor, gFoil, metalnessFactor );
 	}
+#endif
 `;
 
 export function createFabricMaterial(zone) {
@@ -1468,6 +1493,29 @@ export function microScale(eta, F, W, xn = false) {
 // the threads' refractive index, shared by both sets). The cross threads keep the table's values.
 export const SATIN_DEFAULTS = (() => { const mc = FABRICS.satin.micro; return { gs: mc.flat.gs, gv: mc.flat.gv, kd: mc.flat.kd, eta: mc.eta }; })();
 
+// A fabric's own effects as shader switches (material defines), so each fabric's shader holds only the code it uses (owner,
+// 2026-11-09: shorter compiles; knowledge/engineering/app/startup-and-slow-changes.md). Each switch is on exactly when
+// applyFabric gives its uniform a value that draws (uMicro, uFlake, uBend, uDuo, uFilm, uMesh, uBumpAmp, uKnit, uChecker), so no
+// look changes. Smaller parts of an effect stay runtime switches inside it (a flake's glint, blend and holo; the film's tint),
+// where a define would only split one variant into two. What any piece can take whatever its fabric (a scan, a print, decals,
+// an ombre, seams, trims, wrinkles, folds) stays a runtime switch too, shared by every fabric's variant. A mannequin finish
+// takes the same from its own fields (render/engine.js setFinish: knit).
+// Twin: materials/fabric-node.js (WebGPU) is not specialised: its node graph is built before the fabric is known
+// (createFabricNodeMaterial), and every effect is a runtime switch there.
+export function fabricDefines(f) {
+	const fl = f.flake ?? f.glint, d = { STANDARD: '', PHYSICAL: '', ...MICRO_SPEED[f.micro?.speed] }; // three's own, plus the satin's speed-ups
+	if (f.micro) d.FAB_MICRO = '';
+	if (fl) d.FAB_FLAKE = '';
+	if (fl?.bend) d.FAB_BEND = '';
+	if (f.duo) d.FAB_DUO = '';
+	if (f.film) d.FAB_FILM = '';
+	if (f.mesh) d.FAB_MESH = '';
+	if (f.bump) d.FAB_BUMP = '';
+	if (f.knit) d.FAB_KNIT = '';
+	if (f.checker) d.FAB_CHECKER = '';
+	return d;
+}
+
 const _c = new THREE.Color();
 // colour2: an explicit second colour (hex) for the foil, the ombre's far end or the duochrome
 // shift, instead of the `second` choice; on the thread-model satin, the cross threads' colour (a shot
@@ -1492,7 +1540,7 @@ export function applyFabric(m, key, colour, second, colour2 = null, scale = 1, s
 	const mc = f.micro;
 	m.specularIntensity = mc ? 0 : 1;
 	u.uMicro.value = mc ? 1 : 0;
-	m.defines = { STANDARD: '', PHYSICAL: '', ...MICRO_SPEED[mc?.speed] }; // three's own, plus the satin's speed-ups
+	m.defines = fabricDefines(f);
 	if (mc) {
 		m.anisotropy = 0.001;
 		const d2r = Math.PI / 180, W = mc.twisted, o = satin ?? {};

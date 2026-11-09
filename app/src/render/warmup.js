@@ -1,11 +1,12 @@
 // Every shader the app can draw with, compiled at the start behind the curtain (main.jsx reveal), so nothing compiles
 // once the designer is working: no new fabric, finish, crystal, effect or view ever waits for a shader (owner,
 // 2026-11-09). The browser keeps compiled shaders on disk, so this is long only on the first start after a shader or the
-// browser changed; on other starts each shader is set up again from that cache (~0.3-0.6 s a fabric variant).
-// knowledge/engineering/app/startup-and-slow-changes.md.
+// browser changed; on other starts each shader is set up again from that cache (~0.06-0.12 s a fabric variant since each
+// fabric holds only its own code, 2026-11-09). knowledge/engineering/app/startup-and-slow-changes.md.
 //
 // What makes a variant (three's program key): a material's features (sheen, clearcoat, anisotropy, iridescence, sheer,
-// the satin's switches, one side or both), the mesh's (instanced, vertex colours, tangents) and the scene's (lights,
+// the fabric's own effects: materials/fabric.js fabricDefines, the satin's switches, one side or both), the mesh's
+// (instanced, vertex colours, tangents) and the scene's (lights,
 // environment, shadows). The scene's are fixed: one kind of lighting (the photographed studios share one set; the softbox
 // studios were removed for this), and shadows off draws no shadow without changing a shader (render/viewport.js
 // applyDisplay). So each family here is compiled once, on a stand-in mesh carrying the attributes that matter.
@@ -159,6 +160,7 @@ export async function warmUp(engine, onProgress = () => {}, maxMs = 15 * 60 * 10
 	let done = 0;
 	for (const [label, build] of list) {
 		onProgress({ done, total: list.length + 1, label });
+		performance.mark?.('warm-up: ' + label); // (each job in the browser's performance timeline, as the curtain's steps)
 		const objects = build(), mats = new Set();
 		r.setRenderTarget(v.scenePass.target);
 		for (const o of objects) for (const m of r.compile(o, cam, v.scene)) mats.add(m);
@@ -169,6 +171,8 @@ export async function warmUp(engine, onProgress = () => {}, maxMs = 15 * 60 * 10
 		done++;
 	}
 	onProgress({ done, total: list.length + 1, label: 'effects' });
+	performance.mark?.('warm-up: effects');
 	drawEffects(engine);
+	performance.mark?.('warm-up: done');
 	onProgress({ done: list.length + 1, total: list.length + 1, label: '' });
 }

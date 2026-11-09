@@ -1,7 +1,7 @@
 // Turns the design document into the 3D scene. The document is the only input: sync(doc,
 // touched) rebuilds whatever depends on the sections a command touched (see doc/store.js).
 import * as THREE from 'three';
-import { createFabricMaterial } from '../materials/fabric.js';
+import { createFabricMaterial, fabricDefines } from '../materials/fabric.js';
 import { setFabricSlot } from '../materials/fabric-attributes.js';
 import { fullBodyStand, dressFormStand, cutCaps } from './stand.js';
 import { MANNEQUIN_FINISHES, REALISTIC_SKIN } from './presets.js';
@@ -562,6 +562,7 @@ export class Engine {
 export function setFinish(m, f) {
 	const u = m.userData.u;
 	finishSurface(m, f);
+	m.defines = fabricDefines(f); // its shader holds only the effects it uses (materials/fabric.js): the knit, on a linen form
 	u.uKnit.value = f.knit ?? 0;
 	u.uTape.value = f.tape ? 1 : 0;
 	u.uSkin.value = f.skin ?? 0;
