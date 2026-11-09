@@ -224,7 +224,7 @@ export class GarmentView {
 			attr.needsUpdate = true;
 		};
 		const A = geo.attributes, slot = (name, S) => { const [a, o, k] = FABRIC_SLOTS[name]; lerp1(S, A[a], k, o); };
-		// the fabric's own place on the body (slid over the skin in a pose: body/slide.js)
+		// the fabric's own place on the body (Man.gPos: the skin; it slid over the skin in a pose until 2026-11-08)
 		lerp3(man.gPos ?? man.aPos.array, A.position, false); lerp3(man.gNrm ?? man.aNrm.array, A.normal, true); lerp3(man.aGNormal.array, A.aGNormal, true);
 		lerp3(man.ref, A.aRef, false); lerp3(man.aLift.array, A.aLift, false); slot('ao', man.aAO.array); slot('keep', man.keep); slot('form', man.form);
 		// tangent round the body (the stretch direction anisotropic shine follows), as the POC's

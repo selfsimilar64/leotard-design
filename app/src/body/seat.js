@@ -2,7 +2,7 @@
 // gluteal cleft. Neither lift spans it: the membrane lift (Man.computeLift) gives 0 mm there,
 // because the cleft is two convex cheeks meeting in a slot whose walls face each other, and the
 // rolling ball (body/ball.js) left a crevice and artifacts from a ball of about 90 mm up. The slide
-// (body/slide.js) keeps the fabric's shape (as-rigid-as-possible), so it keeps the fold too.
+// (body/slide.js, removed 2026-11-08) kept the fabric's shape (as-rigid-as-possible), so it kept the fold too.
 //
 // Here the fabric over the seat is a membrane under tension with no bending stiffness, at rest
 // (the shape a cloth simulation settles to), solved as seen from behind: a height field u over a

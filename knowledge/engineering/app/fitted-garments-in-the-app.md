@@ -51,8 +51,8 @@ high-cut leg. Only blocks the project owns are shipped; fits of the [bought bloc
 - Each fitted point is a host triangle and weights on the body's canonical surface, as the app's own
   pieces are, so `GarmentView.interpolate` places it on any body and pose (`render/fitted.js`
   `FittedView.place`, run on every `body.onGarment`).
-- The body is told where the fitted fabric is (a cover hook), so the lift and the pose's slide treat it
-  as fabric; the app's own pieces, edge finishes and fixed wrinkle zones are hidden; folds come from the
+- The body is told where the fitted fabric is (a cover hook), so the lift (and, until 2026-11-08, the pose's slide) treat it
+  as fabric; the re-fit stands on that lifted surface ([fabric bridging hollows](/engineering/geometry/fabric-bridging-hollows.md)); the app's own pieces, edge finishes and fixed wrinkle zones are hidden; folds come from the
   fit (`aFold`); openings get the elastic finish from the fit's loops, in the Front panel's look.
 - It grew out of the dev viewer `dev/wrap-eval.js` (`show`, `cover`, `finish`); each names the other.
 

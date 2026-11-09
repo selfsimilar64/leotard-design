@@ -3,7 +3,8 @@ type: Component
 title: Garment sliding over the posed body (experiment)
 description: "Why a leotard painted on the skin's vertices goes wrong in deep poses (leg openings dragged down the inner thigh, seams warped at the armpit), and the experimental fix in app/src/body/slide.js: the garment slides over the posed body under tension, as-rigid-as-possible against its A-pose shape, with measured results on the low lunge and kneeling poses."
 tags: [app, geometry, pose, garment, simulation, component, experiment]
-status: draft
+status: deprecated
+superseded_by: /decisions/2026-11-08-one-fit-simulation.md
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-21T23:00:00Z }
 sources:
   - id: code
@@ -16,6 +17,11 @@ sources:
 ---
 
 # Takeaway
+
+**Removed on 2026-11-08** (owner): the fitted garments' fits stand on the garment surface, and the slide moved a
+fitted garment about 15 mm off its fit and held the page 1.3 s a pose; the fit sim is to carry the whole fit
+([decision](/decisions/2026-11-08-one-fit-simulation.md)). `body/slide.js` and its test are deleted; what follows is the
+record of the experiment.
 
 Until 2026-10-21 the leotard was **painted on the skin**: every garment point sat on the same
 canonical vertex in every pose, so wherever Daz's skinning moves the skin, the leotard went with

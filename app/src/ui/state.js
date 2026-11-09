@@ -26,6 +26,7 @@ export const libraryOpen = signal(false);  // the designs library over the whole
 export const fitStatus = signal({ state: 'off' }); // a fitted garment's re-fit (render/fitted.js status): the busy note and the settings panel
 export const busy = signal(null);          // { text } while a slow change (a new shape, a design) is applied
 export const compiling = signal(false);    // new shaders compiling before they are drawn (render/viewport.js prepare)
+export const prewarming = signal(null);    // { share } while every fabric is compiled in the background and it takes a while (render/prewarm.js)
 export const savedRev = signal(-1);        // the design's revision when it was last saved or opened
 
 // Which tab shows a selected part: a piece's fabric, a line's or strap's shape, stones and logos.

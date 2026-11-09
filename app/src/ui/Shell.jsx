@@ -4,7 +4,7 @@
 // library (ui/Library.jsx) opens over everything.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { drawnLines, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, fitStatus, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, compiling, savedRev, prefs, setPref } from './state.js';
+import { drawnLines, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, fitStatus, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, compiling, prewarming, savedRev, prefs, setPref } from './state.js';
 import { Panel, pickTab } from './Panel.jsx';
 import { Library } from './Library.jsx';
 import { FlatView } from './FlatView.jsx';
@@ -48,6 +48,7 @@ export function Shell({ onViewport }) {
 				<ModeBar />
 				<StageHint />
 				<Busy />
+				<Prewarm />
 				<ViewBar />
 				<Hud />
 				<Toast />
@@ -136,39 +137,31 @@ function Settings({ onClose }) {
 	);
 }
 
-// How the leotard sits in a pose (body/slide.js, experiment) and how it bridges hollows in every
-// pose (Man.computeLift): this computer's setting, kept with the display settings. A change re-solves
-// the fit (a few seconds), so sliders apply on release. Grip runs on a log scale: slider 0..100 ->
-// 0.001..1. Bridging (lift tautness) is steep near 1 (measured 2026-10-25: taut 0.5 kept 3% of the
-// bridged volume, 0.9 20%, 0.98 53%), so its slider is logarithmic in the slack 1 - taut: 0 -> 0
-// (hugs), 50 -> 0.97 (about half), 100 -> 1.
-const gripOf = (x) => (x <= 0 ? 0 : 0.001 * 1000 ** (x / 100));
-const gripPos = (g) => (g <= 0 ? 0 : Math.max(0, Math.min(100, (100 * Math.log10(g / 0.001)) / 3)));
+// How the fabric bridges hollows in every pose (Man.computeLift, the seat sheet): this computer's
+// setting, kept with the display settings. A fitted garment's re-fit stands on this surface. A change
+// re-solves it (a second or two), so sliders apply on release. (The pose slide and its tension and
+// grip were removed on 2026-11-08: knowledge/engineering/app/garment-sliding.md.) Bridging (lift
+// tautness) is steep near 1 (measured 2026-10-25: taut 0.5 kept 3% of the bridged volume, 0.9 20%,
+// 0.98 53%), so its slider is logarithmic in the slack 1 - taut: 0 -> 0 (hugs), 50 -> 0.97 (about
+// half), 100 -> 1.
 const tautOf = (x) => 1 - (10 ** (-3 * x / 100) - 0.001) / 0.999;
 const tautPos = (t) => Math.round((-100 * Math.log10(0.999 * (1 - t) + 0.001)) / 3);
 function FabricFit() {
-	rev.value;
 	const d = display.value, [fitting, setFitting] = useState(false), [ms, setMs] = useState(null);
 	if (!d) return null;
-	const posed = app.doc.body.pose !== 'a-pose';
 	const apply = (patch) => {
 		const n = { ...d, ...patch };
 		display.value = n; saveDisplay(n);
 		setFitting(true);
 		// let the panel show "Fitting…" before the solve holds the page
 		setTimeout(() => {
-			const e = app.engine;
-			e?.setSlide(n.slide, { shrink: n.slideTension, grip: n.slideGrip }, { taut: n.liftTaut, max: n.liftMax, reach: n.liftReach, method: n.liftMethod, ball: n.liftBall, seat: n.liftSeat, seatAlong: 1 / n.liftSeatAcross });
-			setMs(e?.body.slideMs || null); setFitting(false);
+			const t0 = performance.now();
+			app.engine?.setLift({ taut: n.liftTaut, max: n.liftMax, reach: n.liftReach, method: n.liftMethod, ball: n.liftBall, seat: n.liftSeat, seatAlong: 1 / n.liftSeatAcross });
+			setMs(performance.now() - t0); setFitting(false);
 		}, 30);
 	};
 	return (
 		<div class="fit">
-			<Switch label="Fabric slides over the body in poses" value={d.slide} onChange={(v) => apply({ slide: v })} />
-			{d.slide ? <>
-				<Field label="Tension (fabric size against the body)"><CommitSlider value={Math.round(d.slideTension * 100)} min={60} max={100} step={1} format={(v) => `${v}%`} onCommit={(v) => apply({ slideTension: v / 100 })} /></Field>
-				<Field label="Grip (how much it sticks to the skin)"><CommitSlider value={gripPos(d.slideGrip)} min={0} max={100} step={1} format={(v) => gripOf(v).toFixed(3)} onCommit={(v) => apply({ slideGrip: gripOf(v) })} /></Field>
-			</> : null}
 			<Switch label="Taut across the seat" value={d.liftSeat} onChange={(v) => apply({ liftSeat: v })} />
 			{d.liftSeat ? <Field label="Stretch across the seat (more pulls the cleft flatter)"><CommitSlider value={d.liftSeatAcross} min={1} max={30} step={0.5} format={(v) => `${v}×`} onCommit={(v) => apply({ liftSeatAcross: v })} /></Field> : null}
 			<Field label="How fabric spans hollows"><Segmented value={d.liftMethod} options={[['membrane', 'Membrane'], ['ball', 'Rolling ball']]} onPick={(v) => apply({ liftMethod: v })} /></Field>
@@ -179,7 +172,7 @@ function FabricFit() {
 				<Field label="Deepest bridge"><CommitSlider value={Math.round(d.liftMax * 1000)} min={0} max={50} step={1} format={(v) => `${v} mm`} onCommit={(v) => apply({ liftMax: v / 1000 })} /></Field>
 				<Field label="Bridge reach (how wide a hollow it spans)"><CommitSlider value={Math.round(d.liftReach * 100)} min={25} max={150} step={5} format={(v) => `${v}%`} onCommit={(v) => apply({ liftReach: v / 100 })} /></Field>
 			</>}
-			<p class="pop-meta">{fitting ? 'Fitting…' : !posed ? 'Sliding shows in poses; the mannequin stance is the design as drawn.' : ms ? `Fitted in ${(ms / 1000).toFixed(1)} s` : ''}</p>
+			<p class="pop-meta">{fitting ? 'Fitting…' : ms ? `Applied in ${(ms / 1000).toFixed(1)} s` : ''}</p>
 		</div>
 	);
 }
@@ -292,6 +285,18 @@ function Busy() {
 	// (render/viewport.js prepare): the view holds its last frame meanwhile
 	const b = busy.value ?? (fitStatus.value.state === 'fitting' ? { text: 'Fitting the leotard…' } : compiling.value ? { text: 'Preparing the materials…' } : null);
 	return b ? <div class="stage-busy" role="status"><span class="spinner" /><span>{b.text}</span><span class="busy-sheen" /></div> : null;
+}
+
+// Every fabric being compiled in the background (main.jsx prewarm), shown only when it takes a while: quiet, out of the way.
+function Prewarm() {
+	const p = prewarming.value;
+	if (!p) return null;
+	return (
+		<div class="stage-prep" role="status" title="Each fabric is prepared once on this computer, so switching to any of them is instant">
+			<span>Getting every fabric ready</span>
+			<span class="prep-track"><span style={{ transform: `scaleX(${Math.max(0.04, p.share)})` }} /></span>
+		</div>
+	);
 }
 
 function Hud() {

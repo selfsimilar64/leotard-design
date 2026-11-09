@@ -412,13 +412,12 @@ export class Engine {
 		cm.needsUpdate = true;
 	}
 
-	// The garment sliding over a posed body (body/slide.js): on/off and { shrink, grip }; re-solves
-	// where the fabric sits on the body shown and rebuilds everything that sits on it.
-	// lift: { taut, max, reach }, how the fabric bridges hollows (Man.computeLift).
-	setSlide(on, opt, lift) {
+	// How the fabric bridges hollows (Man.computeLift; the seat sheet, body/seat.js): { taut, max, reach, method, ball, seat,
+	// seatAlong }. Re-solves the garment surface on the body shown and rebuilds everything that sits on it; a fitted garment
+	// re-fits on it (its re-fit stands on this surface: knowledge/engineering/geometry/fabric-bridging-hollows.md).
+	setLift(lift) {
 		const b = this.body;
-		b.slide = on; b.slideOpt = { ...b.slideOpt, ...opt };
-		if (lift) b.liftOpt = { ...b.liftOpt, ...lift };
+		b.liftOpt = { ...b.liftOpt, ...lift };
 		if (!this.app || !b.key) return;
 		b.key = null;
 		this.applyBody(this.app.doc.body, true, false);

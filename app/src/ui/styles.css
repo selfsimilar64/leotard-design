@@ -430,6 +430,11 @@ kbd { font: 600 10px var(--sans); padding: 2px 5px; border-radius: 5px; backgrou
 @keyframes sheen-run { from { transform: translateX(-100%); } to { transform: translateX(225%); } }
 @keyframes busy-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @media (prefers-reduced-motion: reduce) { .busy-sheen::after { animation: none; opacity: 0.5; width: 100%; } }
+/* every fabric being compiled in the background (Shell.jsx Prewarm): quiet, bottom left, above the frame-rate read-out */
+.stage-prep { position: absolute; left: 14px; bottom: 40px; z-index: 4; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 9px; border-radius: 12px; background: rgba(251, 250, 248, 0.88); box-shadow: 0 0 0 1px rgba(35, 30, 24, 0.06); font-size: 11.5px; font-weight: 500; color: var(--ink-2); pointer-events: none; animation: fade-in 0.3s; }
+.prep-track { position: relative; width: 150px; height: 2px; overflow: hidden; border-radius: 1px; background: rgba(35, 30, 24, 0.1); }
+.prep-track > span { position: absolute; inset: 0; background: #8a2f57; transform-origin: left center; transition: transform 0.5s var(--ease); }
+.layout-flat .stage-prep { display: none; }
 .hud { position: absolute; left: 14px; bottom: 18px; pointer-events: none; font: 11px/1.4 ui-monospace, Consolas, monospace; color: rgba(31, 29, 26, 0.65); }
 .toast { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: 9px; max-width: min(560px, calc(100% - 40px)); padding: 10px 16px 10px 12px; border-radius: 14px; background: var(--ink); color: var(--on-ink); font-size: 13px; box-shadow: var(--shadow-3); animation: toast-in 0.3s var(--ease); }
 .layout-split .toast { left: calc(var(--split, 50%) / 2); }

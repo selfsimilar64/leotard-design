@@ -108,6 +108,28 @@ target, then a blocking `LINK_STATUS`), GTX 1650, ANGLE/D3D11:[^measured-2026-11
 - Variants are three's feature switches (sheen, clearcoat, anisotropy, iridescence, transparency)
   plus the satin's `MICRO_SPEED` defines: one per distinct combination on show.
 
+# Every fabric compiled in the background (`render/prewarm.js`, 2026-11-08)
+
+Once the curtain lifts, every fabric in `FABRICS` (not the debug checker) is applied to a hidden copy of each kind of
+fabric mesh on show (a piece, an edge, a strap: one host per zone, side and attribute set) and compiled into the scene
+pass's target, one at a time, giving way to any compile the designer is waiting for (`Viewport.compiling`). The
+materials are kept, so their programs stay in three's cache and a piece switched to that fabric reuses one. It runs
+again when the studio changes (`main.jsx`, on a new `scene.rig`, after `envReady`): new lighting, new variants. The
+stage shows a quiet "Getting every fabric ready" pill bottom left, only when the pass takes over 1.2 s.
+
+Why not all at the start, behind the curtain (the owner's first thought, 2026-11-08): the browser keeps compiled
+shaders on disk, so either way it is once per machine until the fabric shader or the browser changes; but at the start
+it would hold the curtain for about a minute on every look-dev reload, and in the background the design is usable after
+~24 s while the rest compiles. **[INFERRED]** The cold pass is estimated from the per-variant table (roughly nine
+distinct variants, ~45-55 s); measured warm, with five new variants, it ended within ~5 s.
+
+Checked 2026-11-08: after the pass, the design's material switched through Shiny, Wet, Satin, Duotone satin, Mystique,
+Foil, Velvet, Iridescent, Liquid holo, Mesh, Glitter mesh, Illusion, Hologram, Duochrome and Matte with no new program
+and no `'shaders'` hold, 70-100 ms each (the command and a frame).
+
+Not covered: a scanned texture with alpha (`applyTexture` makes the piece sheer), the shadow setting (Settings), and
+the WebGPU renderer; those compile when first drawn, through `prepare`.
+
 # Left to do [INFERRED]
 
 - Shorter compiles: gate the satin model to satin (above); then specialise the fabric code by the

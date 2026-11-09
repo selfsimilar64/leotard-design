@@ -26,7 +26,6 @@ import * as THREE from 'three';
 import { regions } from '../garment/legacy-regions.js';
 import { poseSpec, setDazPoses } from './pose.js';
 import { ccStencil, applyStencil, quadTriangles, readPolys } from './subdivide.js';
-import { slideGarment } from './slide.js';
 import { rollingBall } from './ball.js';
 import { seatSheet } from './seat.js';
 import { setFabricSlot } from '../materials/fabric-attributes.js';
@@ -51,7 +50,6 @@ const LIFT_MAX = 0.03, LIFT_ITER = 220;
 // seat adds the taut sheet across the gluteal cleft (body/seat.js) on top of either, seatAlong its
 // tension up the seat over its tension across (1 / the panel's "stretch across").
 export const LIFT_DEFAULTS = { taut: 1, max: LIFT_MAX, reach: 1, method: 'membrane', ball: 0.05, seat: true, seatAlong: 0.25 };
-const SLIDE_WARM = 0.05; // share of the slide's free vertices that may change for a warm start (slideFabric)
 
 // Dress form cuts, in reference-body metres: neck 2.2 cm above the neck base, legs at mid-thigh
 // (swimwear-style "3/4" form, so the leotard's leg openings show), arms just below the armpit.
@@ -107,7 +105,6 @@ class Mannequin {
 		// the cage's subdivision, checked against the pipeline's triangles (pipeline/g9.py cc_stencil)
 		const cage = readPolys(topo, T.cage);
 		this.stencil = ccStencil(manifest.cage, cage.sizes, cage.ids);
-		this.cagePolys = cage; // the base cage's polygons (the slide's coarse level, cageMesh)
 		const idx = this.idx = new Uint32Array(topo, T.index.offset, T.index.count);
 		const tri = quadTriangles(this.stencil.quads);
 		if (this.stencil.n !== N || tri.length !== idx.length || tri.some((v, i) => v !== idx[i])) throw new Error('Subdivision differs from the pipeline (body/subdivide.js vs pipeline/g9.py)');
@@ -162,9 +159,6 @@ class Mannequin {
 		this.cdf = new Float32Array(this.triangles);
 		this.key = null;
 		this.formKind = 'full'; this.head = 'mannequin';
-		this.slide = true; // the garment slides over the posed body (body/slide.js); false: painted on the skin
-		this.slideCoarse = true; // solved on the base cage, then subdivided (slideCage); false: on the canonical mesh
-		this.slideOpt = { shrink: 0.75, grip: 0.002, iters: 30 }; // tension (rest size 75%), friction, solver passes (defaults: render/display.js)
 		this.liftOpt = { ...LIFT_DEFAULTS }; // how the fabric bridges hollows (computeLift)
 	}
 
@@ -326,7 +320,6 @@ class Mannequin {
 		if (!b) throw new Error(`No body ${key}`);
 		const spec = poseSpec(pose);
 		this.key = key; this.pose = pose ?? null; this.poseKey = JSON.stringify(pose ?? 'a-pose');
-		this._slid = null; // a new body or pose: the next slide solves afresh
 		this.headKey = this.head;
 		this.cage = this.cageOf(b, pose);
 		// landmarks of what is shown: a Daz pose has its own; arm poses keep the A-pose's
@@ -416,7 +409,10 @@ class Mannequin {
 	// The garment surface on the current body and style: the fabric's lift over hollows, its
 	// normals, AO, and the sampling table stones are scattered with.
 	updateGarment(warm = false) {
-		this.slideFabric();
+		// where the fabric sits (gPos / gNrm, read by the garment, straps, stones and overlays): the skin. (In a pose it used to
+		// slide over the skin, body/slide.js, removed 2026-11-08: the fitted garment's re-fit stands on this surface, and the slide
+		// moved it ~15 mm off its fit; the fit sim is to carry the whole fit. knowledge/engineering/app/garment-sliding.md)
+		this.gPos = this.aPos.array; this.gNrm = this.aNrm.array;
 		const N = this.vertices, idx = this.idx, P = this.gPos, Nn = this.gNrm;
 		// The lift as a vector (aLift): the membrane's height along the normal, or the rolling ball's
 		// move across a fold (body/ball.js).
@@ -467,84 +463,6 @@ class Mannequin {
 		for (const a of [this.aLift, this.aGNormal]) a.needsUpdate = true;
 		setFabricSlot(this.geometry, 'ao', ao);
 		for (const fn of this.onGarment ?? []) fn();
-	}
-
-	// Where the fabric sits (gPos / gNrm, read by the garment, straps, stones and overlays): in a
-	// pose, the garment slides over the skin under tension (body/slide.js) on its own vertices (the
-	// cover, two rings past each edge so the triangles across an edge move with it); in the A-pose,
-	// or with slide off, the skin itself. Re-solved whenever the body, pose or cover changes.
-	// A small cover change on the same body and pose (a garment edit: under SLIDE_WARM of the cover
-	// differs) starts from the last solve (slideGarment opt.warm): 0.45 s against 1.6 s for a new
-	// neckline in the low lunge, typically 0.1 mm from a fresh solve (p99 0.55 mm, worst 4 mm). A
-	// larger change (a starting point: 18%) solves afresh; after a big change a warm start ended up to
-	// 8 mm off. setBody forgets the last solve (this._slid).
-	slideFabric() {
-		const P = this.aPos.array, Nn = this.aNrm.array, N = this.vertices, S = this.adjStart, A = this.adj, C = this.aCover.array;
-		this.gPos = P; this.gNrm = Nn; this.slideMs = 0;
-		if (!this.slide || this.poseKey === '"a-pose"') return;
-		let free = new Uint8Array(N);
-		for (let i = 0; i < N; i++) free[i] = C[i] > 0 && this.wHead[i] <= 0.5 ? 1 : 0;
-		for (let r = 0; r < 2; r++) {
-			const f2 = free.slice();
-			for (let i = 0; i < N; i++) if (!free[i] && this.wHead[i] <= 0.5) for (let k = S[i]; k < S[i + 1]; k++) if (free[A[k]]) { f2[i] = 1; break; }
-			free = f2;
-		}
-		if (this.slideCoarse) return this.slideCage(free);
-		const prev = this._slid, opt = { free, ...this.slideOpt };
-		if (prev) {
-			let d = 0, n = 0;
-			for (let i = 0; i < N; i++) { if (free[i] !== prev.free[i]) d++; if (free[i]) n++; }
-			if (d <= SLIDE_WARM * n) opt.warm = prev.res;
-		}
-		const res = slideGarment(this, this.restOf(this.bodies[this.key]), P, Nn, opt);
-		this._slid = { free, res };
-		this.gPos = res.pos; this.gNrm = res.nrm; this.slideMs = res.ms;
-	}
-
-	// The slide solved on Daz's base cage (a quarter of the vertices) instead of the canonical mesh:
-	// a fabric cage slides over the posed body's cage, then is subdivided with the body's own
-	// stencil. Fabric resting on the skin cage subdivides to exactly the skin; lifted fabric to a
-	// smooth surface over it. The canonical vertices outside the garment (free: the cover and two
-	// rings) stay on the skin. Cage vertex i is canonical vertex i's control point (subdivision
-	// keeps the old vertices first), so it is free when that vertex is, plus one cage ring.
-	slideCage(free) {
-		const t0 = performance.now(), P = this.aPos.array, Nn = this.aNrm.array, N = this.vertices, cg = this.cageMesh();
-		const nC = cg.vertices, S = cg.adjStart, A = cg.adj;
-		let cf = new Uint8Array(nC);
-		for (let i = 0; i < nC; i++) cf[i] = free[i];
-		const f2 = cf.slice();
-		for (let i = 0; i < nC; i++) if (!cf[i] && this.wHead[i] <= 0.5) for (let k = S[i]; k < S[i + 1]; k++) if (cf[A[k]]) { f2[i] = 1; break; }
-		cf = f2;
-		const cage = this.cage, cn = new Float32Array(nC * 3);
-		vertexNormals(cage, cg.idx, cn);
-		const prev = this._slid, opt = { free: cf, ...this.slideOpt };
-		if (prev?.coarse) {
-			let d = 0, n = 0;
-			for (let i = 0; i < nC; i++) { if (cf[i] !== prev.free[i]) d++; if (cf[i]) n++; }
-			if (d <= SLIDE_WARM * n) opt.warm = prev.res;
-		}
-		const res = slideGarment(cg, this.bodies[this.key].cages['a-pose'], cage, cn, opt);
-		this._slid = { free: cf, res, coarse: true };
-		const G = applyStencil(this.stencil, res.pos), GN = new Float32Array(N * 3);
-		vertexNormals(G, this.idx, GN);
-		for (let i = 0; i < N * 3; i++) if (!free[(i / 3) | 0]) { G[i] = P[i]; GN[i] = Nn[i]; }
-		this.gPos = G; this.gNrm = GN; this.slideMs = performance.now() - t0;
-	}
-
-	// Daz's base cage as a triangle mesh with vertex adjacency (the slide's coarse level), cached.
-	cageMesh() {
-		if (this._cageMesh) return this._cageMesh;
-		const { sizes, ids } = this.cagePolys, V = this.manifest.cage, tris = [], pairs = new Set();
-		for (let f = 0, o = 0; f < sizes.length; o += sizes[f++]) {
-			for (let k = 1; k + 1 < sizes[f]; k++) tris.push(ids[o], ids[o + k], ids[o + k + 1]); // fan
-			for (let k = 0; k < sizes[f]; k++) { const a = ids[o + k], b = ids[o + (k + 1) % sizes[f]]; pairs.add(a < b ? a * V + b : b * V + a); } // polygon edges only
-		}
-		const deg = new Uint32Array(V + 1);
-		for (const k of pairs) { deg[Math.floor(k / V) + 1]++; deg[k % V + 1]++; }
-		for (let i = 0; i < V; i++) deg[i + 1] += deg[i];
-		const adj = new Uint32Array(deg[V]), fill = deg.slice(0, V);
-		for (const k of pairs) { const a = Math.floor(k / V), b = k % V; adj[fill[a]++] = b; adj[fill[b]++] = a; }
-		return (this._cageMesh = { vertices: V, idx: Uint32Array.from(tris), adjStart: deg, adj });
 	}
 
 	// Outward-only membrane: h_i = clamp(taut * mean_j <P_j + h_j N_j - P_i, N_i>, 0, max). On convex

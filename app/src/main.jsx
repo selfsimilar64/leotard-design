@@ -2,7 +2,8 @@ import { render } from 'preact';
 import { app } from './instance.js';
 import { withKnownPose } from './app.js';
 import { Shell, useShortcuts } from './ui/Shell.jsx';
-import { rev, stats, display, hideMannequin, libraryOpen, savedRev, fitStatus, compiling, settle } from './ui/state.js';
+import { rev, stats, display, hideMannequin, libraryOpen, savedRev, fitStatus, compiling, prewarming, settle } from './ui/state.js';
+import { prewarmFabrics } from './render/prewarm.js';
 import { curtainStep, curtainNote, liftCurtain } from './ui/curtain.js';
 import { loadDisplay, fitOptions } from './render/display.js';
 import { Viewport } from './render/viewport.js';
@@ -29,7 +30,6 @@ async function start(el) {
 	const body = await loadMannequins();
 	performance.mark?.('start: bodies loaded');
 	const d = display.value;
-	body.slide = d.slide; body.slideOpt = { ...body.slideOpt, shrink: d.slideTension, grip: d.slideGrip };
 	body.liftOpt = { taut: d.liftTaut, max: d.liftMax, reach: d.liftReach, method: d.liftMethod, ball: d.liftBall, seat: d.liftSeat, seatAlong: 1 / d.liftSeatAcross };
 	const engine = new Engine(viewport, body, buildReference(body));
 	engine.fitted.options = { ...engine.fitted.options, ...fitOptions(d) };
@@ -50,6 +50,25 @@ async function start(el) {
 	setInterval(() => { stats.value = { ...viewport.stats, stones: engine.stoneCount?.() ?? 0 }; }, 500);
 	performance.mark?.('start: design applied');
 	await reveal(engine);
+	prewarm(engine);
+	// a new studio lights the fabric differently: its variants are compiled once it is in (not for its sliders, which change no shader)
+	let rig = app.doc.scene.rig;
+	app.onChange((touched) => {
+		if (!touched.has('scene') || app.doc.scene.rig === rig) return;
+		rig = app.doc.scene.rig;
+		viewport.envReady?.then(() => prewarm(engine));
+	});
+}
+
+// Every fabric compiled in the background (render/prewarm.js), so picking one later is instant. The stage says so only
+// when it takes a while (a cold shader cache: about a minute; a warm one finishes in well under a second).
+function prewarm(engine) {
+	let timer = null;
+	prewarmFabrics(engine, ({ done, total, waiting }) => {
+		const share = done / total;
+		if (prewarming.value) prewarming.value = { share };
+		else if (waiting && !timer) timer = setTimeout(() => { prewarming.value = { share }; }, 1200);
+	}).finally(() => { clearTimeout(timer); prewarming.value = null; });
 }
 
 // The first frame, and the curtain lifted off it: the studio lit, a fitted garment fitted, then every shader the scene draws
