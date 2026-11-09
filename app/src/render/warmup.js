@@ -204,13 +204,14 @@ function compile(v, build) {
 	return mats;
 }
 
-// Compiles the jobs in turn, each waited for before the next; step() after each.
-async function run(v, list, step, deadline) {
-	for (const [label, build] of list) {
-		performance.mark?.('warm-up: ' + label); // (each job in the browser's performance timeline, as the curtain's steps)
-		const mats = compile(v, build), t = performance.now();
-		while (!isReady(v.renderer, mats, performance.now() - t > NUDGE_MS) && performance.now() < deadline) await tick();
-		step();
+// Waits for sent jobs (their materials, in the order sent, which is the order they compile in), asking outright (isReady's
+// nudge) once they have had `after` ms; the page is let go between any that held it (a genuine compile). step() as jobs end.
+async function settle(v, jobs, step, deadline, after = NUDGE_MS) {
+	const t0 = performance.now();
+	while (jobs.length && performance.now() < deadline) {
+		const t = performance.now(), nudge = t - t0 >= after;
+		while (jobs.length && isReady(v.renderer, jobs[0], nudge) && performance.now() - t < 50) { jobs.shift(); step(); }
+		if (jobs.length) await tick();
 	}
 }
 
@@ -219,7 +220,7 @@ let early = null; // the first part, once started: { promise, done, total, step,
 // The first part (earlyJobs), started as soon as the studio is lit (viewport.envReady), beside the bodies' loading: its
 // lights and environment are what every fabric variant is compiled for, and the engine's showing the design's studio
 // again changes neither (one kind of lighting, above).
-// Every job is sent at once, not one after another as run does: the GPU process compiles what it was sent in turn while the
+// Every job is sent at once, not one after another: the GPU process compiles what it was sent in turn while the
 // page builds the bodies, the engine and the design (one long task, which nothing could be sent beside). Nothing is asked
 // of them until warmUp waits for them (want): every question is a round trip to the GPU process that holds the page, and a
 // nudge (isReady) holds it for every compile queued ahead. Measured 2026-11-09 (B12, warm): sent 0.3 s of the page's time,
@@ -234,15 +235,9 @@ export function warmEarly(v, maxMs = 15 * 60 * 1000) {
 		const [scans] = await Promise.all([new TextureLibrary(v.renderer).list().catch(() => []), v.envReady]);
 		opt.scans = scans.length > 0;
 		performance.mark?.('warm-up: fabrics and finishes');
-		let jobs = list.map(([, build]) => compile(v, build));
+		const jobs = list.map(([, build]) => compile(v, build));
 		await wanted;
-		// in the order sent (the order they compile in), the page let go between any that held it (a genuine compile)
-		while (jobs.length && performance.now() < deadline) {
-			const t = performance.now();
-			while (jobs.length && isReady(v.renderer, jobs[0], true) && performance.now() - t < 50) { jobs.shift(); e.done++; }
-			e.step();
-			if (jobs.length) await tick();
-		}
+		await settle(v, jobs, () => { e.done++; e.step(); }, deadline, 0); // (they have had the bodies' and the design's time)
 	})().catch((err) => console.error('warm-up', err));
 }
 
@@ -257,11 +252,14 @@ export async function warmUp(engine, onProgress = () => {}, maxMs = 15 * 60 * 10
 	const step = () => onProgress({ done, total });
 	early.step = () => { done = early.done; step(); };
 	step();
+	// sent at once too, queued behind the first part's (measured 2026-11-09, B12 warm: 0.9 s one job after another)
+	performance.mark?.('warm-up: the rest');
+	const sent = list.map(([, build]) => compile(v, build));
 	early.want();
 	await early.promise;
 	performance.mark?.('warm-up: fabrics and finishes ready');
 	done = early.total;
-	await run(v, list, () => { done++; step(); }, deadline);
+	await settle(v, sent, () => { done++; step(); }, deadline);
 	performance.mark?.('warm-up: effects');
 	drawEffects(engine);
 	performance.mark?.('warm-up: done');

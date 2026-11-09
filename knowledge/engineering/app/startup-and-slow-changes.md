@@ -378,12 +378,48 @@ it holds the page for what is left of that compile (the curtain's motion is CSS 
 - Why sending at once compiles faster even cold (~21 s against ~40 s) is not established: fewer round trips and no
   lags, perhaps ANGLE's worker threads overlapping translations **[INFERRED]**.
 
+# Smaller studio photographs, the rest sent at once, the PDF library on demand (measured 2026-11-09)
+
+The owner asked for a smaller HDRI and any other straightforward small wins ("a lot of this will become negligible in a
+native desktop app"); they do not mind the room backdrop softening (the HDRI is not meant to be shown as a background),
+and asked only that reflections on chrome and gloss metals be checked.[^measured-2026-11-08]
+
+- **Studio photographs at 2K**: `pipeline/hdri_2k.py` writes `*_2k.hdr` (2048 x 1024, 6.5 MB) and `*_1k.hdr` (1024 x
+  512, 1.6 MB) beside Poly Haven's 4K files in `assets/hdri` (2 x 2 / 4 x 4 area averages, mean radiance unchanged to 4
+  decimals); `render/presets.js` RIGS load the 2K. The prefiltered environment follows the image's width (three's PMREM
+  cube face is width / 4: 1024 px at 4K, 512 at 2K, 256 at 1K), which changes every lit program's source once (the first
+  start after the change recompiles everything).
+- **The rest of the warm-up sent at once** (`render/warmup.js` warmUp, `settle`): the scene, crystals, hardware, lines
+  and editing jobs are compiled in one go right after the design, queued behind the fabrics, then waited for in order
+  (nudged after `NUDGE_MS`); ~0.25-0.3 s from the design to the effects frame, against ~1.1 s one job after another.
+- **The PDF library** (jspdf, `export/pdf.js`) is imported by `App.exportPattern` when a pattern is exported, not at the
+  start (checked: no jspdf request at the start; an export still writes its PDF).
+
+Measured on B12, warm, alternating the photograph on the same machine state (the machine ran ~1 s slower than earlier
+in the day on both):
+
+| Studio photograph | Studio lit (fabrics sent) | Curtain ready |
+|---|---|---|
+| 4K (before) | 2.2-2.4 s | 8.9-9.5 s (3 starts) |
+| 2K (now) | 1.1-1.4 s | 7.6-8.4 s (3 starts; 7.6-9.2 s over 7) |
+| 1K | 0.6-0.7 s | 7.3-7.7 s (3 starts) |
+
+Looks (three-quarter view, same page, the photograph swapped):
+
+- Ordinary fabrics on B12 (plain backdrop), 2K against 4K: 6% of pixels changed, median 1/765, 99th percentile 15/765,
+  max 55; what shows at 8x is the floor shadow's edge moved by a pixel or two (the key light's direction is found from
+  the photograph's brightest 0.5% of solid angle, `viewport.js keyDirection`, and lands a hair apart) and faint noise
+  on the crystals. The room backdrop is visibly softer at its sharp edges (accepted).
+- Mirror chrome on every piece with the Polished metal mannequin: 2K indistinguishable from 4K; **1K visibly softer**
+  (the windows reflected on the bust and the chrome arm lose their crisp edges). Liquid metallic foil with Brushed
+  metal: the three alike. So 1K would cost mirror-like reflections for ~0.3-0.5 s; left at 2K, the owner's call
+  (switching is the six file names in `render/presets.js`).
+- 89 programs at the start; shader tour 194 steps, nothing compiled (studios still share one set of variants).
+
 # Left to do [INFERRED]
 
 Ways to shorten the start now (put to the owner 2026-11-09; estimates from the measurements above):
 
-- The crystals, hardware and lines jobs could be sent at once too (they need the engine but not the design's
-  arrangement); ~1.4 s is left after the design on a warm start, the effects frame 0.5 s of it.
 - Decals (lettering and stamps) are 20-41% of a fabric variant's cold compile (above); drawn in a pass of their own
   they would leave every variant (a rewrite: their own surface following fit and pose, their own lighting and fold
   bumps, the stamps staying in the cloth, see-through fabrics, outline and picking).
@@ -394,8 +430,8 @@ Ways to shorten the start now (put to the owner 2026-11-09; estimates from the m
 - Cache the lift per body and pose (an instant switch back), or solve it in a worker so a pose
   change never holds the page.
 - Start the WebGPU device for the re-fit at the very start, beside the bodies.
-- The 4K studio photograph (25 MB) is parsed on the page; a 2K copy would light the same
-  (the prefiltered environment is far smaller) but the room backdrop would be softer: the owner's call.
+- The engine (~0.9-2 s) and the design (~1.4-2.9 s) are built in one long task on the page; nothing was profiled
+  inside them yet.
 
 [^code]: Source files listed in the frontmatter.
 [^owner-2026-11-08]: Conversation with the product owner, 2026-11-08.

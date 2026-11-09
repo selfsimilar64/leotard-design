@@ -25,7 +25,6 @@ import { defineCommand } from './doc/store.js';
 import { buildGarment, inheritPanels, evaluateAll } from './garment/build.js';
 import { showCells } from './render/debug.js';
 import { patternPieces } from './garment/pattern.js';
-import { patternPDF } from './export/pdf.js';
 import { FABRICS } from './materials/fabric.js';
 import { swatch } from './materials/swatches.js';
 import { SS as SS_TABLE, COLOURS as STONE_COLOURS } from './stones/library.js';
@@ -294,6 +293,8 @@ export class App {
 	}
 	// Printable full-scale PDF of the pattern: exports/<name>.pdf (dev server) or a download.
 	async exportPattern(name = (this.doc.meta.name || 'design') + ' pattern') {
+		// (the PDF library loads only now: it is ~0.4 MB the start does not need, 2026-11-09)
+		const { patternPDF } = await import('./export/pdf.js');
 		const pdf = patternPDF(await this.pattern(), { name: this.doc.meta.name });
 		const blob = pdf.output('blob'), file = safeName(name) + '.pdf';
 		const r = await fetch('/__fs/exports/' + file, { method: 'POST', body: blob }).catch(() => null);
