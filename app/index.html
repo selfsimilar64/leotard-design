@@ -4,8 +4,54 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Leotard Designer</title>
+	<style>
+		/* The curtain over the page while it starts (ui/curtain.js steps it, main.jsx lifts it at the first finished frame). Here,
+		   not in styles.css, so it is drawn before any script has loaded. A leotard in garnet satin with light running over it and
+		   crystals at the neckline catching it. Everything that moves is transform or opacity only: the compositor keeps it moving
+		   while the page's thread is busy building the garment. */
+		html, body { margin: 0; height: 100%; background: #edebe7; }
+		#curtain { position: fixed; inset: 0; z-index: 1000; display: grid; place-content: center; justify-items: center; background: radial-gradient(120% 90% at 50% 40%, #f7f5f1 0%, #edebe7 55%, #e3e0da 100%); color: #1f1d1a; font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), visibility 0s linear 0.7s; }
+		#curtain.lifted { opacity: 0; visibility: hidden; pointer-events: none; }
+		.curtain-figure { position: relative; width: 132px; height: 185px; margin-bottom: 30px; filter: drop-shadow(0 22px 26px rgba(70, 18, 44, 0.2)); transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); animation: curtain-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+		#curtain.lifted .curtain-figure { transform: translateY(-12px) scale(0.98); }
+		.curtain-leo { position: absolute; inset: 0; overflow: hidden;
+			-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 168'%3E%3Cpath d='M30 4L46 4C48 22 54 32 60 33C66 32 72 22 74 4L90 4C92 26 98 40 104 46C99 66 96 80 96 92C96 104 99 112 101 116C88 132 74 150 68 163L52 163C46 150 32 132 19 116C21 112 24 104 24 92C24 80 21 66 16 46C22 40 28 26 30 4Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+			mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 168'%3E%3Cpath d='M30 4L46 4C48 22 54 32 60 33C66 32 72 22 74 4L90 4C92 26 98 40 104 46C99 66 96 80 96 92C96 104 99 112 101 116C88 132 74 150 68 163L52 163C46 150 32 132 19 116C21 112 24 104 24 92C24 80 21 66 16 46C22 40 28 26 30 4Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
+		/* the satin: garnet, rounder at the middle of the body, darker where it turns away at the sides */
+		.curtain-satin { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20, 2, 12, 0.38), transparent 24%, transparent 76%, rgba(20, 2, 12, 0.38)), radial-gradient(70% 55% at 50% 42%, rgba(255, 214, 232, 0.2), transparent 70%), linear-gradient(170deg, #a5386a 0%, #7a1f4b 46%, #43102b 100%); }
+		/* the light running over it, as it does over stretch satin when the body turns */
+		.curtain-sheen { position: absolute; top: -20%; bottom: -20%; left: -70%; width: 70%; background: linear-gradient(100deg, transparent 0%, rgba(255, 232, 242, 0) 28%, rgba(255, 232, 242, 0.62) 50%, rgba(255, 232, 242, 0) 72%, transparent 100%); transform: translateX(0) skewX(-14deg); animation: curtain-sheen 3.4s cubic-bezier(0.45, 0.05, 0.25, 1) 0.4s infinite; }
+		/* crystals along the neckline: a small stone always, a glint now and then */
+		.curtain-stone { position: absolute; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #e9dde4 45%, #a99aa3); box-shadow: 0 0 2px rgba(255, 255, 255, 0.7); }
+		.curtain-stone::after { content: ''; position: absolute; left: 50%; top: 50%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; background: #fff; clip-path: polygon(50% 0, 56% 44%, 100% 50%, 56% 56%, 50% 100%, 44% 56%, 0 50%, 44% 44%); opacity: 0; transform: scale(0.2) rotate(0deg); animation: curtain-glint 3.4s ease-out infinite; animation-delay: inherit; }
+		.curtain-title { font: 400 22px/1.2 ui-serif, 'New York', 'Iowan Old Style', 'Sitka Heading', Georgia, 'Times New Roman', serif; letter-spacing: 0.015em; animation: curtain-fade 0.9s 0.15s both; }
+		.curtain-step { margin-top: 9px; min-height: 16px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.17em; text-transform: uppercase; color: #8f8a82; animation: curtain-fade 0.9s 0.3s both; }
+		.curtain-thread { position: relative; width: 150px; height: 1px; margin-top: 18px; overflow: hidden; background: rgba(35, 30, 24, 0.12); animation: curtain-fade 0.9s 0.3s both; }
+		.curtain-thread > span { position: absolute; inset: 0; background: linear-gradient(90deg, #7a1f4b, #c4698f); transform-origin: left center; transform: scaleX(var(--progress, 0.08)); transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
+		.curtain-note { margin-top: 14px; min-height: 17px; font-size: 12px; color: #8f8a82; text-align: center; max-width: 300px; }
+		@keyframes curtain-sheen { 0% { transform: translateX(0) skewX(-14deg); } 62%, 100% { transform: translateX(320%) skewX(-14deg); } }
+		@keyframes curtain-glint { 0%, 52% { opacity: 0; transform: scale(0.2) rotate(0deg); } 60% { opacity: 1; transform: scale(1) rotate(45deg); } 74%, 100% { opacity: 0; transform: scale(0.3) rotate(90deg); } }
+		@keyframes curtain-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+		@keyframes curtain-fade { from { opacity: 0; } to { opacity: 1; } }
+		@media (prefers-reduced-motion: reduce) { .curtain-sheen, .curtain-stone::after { animation: none; } .curtain-sheen { opacity: 0; } }
+	</style>
 </head>
 <body>
+	<div id="curtain" role="progressbar" aria-label="Opening Leotard Designer" aria-valuetext="Opening the studio">
+		<div class="curtain-figure" aria-hidden="true">
+			<div class="curtain-leo"><div class="curtain-satin"></div><div class="curtain-sheen"></div></div>
+			<!-- along the scoop of the neckline (the mask's path, 120 x 168, drawn at 132 x 185): the glints follow the sheen across -->
+			<span class="curtain-stone" style="left: 49.5px; top: 16px; animation-delay: 0.55s"></span>
+			<span class="curtain-stone" style="left: 54.2px; top: 30.1px; animation-delay: 0.68s"></span>
+			<span class="curtain-stone" style="left: 66px; top: 40.2px; animation-delay: 0.86s"></span>
+			<span class="curtain-stone" style="left: 77.8px; top: 30.1px; animation-delay: 1.04s"></span>
+			<span class="curtain-stone" style="left: 82.5px; top: 16px; animation-delay: 1.17s"></span>
+		</div>
+		<div class="curtain-title">Leotard Designer</div>
+		<div class="curtain-step">Opening the studio</div>
+		<div class="curtain-thread"><span></span></div>
+		<div class="curtain-note"></div>
+	</div>
 	<div id="root"></div>
 	<script type="module" src="/src/main.jsx"></script>
 </body>

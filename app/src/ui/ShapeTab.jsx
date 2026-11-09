@@ -30,11 +30,16 @@ export function ShapeTab() {
 // The drawn pieces stay in the design either way; their Front, Back and Sleeve panels dress the fitted pieces.
 function Garment({ doc }) {
 	const f = fittedOf(doc), started = doc.curves.length > 0;
+	// a fitted garment loads its file and is fitted on the body shown (a second or two): the pick shows at once, the stage says so until it is on show
+	const [pending, setPending] = useState(undefined);
 	if (!started) return null;
-	const pick = (key) => run({ op: 'fitted.set', key });
+	const pick = async (key) => {
+		setPending(key);
+		try { await slow(key ? 'Fitting the garment…' : 'Changing the garment…', () => run({ op: 'fitted.set', key })); } finally { setPending((p) => (p === key ? undefined : p)); }
+	};
 	return (
 		<Section title="Garment">
-			<Segmented wrap value={f?.key ?? null} onPick={pick}
+			<Segmented wrap value={pending !== undefined ? pending : f?.key ?? null} onPick={pick}
 				options={[[null, 'Drawn', null, 'The pieces drawn on the body, shaped by the options below'], ...FITTED.map((x) => [x.key, x.label, null, x.hint ?? `${x.leg}; drafted from a textbook block and fitted by simulation on the ${x.fittedOn} body`])]} />
 			{f ? <Hint>Fitted on the {f.fittedOn} body. The options below shape the drawn pieces, not this one; its fabric comes from the Front, Back and Sleeve pieces.</Hint> : null}
 			{f ? <FitSize doc={doc} /> : null}

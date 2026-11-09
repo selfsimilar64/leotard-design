@@ -4,7 +4,7 @@
 // library (ui/Library.jsx) opens over everything.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { drawnLines, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, fitStatus, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, savedRev, prefs, setPref } from './state.js';
+import { drawnLines, rev, stonesRun, selection, tool, layout, stats, toast, notify, display, fitStatus, designsRev, showStats, hideOverlay, showHandles, hideMannequin, libraryOpen, busy, compiling, savedRev, prefs, setPref } from './state.js';
 import { Panel, pickTab } from './Panel.jsx';
 import { Library } from './Library.jsx';
 import { FlatView } from './FlatView.jsx';
@@ -288,9 +288,10 @@ function StageHint() {
 }
 
 function Busy() {
-	// a slow change the UI asked for, or a fitted garment being re-fitted (render/fitted.js: the view holds its last frame meanwhile)
-	const b = busy.value ?? (fitStatus.value.state === 'fitting' ? { text: 'Fitting the leotard…' } : null);
-	return b ? <div class="busy" role="status"><span class="spinner" /><span>{b.text}</span></div> : null;
+	// a slow change the UI asked for, a fitted garment being re-fitted (render/fitted.js), or new shaders compiling
+	// (render/viewport.js prepare): the view holds its last frame meanwhile
+	const b = busy.value ?? (fitStatus.value.state === 'fitting' ? { text: 'Fitting the leotard…' } : compiling.value ? { text: 'Preparing the materials…' } : null);
+	return b ? <div class="stage-busy" role="status"><span class="spinner" /><span>{b.text}</span><span class="busy-sheen" /></div> : null;
 }
 
 function Hud() {

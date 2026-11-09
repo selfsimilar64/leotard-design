@@ -424,6 +424,16 @@ export class Engine {
 		this.applyBody(this.app.doc.body, true, false);
 	}
 
+	// Resolves once what the last change asked for is on show, so the interface can say it is working until then (ui/state.js
+	// slow): no body waiting for its files (applyBody), no fitted garment loading, no studio loading, no frame held (a fitted
+	// garment's re-fit, render/fitted.js; shaders compiling, render/viewport.js prepare). It waits a frame first: the view finds
+	// new shaders in its frame. maxMs: it gives up waiting then, whatever is still under way.
+	async settled(maxMs = 120000) {
+		const v = this.viewport, t0 = performance.now();
+		await new Promise((r) => { requestAnimationFrame(r); setTimeout(r, 100); });
+		while ((this.pendingBody || this.fitted.loading || v.envPending || v.holds.size) && performance.now() - t0 < maxMs) await new Promise((r) => setTimeout(r, 50));
+	}
+
 	// Which body, pose, head and expression, full figure or dress form, its finish, its stand.
 	// wait: false applies at once, without waiting for the person's files (see below)
 	applyBody(b, force, wait = true) {

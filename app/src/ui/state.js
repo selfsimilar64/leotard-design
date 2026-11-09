@@ -25,6 +25,7 @@ export const hideMannequin = signal(false); // the leotard floats with the manne
 export const libraryOpen = signal(false);  // the designs library over the whole window
 export const fitStatus = signal({ state: 'off' }); // a fitted garment's re-fit (render/fitted.js status): the busy note and the settings panel
 export const busy = signal(null);          // { text } while a slow change (a new shape, a design) is applied
+export const compiling = signal(false);    // new shaders compiling before they are drawn (render/viewport.js prepare)
 export const savedRev = signal(-1);        // the design's revision when it was last saved or opened
 
 // Which tab shows a selected part: a piece's fabric, a line's or strap's shape, stones and logos.
@@ -54,11 +55,18 @@ export function edit(app, cmd, side) {
 }
 
 // Runs a change that holds the page for a while (a new neckline re-cuts and re-flattens the
-// garment, ~1-5 s) after the interface has shown that it is working on it.
+// garment, ~1-5 s; a new body or pose re-solves the fit, ~1 s, then re-fits a fitted garment)
+// after the interface has shown that it is working on it, and goes on saying so until the result
+// is on show (settle.wait: render/engine.js settled, set by main.jsx). Changes may overlap (a
+// second pose picked while the first is fitted): the note shows the latest one under way.
+export const settle = { wait: () => Promise.resolve() };
+let jobs = [];
+const showJob = () => { busy.value = jobs.length ? jobs[jobs.length - 1] : null; };
 export async function slow(text, fn) {
-	busy.value = { text };
+	const job = { text };
+	jobs.push(job); showJob();
 	await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-	try { return await fn(); } finally { busy.value = null; }
+	try { const out = await fn(); await settle.wait(); return out; } finally { jobs = jobs.filter((j) => j !== job); showJob(); }
 }
 
 // Interface preferences of this computer (not the design's): kept in the browser.

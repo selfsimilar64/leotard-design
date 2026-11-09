@@ -146,7 +146,8 @@ export class FittedView {
 	async load(f, doc) {
 		const want = this.key, url = import.meta.env.BASE_URL + (f.local ? 'fitted-local/' : 'fitted/') + f.file + '.json'; // local: dev-only, garment/fitted.js
 		let data;
-		try { data = await (await fetch(url)).json(); } catch (e) { console.error('fitted garment', url, e); return; }
+		this.loading = true; // (render/engine.js settled: the interface says it is working until the garment is in)
+		try { data = await (await fetch(url)).json(); } catch (e) { console.error('fitted garment', url, e); return; } finally { if (this.key === want) this.loading = false; }
 		if (this.key !== want) return; // asked for another meanwhile
 		this.data = data;
 		this.on = new Set(data.cells.flatMap((c) => c.hostI));

@@ -1,6 +1,7 @@
 // The Stage tab: how the design is presented. The mannequin (shown or hidden, its finish and
 // colour), its age and build, its pose; the photo studio that lights it, its brightness and turn,
 // what is behind the figure; sparkle glow and crystal glare. None of it changes the leotard.
+import { useState } from 'preact/hooks';
 import { app } from '../instance.js';
 import { rev, hideMannequin, slow } from './state.js';
 import { run, Section, Field, Tiles, Segmented, Swatches, Slider, Switch, thumb } from './kit.jsx';
@@ -48,11 +49,18 @@ function Body({ b }) {
 	}));
 	const poses = catalogue.poses.map((p) => ({ key: p.key, label: shortPose(p.key === 'a-pose' ? POSE_LABELS['a-pose'] : p.label), hint: p.key === 'a-pose' ? POSE_LABELS['a-pose'] : p.label, img: thumb('poses', p.key) }));
 	const poseKey = typeof b.pose === 'string' ? b.pose : null;
-	const set = (patch, what) => slow(what, () => run({ op: 'body.set', ...patch }));
+	// the tile picked shows as chosen, with a spinner, from the click until the body is on show (the re-solve holds the page ~1 s)
+	const [pending, setPending] = useState(null); // { k: 'size' | 'pose', v }
+	const set = async (patch, what) => {
+		const [k, v] = Object.entries(patch)[0];
+		setPending({ k, v });
+		try { await slow(what, () => run({ op: 'body.set', ...patch })); } finally { setPending((p) => (p?.k === k && p.v === v ? null : p)); }
+	};
+	const shown = (k, cur) => (pending?.k === k ? pending.v : cur), spin = (k) => (pending?.k === k ? pending.v : null);
 	return (
 		<>
-			<Section title="Age and build" id="stage-body"><Tiles cols={3} value={b.size} items={sizes} onPick={(v) => set({ size: v }, 'Changing the body…')} /></Section>
-			<Section title="Pose" id="stage-pose"><Tiles cols={4} compact value={poseKey} items={poses} onPick={(v) => set({ pose: v }, 'Posing…')} /></Section>
+			<Section title="Age and build" id="stage-body"><Tiles cols={3} value={shown('size', b.size)} busyKey={spin('size')} items={sizes} onPick={(v) => set({ size: v }, 'Changing the body…')} /></Section>
+			<Section title="Pose" id="stage-pose"><Tiles cols={4} compact value={shown('pose', poseKey)} busyKey={spin('pose')} items={poses} onPick={(v) => set({ pose: v }, 'Posing…')} /></Section>
 		</>
 	);
 }
@@ -63,9 +71,15 @@ const BACKDROPS = ['#d9d8d4', '#f4f4f2', '#9a9b9f', '#4a4b50', '#1d1d21', '#d8cf
 function Studio({ s }) {
 	const r = RIGS[s.rig] ?? {}, hdri = !!r.hdri, room = s.backdrop === 'room', colour = s.backdropColour ?? BACKDROP_COLOUR;
 	const set = (patch, g) => run({ op: 'scene.set', ...patch, gesture: g });
+	// a new studio loads its photograph (~25 MB) and lights the fabric anew: the tile shows the pick until it is on show
+	const [pending, setPending] = useState(null);
+	const pickRig = async (v) => {
+		setPending(v);
+		try { await slow('Changing the studio…', () => set({ rig: v })); } finally { setPending((p) => (p === v ? null : p)); }
+	};
 	return (
 		<Section title="Studio" id="stage-studio">
-			<Tiles cols={4} compact value={s.rig} onPick={(v) => set({ rig: v })}
+			<Tiles cols={4} compact value={pending ?? s.rig} busyKey={pending} onPick={pickRig}
 				items={Object.keys(RIGS).map((k) => ({ key: k, label: k.replace(/ studio/, '').replace(/^./, (c) => c.toUpperCase()), hint: k, img: thumb('environments', k) }))} />
 			<Field label="Brightness"><Slider value={s.exposure} min={0.3} max={2.5} format={(v) => Math.round(v * 100) + '%'} onChange={(v, g) => set({ exposure: v }, g)} /></Field>
 			<Field label="Turn the lights"><Slider value={s.envRotation} min={0} max={6.283} format={(v) => Math.round(v * 180 / Math.PI) + '°'} onChange={(v, g) => set({ envRotation: v }, g)} /></Field>

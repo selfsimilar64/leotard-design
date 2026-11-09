@@ -34,7 +34,7 @@ finished designs and saves live in a full-window **library**. Supersedes the sid
 | Place | Contents |
 |---|---|
 | Top bar | Designs (opens the library), the design's name (serif, edit in place), its state (Saved / Unsaved changes / Not saved yet, `savedRev` against `app.revision`); undo, redo; Pattern (the pattern pieces beside the model), Export (the PDF pattern), Save; settings |
-| Stage | the 3D view; with Pattern on, the flat pieces beside it (`ui/FlatView.jsx`); the **view bar** floating at the bottom (the crystal count, whole design and the group chosen; Front, ¾, Side, Back, lines on/off, mannequin on/off, a chosen pattern's handles on/off, fit); a chosen pattern's handles over the view (`render/gizmo.js`); the **mode bar** at the top while a tool is on; a busy chip (top right) while a slow change runs; toasts; the frame-rate read-out |
+| Stage | the 3D view; with Pattern on, the flat pieces beside it (`ui/FlatView.jsx`); the **view bar** floating at the bottom (the crystal count, whole design and the group chosen; Front, ¾, Side, Back, lines on/off, mannequin on/off, a chosen pattern's handles on/off, fit); a chosen pattern's handles over the view (`render/gizmo.js`); the **mode bar** at the top while a tool is on; a busy note (top centre since 2026-11-08, until the change is on show: [slow changes](/engineering/app/startup-and-slow-changes.md)) while a slow change runs; toasts; the frame-rate read-out |
 | Panel | the four tabs (sliding underline); one vertical scroller per tab page |
 | Library | over everything: Start fresh (the six starting points), Finished designs (`designs/b<n>-*`), Your designs (other saves); each a front-and-back picture |
 | Settings popover | display (resolution, smooth edges, shadows as segments; lower resolution while turning, glow, contact shadows as switches), Working (the view turns to the part being changed), fabric fit (experimental, folded), performance |
@@ -56,7 +56,7 @@ hint on the stage says how to turn, zoom and pick a piece (`prefs.hintDone`).
   3-column grid of close-up options. Opening a row glides the camera to that element
   (`ui/camera.js focusOn`, when `prefs.followCamera`). A pick dry-runs `block.set` and asks inline
   when it would take something away (the Ask card), as before; the change itself runs through
-  `slow()` so the busy chip shows before the re-cut holds the page. *Lines and straps*: Draw a
+  `slow()` so the busy note shows before the re-cut holds the page. *Lines and straps*: Draw a
   seam / Draw a strap (the pen and strap tools, their options inline), and the drawn lines
   (curves without a `block` key, not strap paths) and straps as rows. A selected line or strap gets
   its own page (back to Shape): kind, mirror, closed, finish as cross-section icon tiles (turned

@@ -146,6 +146,8 @@ export class Viewport {
 		this.onFrame = new Set();
 		this.onTick = new Set(); // every frame, drawn or not: work the other views wait on (render/engine.js lays the stones here)
 		this.holds = new Set(); // while any holder is in it, frames are not drawn (frame)
+		this.shaderKey = null; // what the scene's shaders were last compiled for (checkShaders)
+		this.onCompiling = new Set(); // fn(true | false): shaders compiling (the interface's busy note)
 		this.onResize = new Set();
 		this.stats = { fps: 0, cpuMs: 0, triangles: 0, width: 0, height: 0 };
 		this.timer = new THREE.Timer();
@@ -155,7 +157,8 @@ export class Viewport {
 		// Resizing the canvas clears it. The observer runs after the frame was drawn and before the
 		// page is painted, so it draws again at once: otherwise that frame showed black (the flicker
 		// the owner saw while orbiting, when dynamic resolution changed the size twice a second).
-		new ResizeObserver(() => { if (this.resize() && this.container.clientWidth) this.render(); }).observe(container);
+		// (Not while the page is starting or shaders compile: that draw would compile them on the page, the stall prepare avoids.)
+		new ResizeObserver(() => { if (this.resize() && this.container.clientWidth && this.mayDraw()) this.render(); }).observe(container);
 		this.resize();
 		// (WebGPU: once the device is in; three starts its own initialisation when the loop is set, on a device of its own)
 		if (gpu) this.ready.then(() => renderer.setAnimationLoop(() => this.frame())); else renderer.setAnimationLoop(() => this.frame());
@@ -200,10 +203,13 @@ export class Viewport {
 		this.bloom.strength = this.settings.bloom * this.bloomK; // (as frame() does: a page that draws no frames captures with it too)
 		this.showHdri(null);
 		this.showStudio(null);
-		if (r.areas) { this.showStudio(r); return; }
-		// until the studio has loaded, the last environment stays on show
+		if (r.areas) { this.showStudio(r); this.envReady = Promise.resolve(); this.envPending = false; return; }
+		// until the studio has loaded, the last environment stays on show. envReady: the start waits for it (main.jsx), as a
+		// slow change does (envPending, render/engine.js settled)
 		const want = this.settings.rig;
-		this.hdri(r.hdri).then((h) => { if (this.settings.rig === want) this.showHdri(r, h); }, (e) => console.error('hdri', e));
+		const p = this.envReady = this.hdri(r.hdri).then((h) => { if (this.settings.rig === want) this.showHdri(r, h); }, (e) => console.error('hdri', e));
+		this.envPending = true;
+		p.then(() => { if (this.envReady === p) this.envPending = false; });
 	}
 
 	// An HDRI studio: its equirectangular image (the skybox), the lighting prefiltered from it, and
@@ -319,12 +325,68 @@ export class Viewport {
 		this.bloom.enabled = d.bloom;
 		this.skinPass.enabled = this.scenePass.keepSkinMark = d.skin;
 		this.aoPass.enabled = d.ao;
-		if (this.resize() && this.container.clientWidth) this.render();
+		if (this.resize() && this.container.clientWidth && this.mayDraw()) this.render();
 	}
+
+	// Shaders are compiled off the page before anything is drawn with them. A material variant drawn for the first time (a fabric
+	// kind not on show before, a new studio's lighting, the start) otherwise compiles inside that frame and holds the whole page:
+	// the fabric shader is ~145k characters and each kind on show is a variant of it, 6-14 s each on ANGLE/D3D11 when the GPU
+	// process's shader cache misses (the first start after a shader change; 2026-11-08 the start took ~55 s that way, ~9 s warm).
+	// three compiles them with KHR_parallel_shader_compile and is asked when each is done without waiting (compileAsync's
+	// method); meanwhile frames hold the last one (holds) and the page stays responsive. Measured 2026-11-08: a cold compile of
+	// the fabric took 13.5 s of wall time with the page never stalling more than 28 ms, and the frame after it drew in 27 ms.
+	// They are compiled as the scene pass draws them (into its target: a variant drawn into a target differs from one drawn to
+	// the screen, its tone mapping and colour space, so compiling for the screen left the 9 s stall in place). Only what is
+	// visible: a hidden part's shaders wait until it is shown. -> a Promise, resolved when everything shown can be drawn.
+	prepare() {
+		const r = this.renderer, cam = this.camera, mats = new Set();
+		if (this.webgpu || !this.scenePass?.target) return Promise.resolve();
+		r.setRenderTarget(this.scenePass.target);
+		this.scene.traverseVisible((o) => {
+			if (o.material && (o.isMesh || o.isPoints || o.isLine || o.isSprite) && o.layers.test(cam.layers)) for (const m of r.compile(o, cam, this.scene)) mats.add(m);
+		});
+		r.setRenderTarget(null);
+		const waiting = () => { for (const m of mats) if (r.properties.get(m).currentProgram?.isReady() === false) return true; return false; };
+		if (!waiting()) return Promise.resolve();
+		const t0 = performance.now(), MAX_MS = 120000; // (a program that never reports done must not hold the view for ever)
+		this.holds.add('shaders');
+		for (const fn of this.onCompiling) fn(true);
+		return (this.compiling = new Promise((resolve) => {
+			const check = () => {
+				if (waiting() && performance.now() - t0 < MAX_MS) { setTimeout(check, 30); return; }
+				this.holds.delete('shaders'); this.compiling = null;
+				for (const fn of this.onCompiling) fn(false);
+				resolve();
+			};
+			setTimeout(check, 30);
+		}));
+	}
+
+	// A cheap key, each frame, of what the scene's shaders depend on: its visible materials (a new one, or needsUpdate), its
+	// environment and its lights. When it changes the scene is compiled again (prepare); a material compiled before is a cache hit.
+	checkShaders() {
+		if (this.webgpu) return;
+		let k = this.scene.environment?.id ?? 0, lights = 0;
+		this.scene.traverseVisible((o) => {
+			if (o.isLight) lights += o.castShadow ? 1001 : 1;
+			const m = o.material;
+			if (m) for (const x of Array.isArray(m) ? m : [m]) k = (Math.imul(k, 31) + x.id * 8191 + x.version) | 0;
+		});
+		const key = k + ':' + lights;
+		if (key === this.shaderKey) return;
+		this.shaderKey = key;
+		if (!this.compiling) this.prepare();
+		else this.compiling.then(() => { this.shaderKey = null; }); // (looked at again once the compile under way is done)
+	}
+
+	// Whether a frame may be drawn outside the loop (a resize): not while the page is starting or shaders compile.
+	mayDraw() { return !this.holds.has('startup') && !this.holds.has('shaders'); }
 
 	frame() {
 		this.timer.update();
 		const dt = this.timer.getDelta(), start = performance.now(), s = this.settings;
+		// (the start compiles the scene itself, once its studio and garment are in: main.jsx)
+		if (this.isReady && !this.holds.has('startup')) this.checkShaders();
 		// something is still being worked out for what is about to be shown (a fitted garment's re-fit on a new pose: render/fitted.js):
 		// the last frame stays on screen, so the half-made state is never drawn
 		if (this.holds.size) return;
