@@ -149,6 +149,15 @@ What that costs, measured on the GTX 1650 (Chrome 152, ANGLE/D3D11):[^measured-2
   garments (1 each). Every fabric on every kind of mesh in every lighting multiplies: roughly 150 fabric-shader
   variants in all **[INFERRED]** from the tour's counts.
 
+What splits a fabric variant (three's program keys decoded, 2026-11-09): the fabric's own features (about nine
+families: sheen; sheen + anisotropy; satin's switches; duotone satin's; clearcoat + sheen + anisotropy; none;
+iridescence; sheer with sheen; sheer without), the mannequin's finish (its skin is the fabric shader, `|skin`), the
+lights (photographed studios: one directional sun with shadow, the HDRI's prefiltered size 4096, so all six
+share one set; each softbox studio adds its own count of rect area lights and its own smaller environment), and
+whether the sun casts shadows (Settings › Shadows Off; Soft and Detailed only change the map's size). A piece, an
+edge and a strap in the same fabric share one program (compared directly on b6): the mesh kind does not split them.
+"Contact shadows" is the AO post pass and does not touch the fabric shader.
+
 So with the shader as it is, all of them at the start would be about ten minutes the first time and most of a minute
 added to every launch **[INFERRED]**. Ways down, none changing a look: shadows off drawn as an empty shadow map
 (no variant), the two-light softbox padded to six dark lights, one attribute set for every fabric mesh, satin's
