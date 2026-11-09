@@ -13,9 +13,14 @@
 // The shader tour (dev/shader-tour.js) is the check: a step of it that compiles means a case is missing here.
 //
 // Compiled into the scene pass's target, as Viewport.prepare does (a variant drawn into a target differs from one
-// drawn to the screen), one at a time (the GPU process compiles one at a time anyway), each waited for before the next.
+// drawn to the screen); the GPU process compiles one at a time anyway.
+//
+// In two parts: the fabrics and the mannequin's finishes need only the studio's lighting, so they start as soon as it is
+// lit, beside the bodies' loading and the design (warmEarly, from main.jsx start); the rest needs the engine and the
+// design and follows (warmUp, from main.jsx reveal, which waits for the first part), one job at a time, each waited for.
 import * as THREE from 'three';
 import { createFabricMaterial, applyFabric, fabricSide, FABRICS } from '../materials/fabric.js';
+import { TextureLibrary } from '../materials/textures.js';
 import { MANNEQUIN_FINISHES } from './presets.js';
 import { setFinish } from './engine.js';
 import { finishSurface } from './figure.js';
@@ -53,17 +58,17 @@ function bare() {
 }
 
 // The jobs: [label, () => [Object3D, ...]] in the order they run; each builds what it compiles (and keeps nothing).
-function jobs(engine, scans) {
-	const v = engine.viewport, view = engine.stoneView, out = [], g = standIn();
+// The first part's: what needs only the lit studio (every fabric, the mannequin's finishes). opt.scans: whether there are
+// scanned fabrics (known once the jobs run).
+function earlyJobs(opt) {
+	const out = [], g = standIn();
 	const mesh = (m) => new THREE.Mesh(g, m);
-	// the scene as it is, hidden parts too (the studio room's dome, the floor that shows shadows, a stand, the overlays)
-	out.push(['the scene', () => [v.scene]]);
 	// every fabric, with its inside hidden (the mannequin shown) and shown (hidden: the leotard is drawn from inside too,
 	// render/garment.js setDoubleSided), sides as materials/fabric.js fabricSide gives them: one program for an opaque fabric,
 	// a see-through one's one-sided and two-sided; a sheer scan makes its base fabric sheer (materials/fabric.js applyTexture)
 	for (const key of Object.keys(FABRICS)) {
 		if (SKIP.has(key)) continue;
-		out.push([`fabric ${key}`, () => (scans && SCAN_BASES.has(key) ? [false, true] : [false]).flatMap((sheerScan) => {
+		out.push([`fabric ${key}`, () => (opt.scans && SCAN_BASES.has(key) ? [false, true] : [false]).flatMap((sheerScan) => {
 			const make = (inside) => {
 				const m = createFabricMaterial(5);
 				applyFabric(m, key, '#808080', 'Tone-on-tone');
@@ -89,6 +94,15 @@ function jobs(engine, scans) {
 			return [mesh(m), mesh(cap)];
 		}]);
 	}
+	return out;
+}
+
+// The second part's: what needs the engine and the design.
+function jobs(engine) {
+	const v = engine.viewport, view = engine.stoneView, out = [], g = standIn();
+	const mesh = (m) => new THREE.Mesh(g, m);
+	// the scene as it is, hidden parts too (the studio room's dome, the floor that shows shadows, a stand, the overlays)
+	out.push(['the scene', () => [v.scene]]);
 	// the crystals, each family two ways: laid on the CPU (instanced: stones/view.js meshFor) and placed by the GPU from a
 	// piece's atlas (stones/gpu-view.js PackView.side), with the atlas's own drawing
 	const shapeOf = (fam) => Object.keys(SHAPES).find((k) => (SHAPES[k].family ?? 'crystal') === fam);
@@ -154,27 +168,102 @@ function drawEffects(engine) {
 	v.applyDisplay(d);
 }
 
-// onProgress({ done, total, label }). -> a Promise, resolved when every shader is ready (or after maxMs, whatever is left).
-export async function warmUp(engine, onProgress = () => {}, maxMs = 15 * 60 * 1000) {
-	const v = engine.viewport, r = v.renderer, cam = v.camera, t0 = performance.now();
-	if (v.webgpu || !v.scenePass?.target) return;
-	const list = jobs(engine, (await engine.textures?.list().catch(() => []))?.length > 0);
-	let done = 0;
-	for (const [label, build] of list) {
-		onProgress({ done, total: list.length + 1, label });
-		performance.mark?.('warm-up: ' + label); // (each job in the browser's performance timeline, as the curtain's steps)
-		const objects = build(), mats = new Set();
-		r.setRenderTarget(v.scenePass.target);
-		for (const o of objects) for (const m of r.compile(o, cam, v.scene)) mats.add(m);
-		r.setRenderTarget(null);
-		const waiting = () => [...mats].some((m) => r.properties.get(m).currentProgram?.isReady() === false);
-		while (waiting() && performance.now() - t0 < maxMs) await new Promise((res) => setTimeout(res, 25));
-		held.push(...objects.filter((o) => o !== v.scene));
-		done++;
+// How long a program may take to say it is ready before it is asked outright (isReady). One read from the browser's shader
+// cache is ready in ~0.06-0.12 s.
+const NUDGE_MS = 250;
+
+// Whether a job's programs are ready. three asks KHR_parallel_shader_compile's
+// COMPLETION_STATUS_KHR, which never waits; here (Chrome 152, ANGLE/D3D11) it kept answering "not yet" for ~2.46 s after a
+// program had linked, on about half the warm starts, one program each time, a different one (measured 2026-11-09: the GPU
+// process meanwhile answered another context's reads at once, and LINK_STATUS asked of the waiting program returned true at
+// once, after which it read ready). So a program not ready after NUDGE_MS is asked LINK_STATUS, which waits for the link: on
+// a genuine compile (the first start after an update) that holds the page for what is left of it, the curtain's motion
+// being CSS and carrying on.
+// -> whether every material's program is ready; nudge: those not yet are asked LINK_STATUS first.
+function isReady(r, mats, nudge) {
+	const gl = r.getContext();
+	let all = true;
+	for (const m of mats) {
+		const p = r.properties.get(m).currentProgram;
+		if (!p || p.isReady()) continue;
+		if (nudge) gl.getProgramParameter(p.program, gl.LINK_STATUS);
+		all &&= p.isReady();
 	}
-	onProgress({ done, total: list.length + 1, label: 'effects' });
+	return all;
+}
+
+const tick = () => new Promise((res) => setTimeout(res, 25));
+
+// Starts compiling a job: its objects' materials into the scene pass's target, kept (held). -> the materials.
+function compile(v, build) {
+	const r = v.renderer, objects = build(), mats = new Set();
+	r.setRenderTarget(v.scenePass.target);
+	for (const o of objects) for (const m of r.compile(o, v.camera, v.scene)) mats.add(m);
+	r.setRenderTarget(null);
+	held.push(...objects.filter((o) => o !== v.scene));
+	return mats;
+}
+
+// Compiles the jobs in turn, each waited for before the next; step() after each.
+async function run(v, list, step, deadline) {
+	for (const [label, build] of list) {
+		performance.mark?.('warm-up: ' + label); // (each job in the browser's performance timeline, as the curtain's steps)
+		const mats = compile(v, build), t = performance.now();
+		while (!isReady(v.renderer, mats, performance.now() - t > NUDGE_MS) && performance.now() < deadline) await tick();
+		step();
+	}
+}
+
+let early = null; // the first part, once started: { promise, done, total, step, want }
+
+// The first part (earlyJobs), started as soon as the studio is lit (viewport.envReady), beside the bodies' loading: its
+// lights and environment are what every fabric variant is compiled for, and the engine's showing the design's studio
+// again changes neither (one kind of lighting, above).
+// Every job is sent at once, not one after another as run does: the GPU process compiles what it was sent in turn while the
+// page builds the bodies, the engine and the design (one long task, which nothing could be sent beside). Nothing is asked
+// of them until warmUp waits for them (want): every question is a round trip to the GPU process that holds the page, and a
+// nudge (isReady) holds it for every compile queued ahead. Measured 2026-11-09 (B12, warm): sent 0.3 s of the page's time,
+// ready before the design was in; the curtain lifted at 8.5-8.8 s, against 9.1-9.4 s sending them at once only after the
+// design and ~10.4 s or more one job after another.
+export function warmEarly(v, maxMs = 15 * 60 * 1000) {
+	if (early || v.webgpu || !v.scenePass?.target) return;
+	const deadline = performance.now() + maxMs, opt = { scans: false }, list = earlyJobs(opt);
+	const e = early = { done: 0, total: list.length, step: () => {} };
+	const wanted = new Promise((res) => { e.want = res; });
+	e.promise = (async () => {
+		const [scans] = await Promise.all([new TextureLibrary(v.renderer).list().catch(() => []), v.envReady]);
+		opt.scans = scans.length > 0;
+		performance.mark?.('warm-up: fabrics and finishes');
+		let jobs = list.map(([, build]) => compile(v, build));
+		await wanted;
+		// in the order sent (the order they compile in), the page let go between any that held it (a genuine compile)
+		while (jobs.length && performance.now() < deadline) {
+			const t = performance.now();
+			while (jobs.length && isReady(v.renderer, jobs[0], true) && performance.now() - t < 50) { jobs.shift(); e.done++; }
+			e.step();
+			if (jobs.length) await tick();
+		}
+	})().catch((err) => console.error('warm-up', err));
+}
+
+// The rest, once the design is in, after the first part (started here if it was not). onProgress({ done, total }) over
+// both parts. -> a Promise, resolved when every shader is ready (or after maxMs, whatever is left).
+export async function warmUp(engine, onProgress = () => {}, maxMs = 15 * 60 * 1000) {
+	const v = engine.viewport, deadline = performance.now() + maxMs;
+	if (v.webgpu || !v.scenePass?.target) return;
+	warmEarly(v, maxMs);
+	const list = jobs(engine), total = early.total + list.length + 1;
+	let done = early.done;
+	const step = () => onProgress({ done, total });
+	early.step = () => { done = early.done; step(); };
+	step();
+	early.want();
+	await early.promise;
+	performance.mark?.('warm-up: fabrics and finishes ready');
+	done = early.total;
+	await run(v, list, () => { done++; step(); }, deadline);
 	performance.mark?.('warm-up: effects');
 	drawEffects(engine);
 	performance.mark?.('warm-up: done');
-	onProgress({ done: list.length + 1, total: list.length + 1, label: '' });
+	onProgress({ done: total, total });
 }

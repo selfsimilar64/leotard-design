@@ -43,6 +43,10 @@ To make that a wait of seconds rather than minutes the variants were cut where t
 - Then the owner had opaque fabrics drawn on both sides always, the inside discarded in the shader while hidden
   (`materials/fabric.js fabricSide`): one program per fabric instead of two, 89 programs at the start; a warm start's
   warm-up ~4.9 s; looks identical.
+- Then the fabrics and finishes were sent to compile all at once as soon as the studio is lit, beside the bodies' loading
+  (`render/warmup.js warmEarly`), and the warm starts' "one miss" proved a ready status lagging ~2.46 s behind the link,
+  now cut short by asking `LINK_STATUS` after 250 ms: the curtain lifts at ~8.5 s warm on B12 (was 11.0 s, 13.4 s with
+  the stall) and ~20 s after a fabric-shader change (was 39.5 s). Still every shader before the curtain lifts.
 - `?quick` in the address compiles only what the design shows, for look-dev reloads after a shader change.
 - The shader tour (`app/src/dev/shader-tour.js`) is the check: after the start it walks every option a designer can
   reach and lists any step that compiled. When the app gains a material, a mesh kind or a lighting change, the warm-up

@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: Start-up curtain, shader pre-compiling and slow changes
-description: "Why the app's first start took ~55 s on a cold shader cache (the ~145k-character fabric shader compiled per variant, twice over) and how it now starts: a curtain drawn by index.html before any script, frames held until the studio, the fit and every shader are in, shaders compiled off the page with KHR_parallel_shader_compile into the scene pass's target (Viewport.prepare, also every frame a new variant appears), and slow changes (pose, body, studio, garment) showing the pick at once and a stage note until the result is on show (Engine.settled). Since 2026-11-09 every shader is compiled behind the curtain (render/warmup.js) and each fabric's shader holds only its own effects (fabricDefines): curtain at 52-69 s on a cold cache (was 160 s), ~14.5 s warm, with where that time goes and what is left to speed up."
+description: "Why the app's first start took ~55 s on a cold shader cache (the ~145k-character fabric shader compiled per variant, twice over) and how it now starts: a curtain drawn by index.html before any script, frames held until the studio, the fit and every shader are in, shaders compiled off the page with KHR_parallel_shader_compile into the scene pass's target (Viewport.prepare, also every frame a new variant appears), and slow changes (pose, body, studio, garment) showing the pick at once and a stage note until the result is on show (Engine.settled). Since 2026-11-09 every shader is compiled behind the curtain (render/warmup.js) and each fabric's shader holds only its own effects (fabricDefines): curtain at 52-69 s on a cold cache (was 160 s), ~14.5 s warm, with where that time goes and what is left to speed up. Later that day: one program per opaque fabric (fabricSide), the fabrics sent to compile at once beside the bodies' loading (warmEarly), and the warm starts' 2.46 s stall found to be a lagging ready status, not a cache miss: ~8.5 s warm on B12, ~20 s after a fabric-shader change."
 tags: [app, startup, loading, shaders, webgl, performance, ux, component]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-08T18:00:00Z }
@@ -194,7 +194,8 @@ compile: a different fabric each time (Satin twice, Shiny, Crushed velvet; Satin
 and the miss moved to Shiny). In the two starts whose warm-up began later (5 s held back; a tracing run) nothing
 missed, and the scene's job fell from ~1.5 s to 0.35 s. Over that window the page sent no other GPU work (traced GL and
 WebGPU calls) and its main thread was idle, so the GPU process was compiling. Cause not found: the browser's shader
-cache still being read in, or its size limit **[INFERRED]**.
+cache still being read in, or its size limit **[INFERRED]**. *Later the same day it turned out not to be a miss at all:
+the program was ready and the browser said otherwise (below, "The stall that was not a miss").*
 
 # Where a start's time goes (measured 2026-11-09)
 
@@ -327,21 +328,69 @@ Checked (test tab, B12):
   4.67 against 4.81 ms: no measurable cost in this view (the earlier +0.12 ms was another framing).
 - Unit tests: 229 pass, the same 4 failing as before.
 
+# The stall that was not a miss, and the fabrics sent early (measured 2026-11-09)
+
+The owner asked for the two quick wins left: compile beside the loading, and the warm starts' one ~2.5 s "miss".
+Test tab (port 5176), design B12, GTX 1650, Chrome 152; times from the page's performance marks.[^measured-2026-11-08]
+
+**The stall was the browser's answer, not a compile.** On the old code 2 of 4 warm starts stalled, each on one job
+(Duochrome, the Matte white fibreglass finish; later Linen dress form, the holo-dot crystals, Satin), and every stall
+lasted 2.46-2.53 s whatever the program: the holo-dot crystals' shader compiles cold in a fraction of that, so it was a
+fixed wait. During one (Satin) a second WebGL context on the page cleared and read a pixel every 50 ms with no delay over
+60 ms, and the page's main thread had no gap over 120 ms: the GPU process was free. No WebGPU pipeline was made during
+the start (patched `GPUDevice` methods logged none). Asking the waiting program `LINK_STATUS` (which waits for the link)
+after 300 ms returned `true` in 0 ms, and three's `isReady()` (`COMPLETION_STATUS_KHR`) then read ready: three starts
+without a stall, against two in four before. So `KHR_parallel_shader_compile`'s status sometimes lags the link by
+~2.46 s here. Why is not known (Chrome's or ANGLE's polling of the parallel link) **[INFERRED]**; held back 3 s, the
+warm-up never stalled (4 of 4), so it is early in a page's life.
+
+**Fix** (`render/warmup.js` `isReady`, `NUDGE_MS` 250): a job's programs not ready after 250 ms are asked `LINK_STATUS`.
+A program from the cache is ready in ~0.06-0.12 s, so on a warm start this only ever meets the lag; on a genuine compile
+it holds the page for what is left of that compile (the curtain's motion is CSS on the compositor and carries on).
+
+**Sending the fabrics at once is the bigger win.** The fabric and finish jobs need only the lit studio, so
+`warmEarly(viewport)` is called by `main.jsx start` right after `applyScene`, before the bodies load.
+
+- One job after another, as before, from the start: the first job (Matte) took 4.3 s. The page builds the bodies, the
+  engine and the design in one long task (~3.7 s on B12; nothing can be sent beside it, so starting after the bodies
+  instead sends nothing until the design is in), and the job's end is only noticed between tasks.
+- So every early job is now compiled in one go (~0.3 s of the page's time) and left to the GPU process, which compiles
+  them in turn; nothing is asked of them until `warmUp` waits (`want`), since each `COMPLETION_STATUS_KHR` question is a
+  round trip that holds the page and an early nudge would hold it for every compile queued ahead. Asking every 25 ms
+  while the design was built slowed it by ~0.4 s.
+- Sent at once after the design instead (as a test): all fabrics and finishes ready in ~0.9 s, against ~2.7 s one job
+  after another; the curtain at 9.1-9.4 s.
+- Then `warmUp` runs the rest (the scene, crystals, hardware, lines, editing, the effects frame) one job after another as
+  before; the scene's job finds the design's fabrics already compiled.
+
+| B12, warm, curtain ready at | Old (one job after another, at the end) | New |
+|---|---|---|
+| No stall | 11.0 s (3 starts) | 8.3-8.8 s (5 starts; 9.2 s once) |
+| With the stall | 13.4 s (1 of 5; was ~1 in 2) | none seen in 11 starts |
+| First start after a shader change (a live nonce uniform in the fabric shader, so the fabrics compile in full; the rest cached) | 39.5 s | 21.3 s, 19.5 s |
+
+- Sending early delays the bodies by ~0.6 s and the design by ~0.4 s (both still in the shadow of the compiles).
+- First start after an update: the page was held for up to 10.5 s while the bodies and the design were built (their
+  own GPU calls wait behind the compiles queued); the curtain's motion carries on, its step text does not change. The
+  note ("Setting up every fabric once after an update") now counts 12 s from the start (`main.jsx start`), not 4 s
+  from the last step, since most of the wait now comes before it.
+- 89 programs at the start, as before; shader tour 194 steps, nothing compiled; unit tests 229 pass (the same 4 fail).
+- Why sending at once compiles faster even cold (~21 s against ~40 s) is not established: fewer round trips and no
+  lags, perhaps ANGLE's worker threads overlapping translations **[INFERRED]**.
+
 # Left to do [INFERRED]
 
 Ways to shorten the start now (put to the owner 2026-11-09; estimates from the measurements above):
 
-- Compile beside the loading: the fabric, finish and crystal jobs need only the studio (lit within ~1-2 s), not the
-  bodies or the design, so they could start while those load: ~3 s off every start, if the early cache misses do not
-  grow.
+- The crystals, hardware and lines jobs could be sent at once too (they need the engine but not the design's
+  arrangement); ~1.4 s is left after the design on a warm start, the effects frame 0.5 s of it.
 - Decals (lettering and stamps) are 20-41% of a fabric variant's cold compile (above); drawn in a pass of their own
   they would leave every variant (a rewrite: their own surface following fit and pose, their own lighting and fold
   bumps, the stamps staying in the cloth, see-through fabrics, outline and picking).
 - In a desktop shell: measure ANGLE's OpenGL or Vulkan backends against D3D11's FXC compiler, and the shell's control
-  of the shader cache (the warm starts' one miss).
+  of the shader cache.
 - A build instead of the dev server: one bundle instead of 154 modules, compressed body files (part of the ~4.8 s before
   the warm-up).
-- Find why one program misses the cache on most warm starts (~2-3 s).
 - Cache the lift per body and pose (an instant switch back), or solve it in a worker so a pose
   change never holds the page.
 - Start the WebGPU device for the re-fit at the very start, beside the bodies.
