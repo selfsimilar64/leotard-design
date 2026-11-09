@@ -84,10 +84,39 @@ cover and lift re-solve, building), shaders ~0.5 s.[^measured-2026-11-08]
   (`Man.setBody`, of which `computeLift` ~0.6 s and the fitted garment's placing ~0.2 s; rims
   ~0.05 s), then ~0.45 s of GPU re-fit. With the drawn garment ~0.6 s.[^measured-2026-11-08]
 
+# What a variant's compile costs (measured 2026-11-08)
+
+Each variant compiled alone on a cold cache (a nonce define; `renderer.compile` into the scene pass's
+target, then a blocking `LINK_STATUS`), GTX 1650, ANGLE/D3D11:[^measured-2026-11-08]
+
+| Variant | Cold compile |
+|---|---|
+| three's own MeshPhysicalMaterial, same lights and target (plain; + sheen; + anisotropy; + clearcoat, sheen and anisotropy) | 0.16; 0.22; 0.18; 0.32 s (80k characters) |
+| Matte, Satin (its speed-ups), Mystique, Foil, Velvet, Mesh, Iridescent, Liquid holo | 4.1-4.7 s each (141-142k characters) |
+| Duotone satin | 5.0 s |
+| Shiny tricot; Wet look | 9.6 s; 10.1 s |
+| Shiny tricot with anisotropy off; with Satin's speed-up switches | 4.3 s; 4.8 s |
+
+- About 95% of every variant's compile is the fabric code, which each variant carries whole: every
+  effect (foil dots, mesh, film, holo, ombre, prints, decals, scans and their masks, wrinkles) is a
+  runtime switch, compiled whether the piece uses it or not.
+- The satin thread model (`MICRO_FRAGMENT`) is compiled into any fabric with anisotropy
+  (`#if ... USE_ANISOTROPY`): Shiny tricot and Wet look carry it, never run it (`uMicro` 0), and get
+  it without Satin's speed-up switches (`MICRO_SPEED` is set only for satin), so it doubles their
+  compile. A satin-only define around it would bring them to ~4.3 s with no change to any look.
+  Its twin in `materials/fabric-node.js` (WebGPU) would need the same treatment.
+- Variants are three's feature switches (sheen, clearcoat, anisotropy, iridescence, transparency)
+  plus the satin's `MICRO_SPEED` defines: one per distinct combination on show.
+
 # Left to do [INFERRED]
 
-- Shorter compiles need a smaller fabric shader or fewer variants (switches as uniforms rather than
-  defines); that is look-dev, so the owner decides when (memory: no simplifying during look-dev).
+- Shorter compiles: gate the satin model to satin (above); then specialise the fabric code by the
+  effects a piece uses (compile-time switches per effect group, parameters staying uniforms), so a
+  plain knit compiles little more than three's own 0.2-0.3 s, at the price of more, smaller
+  variants (compiled ahead off the page: `Viewport.prepare`). Pre-compile the catalogue's variants in
+  the background after the start so a fabric picked later is instant. In a desktop shell, measure
+  ANGLE's OpenGL or Vulkan backends against D3D11's FXC compiler. The fabric code is look-dev, so the
+  owner decides when (memory: no simplifying during look-dev; the specialising cuts nothing a look uses).
 - Cache the lift per body and pose (an instant switch back), or solve it in a worker so a pose
   change never holds the page.
 - Start the WebGPU device for the re-fit at the very start, beside the bodies.

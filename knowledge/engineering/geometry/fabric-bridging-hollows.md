@@ -21,6 +21,10 @@ sources:
     resource: measurements of aLift in the running designer app, 2026-10-25 (Claude Code session)
     title: Lift against the bridging controls
     author: claude-code/claude-opus-5-5
+  - id: fit-2026-11-08
+    resource: measurements in the dev preview, 2026-11-08 (Claude Code session)
+    title: The fitted garment's re-fit on the bridged, slid and bare surfaces
+    author: claude-code/claude-opus-5-5
   - id: report
     resource: /references/research/research-report.md
     title: "Research report (in-bundle mirror), 'designed directly on the body' section"
@@ -280,6 +284,29 @@ Not fixed.
 Not yet done: the bust (the fold under it is the same kind of problem; the same code with another
 region and frame), bodies other than the teen and older teen checked by eye.
 
+# The fitted garments stand on it (measured 2026-11-08)
+
+The fit sim does not bridge hollows itself: it fits against this surface. The offline fit's body
+(`dev/wrap-eval.js exportSeed`, "the garment's own [surface] ... so that fabric still bridges its
+hollows") and the in-app re-fit's body (`render/fitted.js refit` → `fit/fitted-case.js buildCase`
+with `man.garmentPos`) are both the drawn garment's surface: the skin, slid in poses (`body/slide.js`
+when its switch is on), plus this lift and the seat sheet.[^fit-2026-11-08] Hybrid high cut on `young`,
+pose `standing`, re-fit at 150 steps (11,388 fitted points, 24,216 covered body vertices):
+
+| Body the re-fit stands on | Body off the bare skin | Fitted points against bare skin | Page held by a pose change |
+|---|---|---|---|
+| Defaults: slide + membrane + seat | mean 16.8 mm, max 77 mm (the slide moves points along the body) | mean 14.9 mm, 74% over 10 mm | 3.1 s (slide 1.3 s, seat 0.3 s) |
+| Membrane + seat, slide off | mean 0.6 mm, max 13.9 mm; 10% over 2 mm (the hollows) | mean 0.5 mm, max 10 mm; 3% over 3 mm | 1.7 s |
+| Bare skin (slide and seat off, max 0) | 0 | 0 | 1.2 s (the membrane still runs at max 0) |
+
+On bare skin the fitted fabric follows the navel, the spine groove and the seat cleft, at 150 steps
+and at 750; without friction the navel still shows and the leg openings creep (captures
+`app/captures/bridging-compare.png`, `bridging-steps-compare.png`, git-ignored).[^fit-2026-11-08]
+So: the slide only moves the fitted garment off its fit and costs 1.3 s a pose; the membrane and seat
+sheet are what keep fitted fabric off the hollows today, and dropping them needs a fit sim that spans
+hollows by its own tension first (and every shipped fit redone on the bare skin). **[INFERRED]** for
+the remedy; the numbers are measured.
+
 # Limits and open issues **[INFERRED]**
 
 - It is a geometric heuristic, not a tension model: bridge shape does not depend on fabric stiffness,
@@ -301,3 +328,4 @@ region and frame), bodies other than the teen and older teen checked by eye.
 [^report]: Research report (in-bundle mirror).
 [^fix-2026-10-15]: Measured in the running POC before and after the change, 2026-10-15 (young-adult body, tank, scoop back).
 [^app-2026-10-25]: Measured in the running designer app, 2026-10-25 (teen body, A-pose, the design open at start-up).
+[^fit-2026-11-08]: Measured in the dev preview (port 5176), 2026-11-08: Hybrid high cut on young, pose standing, settings applied through Engine.setSlide, re-fit compared point by point.
