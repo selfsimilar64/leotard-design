@@ -251,6 +251,52 @@ no-shadow draw (above). Ways down, none changing a look: shadows off drawn as an
 (no variant), the two-light softbox padded to six dark lights, one attribute set for every fabric mesh, satin's
 model only in satin, and the fabric code specialised per fabric. **[INFERRED]** estimates in the owner's report.
 
+# Both sides always, and the decals' share of a compile (measured 2026-11-09)
+
+The owner asked what drawing every fabric on both sides would cost per frame, and what the decals (lettering and the
+surface stamps) cost per compile, before choosing.[^measured-2026-11-08] Test tab (port 5176), design "B12 lace over
+hologram", mannequin shown, GTX 1650; nothing in the app changed (materials patched in the page, then reloaded).
+
+**Why the inside doubles the variants.** three puts `material.side` in the program key (`parameters.doubleSided` /
+`DOUBLE_SIDED`: `normal_fragment_begin` flips the normal and TBN by `faceDirection` for back faces). For front faces
+`faceDirection` is 1, so a `DoubleSide` program draws the outside exactly as a `FrontSide` one; the only change is that
+back faces are no longer culled.
+
+**Frame cost** (`dev/pass-times.js passTimes`, 1792 x 1344, 20 frames a reading, F / D / DC alternated, 16-18 readings
+each, medians; `document.hidden` false throughout):
+
+| Garment drawn | Scene pass | Whole frame |
+|---|---|---|
+| `FrontSide` (now) | 2.01 ms | 5.05 ms |
+| `DoubleSide` | 2.30 ms (+0.29) | 5.37 ms |
+| `DoubleSide`, back faces discarded first thing in the fragment shader (`if ( uCullBack > .5 && ! gl_FrontFacing ) discard;` before the `uClip` discard), on while the mannequin shows | 2.14 ms (+0.12) | 5.21 ms |
+
+- The +0.29 ms is the back half of the garment shaded in full: garment meshes draw before the body
+  (`render/garment.js` `renderOrder = -1 - z`, so the body under them fails the depth test), so the back faces behind
+  the body are not rejected early. The shader already discards (`uClip`, `uClipShell`, edges), so the extra discard
+  costs no early-depth behaviour it had.
+- Shadow maps: no difference measurable (0.53-0.98 ms in every mode, noise).
+- **Looks**: `DoubleSide` + discard against `FrontSide`, stones hidden, full canvas (1144 x 1207): identical at the
+  front view and turned 0.8, 3.14 and 4.4 rad; turned 1.6 rad, 5,311 pixels within 3/765 (the shadow map drawn from
+  both sides; `shadowSide = BackSide` gave the same order of difference at the front view, so left at null). Without
+  the discard one pixel differed (114/765), the inside glimpsed at an opening.
+
+**Compile cost of the decals** (cold: each compile carries a live uniform of its own, `gl_FragColor.r += uNonceN * 1e-9`,
+so neither the browser's nor the driver's cache can match; one-sided stand-in compiled into the scene pass's target as
+`render/warmup.js` does; 4 rounds alternated, ms):
+
+| Fabric | Whole shader | Without the stamps (gathers, ruching, twist knot) | Without the decal loop (lettering and stamps) |
+|---|---|---|---|
+| Matte (141.7k characters) | 950-1020 | 714-761 (-0.24 s) | 557-570 (-0.40 s, -41%) |
+| Satin (142.0k) | 2670-2760 | 2479-2539 (-0.20 s) | 2136-2413 (-0.55 s, -20%) |
+
+- The stamps are ~0.9k characters of the 2.3k loop but ~half its cost (`atan`, `sin` and their height fed to `bumpN`'s
+  derivatives).
+- The loop is not copied per slot: the loop bound set to 1, 2 or 4 slots compiles in the same ~0.95 s on Matte.
+- Over the start's fabric programs (45, plus the finishes on the skin, which carry the loop too) that is ~18-25 s of a
+  cold start **[INFERRED]**; a lettering pass of its own would add its own program(s) back. Warm starts read cached
+  binaries (~0.06-0.12 s a fabric variant) and would gain little **[INFERRED]**.
+
 # Left to do [INFERRED]
 
 Ways to shorten the start now (put to the owner 2026-11-09; estimates from the measurements above):
@@ -260,10 +306,11 @@ Ways to shorten the start now (put to the owner 2026-11-09; estimates from the m
   grow.
 - One side per fabric: the inside of the leotard (mannequin hidden) doubles every fabric variant. Drawing it another
   way (always both sides, or the inside in a plain material) halves them: ~17-23 s off a cold start, ~2.5 s off a warm
-  one; a look or frame-time trade, the owner's call.
-- The fabric shader's shared part (scans and masks, prints, decals in seven looks, wrinkles, folds, seams, topstitching)
-  is now most of a plain fabric's compile; decals drawn in a pass of their own would take the largest piece out of
-  every variant (a rewrite).
+  one. Measured (above): always both sides, back faces discarded while the mannequin shows, costs +0.12 ms a frame and
+  draws the same picture; the owner's call.
+- Decals (lettering and stamps) are 20-41% of a fabric variant's cold compile (above); drawn in a pass of their own
+  they would leave every variant (a rewrite: their own surface following fit and pose, their own lighting and fold
+  bumps, the stamps staying in the cloth, see-through fabrics, outline and picking).
 - In a desktop shell: measure ANGLE's OpenGL or Vulkan backends against D3D11's FXC compiler, and the shell's control
   of the shader cache (the warm starts' one miss).
 - A build instead of the dev server: one bundle instead of 154 modules, compressed body files (part of the ~4.8 s before
