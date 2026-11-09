@@ -1,11 +1,12 @@
-"""Half-size copies of the studio HDRIs (assets/hdri/*_4k.hdr -> *_2k.hdr), which the app loads.
+"""Smaller copies of the studio HDRIs (assets/hdri/*_4k.hdr -> *_2k.hdr and *_1k.hdr); the app loads the 1K.
 
-Owner, 2026-11-09: load a smaller HDRI to shorten the start. The 4K files (25 MB each) took most of a second
-to decode and prefilter on the page; the lighting comes from the prefiltered environment, which is far smaller
-than either, and the room backdrop is the only thing drawn from the full image (softer at 2K, accepted).
+Owner, 2026-11-09: load a smaller HDRI to shorten the start (the 4K files, 25 MB each, took about a second to
+decode and prefilter on the page), then 1K "to keep everything lightweight", accepting softer mirror-chrome
+reflections (2K keeps them as at 4K). The room backdrop, the only thing drawn from the full image, is softer too;
+the HDRI is not meant to be shown as a background.
 
-Each 2x2 block of linear radiance is averaged (cv2.INTER_AREA), so the total light is unchanged.
-Run: python pipeline/hdri_2k.py   (rewrites every *_2k.hdr next to its *_4k.hdr)
+Each 2x2 (4x4) block of linear radiance is averaged (cv2.INTER_AREA), so the total light is unchanged.
+Run: python pipeline/hdri_small.py   (rewrites every *_2k.hdr and *_1k.hdr next to its *_4k.hdr)
 """
 from pathlib import Path
 

@@ -54,16 +54,16 @@ export const MANNEQUIN_FINISHES = {
 // photographed studios share one set (their recipe lives on in render/studio.js for the picker's thumbnails).
 export const DEFAULT_RIG = 'White loft studio';
 export const RIGS = {
-	'White loft studio': hdriRig('brown_photostudio_02_2k.hdr'),
-	'Window loft studio': hdriRig('brown_photostudio_01_2k.hdr'),
-	'Parquet studio, sunlit': hdriRig('brown_photostudio_06_2k.hdr'),
-	'Green loft hall': hdriRig('photo_studio_loft_hall_2k.hdr'),
-	'Neon studio': hdriRig('ferndale_studio_12_2k.hdr'),
-	'Small photo studio': hdriRig('studio_small_09_2k.hdr'), // owner's addition, 2026-10-27 (Poly Haven, CC0)
+	'White loft studio': hdriRig('brown_photostudio_02_1k.hdr'),
+	'Window loft studio': hdriRig('brown_photostudio_01_1k.hdr'),
+	'Parquet studio, sunlit': hdriRig('brown_photostudio_06_1k.hdr'),
+	'Green loft hall': hdriRig('photo_studio_loft_hall_1k.hdr'),
+	'Neon studio': hdriRig('ferndale_studio_12_1k.hdr'),
+	'Small photo studio': hdriRig('studio_small_09_1k.hdr'), // owner's addition, 2026-10-27 (Poly Haven, CC0)
 };
 
-// An HDRI studio (assets/hdri, served at /hdri; the 2K copies made by pipeline/hdri_2k.py from Poly Haven's 4K files,
-// owner 2026-11-09: a faster start; its 1K copies start ~0.3-0.5 s sooner still but soften mirror-chrome reflections,
+// An HDRI studio (assets/hdri, served at /hdri; the 1K copies made by pipeline/hdri_small.py from Poly Haven's 4K files,
+// owner 2026-11-09: a lightweight start, accepting softer mirror-chrome reflections; the 2K copies keep them crisp,
 // knowledge/engineering/app/startup-and-slow-changes.md). height: the camera height it was shot from
 // (metres; sets where its floor lands), turn: the room's default turn (radians, so a pleasing
 // wall is behind the figure), sun: strength of the shadow-casting key along the HDRI's brightest

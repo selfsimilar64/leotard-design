@@ -384,9 +384,10 @@ The owner asked for a smaller HDRI and any other straightforward small wins ("a 
 native desktop app"); they do not mind the room backdrop softening (the HDRI is not meant to be shown as a background),
 and asked only that reflections on chrome and gloss metals be checked.[^measured-2026-11-08]
 
-- **Studio photographs at 2K**: `pipeline/hdri_2k.py` writes `*_2k.hdr` (2048 x 1024, 6.5 MB) and `*_1k.hdr` (1024 x
-  512, 1.6 MB) beside Poly Haven's 4K files in `assets/hdri` (2 x 2 / 4 x 4 area averages, mean radiance unchanged to 4
-  decimals); `render/presets.js` RIGS load the 2K. The prefiltered environment follows the image's width (three's PMREM
+- **Studio photographs at 1K** (2K first, then the owner chose 1K the same day "to keep everything lightweight", having
+  seen the chrome comparison below): `pipeline/hdri_small.py` writes `*_2k.hdr` (2048 x 1024, 6.5 MB) and `*_1k.hdr`
+  (1024 x 512, 1.6 MB) beside Poly Haven's 4K files in `assets/hdri` (2 x 2 / 4 x 4 area averages, mean radiance
+  unchanged to 4 decimals); `render/presets.js` RIGS load the 1K. The prefiltered environment follows the image's width (three's PMREM
   cube face is width / 4: 1024 px at 4K, 512 at 2K, 256 at 1K), which changes every lit program's source once (the first
   start after the change recompiles everything).
 - **The rest of the warm-up sent at once** (`render/warmup.js` warmUp, `settle`): the scene, crystals, hardware, lines
@@ -412,9 +413,12 @@ Looks (three-quarter view, same page, the photograph swapped):
   on the crystals. The room backdrop is visibly softer at its sharp edges (accepted).
 - Mirror chrome on every piece with the Polished metal mannequin: 2K indistinguishable from 4K; **1K visibly softer**
   (the windows reflected on the bust and the chrome arm lose their crisp edges). Liquid metallic foil with Brushed
-  metal: the three alike. So 1K would cost mirror-like reflections for ~0.3-0.5 s; left at 2K, the owner's call
-  (switching is the six file names in `render/presets.js`).
-- 89 programs at the start; shader tour 194 steps, nothing compiled (studios still share one set of variants).
+  metal: the three alike. So 1K costs mirror-like reflections for ~0.3-0.5 s; the owner took 1K (2K is the six file
+  names in `render/presets.js` away if chrome ever needs it).
+- 2K: 89 programs at the start; 1K: 90, the one more being three's PMREM `SphericalGaussianBlur` (`CUBEUV_MAX_MIP` 8:
+  the 1K studio's prefiltered cube is 256 px, the same size as the stand-in RoomEnvironment's, so a blur program stays
+  held instead of being replaced; it draws nothing in the scene). Shader tour on 1K: 194 steps, nothing compiled.
+- 1K on B12 warm, later and on a slower machine state: curtain 7.9-8.2 s (3 starts).
 
 # Left to do [INFERRED]
 
