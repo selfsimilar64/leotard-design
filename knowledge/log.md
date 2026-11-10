@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-11-10
+* **Creation**: [Fit mesh resolution trial](/engineering/app/fit-mesh-resolution-trial.md): owner asked to time the fit at finer meshes. Hybrid leotard (long sleeves) at 7, 5 and 3.5 mm on `older-teen` in back-arched and passe: 1.65 / 2.8 / 4.7 ms per step (11.8k / 23k / 47k points), 150 steps in 0.26 / 0.43 / 0.73 s, no more steps needed at finer meshes. `pipeline/wrap_block.py` takes `WRAP_STEP` (files tagged `-s5`, `-s3p5`).
+
 ## 2026-11-09
 * **Decision**: [Full-screen stage, frosted-glass panes, nothing in a scrolling list](/decisions/2026-11-09-full-screen-stage-glass-interface.md): owner asked for the interface redesigned from scratch (canvas full-screen, every panel frosted glass, context-specific, no category in a scrolling pane, iPad and desktop). Built as [the glass studio interface](/engineering/app/glass-studio-interface.md): two chips, a spine of the four kinds of work, one inspector card split into faces, the cut named on the body with leaders, sliders that clear their card away, a dark tone over dark backdrops. 82 faces checked at four window sizes, none scrolls (`app/src/dev/ui-audit.js`). Replaces the layout of [the studio interface](/engineering/app/studio-interface.md) and [the one-screen proposal](/engineering/ux/one-screen-interface-proposal.md) (deprecated).
 * **Update**: [Start-up and slow changes](/engineering/app/startup-and-slow-changes.md): owner chose the 1K studio photographs to keep everything lightweight (mirror chrome softer, accepted); `pipeline/hdri_2k.py` renamed `pipeline/hdri_small.py`. 90 programs at the start (one PMREM blur program more); shader tour clean.

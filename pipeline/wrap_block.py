@@ -25,7 +25,8 @@ from scipy.spatial import Delaunay, cKDTree
 HERE = os.path.dirname(os.path.abspath(__file__))
 DERIVED = os.path.join(HERE, '..', 'assets', 'patterns', 'basicpatternblock-leotard-0005', 'derived')
 CAPTURES = os.path.join(HERE, '..', 'app', 'captures')
-STEP = 7.0  # mm between mesh points
+STEP = float(os.environ.get('WRAP_STEP', 7.0))  # mm between mesh points. WRAP_STEP=5 (say) meshes finer for a resolution trial; its files are named -s5 (-s3p5 for 3.5: the dev server's /fitted-local/ takes no dots)
+STEP_TAG = '' if STEP == 7.0 else f'-s{STEP:g}'.replace('.', 'p')
 ITERS = 240
 CUT_ITERS = 360  # re-solving a cut from the whole block's fit: 120 left it 1.7 mm mean, 7 mm at most, from settled (pipeline/fit_checks.py)
 FACING = {'front': 1, 'back': -1, 'sleeve': -1}  # on the +x side of the body; the block lays a sleeve out with its front at +x
@@ -839,7 +840,7 @@ def main(after=None):
 		# the neck is one loop across the body: one half, then the same points mirrored coming back
 		d = into_of(neck)
 		openings.append(loop_of('neck', np.vstack([pts[neck], (pts[neck] * mirror)[-2:0:-1]]), np.vstack([d, (d * mirror)[-2:0:-1]]), np.zeros(2 * len(neck) - 2, bool), np.concatenate([neck, twin[neck][-2:0:-1]])))
-		with open(os.path.join(CAPTURES, f'wrap-{size}-{label}.json'), 'w', encoding='utf-8') as f:
+		with open(os.path.join(CAPTURES, f'wrap-{size}{STEP_TAG}-{label}.json'), 'w', encoding='utf-8') as f:
 			json.dump({'size': size, 'cut': label, 'side': side, 'cells': cells, 'openings': openings, 'case': case}, f, separators=(',', ':'))
 
 	def true_to_lines(G, label):
