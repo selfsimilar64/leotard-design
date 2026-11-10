@@ -17,7 +17,7 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 CAPTURES = os.path.join(HERE, '..', 'app', 'captures')
 OUT = os.path.join(HERE, '..', 'app', 'public', 'fitted')
-OWNED = ['armstrong-6-block', 'armstrong-6-high-resolved', 'aldrich-6-block', 'cole-young-block', 'hybrid-6-block', 'hybrid-6-high-resolved']  # twin: FITTED in app/src/garment/fitted.js
+OWNED = ['armstrong-6-high-resolved', 'hybrid-6-high-resolved']  # only the high cuts are offered (owner, 2026-11-10); twin: FITTED in app/src/garment/fitted.js
 
 
 def main():

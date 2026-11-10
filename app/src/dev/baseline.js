@@ -28,7 +28,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 export const COLOUR = '#0f3b37';           // the fabrics' colour (the owner's comparison green)
 export const BENCH = { frames: 60, width: 1792, height: 1344 };
 export const GEM_TESTS = ['Procedural Gem Test 1', 'Procedural Gem Test 2', 'Procedural Gem Test 3'];
-export const FITTED_KEY = 'armstrong-6';
+export const FITTED_KEY = 'armstrong-6-high';
 // [shape, stone]: every render family (crystal, pearl, spangle, holo dot, nailhead) and coating (none, AB, shimmer,
 // metallic, opal)
 export const STONES = [['round', 'Crystal'], ['round', 'Crystal AB'], ['round', 'Sapphire Shimmer'], ['round', 'Jet Hematite'], ['round', 'Pacific Opal'],

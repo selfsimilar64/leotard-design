@@ -44,29 +44,9 @@ export const STARTS = [
 	// Fitted garments (garment/fitted.js): a textbook-drafted block, sewn and fitted by the fit solver, shown in place of
 	// the drawn pieces. The block below only names the panels (Front, Back, Sleeve) that dress it.
 	{
-		key: 'fitted-textbook', label: 'Fitted: textbook leotard', hint: 'Drafted by the book (Armstrong, size 6) and fitted by simulation; long sleeves, basic leg',
-		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
-		fabric: { fabric: 'mystique', colour: '#16205c' }, fitted: 'armstrong-6',
-	},
-	{
 		key: 'fitted-textbook-high', label: 'Fitted: textbook, high cut', hint: 'The same textbook block with its high-cut leg, fitted by simulation',
 		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
 		fabric: { fabric: 'shiny', colour: '#b3122e' }, fitted: 'armstrong-6-high',
-	},
-	{
-		key: 'fitted-bodyshaper', label: 'Fitted: bodyshaper leotard', hint: "Drafted by the book (Aldrich's bodyshaper, size 6) and fitted by simulation; long sleeves, the book's leg",
-		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
-		fabric: { fabric: 'mystique', colour: '#2e5c3a' }, fitted: 'aldrich-6',
-	},
-	{
-		key: 'fitted-stretch-knit', label: 'Fitted: stretch-knit leotard', hint: "Drafted by the book (Cole's four-way stretch one-piece) and fitted by simulation; long sleeves, leg-line leg",
-		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
-		fabric: { fabric: 'mystique', colour: '#5a2e6e' }, fitted: 'cole-young',
-	},
-	{
-		key: 'fitted-hybrid', label: 'Fitted: hybrid leotard', hint: 'The textbook block with its crotch seam moved forward, under the body; fitted by simulation; long sleeves, basic leg',
-		block: { neck: 'crew', back: 'crew', sleeves: 'long', armhole: 'set-in', leg: 'high', yoke: 'none', waist: 'none' },
-		fabric: { fabric: 'mystique', colour: '#1f4e5c' }, fitted: 'hybrid-6',
 	},
 	{
 		key: 'fitted-hybrid-high', label: 'Fitted: hybrid, high cut', hint: 'The hybrid block with its high-cut leg, fitted by simulation',

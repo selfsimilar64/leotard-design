@@ -84,7 +84,8 @@ The owner asked for the finer meshes as options beside the re-fit's settings.[^o
   12 mm at 3.5 mm. Passes now scale as 12 x (7 / spacing)^2 (24 at 5 mm, 48 at 3.5 mm): `fit/folds.js foldPasses`, twin
   `wrap_block.FOLD_PASSES` (7 mm unchanged; `test/folds.test.js` still passes).
 - **Made for:** the hybrid (basic and high cut), Armstrong (basic and high cut), Aldrich's bodyshaper and Cole's stretch-knit leotard, at 5 and
-  3.5 mm (`WRAP_STEP=5|3.5 python pipeline/wrap_block.py --drafted <block> young`).
+  3.5 mm (`WRAP_STEP=5|3.5 python pipeline/wrap_block.py --drafted <block> young`). Since the same day only the two high cuts are
+  offered ([decision](/decisions/2026-11-10-high-cut-fitted-garments-only.md)); the others' finer files were deleted.
 - The card face still fits a 1024 x 768 window without scrolling (the explanation is a hover tip on each choice).
 - **Checked in the app** (older-teen, passe, 150 steps, the app drawing meanwhile): all six garment choices load their finer fit and
   re-fit. 5 mm: 21.9-27.4k points, 0.45-0.57 s; 3.5 mm: 44.6-56.1k points (the bodyshaper the most), 0.83-1.05 s.

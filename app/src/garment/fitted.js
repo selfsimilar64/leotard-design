@@ -6,25 +6,21 @@
 // redistributing it). knowledge/engineering/app/fitted-garments-in-the-app.md
 // The purchased block (BasicPatternBlock 0005, XS on `young`), for comparison only: its fits stay in app/captures, served by the
 // dev server at /fitted-local/ (vite.config.js) and listed only in dev, so they are never bundled or shipped (licence).
+// Only the high-cut garments are offered (owner, 2026-11-10): the basic and thigh legs, the bodyshaper and the stretch-knit leotard
+// were removed; a design that names one shows its block's high cut where there is one (MOVED), else the drawn pieces.
 const LOCAL = [
-	{ key: 'bought-XS', label: 'Purchased block (local)', leg: 'Thigh leg', file: 'wrap-XS-block', fittedOn: 'young', local: true, hint: 'The purchased block, size XS, thigh leg; fitted by simulation on the young body. Shown only on this computer (its licence bars shipping it)' },
 	{ key: 'bought-XS-high', label: 'Purchased block, high cut (local)', leg: 'High-hips leg', file: 'wrap-XS-high-resolved', fittedOn: 'young', local: true, hint: 'The purchased block, size XS, high-hips leg; fitted by simulation on the young body. Shown only on this computer (its licence bars shipping it)' },
 ];
 
 export const FITTED = [
 	...(import.meta.env.DEV ? LOCAL : []),
-	{ key: 'armstrong-6',label: 'Textbook leotard', leg: 'Basic leg', file: 'armstrong-6-block', fittedOn: 'young' },
 	{ key: 'armstrong-6-high', label: 'Textbook leotard, high cut', leg: 'High-cut leg', file: 'armstrong-6-high-resolved', fittedOn: 'young' },
-	// Aldrich's bodyshaper (pipeline/draft_aldrich.py), size 6, gusset joined to the back and the crotch sewn shut
-	{ key: 'aldrich-6', label: 'Bodyshaper leotard', leg: "The book's leg", file: 'aldrich-6-block', fittedOn: 'young' },
-	// Cole's one-piece (pipeline/draft_cole.py): four-way super-stretchy top and leg-line panty foundations, set-in sleeve
-	{ key: 'cole-young', label: 'Stretch-knit leotard', leg: 'Leg-line leg', file: 'cole-young-block', fittedOn: 'young' },
 	// The hybrid (pipeline/draft_hybrid.py): Armstrong's block with its crotch seam moved 29 mm forward, a front strip joined to the back
-	{ key: 'hybrid-6', label: 'Hybrid leotard', leg: 'Basic leg', file: 'hybrid-6-block', fittedOn: 'young' },
 	{ key: 'hybrid-6-high', label: 'Hybrid leotard, high cut', leg: 'High-cut leg', file: 'hybrid-6-high-resolved', fittedOn: 'young' },
 ];
+const MOVED = { 'bought-XS': 'bought-XS-high', 'armstrong-6': 'armstrong-6-high', 'hybrid-6': 'hybrid-6-high' };
 
-export const fittedOf = (doc) => FITTED.find((f) => f.key === doc?.meta?.fitted) ?? null;
+export const fittedOf = (doc) => { const k = doc?.meta?.fitted; return FITTED.find((f) => f.key === (MOVED[k] ?? k)) ?? null; };
 
 // The fitted garment's size: its pattern made wider (across the grain) and longer (along it) by these factors, op fitted.size.
 // The re-fit takes the scaled pattern as its rest shape (fit/fitted-case.js garmentArrays): smaller sits tauter, larger looser.

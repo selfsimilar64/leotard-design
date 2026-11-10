@@ -281,6 +281,12 @@ Hybrid high cut on `young`, A-pose, share of each piece's points with a fold ove
 The crease across the small of the back at 100% is gone at 95 x 90 (seen in the app, back view). Sleeve folds barely move with size
 (they are not spare length). On `teen` standing, 95 x 90 halves the back's (50% to 25%). A re-fit of 150 steps takes about 0.6 s.
 
+# Only the high cuts since 2026-11-10
+
+The owner removed the purchased thigh leg, the textbook and hybrid basic legs, the bodyshaper and the stretch-knit leotard from the
+Garment row and the starting points ([decision](/decisions/2026-11-10-high-cut-fitted-garments-only.md)). The sections above keep
+their history; a design naming one shows its block's high cut, or the drawn pieces.
+
 # Known limits **[INFERRED]**
 
 - **Fitted on one body.** On other bodies the young standing fit is carried by surface coordinates and then re-fitted by the GPU
