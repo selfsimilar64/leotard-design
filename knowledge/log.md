@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-10
+* **Update**: [Fit mesh resolution trial](/engineering/app/fit-mesh-resolution-trial.md): owner asked for the finer meshes as options beside the re-fit's settings. Settings, Fabric fit: 7 / 5 / 3.5 mm mesh (dev only; files in `app/captures`), made for all four drafted garments and both hybrid and Armstrong cuts; a garment without one shows its 7 mm fit and says so. Fold smoothing now keeps its 25 mm reach at any spacing (`fit/folds.js foldPasses`, twin `wrap_block.FOLD_PASSES`). 150 steps in the app: 0.45-0.57 s at 5 mm, 0.83-1.05 s at 3.5 mm.
 * **Creation**: [Fit mesh resolution trial](/engineering/app/fit-mesh-resolution-trial.md): owner asked to time the fit at finer meshes. Hybrid leotard (long sleeves) at 7, 5 and 3.5 mm on `older-teen` in back-arched and passe: 1.65 / 2.8 / 4.7 ms per step (11.8k / 23k / 47k points), 150 steps in 0.26 / 0.43 / 0.73 s, no more steps needed at finer meshes. `pipeline/wrap_block.py` takes `WRAP_STEP` (files tagged `-s5`, `-s3p5`).
 
 ## 2026-11-09

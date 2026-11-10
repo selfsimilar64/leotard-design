@@ -68,12 +68,32 @@ Distance left from the 1500-step run, mean / 95% mm:
 - **Setup per pose** (case built on the new body, trees refitted) stayed about 0.25-0.3 s at every resolution; the first fit after a
   load about 1.3-1.6 s.
 
+# The mesh setting in the app (2026-11-10, dev only)
+
+The owner asked for the finer meshes as options beside the re-fit's settings.[^owner] Settings, Fabric fit: **7 mm mesh / 5 mm mesh /
+3.5 mm mesh** under "Re-fit it on the body shown" (`ui/Studio.jsx FittedFit`; `render/display.js fitMesh`, kept per computer;
+`render/fitted.js FIT_DEFAULTS.mesh`, `FIT_MESHES`).
+
+- **Dev only.** The finer files stay in `app/captures` (served at `/fitted-local/`, never shipped); `fitOptions` passes 7 outside dev and
+  the row is hidden there.
+- **Which file:** `fineFile` puts wrap_block's tag before the cut (`hybrid-6-block` to `wrap-hybrid-6-s5-block`). A garment without that
+  file shows its 7 mm fit and the panel says so (the purchased block has none).
+- **Changing it** (`FittedView.reload`) drops the garment and loads the other file with the view held on its last frame, then re-fits; stones
+  re-lay on the new pieces.
+- **Folds keep their reach.** A smoothing pass spreads about one edge, so `FOLD_SMOOTH` passes covered about 25 mm at 7 mm but only about
+  12 mm at 3.5 mm. Passes now scale as 12 x (7 / spacing)^2 (24 at 5 mm, 48 at 3.5 mm): `fit/folds.js foldPasses`, twin
+  `wrap_block.FOLD_PASSES` (7 mm unchanged; `test/folds.test.js` still passes).
+- **Made for:** the hybrid (basic and high cut), Armstrong (basic and high cut), Aldrich's bodyshaper and Cole's stretch-knit leotard, at 5 and
+  3.5 mm (`WRAP_STEP=5|3.5 python pipeline/wrap_block.py --drafted <block> young`).
+- The card face still fits a 1024 x 768 window without scrolling (the explanation is a hover tip on each choice).
+- **Checked in the app** (older-teen, passe, 150 steps, the app drawing meanwhile): all six garment choices load their finer fit and
+  re-fit. 5 mm: 21.9-27.4k points, 0.45-0.57 s; 3.5 mm: 44.6-56.1k points (the bodyshaper the most), 0.83-1.05 s.
+
 # Not checked
 
-- **Looks:** no render compared side by side; the finer fits are not listed in the app's Garment row (only loadable from the console).
+- **Looks** only at a glance: hybrid in passe on `older-teen`, 7 against 3.5 mm, both drawn cleanly (`app/captures/mesh-7-passe.png`,
+  `mesh-3p5-passe.png`); the owner's judgement is the test.
 - Distance from a common answer across resolutions (the meshes differ, so each is judged against itself).
-- `FOLD_SMOOTH` (12 passes, "about 25 mm at 7 mm") smooths a shorter distance on a finer mesh, so the drawn folds would change
-  character; not rescaled **[INFERRED]**. Elastic stiffness is already mesh-independent by construction.
 - iPad, and the 3.5 mm file size (12.7 MB a garment against 3.4 MB).
 
 [^owner]: Conversation with the product owner, 2026-11-10.

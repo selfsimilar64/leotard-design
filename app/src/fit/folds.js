@@ -5,9 +5,14 @@ const FOLD_WAVELENGTH = 0.02; // wrap_block.FOLD_WAVELENGTH
 const FOLD_MAX = 0.006;       // wrap_block.FOLD_MAX
 const FOLD_SMOOTH = 12;       // wrap_block.FOLD_SMOOTH
 
+// Smoothing passes for a mesh of `mm` spacing: the same reach on the body (about 25 mm) whatever the mesh, since a pass spreads
+// about one edge. Twin: wrap_block.FOLD_PASSES.
+export const foldPasses = (mm = 7) => Math.round(FOLD_SMOOTH * (7 / mm) ** 2);
+
 // q: per cell point its position (xyz, metres); uv: per point its flat place (metres, at the pattern's size); tri: the cell's
-// triangles. Returns per point [height * cos, height * sin, height] (twice the squeezed direction's angle on the flat piece).
-export function foldsOf(q, uv, tri) {
+// triangles; passes: smoothing passes (foldPasses of the mesh's spacing). Returns per point [height * cos, height * sin, height]
+// (twice the squeezed direction's angle on the flat piece).
+export function foldsOf(q, uv, tri, passes = FOLD_SMOOTH) {
 	const m = uv.length / 2, total = new Float64Array(m * 3), weight = new Float64Array(m);
 	for (let t = 0; t < tri.length; t += 3) {
 		const a = tri[t], b = tri[t + 1], c = tri[t + 2];
@@ -33,7 +38,7 @@ export function foldsOf(q, uv, tri) {
 	const count = new Float64Array(m);
 	for (let t = 0; t < tri.length; t += 3) for (let k = 0; k < 3; k++) { count[tri[t + k]]++; count[tri[t + (k + 1) % 3]]++; }
 	for (let p = 0; p < m; p++) count[p] = Math.max(count[p], 1);
-	for (let s = 0; s < FOLD_SMOOTH; s++) {
+	for (let s = 0; s < passes; s++) {
 		const around = new Float64Array(m * 3);
 		for (let t = 0; t < tri.length; t += 3) for (let k = 0; k < 3; k++) {
 			const i = tri[t + k], j = tri[t + (k + 1) % 3];

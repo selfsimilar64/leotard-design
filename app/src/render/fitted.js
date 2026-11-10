@@ -10,7 +10,7 @@ import { fittedOf, fitSizeOf } from '../garment/fitted.js';
 import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
 import { Refit, DEFAULTS } from '../fit/refit.js';
 import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
-import { foldsOf } from '../fit/folds.js';
+import { foldsOf, foldPasses } from '../fit/folds.js';
 import { LineSegments2 } from './lines.js'; // (WebGL or WebGPU lines)
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { ROLE_COLOURS } from './overlay.js';
@@ -68,7 +68,15 @@ export const FIT_DEFAULTS = {
 	lift: 0.0012,             // m the fabric is drawn off the surface it was fitted to (the dev viewer's 1.2 mm), on top of the
 	// fabric material's own 1.2 mm: a fitted mesh's flat 7 mm triangles dip under a curved body between their points
 	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look)
+	mesh: 7,                  // mm between the garment's points. Finer (5, 3.5) is a dev-only trial: those fits are made by
+	// `WRAP_STEP=5 python pipeline/wrap_block.py --drafted <block> young` into app/captures and served at /fitted-local/
+	// (knowledge/engineering/app/fit-mesh-resolution-trial.md); a garment without one shows its 7 mm fit and says so
 };
+export const FIT_MESHES = [7, 5, 3.5];
+
+// The finer fit's file for a garment entry (garment/fitted.js): wrap_block's names with its STEP_TAG before the cut,
+// e.g. hybrid-6-block -> wrap-hybrid-6-s5-block, wrap-XS-high-resolved -> wrap-XS-s3p5-high-resolved.
+const fineFile = (f, mm) => 'wrap-' + f.file.replace(/^wrap-/, '').replace(/-(block|high-resolved)$/, `-s${String(mm).replace('.', 'p')}-$1`);
 
 export class FittedView {
 	constructor(engine) {
@@ -118,6 +126,7 @@ export class FittedView {
 		this.options = { ...before, ...o };
 		if (!this.active) return;
 		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
+		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
 		else if ((changed('refit') || changed('steps') || changed('mu')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
 		else this.show();
@@ -143,12 +152,29 @@ export class FittedView {
 		this.dress(doc);
 	}
 
+	// The same garment from another file (the mesh setting), the view held on its last frame so the drawn pieces never flash
+	// between the two (owner: only finished fits are shown).
+	async reload() {
+		const doc = this.engine.app?.doc, f = fittedOf(doc);
+		if (!f || f.key !== this.key) return;
+		this.clear(doc);
+		this.hold(true);
+		await this.load(f, doc);
+		if (!(this.options.refit && this.data?.case)) this.hold(false); // else the re-fit lets go once drawn
+	}
+
 	async load(f, doc) {
 		const want = this.key, url = import.meta.env.BASE_URL + (f.local ? 'fitted-local/' : 'fitted/') + f.file + '.json'; // local: dev-only, garment/fitted.js
-		let data;
+		const mm = this.options.mesh, fine = mm !== 7 && import.meta.env.DEV ? import.meta.env.BASE_URL + 'fitted-local/' + fineFile(f, mm) + '.json' : null;
+		let data, got = 7;
 		this.loading = true; // (render/engine.js settled: the interface says it is working until the garment is in)
-		try { data = await (await fetch(url)).json(); } catch (e) { console.error('fitted garment', url, e); return; } finally { if (this.key === want) this.loading = false; }
+		try {
+			if (fine) { const r = await fetch(fine); if (r.ok) { data = await r.json(); got = mm; } }
+			data ??= await (await fetch(url)).json();
+		} catch (e) { console.error('fitted garment', url, e); return; } finally { if (this.key === want) this.loading = false; }
 		if (this.key !== want) return; // asked for another meanwhile
+		this.meshMm = got; // folds smooth over the same distance at any spacing (fit/folds.js foldPasses)
+		this.meshNote = fine && got !== mm ? `This garment has no ${mm} mm fit yet: showing its 7 mm fit.` : null;
 		this.data = data;
 		this.on = new Set(data.cells.flatMap((c) => c.hostI));
 		if (data.case) {
@@ -231,7 +257,7 @@ export class FittedView {
 			if (X && mesh.cid) {
 				const q = new Float32Array(n * 3), sx = this.size.width, sy = this.size.length;
 				for (let l = 0; l < n; l++) for (let k = 0; k < 3; k++) q[3 * l + k] = X[3 * mesh.cid[l] + k];
-				setFabricSlot(geo, 'fold', foldsOf(q, Float32Array.from(c.uv, (v, i) => v * (i % 2 ? sy : sx)), c.I));
+				setFabricSlot(geo, 'fold', foldsOf(q, Float32Array.from(c.uv, (v, i) => v * (i % 2 ? sy : sx)), c.I, foldPasses(this.meshMm)));
 			} else if (c.fold) setFabricSlot(geo, 'fold', c.fold);
 			else setFabricSlot(geo, 'fold', 0);
 			geo.attributes.aLift.needsUpdate = geo.attributes.position.needsUpdate = true;

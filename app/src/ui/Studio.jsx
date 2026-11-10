@@ -19,6 +19,7 @@ import { Card, Field, Segmented, Switch, CommitSlider, Button, IconButton } from
 import { I } from './icons.jsx';
 import { viewTo, cancel as cancelFlight } from './camera.js';
 import { DISPLAY_OPTIONS, saveDisplay, fitOptions } from '../render/display.js';
+import { FIT_MESHES } from '../render/fitted.js';
 import { BACKDROP_COLOUR } from '../render/viewport.js';
 import { symmetryOn } from '../doc/symmetry.js';
 
@@ -235,15 +236,20 @@ function FittedFit() {
 		fitted: `Re-fitted: ${st.steps} steps in ${(st.seconds ?? 0).toFixed(2)} s (setting up ${(st.setup ?? 0).toFixed(2)} s)`,
 		error: `The re-fit could not run here: ${st.note}`,
 	}[st.state];
+	const points = f?.data?.case?.n;
 	return (
 		<Field label="A fitted garment (experimental)">
 			<Switch label="Re-fit it on the body shown" value={d.fitRefit} onChange={(v) => apply({ fitRefit: v })} />
+			{import.meta.env.DEV ? <>
+				{/* dev-only trial: finer meshes' fits live in app/captures (render/fitted.js FIT_DEFAULTS.mesh) */}
+				<Segmented value={d.fitMesh} options={FIT_MESHES.map((v) => [v, `${v} mm mesh`, null, `Garment points ${v} mm apart${v === 7 ? ' (the usual)' : ': finer, smoother, slower to fit'}`])} onPick={(v) => apply({ fitMesh: v })} />
+			</> : null}
 			{d.fitRefit ? <>
 				<CommitSlider label="Re-fit steps" hint="More settles closer, takes longer" value={d.fitSteps} min={20} max={750} step={10} format={(v) => `${v}`} onCommit={(v) => apply({ fitSteps: v })} />
 				<CommitSlider label="Friction against the skin" value={Math.round(d.fitMu * 100)} min={0} max={100} step={5} format={(v) => (v / 100).toFixed(2)} onCommit={(v) => apply({ fitMu: v / 100 })} />
 			</> : null}
 			<CommitSlider label="Fabric drawn off the body" value={Math.round(d.fitLift * 10000) / 10} min={0} max={5} step={0.1} format={(v) => `${(+v).toFixed(1)} mm`} onCommit={(v) => apply({ fitLift: v / 1000 })} />
-			<p class="pop-meta">{said}</p>
+			<p class="pop-meta" title={points ? `${points.toLocaleString()} points` : undefined}>{f?.meshNote && st.state !== 'off' ? f.meshNote + ' ' : ''}{said}</p>
 		</Field>
 	);
 }

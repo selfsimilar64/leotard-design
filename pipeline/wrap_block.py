@@ -45,6 +45,9 @@ ELASTIC_WIDTH = 0.020
 FOLD_WAVELENGTH = 0.02
 FOLD_MAX = 0.006  # a fold no higher than this, however much fabric the fit has gathered
 FOLD_SMOOTH = 12  # passes over the mesh: about 25 mm at 7 mm. Folds run coherently over several wavelengths; triangle-to-triangle squeeze is mesh noise (TUNABLE)
+# a finer mesh takes more passes for the same distance (a pass spreads about one edge, so the reach goes as spacing * sqrt(passes));
+# twin: foldPasses in app/src/fit/folds.js
+FOLD_PASSES = round(FOLD_SMOOTH * (7.0 / STEP) ** 2)
 LAST = {}  # what the last solve's fabric and elastic pulled each point with, against the surface it was held to (pipeline/fit_checks.py)
 
 
@@ -396,7 +399,7 @@ def folds_of(q, uv, tri):
 	folds = total / np.maximum(weight, 1e-12)[:, None]
 	edges = np.vstack([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]])
 	count = np.maximum(np.bincount(edges.ravel(), minlength=len(q)), 1)[:, None]
-	for _ in range(FOLD_SMOOTH):
+	for _ in range(FOLD_PASSES):
 		around = np.zeros_like(folds)
 		np.add.at(around, edges[:, 0], folds[edges[:, 1]])
 		np.add.at(around, edges[:, 1], folds[edges[:, 0]])

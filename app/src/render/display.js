@@ -19,11 +19,11 @@ export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 0, shad
 	// (body/seat.js, experiment) and how much harder it is stretched across the seat than up it
 	liftMethod: 'membrane', liftBall: 0.05, liftSeat: true, liftSeatAcross: 4,
 	// a fitted garment (render/fitted.js FIT_DEFAULTS): re-fit on the GPU after a body or pose change, its step count and friction,
-	// and how far its fabric is drawn off the body
-	fitRefit: FIT_DEFAULTS.refit, fitSteps: FIT_DEFAULTS.steps, fitMu: FIT_DEFAULTS.mu, fitLift: FIT_DEFAULTS.lift };
+	// and how far its fabric is drawn off the body; the mesh spacing (mm; finer than 7 is a dev-only trial)
+	fitRefit: FIT_DEFAULTS.refit, fitSteps: FIT_DEFAULTS.steps, fitMu: FIT_DEFAULTS.mu, fitLift: FIT_DEFAULTS.lift, fitMesh: FIT_DEFAULTS.mesh };
 
-// A fitted garment's options from the display settings.
-export const fitOptions = (d) => ({ refit: d.fitRefit, steps: d.fitSteps, mu: d.fitMu, lift: d.fitLift });
+// A fitted garment's options from the display settings. A finer mesh only in dev (its files are in app/captures, never shipped).
+export const fitOptions = (d) => ({ refit: d.fitRefit, steps: d.fitSteps, mu: d.fitMu, lift: d.fitLift, mesh: import.meta.env.DEV ? d.fitMesh : 7 });
 
 // Choices the UI offers (value, label).
 export const DISPLAY_OPTIONS = {
