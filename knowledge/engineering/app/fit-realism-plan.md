@@ -34,6 +34,9 @@ sources:
   - id: diagnosis
     resource: /engineering/app/hollows-on-bare-skin-diagnosis.md
     title: Why the re-fit does not span hollows on bare skin (diagnosis)
+  - id: shelved
+    resource: /decisions/2026-11-11-folds-as-geometry-shelved.md
+    title: Folds as geometry (fit realism stage 2) shelved
   - id: bare-skin
     resource: /decisions/2026-11-10-fit-on-bare-skin.md
     title: The re-fit stands on the bare skin, settled without friction first; the older fit is kept
@@ -165,6 +168,10 @@ Goal: the collision body is the bare skin; the membrane, seat sheet and rolling 
   settling; measure.
 
 # Stage 2: folds as geometry (trial first)
+
+**Shelved 2026-11-11** ([decision](/decisions/2026-11-11-folds-as-geometry-shelved.md)):[^shelved] after the sweeps below the owner
+found none of the fold looks appealing (the arched back least) and set the stage aside, to revisit if necessary. Its code stays, off
+by default.
 
 Goal: spare fabric buckles into real folds the silhouette, shadows, prints and stones follow; the painted waves remain only for
 wrinkles finer than the mesh.[^owner]
@@ -302,4 +309,5 @@ wider than plain: once fabric can buckle, rounding picks where.
 [^block-fit]: Fitting a block like the app.
 [^code]: The fit's code as read for this plan.
 [^diagnosis]: Why the re-fit does not span hollows on bare skin (diagnosis), 2026-11-10.
+[^shelved]: Decision of 2026-11-11: folds as geometry shelved.
 [^bare-skin]: Decision of 2026-11-10: the re-fit stands on the bare skin; the older fit is kept; stage 0 as in-app stills.
