@@ -386,6 +386,7 @@ include the skin's own vertex spacing, a few mm.)
   Cleared when the body or pose changes, set after each re-fit. No bulge yet.
 - **Stills** (tank, realistic skin, give 1 / 500 / 1500: `app/captures/fit-stills/k-tank-give*`, sheets `k-softbody.png`,
   `k-softbody-closeup.png`): the elastic sits into the thigh and the seat's edge into the flesh at 1500, faintly at 500.
+- **Owner (2026-11-11):** hard to tell at 1500; asked whether the leotard casts shadows (it does not: the fitted meshes do not cast, and the darkening seen is the pressed-in skin's own shading) and for the bare body's normals under the fabric's pressure, more exaggerated. `fit-stills.js all(..., { bare })` adds `<view>-normals.png`: garment and realistic skin hidden, the mannequin's (dented) mesh in `MeshNormalMaterial`; `skin-dent.js` cap raised to 30 mm. Sheets `m-softbody-normals.png`, `m-softbody-skin.png` (tank, give 1 / 1500 / 5000 / 20000): 1500 a faint crease along the leg line; 5000 clear grooves at the leg openings and the seat's edge, the elastic visibly in the thigh in the lunge; 20000 overdone, deep ridges at the waist and armhole and a mangled crotch.
 - Not yet: the owner's choice of `give` (and whether it becomes the default); a bulge beside the elastic.
 
 # Open for the owner

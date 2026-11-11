@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { vertexNormals } from '../body/mannequin.js';
 
 const CELL = 0.01;     // m, the grid the nearest skin vertex is found in
-const MAX_DENT = 0.01; // m, deepest drawn
+const MAX_DENT = 0.03; // m, deepest drawn (a guard; the fit's own depths are what is drawn)
 const FILL = 2;        // passes that give each skin vertex the deepest of its neighbours' (fills between the fabric's points)
 const SOFTEN = 3;      // passes that average with the neighbours (the flesh round a dent eases back up)
 

@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-11
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: bare-body normals stills under the fabric's pressure (give 1 to 20000); 5000 shows clear grooves at the leg openings, 20000 overdone. The fitted leotard casts no shadows.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): stage 5 gate checked and passed (underarm fabric lies against the skin with the arms up; leg lines do not creep). Stage 6 built as a trial: realistic skin offered again as a body finish; per-region softness (`mannequin.soft`), a soft contact (`give`) in the app and every twin, the skin drawn pressed in (`skin-dent.js`); give about 1000 sinks the leg elastic about 3 mm.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 3 done (cheap stage): owner chose elastic firmness 3x by eye; it is the default.
 * **Creation**: [How firm leotard elastic is against the fabric](/engineering/app/elastic-firmness-estimate.md): no published force data for narrow elastic or tricot found; from rubber swim elastic's size and rubber's stiffness against Carvico's strip tests, firm 1-2 most likely, 3-4 at the stiff end. Stills at 2x, 3x, 4x on the tank and hybrid (`app/captures/fit-stills/h-*`) for the owner to choose by eye.

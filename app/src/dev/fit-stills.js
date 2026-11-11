@@ -6,6 +6,7 @@
 // short by a reload cannot, so keep a copy of the autosave first.
 // Run it in a tab nobody designs in:
 //   const s = await import('/src/dev/fit-stills.js'); await s.all('2026-11-10')       // or s.all(tag, { fits, bodies, poses, views })
+import * as THREE from 'three';
 import { framed, lightsTurned } from '../render/pictures.js';
 import { surfaceLandmarks } from '../body/landmarks.js';
 
@@ -89,18 +90,36 @@ async function refitDone(fv) {
 	await app().engine.settled();
 }
 
-async function shoot(dir, name, pick) {
-	const a = app(), vp = a.engine.viewport, V = views(), out = [];
+// bare: also each view without the garment, the body shaded by its normals (<view>-normals.png): where a soft-body fit pressed the skin
+// in (render/skin-dent.js), seen without the fabric over it (fit realism plan stage 6).
+let normalMaterial = null;
+async function shoot(dir, name, pick, bare = false) {
+	const a = app(), e = a.engine, vp = e.viewport, V = views(), out = [];
+	const put = async (k, suffix) => {
+		const blob = await a.withoutOverlay(() => vp.capture(900, 900));
+		const url = `/__fs/captures/${dir}/${name}-${k}${suffix}.png`;
+		const r = await fetch(url, { method: 'POST', body: blob });
+		if (!r.ok) throw new Error(`${url}: ${r.status}`);
+		out.push(url);
+	};
 	for (const k of pick) {
 		const { camera, dir: d } = V[k];
 		await lightsTurned(a, Math.atan2(d[0], d[2]), async () => { // the studio's front lights turned to the camera's side
 			vp.setCamera(camera);
 			await wait(600);
-			const blob = await a.withoutOverlay(() => vp.capture(900, 900));
-			const url = `/__fs/captures/${dir}/${name}-${k}.png`;
-			const r = await fetch(url, { method: 'POST', body: blob });
-			if (!r.ok) throw new Error(`${url}: ${r.status}`);
-			out.push(url);
+			await put(k, '');
+			if (!bare) return;
+			const fv = e.fitted, hidden = [...fv.meshes, fv.edges, fv.lines, e.figure?.group].filter((m) => m && m.visible), skin = e.skinMesh, mat = skin.material, shown = skin.visible;
+			normalMaterial ??= new THREE.MeshNormalMaterial();
+			try {
+				for (const m of hidden) m.visible = false;
+				skin.material = normalMaterial; skin.visible = true;
+				await wait(400);
+				await put(k, '-normals');
+			} finally {
+				for (const m of hidden) m.visible = true;
+				skin.material = mat; skin.visible = shown;
+			}
 		});
 	}
 	return out;
@@ -111,8 +130,8 @@ async function shoot(dir, name, pick) {
 // (render/fitted.js FIT_DEFAULTS: press, bend, mesh, steps), put back at the end.
 // size: the pattern's { width, length } (op fitted.size, garment/fitted.js fitSizeOf), applied to the stills' own design.
 // garment: the fitted garment's key (KEY, the hybrid high cut; 'hybrid-6-tank' for the elastic at every opening, with OPENING_VIEWS).
-// finish: the body's finish (render/presets.js; REALISTIC_SKIN for the soft body), else the mannequin's.
-export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, views: pick = VIEWS, redo = false, options = {}, size = null, garment = KEY, finish = null } = {}) {
+// finish: the body's finish (render/presets.js; REALISTIC_SKIN for the soft body), else the mannequin's. bare: shoot (above).
+export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, views: pick = VIEWS, redo = false, options = {}, size = null, garment = KEY, finish = null, bare = false } = {}) {
 	const a = app(), e = a.engine, fv = e.fitted, vp = e.viewport, cam = vp.getCamera();
 	let saved = null;
 	try { saved = localStorage.getItem(AUTOSAVE); } catch { /* storage blocked */ }
@@ -133,7 +152,7 @@ export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, vi
 				await e.settled();
 				await refitDone(fv);
 				const entry = { fit, body, pose, options, size, state: fv.status.state, steps: fv.status.steps, seconds: fv.status.seconds, setup: fv.status.setup, hidden: document.hidden };
-				shots.push(...await shoot(`fit-stills/${tag}/${fit}`, `${body}-${pose}`, pick));
+				shots.push(...await shoot(`fit-stills/${tag}/${fit}`, `${body}-${pose}`, pick, bare));
 				await fetch(rec, { method: 'POST', body: JSON.stringify(entry) });
 				log.push(entry);
 			}
