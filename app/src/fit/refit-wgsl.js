@@ -1,7 +1,8 @@
 // The re-fit's GPU kernels in WGSL: today's local/global method with push-only contact and lagged friction, one step =
 // query, tri, spring, rhs, then `cgIters` of preconditioned conjugate gradients warm-started from the positions.
 // Twin of pipeline/race/gpu.py (surface_at, query_k, tri_state, friction_lam_k, pd_friction_k) and pipeline/race/solvers.py
-// (pd_tri_k, pd_spring_k, pd_rhs_k, local_global) with Warp's cg; change both sides together. Checked against Python's iterates by
+// (pd_tri_k, pd_spring_k, pd_rhs_k, local_global) with Warp's cg; change both sides together. Stage 2 of the fit realism plan: press
+// in tri (solvers.pd_tri_k), bending only in the constant matrix (refit.js hingesOf, energy.hinges). Checked against Python's iterates by
 // the tuning page's check (app/src/dev/refit-lab.js). Sums gather over fixed lists and reductions run in a fixed order, so a run is
 // bit-for-bit repeatable on one GPU.
 //
@@ -31,7 +32,7 @@ export const PARAMS = [
 	'vn0', 'vn1', 'off_pts', 'off_fi',
 	'link0', 'link1', 'pad0', 'pad1',
 ];
-export const FPARAMS = ['plane', 'hold', 'gather', 'turn', 'damp', 'mu', 'stick', 'grip'];
+export const FPARAMS = ['plane', 'hold', 'gather', 'turn', 'damp', 'mu', 'stick', 'grip', 'press'];
 
 export const WGSL = /* wgsl */ `
 struct Params {
@@ -257,8 +258,11 @@ fn tri(@builtin(global_invocation_id) gid: vec3<u32>) {
 	}
 	var sg = 1.0;
 	if (w > 0.5) { sg = -1.0; }
-	let c1 = clamp(s1, g, 1.0);
-	let c2 = clamp(sg * s2, g, 1.0);
+	// a squeezed singular value's target moved press of the way back to 1, so squeezing costs (fit realism plan stage 2; 0: free)
+	var c1 = clamp(s1, g, 1.0);
+	var c2 = clamp(sg * s2, g, 1.0);
+	c1 = c1 + P.press * (1.0 - c1);
+	c2 = c2 + P.press * (1.0 - c2);
 	for (var k = 0u; k < 3u; k++) {
 		let bb = tri_b(D, k);
 		loc[3u * t + k] = vec4<f32>(area * (u1 * (c1 * dot(v1, bb)) + u2 * (sg * c2 * dot(v2, bb))), 0.0);

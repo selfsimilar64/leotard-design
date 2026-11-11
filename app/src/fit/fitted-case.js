@@ -118,7 +118,9 @@ function spanLengths(c, sx, sy) {
 // how much of each vertex is arm (wArm) as gpu.Problem: torso where every corner is under 0.5 arm, arm where every corner is over 0.15.
 // cache: kept by the caller between re-fits on the same garment and body mesh (the parts' faces and edge pairing; Refit keeps its
 // own matrix and trees in the same object).
-export function buildCase(data, garment, Q, idx, wArm, cache = {}) {
+// physics: { press, bend } of the fit realism plan's stage 2 (squeeze resistance, bending stiffness; 0 and 0: the physics before it),
+// as gpu.Problem's press and bend.
+export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {}) {
 	const c = data.case, arrays = { ...garment, start: startOf(data, Q), body: Float32Array.from(Q) };
 	const parts = [];
 	cache.parts ??= [['torso', (w) => w < 0.5], ['arm', (w) => w > 0.15]].map(([label, keep]) => {
@@ -132,6 +134,7 @@ export function buildCase(data, garment, Q, idx, wArm, cache = {}) {
 		arrays[label + '_tris'] = ti; arrays[label + '_fn'] = g.fn; arrays[label + '_en'] = g.en; arrays[label + '_eb'] = g.eb; arrays[label + '_vn'] = g.vn; arrays[label + '_vb'] = g.vb;
 		parts.push(ti.length / 3);
 	}
-	const head = { n: c.n, nt: c.tris.length / 3, ns: c.si.length, body_points: Q.length / 3, part_faces: parts, plane: c.plane, gather: c.gather, hold: HOLD, turn: TURN };
+	const head = { n: c.n, nt: c.tris.length / 3, ns: c.si.length, body_points: Q.length / 3, part_faces: parts, plane: c.plane, gather: c.gather, hold: HOLD, turn: TURN,
+		press: physics.press ?? 0, bend: physics.bend ?? 0 };
 	return { head, arrays, cache };
 }

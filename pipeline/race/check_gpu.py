@@ -1,5 +1,5 @@
 """Does the GPU energy (gpu.py) compute the race's energy? Against the numpy one (energy.py) and against its own finite differences.
-    <venv python> pipeline/race/check_gpu.py [case]       (default case-young-back-arched)
+    <venv python> pipeline/race/check_gpu.py [case] [--press P] [--bend B]       (default case-young-back-arched; stage 2's terms off)
 Spec: knowledge/engineering/app/solver-race-plan.md (stage 3).
 """
 import os
@@ -20,16 +20,20 @@ CAP = os.path.join(HERE, '..', '..', 'app', 'captures', 'race')
 
 
 def main():
-	name = sys.argv[1] if len(sys.argv) > 1 else 'case-young-back-arched'
+	args = [a for a in sys.argv[1:] if not a.startswith('--')]
+	opt = lambda k: float(sys.argv[sys.argv.index(k) + 1]) if k in sys.argv else 0.0
+	press, bend = opt('--press'), opt('--bend')
+	args = [a for a in args if a not in (str(press), str(bend)) and not a.replace('.', '').replace('e-', '').isdigit()]
+	name = args[0] if args else 'case-young-back-arched'
 	case = dict(np.load(os.path.join(CAP, name + '.npz')))
 	t = time.perf_counter()
-	pb = Problem(case)
+	pb = Problem(case, press=press, bend=bend)
 	print(f'GPU problem set up in {time.perf_counter() - t:.2f} s: {pb.n} points, {pb.nt} triangles, {pb.ns} spans, {pb.nnz} Hessian blocks', flush=True)
 	rng = np.random.default_rng(0)
 	states = [('start', case['start'])] + ([('today, 1440 iterations', case['alt_1440'])] if 'alt_1440' in case else [])
 
 	print('\n== against the numpy energy (surface by grid there, exact here: expect the surface part to differ slightly)', flush=True)
-	En = Energy(case, surface='field', contact='push') if '--no-numpy' not in sys.argv else None
+	En = Energy(case, surface='field', contact='push', press=press, bend=bend) if '--no-numpy' not in sys.argv else None
 	for label, x in (states if En else ()):
 		E, g, parts = En(x)
 		X = pb.array(x)
@@ -37,7 +41,7 @@ def main():
 		gp = pb.parts(X)
 		pb.evaluate(X, 1)
 		gg = pb.grad.numpy().astype(np.float64)
-		print(f'  {label}: membrane {parts["membrane"]:.6e} / {gp["membrane"]:.6e}; elastic {parts["elastic"]:.6e} / {gp["elastic"]:.6e}; surface {parts["surface"]:.6e} / {gp["surface"]:.6e}; inside out {parts["inside_out"]} / {gp["inside_out"]}', flush=True)
+		print(f'  {label}: membrane {parts["membrane"]:.6e} / {gp["membrane"]:.6e}; elastic {parts["elastic"]:.6e} / {gp["elastic"]:.6e}; surface {parts["surface"]:.6e} / {gp["surface"]:.6e}; bending {parts["bending"]:.6e} / {gp["bending"]:.6e}; inside out {parts["inside_out"]} / {gp["inside_out"]}', flush=True)
 		rel = np.linalg.norm(g - gg, axis=1) / (np.linalg.norm(g, axis=1).mean() + 1e-30)
 		print(f'    gradient: numpy against GPU, per point relative to the mean size: median {np.median(rel):.2e}, 99% {np.percentile(rel, 99):.2e}, max {rel.max():.2e}', flush=True)
 
@@ -102,7 +106,7 @@ def main():
 		lam, fn = pb.lam.numpy().astype(np.float64), pb.fn.numpy().astype(np.float64)
 		e_np, g_np = EN.friction(x, x0, fn, lam)
 		pb.evaluate(X, 2, held=True)
-		e_gpu = float(pb.e.numpy()[pb.off_f:].astype(np.float64).sum())
+		e_gpu = float(pb.e.numpy()[pb.off_f:pb.off_eb].astype(np.float64).sum())
 		g_all = pb.grad.numpy().astype(np.float64)
 		pb.mu = 0.0
 		pb.evaluate(X, 1, held=True)

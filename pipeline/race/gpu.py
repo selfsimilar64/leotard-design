@@ -23,29 +23,31 @@ STICK = 1.0e-3  # m a point gives before it slides: friction's spring part, the 
 SNAP = 1.0e-5  # m: closer to the body than this, a point's surface normal is the feature's pseudo-normal, not the direction to it (surface_at). Twin: refit-wgsl.js
 
 
+# The membrane's energy density per singular value s: stretch above 1; from g to 1 squeezing costs p (press) times as much (0: free,
+# today's), below g (gather) the target stops at mix(g, 1, p). Twin: energy.Energy.phi (and the local step's target, solvers.pd_tri_k).
 @wp.func
-def phi(s: float, g: float):
+def phi(s: float, g: float, p: float):
 	if s > 1.0:
 		return (s - 1.0) * (s - 1.0)
 	if s < g:
-		return (g - s) * (g - s)
-	return 0.0
+		return p * (1.0 - g) * (1.0 - g) + (s - g) * (s - g) - 2.0 * p * (1.0 - g) * (s - g)
+	return p * (1.0 - s) * (1.0 - s)
 
 
 @wp.func
-def dphi(s: float, g: float):
+def dphi(s: float, g: float, p: float):
 	if s > 1.0:
 		return 2.0 * (s - 1.0)
 	if s < g:
-		return -2.0 * (g - s)
-	return 0.0
+		return 2.0 * (s - g) - 2.0 * p * (1.0 - g)
+	return -2.0 * p * (1.0 - s)
 
 
 @wp.func
-def ddphi(s: float, g: float):
+def ddphi(s: float, g: float, p: float):
 	if s > 1.0 or s < g:
 		return 2.0
-	return 0.0
+	return 2.0 * p
 
 
 @wp.struct
@@ -171,7 +173,7 @@ class Tri:
 
 
 @wp.func
-def tri_state(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, Di: wp.mat22, area: float, tn: wp.vec3, facing: float, g: float, turn: float):
+def tri_state(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, Di: wp.mat22, area: float, tn: wp.vec3, facing: float, g: float, turn: float, p: float):
 	"""The membrane term of one triangle. Inside out (today's `wrong` in wrap_block.solve): the triangle's facing c = cos of the angle
 	between its normal and the body's (times `facing`) is below 0. Today's solver then charges phi(-s2) instead of phi(s2), which
 	jumps where the triangle stands square to the body (c = 0, s2 not small), and a jump never settles (Newton: thousands of points
@@ -230,8 +232,8 @@ def tri_state(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, Di: wp.mat22, area: float, 
 			m = tnn - c * jh
 			gc0 = wp.cross(f1, m) / lj  # dc / df0
 			gc1 = wp.cross(m, f0) / lj  # dc / df1
-	jump = phi(-s2, g) - phi(s2, g)
-	T.e = 0.5 * area * (phi(s1, g) + (1.0 - w) * phi(s2, g) + w * phi(-s2, g))
+	jump = phi(-s2, g, p) - phi(s2, g, p)
+	T.e = 0.5 * area * (phi(s1, g, p) + (1.0 - w) * phi(s2, g, p) + w * phi(-s2, g, p))
 	T.u1 = u1
 	T.u2 = u2
 	T.u3 = wp.cross(u1, u2)
@@ -239,10 +241,10 @@ def tri_state(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, Di: wp.mat22, area: float, 
 	T.v2 = v2
 	T.s1 = s1
 	T.s2 = s2
-	T.dp1 = dphi(s1, g)
-	T.dp2 = (1.0 - w) * dphi(s2, g) - w * dphi(-s2, g)
-	T.dd1 = ddphi(s1, g)
-	T.dd2 = (1.0 - w) * ddphi(s2, g) + w * ddphi(-s2, g)
+	T.dp1 = dphi(s1, g, p)
+	T.dp2 = (1.0 - w) * dphi(s2, g, p) - w * dphi(-s2, g, p)
+	T.dd1 = ddphi(s1, g, p)
+	T.dd2 = (1.0 - w) * ddphi(s2, g, p) + w * ddphi(-s2, g, p)
 	T.gc0 = gc0 * (jump * dw)
 	T.gc1 = gc1 * (jump * dw)
 	T.flip = 0
@@ -307,13 +309,13 @@ def tri_hess(T: Tri, L: wp.spatial_vector, area: float, ba: wp.vec2, bb: wp.vec2
 
 @wp.kernel
 def tri_k(x: wp.array(dtype=wp.vec3), tris: wp.array(dtype=wp.vec3i), Dinv: wp.array(dtype=wp.mat22), area: wp.array(dtype=float),
-		facing: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), gather: float, turn: float, mode: int,
+		facing: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), gather: float, turn: float, press: float, mode: int,
 		e_out: wp.array(dtype=float), gt: wp.array(dtype=wp.vec3), Ht: wp.array(dtype=wp.mat33), flip: wp.array(dtype=wp.int32)):
 	"""mode 0: energy; 1: and gradient; 2: and Hessian blocks."""
 	t = wp.tid()
 	i = tris[t]
 	Di = Dinv[t]
-	T = tri_state(x[i[0]], x[i[1]], x[i[2]], Di, area[t], gn[i[0]] + gn[i[1]] + gn[i[2]], facing[t], gather, turn)
+	T = tri_state(x[i[0]], x[i[1]], x[i[2]], Di, area[t], gn[i[0]] + gn[i[1]] + gn[i[2]], facing[t], gather, turn, press)
 	e_out[t] = T.e
 	flip[t] = T.flip
 	if mode >= 1:
@@ -439,6 +441,21 @@ def pd_friction_k(x: wp.array(dtype=wp.vec3), anchor: wp.array(dtype=wp.vec3), f
 
 
 @wp.kernel
+def bend_k(x: wp.array(dtype=wp.vec3), ids: wp.array(dtype=wp.vec4i), K: wp.array(dtype=wp.vec4), c: wp.array(dtype=float), bend: float,
+		mode: int, e_out: wp.array(dtype=float), e_off: int, grad: wp.array(dtype=wp.vec3)):
+	"""Bending per hinge (energy.hinges): bend / 2 * c |K . X|^2, its gradient added onto the four points (after gather_grad_k; atomics,
+	so not bit-for-bit repeatable: the race's other solvers only). Its Hessian is constant: Problem fills its blocks once."""
+	h = wp.tid()
+	i = ids[h]
+	k = K[h]
+	kx = x[i[0]] * k[0] + x[i[1]] * k[1] + x[i[2]] * k[2] + x[i[3]] * k[3]
+	e_out[e_off + h] = 0.5 * bend * c[h] * wp.dot(kx, kx)
+	if mode >= 1:
+		for a in range(4):
+			wp.atomic_add(grad, i[a], kx * (bend * c[h] * k[a]))
+
+
+@wp.kernel
 def fill_bsr_k(start: wp.array(dtype=wp.int32), src: wp.array(dtype=wp.int32), H: wp.array(dtype=wp.mat33), values: wp.array(dtype=wp.mat33)):
 	e = wp.tid()
 	acc = wp.mat33(0.0)
@@ -502,7 +519,8 @@ def csr(keys, n):
 class Problem:
 	"""One case on the GPU: the garment, the body surface, and the shared evaluation (energy, gradient, projected Hessian)."""
 
-	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, device='cuda:0'):
+	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, device='cuda:0'):
+		"""press, bend: squeeze resistance and bending stiffness (fit realism plan stage 2; 0 and 0: the physics before it). energy.py."""
 		wp.init()
 		self.device = device
 		dev = device
@@ -512,6 +530,13 @@ class Problem:
 		n, nt = self.n, self.nt
 		Dm = np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2)
 		self.plane, self.gather, self.hold, self.turn = float(case['plane']), float(case['gather']), float(hold), float(turn)
+		self.press, self.bend = float(press), float(bend)
+		from energy import hinges
+		hid, hK, hc = hinges(tris, rest) if self.bend else (np.zeros((0, 4), np.int32), np.zeros((0, 4)), np.zeros(0))
+		self.nh = nh = len(hid)
+		self.hinge_ids = wp.array(hid.astype(np.int32), dtype=wp.vec4i, device=dev)
+		self.hinge_K = wp.array(np.ascontiguousarray(hK, np.float32), dtype=wp.vec4, device=dev)
+		self.hinge_c = wp.array(np.ascontiguousarray(hc, np.float32), dtype=float, device=dev)
 		self.mu, self.stick = float(mu), float(stick)  # mu 0: frictionless, the race's first physics; a re-fit's is MU (set_anchor)
 		self.grip = float(grip)  # how far each freeze moves friction's held contact force to the new one (1: all the way)
 		self.fresh = True
@@ -562,7 +587,12 @@ class Problem:
 		for slot, (r, c) in enumerate(((si, si), (sj, sj), (si, sj), (sj, si))):
 			keys.append(r.astype(np.int64) * n + c)
 			srcs.append(self.off_s + np.arange(ns) * 4 + slot)
-		self.off_v = self.off_s + ns * 4
+		self.off_b = self.off_s + ns * 4  # bending: per hinge its 4 x 4 blocks, constant (filled below)
+		for a in range(4):
+			for b in range(4):
+				keys.append(hid[:, a].astype(np.int64) * n + hid[:, b])
+				srcs.append(self.off_b + np.arange(nh) * 16 + a * 4 + b)
+		self.off_v = self.off_b + nh * 16
 		keys.append(np.arange(n, dtype=np.int64) * n + np.arange(n))
 		srcs.append(self.off_v + np.arange(n))
 		keys, srcs = np.concatenate(keys), np.concatenate(srcs)
@@ -579,9 +609,10 @@ class Problem:
 		got = self.A.offsets.numpy()[:n + 1], self.A.columns.numpy()[:self.nnz]
 		assert self.A.nnz == self.nnz and (got[1] == cols).all() and (np.diff(got[0]) == np.bincount(rows, minlength=n)).all(), 'BSR block order differs'
 		# work arrays
-		self.ne = nt + ns + 2 * n
-		self.e = wp.zeros(self.ne, dtype=float, device=dev)  # per element: triangles, then spans, then points' surface, then points' friction
+		self.ne = nt + ns + 2 * n + nh
+		self.e = wp.zeros(self.ne, dtype=float, device=dev)  # per element: triangles, spans, points' surface, points' friction, hinges
 		self.off_f = nt + ns + n
+		self.off_eb = nt + ns + 2 * n
 		self.e_base = wp.zeros(self.ne, dtype=float, device=dev)
 		self.e_tmp = wp.zeros(self.ne, dtype=float, device=dev)
 		self.d = wp.zeros(n, dtype=float, device=dev)
@@ -589,7 +620,11 @@ class Problem:
 		self.q = wp.zeros(n, dtype=wp.vec3, device=dev)
 		self.gt = wp.zeros(nt * 3, dtype=wp.vec3, device=dev)
 		self.gs = wp.zeros(ns, dtype=wp.vec3, device=dev)
-		self.H = wp.zeros(self.off_v + n, dtype=wp.mat33, device=dev)
+		Hn = np.zeros((self.off_v + n, 3, 3), np.float32)
+		if nh:  # bending's constant blocks: bend * c * K_a K_b * I
+			w = (self.bend * hc[:, None, None] * hK[:, :, None] * hK[:, None, :]).reshape(-1)
+			Hn[self.off_b:self.off_v] = w[:, None, None] * np.eye(3, dtype=np.float32)
+		self.H = wp.array(Hn, dtype=wp.mat33, device=dev)
 		self.flip = wp.zeros(nt, dtype=wp.int32, device=dev)
 		self.grad = wp.zeros(n, dtype=wp.vec3, device=dev)
 		self.tmp_n = wp.zeros(n, dtype=float, device=dev)
@@ -627,10 +662,12 @@ class Problem:
 			wp.launch(plane_k, self.n, [x, self.q, self.gn, self.plane, self.hold, self.d, self.e, self.nt + self.ns], device=self.device)
 		else:
 			self.query(x)
-		wp.launch(tri_k, self.nt, [x, self.tris, self.Dinv, self.area, self.facing, self.gn, self.gather, self.turn, mode, self.e, self.gt, self.H, self.flip], device=self.device)
+		wp.launch(tri_k, self.nt, [x, self.tris, self.Dinv, self.area, self.facing, self.gn, self.gather, self.turn, self.press, mode, self.e, self.gt, self.H, self.flip], device=self.device)
 		wp.launch(spring_k, self.ns, [x, self.si, self.sj, self.rest_len, self.k, mode, self.e, self.nt, self.gs, self.H[self.off_s:]], device=self.device)
 		if mode >= 1:
 			wp.launch(gather_grad_k, self.n, [self.vt_start, self.vt_src, self.gt, self.vs_start, self.vs_src, self.gs, self.d, self.gn, self.plane, self.hold, self.grad], device=self.device)
+		if self.nh:
+			wp.launch(bend_k, self.nh, [x, self.hinge_ids, self.hinge_K, self.hinge_c, self.bend, mode, self.e, self.off_eb, self.grad], device=self.device)
 		if mode >= 2:
 			wp.launch(surface_hess_k, self.n, [self.d, self.gn, self.plane, self.hold, reg, self.H, self.off_v], device=self.device)
 		if self.mu > 0:
@@ -663,7 +700,7 @@ class Problem:
 		self.fresh = True
 		self.evaluate(x, 0, held=True)
 		e = self.e.numpy().astype(np.float64)
-		tri, spr, pt, fr = e[:self.nt], e[self.nt:self.nt + self.ns], e[self.nt + self.ns:self.off_f], e[self.off_f:]
+		tri, spr, pt, fr, bd = e[:self.nt], e[self.nt:self.nt + self.ns], e[self.nt + self.ns:self.off_f], e[self.off_f:self.off_eb], e[self.off_eb:]
 		d = self.d.numpy()
-		return dict(total=e.sum(), membrane=tri.sum(), surface=pt.sum(), elastic=spr.sum(), friction=fr.sum(), inside_out=int(self.flip.numpy().sum()),
+		return dict(total=e.sum(), membrane=tri.sum(), surface=pt.sum(), elastic=spr.sum(), friction=fr.sum(), bending=bd.sum(), inside_out=int(self.flip.numpy().sum()),
 			inside_body=int((d < -0.0005).sum()), off_body=int((d > 0.002).sum()), max_inside=float(-d.min()), max_off=float(d.max()))

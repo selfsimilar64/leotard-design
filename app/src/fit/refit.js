@@ -44,9 +44,48 @@ function csr(keys, n) {
 	return { start: count, order };
 }
 
-// The constant part of the global matrix (solvers.pd_tri_matrix_k, pd_spring_k), as scalar rows: per triangle area * b_a . b_b,
-// per span k on the ends and -k across. Summed in float64 from the float32 inputs.
-function constantMatrix(n, tris, Dinv, area, si, sj, k) {
+// Bending's hinges (fit realism plan stage 2): every inside edge shared by exactly two triangles, its four points (the edge's ends i, j,
+// the opposite corner in the first triangle, then in the second), their cotangent weights K in each triangle's flat rest shape and
+// c = 3 / (A0 + A1). Twin: energy.hinges (pipeline/race/energy.py): same formula, same order (by the first triangle, then its corner
+// opposite the edge). The rest shape from Dinv (its inverse's columns are the rest edges from corner 0).
+export function hingesOf(tris, Dinv, area) {
+	const nt = area.length, first = new Map(), ids = [], K = [], c = [];
+	const corner = (t) => { // rest corners of triangle t in its own frame
+		const a = Dinv[4 * t], b = Dinv[4 * t + 1], d = Dinv[4 * t + 2], e = Dinv[4 * t + 3], det = a * e - b * d;
+		return [[0, 0], [e / det, -d / det], [-b / det, a / det]]; // Dm = inv(Dinv): columns (e1x, e1y), (e2x, e2y)
+	};
+	const cot = (t, at) => {
+		const p = corner(t), o = p[at], q = p[(at + 1) % 3], r = p[(at + 2) % 3];
+		const ux = q[0] - o[0], uy = q[1] - o[1], vx = r[0] - o[0], vy = r[1] - o[1];
+		return (ux * vx + uy * vy) / Math.abs(ux * vy - uy * vx);
+	};
+	let n = 0;
+	for (const v of tris) if (v >= n) n = v + 1;
+	const seen = new Map();
+	for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) {
+		const a = tris[3 * t + (k + 1) % 3], b = tris[3 * t + (k + 2) % 3], key = Math.min(a, b) * n + Math.max(a, b);
+		const l = seen.get(key);
+		if (l) l.push([t, k]); else seen.set(key, [[t, k]]);
+	}
+	for (const side of seen.values()) {
+		if (side.length !== 2) continue;
+		const [[t0, k0], [t1, k1]] = side; // pushed in triangle order, then corner: the first is the smaller
+		first.set(t0 * 3 + k0, [t0, k0, t1, k1]);
+	}
+	for (const key of [...first.keys()].sort((p, q) => p - q)) {
+		const [t0, k0, t1, k1] = first.get(key), i = tris[3 * t0 + (k0 + 1) % 3], j = tris[3 * t0 + (k0 + 2) % 3];
+		const c1 = [tris[3 * t1], tris[3 * t1 + 1], tris[3 * t1 + 2]];
+		const ci0 = cot(t0, (k0 + 1) % 3), cj0 = cot(t0, (k0 + 2) % 3), ci1 = cot(t1, c1.indexOf(i)), cj1 = cot(t1, c1.indexOf(j));
+		ids.push(i, j, tris[3 * t0 + k0], tris[3 * t1 + k1]);
+		K.push(cj0 + cj1, ci0 + ci1, -(ci0 + cj0), -(ci1 + cj1));
+		c.push(3 / (area[t0] + area[t1]));
+	}
+	return { ids: Int32Array.from(ids), K: Float64Array.from(K), c: Float64Array.from(c) };
+}
+
+// The constant part of the global matrix (solvers.pd_tri_matrix_k, pd_spring_k, gpu.Problem's bending blocks), as scalar rows: per
+// triangle area * b_a . b_b, per span k on the ends and -k across, per hinge bend * c * K_a K_b. Summed in float64 from the float32 inputs.
+function constantMatrix(n, tris, Dinv, area, si, sj, k, bend = 0) {
 	const rows = Array.from({ length: n }, () => new Map());
 	const add = (i, j, w) => rows[i].set(j, (rows[i].get(j) || 0) + w);
 	const nt = area.length;
@@ -56,6 +95,12 @@ function constantMatrix(n, tris, Dinv, area, si, sj, k) {
 	}
 	for (let s = 0; s < si.length; s++) {
 		add(si[s], si[s], k[s]); add(sj[s], sj[s], k[s]); add(si[s], sj[s], -k[s]); add(sj[s], si[s], -k[s]);
+	}
+	if (bend) {
+		const H = hingesOf(tris, Dinv, area);
+		for (let h = 0; h < H.c.length; h++) for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
+			add(H.ids[4 * h + a], H.ids[4 * h + b], bend * H.c[h] * H.K[4 * h + a] * H.K[4 * h + b]);
+		}
 	}
 	const ptr = new Int32Array(n + 1), cols = [], vals = [], lii = new Float32Array(n);
 	for (let i = 0; i < n; i++) {
@@ -108,7 +153,10 @@ export class Refit {
 		for (let s = 0; s < ns; s++) { signed[s] = s; signed[ns + s] = -s - 1; }
 		const vs = cache.vs ??= csr(ends, n);
 		const vsSrc = Int32Array.from(vs.order, (o) => signed[o]);
-		const M = this.matrix = cache.matrix ??= constantMatrix(n, A.tris, A.Dinv, A.area, A.si, A.sj, A.k);
+		// the matrix holds bending (head.bend): kept between runs only while that is the same
+		const bend = h.bend ?? 0;
+		if (cache.matrixBend !== bend) { delete cache.matrix; cache.matrixBend = bend; }
+		const M = this.matrix = cache.matrix ??= constantMatrix(n, A.tris, A.Dinv, A.area, A.si, A.sj, A.k, bend);
 		const topo = concat(Int32Array, [['tri', A.tris], ['sleeve', A.sleeve], ['vts', vt.start], ['vtc', vt.order], ['vss', vs.start], ['vsc', vsSrc],
 			['si', A.si], ['sj', A.sj], ['cp', M.ptr], ['cc', M.cols]]);
 		const kon = concat(Float32Array, [['dinv', A.Dinv], ['area', A.area], ['facing', A.facing], ['rest', A.rest_len], ['k', A.k], ['cv', M.vals], ['lii', M.lii]]);
@@ -143,7 +191,7 @@ export class Refit {
 			order1: bodyI.offsets.order1, face0: 0, face1: nf[0], off_fn: q(bodyF.offsets.fn),
 			vn0: q(bodyF.offsets.vn0), vn1: q(bodyF.offsets.vn1), off_pts: q(bodyF.offsets.pts), off_fi: bodyI.offsets.fi,
 			link0: bodyI.offsets.link0, link1: bodyI.offsets.link1, pad0: 0, pad1: 0,
-			plane: h.plane, hold: h.hold, gather: h.gather, turn: h.turn,
+			plane: h.plane, hold: h.hold, gather: h.gather, turn: h.turn, press: h.press ?? 0,
 		};
 		const S = GPUBufferUsage.STORAGE, D = GPUBufferUsage.COPY_DST, C = GPUBufferUsage.COPY_SRC;
 		const make = (data, usage = S | D | C) => {

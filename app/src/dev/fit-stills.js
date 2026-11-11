@@ -102,13 +102,15 @@ async function shoot(dir, name, pick) {
 }
 
 // Every fit, body and pose. -> { shots: [urls], log: [{ fit, body, pose, steps, seconds }] }; window.stillsProgress says where it is.
-// A case already taken under this tag (its <body>-<pose>.json record) is skipped unless redo.
-export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, views: pick = VIEWS, redo = false } = {}) {
+// A case already taken under this tag (its <body>-<pose>.json record) is skipped unless redo. options: other fit options for the run
+// (render/fitted.js FIT_DEFAULTS: press, bend, mesh, steps), put back at the end.
+export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, views: pick = VIEWS, redo = false, options = {} } = {}) {
 	const a = app(), e = a.engine, fv = e.fitted, vp = e.viewport, cam = vp.getCamera();
 	let saved = null;
 	try { saved = localStorage.getItem(AUTOSAVE); } catch { /* storage blocked */ }
-	const keepBody = fv.options.body, shots = [], log = [];
+	const keepBody = fv.options.body, keep = Object.fromEntries(Object.keys(options).map((k) => [k, fv.options[k]])), shots = [], log = [];
 	try {
+		fv.options = { ...fv.options, ...options }; // before the design opens: its fit is made with them
 		await prepare();
 		for (const fit of fits) {
 			if (fv.options.body !== fit) { fv.setOptions({ body: fit }); await refitDone(fv); }
@@ -120,7 +122,7 @@ export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, vi
 				a.exec({ op: 'body.set', size: body, pose });
 				await e.settled();
 				await refitDone(fv);
-				const entry = { fit, body, pose, state: fv.status.state, steps: fv.status.steps, seconds: fv.status.seconds, setup: fv.status.setup, hidden: document.hidden };
+				const entry = { fit, body, pose, options, state: fv.status.state, steps: fv.status.steps, seconds: fv.status.seconds, setup: fv.status.setup, hidden: document.hidden };
 				shots.push(...await shoot(`fit-stills/${tag}/${fit}`, `${body}-${pose}`, pick));
 				await fetch(rec, { method: 'POST', body: JSON.stringify(entry) });
 				log.push(entry);
@@ -128,6 +130,7 @@ export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, vi
 		}
 	} finally {
 		vp.setCamera(cam);
+		fv.options = { ...fv.options, ...keep };
 		if (fv.options.body !== keepBody) fv.setOptions({ body: keepBody });
 		await wait(1000); // after the design's own autosave (400 ms after a change), so this one is last
 		try { if (saved != null) localStorage.setItem(AUTOSAVE, saved); } catch { /* storage blocked */ }

@@ -1,5 +1,7 @@
 """The race's re-fit cases for the app's tuning page (app/refit.html, app/src/fit/): plain little-endian arrays the WebGPU solver reads.
-    <venv python> pipeline/race/export_app.py [body]
+    <venv python> pipeline/race/export_app.py [body] [--press P --bend B --tag T]
+With --tag, the cases are written as <body>-<case>-<tag> with stage 2's squeeze resistance and bending (fit realism plan) in their
+physics and in Python's run, and added to the case list beside the plain ones.
 Per case writes app/captures/refit/<body>-<case>.json (sizes, settings, the Python run to compare against) and .bin (the arrays, in the
 order the JSON lists them). Git-ignored: the body surfaces come from licensed data.
 Everything the solver needs is computed here exactly as gpu.Problem does (the body's pseudo-normals by gpu.part_geometry), so the port
@@ -58,7 +60,10 @@ def seam_edges(tris, rest):
 
 
 def main():
-	key = sys.argv[1] if len(sys.argv) > 1 else 'young'
+	opt = lambda k, d: sys.argv[sys.argv.index(k) + 1] if k in sys.argv else d
+	press, bend, tag = float(opt('--press', 0)), float(opt('--bend', 0)), opt('--tag', '')
+	key = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else 'young'
+	suffix = '-' + tag if tag else ''
 	os.makedirs(OUT, exist_ok=True)
 	refs = {}
 	results = json.load(open(os.path.join(R.CAP, f'results-{key}-friction.json')))
@@ -72,7 +77,7 @@ def main():
 		ref = np.load(rf)
 		refs[name] = (ref, case)
 		start, came = R.start_of(case, refs, key)
-		pb = G.Problem(case, mu=G.MU)
+		pb = G.Problem(case, mu=G.MU, press=press, bend=bend)
 		# Python's own run, for the port's step-by-step check
 		x0 = pb.array(start)
 		pb.set_anchor(x0)
@@ -116,19 +121,22 @@ def main():
 			part_sizes.append(len(t))
 		run = results.get(name, {}).get('runs', {}).get('local-global, 10 CG')
 		head = dict(case=name, body=key, start=came, n=pb.n, nt=pb.nt, ns=pb.ns, body_points=len(Q), part_faces=part_sizes,
-			plane=pb.plane, gather=pb.gather, hold=pb.hold, turn=pb.turn, damp=G.DAMP, mu=G.MU, stick=G.STICK,
+			plane=pb.plane, gather=pb.gather, hold=pb.hold, turn=pb.turn, press=pb.press, bend=pb.bend, damp=G.DAMP, mu=G.MU, stick=G.STICK,
 			python_curve=run['curve'] if run else None, python_ms_per_iteration=run['per_iteration_ms'] if run else None, arrays=[])
 		offset = 0
-		with open(os.path.join(OUT, f'{key}-{name}.bin'), 'wb') as f:
+		with open(os.path.join(OUT, f'{key}-{name}{suffix}.bin'), 'wb') as f:
 			for label, a in arrays:
 				f.write(a.tobytes())
 				head['arrays'].append(dict(name=label, type='i32' if a.dtype == np.int32 else 'f32', offset=offset, length=int(a.size), shape=list(a.shape)))
 				offset += a.nbytes
-		with open(os.path.join(OUT, f'{key}-{name}.json'), 'w') as f:
+		with open(os.path.join(OUT, f'{key}-{name}{suffix}.json'), 'w') as f:
 			json.dump(head, f, indent=1)
-		listed.append(name)
-		print(f'wrote {key}-{name}: {pb.n} points, {offset / 1e6:.1f} MB; start: {came}', flush=True)
-	with open(os.path.join(OUT, f'{key}-cases.json'), 'w') as f:
+		listed.append(name + suffix)
+		print(f'wrote {key}-{name}{suffix}: {pb.n} points, {offset / 1e6:.1f} MB; start: {came}', flush=True)
+	lst = os.path.join(OUT, f'{key}-cases.json')
+	if tag and os.path.exists(lst):  # beside the plain cases
+		listed = [c for c in json.load(open(lst)) if c not in listed] + listed
+	with open(lst, 'w') as f:
 		json.dump(listed, f)
 
 

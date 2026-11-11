@@ -196,18 +196,22 @@ def block_mv_k(D: wp.array(dtype=wp.mat33), p: wp.array(dtype=wp.vec3)):
 
 @wp.kernel
 def pd_tri_k(x: wp.array(dtype=wp.vec3), tris: wp.array(dtype=wp.vec3i), Dinv: wp.array(dtype=wp.mat22), area: wp.array(dtype=float),
-		facing: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), gather: float, turn: float, rhs: wp.array(dtype=wp.vec3)):
+		facing: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), gather: float, turn: float, press: float, rhs: wp.array(dtype=wp.vec3)):
 	"""Local step: each triangle's nearest allowed shape R (singular values clamped to [GATHER, 1], turned the body's way round where
-	it is mostly inside out, as wrap_block.solve's wrong), and its pull on its corners, area * R b_a."""
+	it is mostly inside out, as wrap_block.solve's wrong), and its pull on its corners, area * R b_a. press (stage 2): a squeezed
+	singular value's target moved that share of the way back to 1, mix(c, 1, press), so squeezing costs (energy.Energy.phi).
+	Twin: tri in app/src/fit/refit-wgsl.js."""
 	t = wp.tid()
 	i = tris[t]
 	Di = Dinv[t]
-	T = G.tri_state(x[i[0]], x[i[1]], x[i[2]], Di, area[t], gn[i[0]] + gn[i[1]] + gn[i[2]], facing[t], gather, turn)
+	T = G.tri_state(x[i[0]], x[i[1]], x[i[2]], Di, area[t], gn[i[0]] + gn[i[1]] + gn[i[2]], facing[t], gather, turn, press)
 	sg = 1.0
 	if T.flip == 1:
 		sg = -1.0
 	c1 = wp.clamp(T.s1, gather, 1.0)
 	c2 = wp.clamp(sg * T.s2, gather, 1.0)
+	c1 = c1 + press * (1.0 - c1)
+	c2 = c2 + press * (1.0 - c2)
 	for a in range(3):
 		b = G.tri_b(Di, a)
 		rhs[t * 3 + a] = area[t] * (T.u1 * (c1 * wp.dot(T.v1, b)) + T.u2 * (sg * c2 * wp.dot(T.v2, b)))
@@ -257,16 +261,17 @@ def local_global(pb, x0, rec, cg_iters=20, damp=G.DAMP, precond=None):
 	"""Today's alternating method (wrap_block.solve) on the GPU, on the race's energy: local step per triangle (pd_tri_k), per span and
 	per point (the body's tangent plane, push only), then the global solve, by cg_iters of preconditioned conjugate gradients
 	warm-started from the last positions, where today's solver factorises. Its matrix changes only in the points' own blocks.
-	With pb.mu, friction is one more per-point constraint (gpu.pd_friction_k)."""
+	With pb.mu, friction is one more per-point constraint (gpu.pd_friction_k). With pb.bend, bending is a constant part of the matrix
+	(quadratic, rest curvature zero: nothing on the right side)."""
 	x = wp.clone(x0)
 	A = ws.bsr_copy(pb.A)
-	H = wp.zeros_like(pb.H)
+	H = wp.clone(pb.H)  # bending's constant blocks come with it (gpu.Problem); every other part is written below
 	wp.launch(pd_tri_matrix_k, pb.nt, [pb.tris, pb.Dinv, pb.area, H], device=pb.device)
 	rhs = wp.zeros_like(x)
 	rec.start()
 	while True:
 		pb.freeze(x)
-		wp.launch(pd_tri_k, pb.nt, [x, pb.tris, pb.Dinv, pb.area, pb.facing, pb.gn, pb.gather, pb.turn, pb.gt], device=pb.device)
+		wp.launch(pd_tri_k, pb.nt, [x, pb.tris, pb.Dinv, pb.area, pb.facing, pb.gn, pb.gather, pb.turn, pb.press, pb.gt], device=pb.device)
 		wp.launch(pd_spring_k, pb.ns, [x, pb.si, pb.sj, pb.rest_len, pb.k, pb.gs, H[pb.off_s:]], device=pb.device)
 		wp.launch(pd_rhs_k, pb.n, [x, pb.vt_start, pb.vt_src, pb.gt, pb.vs_start, pb.vs_src, pb.gs, pb.d, pb.gn, pb.q, pb.plane, pb.hold, damp, rhs], device=pb.device)
 		wp.launch(G.surface_hess_k, pb.n, [pb.d, pb.gn, pb.plane, pb.hold, damp, H, pb.off_v], device=pb.device)
@@ -297,7 +302,7 @@ def vbd_k(x: wp.array(dtype=wp.vec3), ids: wp.array(dtype=wp.int32), vt_start: w
 		a = src - 3 * t
 		i = tris[t]
 		Di = Dinv[t]
-		T = G.tri_state(x[i[0]], x[i[1]], x[i[2]], Di, area[t], gn[i[0]] + gn[i[1]] + gn[i[2]], facing[t], gather, turn)
+		T = G.tri_state(x[i[0]], x[i[1]], x[i[2]], Di, area[t], gn[i[0]] + gn[i[1]] + gn[i[2]], facing[t], gather, turn, 0.0)
 		b = G.tri_b(Di, a)
 		g += G.tri_grad(T, area[t], b)
 		H += G.tri_hess(T, G.tri_lambdas(T, gather), area[t], b, b)
@@ -346,7 +351,8 @@ def colour(pb):
 
 def vbd(pb, x0, rec, colours, reg=1e-3, max_move=0.002):
 	"""Vertex Block Descent (Chen et al. 2024), quasi-static: no inertia, reg on each point's block in its place (a point in the
-	gather band, slack, has almost no curvature). One iteration: look up the contact, then every colour once."""
+	gather band, slack, has almost no curvature). One iteration: look up the contact, then every colour once.
+	Without stage 2's press and bending (pb.press, pb.bend): it is not the app's method, so it was left at the physics before them."""
 	x = wp.clone(x0)
 	rec.start()
 	while True:

@@ -18,6 +18,14 @@ E = membrane + surface + elastic (+ friction on a re-fit), no gravity, metres.
   about 4-12 times the weight of the fabric it carries (0.2 kg/m^2 over 42 mm^2 at 7 mm). A span across a 6 cm hollow at 10% stretch resists
   being pulled in about 90 times harder (8 T A / (HOLD L^2)), so taut fabric bridges, sagging about 1% of the hollow's depth; only slack fabric
   follows the hold. A modelling stand-in, not measured: sensitivity in the race record.
+  press (fit realism plan stage 2, 2026-11-10; 0 is the above): squeezing costs press times what stretching does. phi(s) =
+  press * (1 - s)^2 from GATHER to 1, press * (1 - g)^2 + (s - g)^2 - 2 press (1 - g)(s - g) below GATHER: the energy whose
+  stationary points the local step's target mix(clamp(s, GATHER, 1), 1, press) reaches (solvers.pd_tri_k).
+- bending (stage 2; 0: none), per pair of triangles sharing an inside edge (hinge): bend / 2 * 3 / (A0 + A1) * |K . X|^2, X the
+  four points (the edge's two ends, then the corner opposite it in each triangle), K their cotangent weights in the flat rest
+  shape (hinges below): the isometric quadratic bending energy (Bergou, Wardetzky, Harmon, Zorin, Grinspun 2006), zero on a flat
+  sheet, quadratic in the points, so a constant part of the local/global matrix. bend in m^2: bending stiffness over the stretch
+  modulus the energy is measured in.
 - elastic, per span: k / 2 * max(length - rest, 0)^2, tension only.
 - friction, on re-fits only (owner, 2026-11-03), per point (friction below): mu * lam * f(r), r how far the point has slid along the body
   since the re-fit began, lam its contact force PLANE * depth, held through each step with the normal (lagged friction, as IPC, Li et al.
@@ -40,9 +48,50 @@ MU = 0.4  # twin: gpu.MU (the source there)
 STICK = 1.0e-3  # twin: gpu.STICK
 
 
+def hinges(tris, rest):
+	"""Every inside edge shared by exactly two triangles: (ids (h, 4): the edge's ends i, j, then the opposite corners k in the first
+	triangle and l in the second; K (h, 4) the cotangent weights; c (h,) 3 / (A0 + A1)), from each triangle's own flat rest shape, so
+	a seam (two triangles placed apart on the flat pattern) bends like the cloth either side. In each triangle the cotangent of the
+	angle at a corner opposite the edge's other end: K = (cot_j0 + cot_j1, cot_i0 + cot_i1, -(cot_i0 + cot_j0), -(cot_i1 + cot_j1)),
+	so K . X is zero for any flat placement of the four points. Twin: hingesOf in app/src/fit/refit.js (same order: by the first
+	triangle's index, then its corner)."""
+	tris = np.asarray(tris)
+	where, out = {}, []
+	for t in range(len(tris)):
+		for k in range(3):
+			a, b = int(tris[t, (k + 1) % 3]), int(tris[t, (k + 2) % 3])  # the edge opposite corner k
+			key = (min(a, b), max(a, b))
+			if key in where:
+				where[key].append((t, k))
+			else:
+				where[key] = [(t, k)]
+
+	def cot(t, at):  # cotangent of triangle t's rest angle at its corner `at`
+		p, q, r = rest[t, at], rest[t, (at + 1) % 3], rest[t, (at + 2) % 3]
+		u, v = q - p, r - p
+		return (u @ v) / abs(u[0] * v[1] - u[1] * v[0])
+
+	for key, side in where.items():
+		if len(side) != 2:
+			continue
+		(t0, k0), (t1, k1) = sorted(side)
+		i, j = int(tris[t0, (k0 + 1) % 3]), int(tris[t0, (k0 + 2) % 3])
+		ci0, cj0 = cot(t0, (k0 + 1) % 3), cot(t0, (k0 + 2) % 3)
+		c1 = list(tris[t1])
+		ci1, cj1 = cot(t1, c1.index(i)), cot(t1, c1.index(j))
+		area = lambda t: 0.5 * abs((rest[t, 1, 0] - rest[t, 0, 0]) * (rest[t, 2, 1] - rest[t, 0, 1]) - (rest[t, 2, 0] - rest[t, 0, 0]) * (rest[t, 1, 1] - rest[t, 0, 1]))
+		out.append((t0, k0, (i, j, int(tris[t0, k0]), int(tris[t1, k1])), (cj0 + cj1, ci0 + ci1, -(ci0 + cj0), -(ci1 + cj1)), 3.0 / (area(t0) + area(t1))))
+	out.sort(key=lambda h: (h[0], h[1]))
+	ids = np.array([h[2] for h in out], np.int32).reshape(-1, 4)
+	K = np.array([h[3] for h in out], np.float64).reshape(-1, 4)
+	c = np.array([h[4] for h in out], np.float64)
+	return ids, K, c
+
+
 class Energy:
-	def __init__(self, case, surface='nearest', contact='both', hold=HOLD):
+	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0):
 		self.contact, self.hold = contact, hold
+		self.press, self.bend = float(press), float(bend)
 		self.tris = case['tris']
 		rest = case['rest']
 		Dm = np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2)
@@ -53,6 +102,7 @@ class Energy:
 		el = case['elastic']
 		self.si, self.sj, self.rest_len, self.k = el[:, 0].astype(int), el[:, 1].astype(int), el[:, 2], el[:, 3]
 		self.part = case['sleeve'].astype(bool)
+		self.hinge_ids, self.hinge_K, self.hinge_c = hinges(self.tris, rest) if self.bend else (np.zeros((0, 4), int), np.zeros((0, 4)), np.zeros(0))
 		self.surface = W.Surface(case['surface_P'], case['surface_idx'], case['surface_arm'])
 		self.was = None  # the last normals, so a point is not matched across to a surface facing the other way (as solve)
 		self.field = None
@@ -61,15 +111,15 @@ class Energy:
 			self.field = PartFields(case['surface_P'], case['surface_idx'], case['surface_arm'])
 
 	def phi(self, s):
-		g = self.gather
-		return np.where(s > 1, (s - 1) ** 2, np.where(s < g, (g - s) ** 2, 0.0))
+		g, p = self.gather, self.press
+		return np.where(s > 1, (s - 1) ** 2, np.where(s < g, p * (1 - g) ** 2 + (s - g) ** 2 - 2 * p * (1 - g) * (s - g), p * (1 - s) ** 2))
 
 	def dphi(self, s):
-		g = self.gather
-		return np.where(s > 1, 2 * (s - 1), np.where(s < g, -2 * (g - s), 0.0))
+		g, p = self.gather, self.press
+		return np.where(s > 1, 2 * (s - 1), np.where(s < g, 2 * (s - g) - 2 * p * (1 - g), -2 * p * (1 - s)))
 
 	def __call__(self, x, keep_normals=True):
-		"""Energy, gradient (n, 3) and the parts {membrane, stretch, squeeze, surface, elastic, inside_out, off_field}."""
+		"""Energy, gradient (n, 3) and the parts {membrane, stretch, squeeze, surface, elastic, bending, inside_out, off_field}."""
 		tris = self.tris
 		grad = np.zeros_like(x)
 		# surface
@@ -111,8 +161,13 @@ class Energy:
 		f = (self.k * ext / now)[:, None] * span
 		np.add.at(grad, self.sj, f)
 		np.add.at(grad, self.si, -f)
-		parts = dict(membrane=e_membrane, stretch=e_stretch, squeeze=e_membrane - e_stretch, surface=e_surface, elastic=e_elastic, inside_out=int(flip.sum()), off_field=off)
-		return e_membrane + e_surface + e_elastic, grad, parts
+		# bending: bend / 2 * c * |K . X|^2 per hinge, gradient bend * c * K_a (K . X) on its point a
+		KX = np.einsum('ha,hak->hk', self.hinge_K, x[self.hinge_ids])
+		e_bend = 0.5 * self.bend * (self.hinge_c * (KX ** 2).sum(1)).sum()
+		for a in range(4):
+			np.add.at(grad, self.hinge_ids[:, a], self.bend * (self.hinge_c * self.hinge_K[:, a])[:, None] * KX)
+		parts = dict(membrane=e_membrane, stretch=e_stretch, squeeze=e_membrane - e_stretch, surface=e_surface, elastic=e_elastic, bending=e_bend, inside_out=int(flip.sum()), off_field=off)
+		return e_membrane + e_surface + e_elastic + e_bend, grad, parts
 
 
 def friction(x, anchor, n, lam, mu=MU, stick=STICK):

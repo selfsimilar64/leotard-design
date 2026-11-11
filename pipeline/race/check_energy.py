@@ -1,5 +1,5 @@
 """Stage 1 checks: is energy.py's gradient right, is it today's physics, and does today's alternating solver actually minimise it?
-    python pipeline/race/check_energy.py [pose]
+    python pipeline/race/check_energy.py [pose] [quick]      (quick: the gradient checks only)
 Reads app/captures/race/case-young-<pose>.npz (make_case.py). Spec: knowledge/engineering/app/solver-race-plan.md.
 """
 import os
@@ -46,6 +46,48 @@ def main():
 		fd = (En(x + h * d, False)[0] - En(x - h * d, False)[0]) / (2 * h)
 		worst = max(worst, abs(fd - (g * d).sum()) / max(abs(fd), 1e-12))
 	print(f'  worst relative difference over 20 directions: {worst:.2e}')
+
+	print('\n== 1b. with squeeze resistance and bending (fit realism plan stage 2): the gradient, and bending zero on the flat pattern')
+	for press, bend in ((0.15, 0.0), (0.0, 1e-5), (0.15, 1e-5)):
+		Eb = Energy(case, press=press, bend=bend)
+		Eb(x)
+		_, g, parts = Eb(x, keep_normals=False)
+		worst = 0.0
+		for _ in range(20):
+			d = rng.normal(0, 1, x.shape)
+			d /= np.linalg.norm(d)
+			h = 1e-7
+			fd = (Eb(x + h * d, False)[0] - Eb(x - h * d, False)[0]) / (2 * h)
+			worst = max(worst, abs(fd - (g * d).sum()) / max(abs(fd), 1e-12))
+		print(f'  press {press}, bend {bend}: worst relative difference {worst:.2e}; bending {parts["bending"]:.4g}, squeeze {parts["squeeze"]:.4g}')
+	# each hinge laid flat on its own: the first triangle as on the pattern, the second turned (and if need be mirrored: the garment's
+	# halves share their flat places) onto the other side of the shared edge
+	ids, K, tris, rest = Eb.hinge_ids, Eb.hinge_K, case['tris'], case['rest']
+	cr = lambda a, b: a[0] * b[1] - a[1] * b[0]
+	by_edge = {}
+	for t, tri in enumerate(tris):
+		for k in range(3):
+			a, b = int(tri[(k + 1) % 3]), int(tri[(k + 2) % 3])
+			by_edge.setdefault((min(a, b), max(a, b)), []).append(t)
+	KX = []
+	for h, (i, j, k, l) in enumerate(ids):
+		t0, t1 = sorted(by_edge[(min(i, j), max(i, j))])
+		P0 = {int(v): rest[t0][m] for m, v in enumerate(tris[t0])}
+		P1 = {int(v): rest[t1][m] for m, v in enumerate(tris[t1])}
+		u0, u1 = (P0[j] - P0[i]) / np.linalg.norm(P0[j] - P0[i]), (P1[j] - P1[i]) / np.linalg.norm(P1[j] - P1[i])
+		turn = np.array([[u0[0], -u0[1]], [u0[1], u0[0]]]) @ np.array([[u1[0], u1[1]], [-u1[1], u1[0]]])
+		pl = P0[i] + turn @ (P1[l] - P1[i])
+		if cr(u0, pl - P0[i]) * cr(u0, P0[k] - P0[i]) > 0:
+			v = pl - P0[i]
+			pl = P0[i] + 2 * (v @ u0) * u0 - v
+		X = np.zeros((4, 3))
+		X[0, :2], X[1, :2], X[2, :2], X[3, :2] = P0[i], P0[j], P0[k], pl
+		KX.append(np.linalg.norm(K[h] @ X))
+	KX = np.array(KX)
+	print(f'  {len(ids)} hinges, each laid flat: |K.X| above 1e-9 at {(KX > 1e-9).sum()} (seams whose two edges differ in length), max {KX.max():.2e} '
+		f'(an edge is ~7e-3)')
+	if 'quick' in sys.argv:  # checks 1 and 1b only
+		return
 
 	print('\n== 2. how much the written energy differs from what the alternating solver balances')
 	rest = case['rest']

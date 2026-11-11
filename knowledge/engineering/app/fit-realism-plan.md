@@ -189,6 +189,33 @@ wrinkles finer than the mesh.[^owner]
 - **Expected cost:** 0.73 s for 150 steps at 3.5 mm today; bending about 1.5-2 times per step; more steps unknown. Guess 1.5-3 s
   before tuning.
 
+**Progress (2026-11-10, owner: "we can proceed"): steps 1 and 2 built, as a trial behind options; first sweep.**
+- **Twins, Python first.** `energy.py`: `phi` with `press` (from GATHER to 1 `press (1 - s)^2`, below GATHER continued with the
+  target `mix(GATHER, 1, press)`: the energy whose stationary points the local step's blended target reaches; the plan's
+  [INFERRED] that the blend acts as stiffness `press` times stretch's holds this way), and `hinges` + bending (Bergou et al.
+  2006: per inside edge `bend / 2 * 3 / (A0 + A1) * |K . X|^2`, cotangent weights from each triangle's own flat shape, so seams and
+  the garment's mirrored halves bend like the cloth). `check_energy.py <pose> quick`: gradients against finite differences 1e-7 to
+  1e-6 relative with either or both on; every hinge laid flat gives `K . X` = 0 except 108 seam hinges whose sewn edges differ in
+  length (up to 3e-4 against a 7e-3 edge). `gpu.py`: `phi`/`dphi`/`ddphi` take `press`; `Problem(press, bend)` puts the hinges'
+  4 x 4 blocks in the matrix pattern (constant, filled once) and bending in the energy and gradient (`bend_k`); `check_gpu.py
+  --press --bend`: bending 8.033263e-3 numpy / 8.033272e-3 GPU; the other loose figures there are as they were with both off.
+  `solvers.local_global`: target `mix(clamp(s), 1, press)`, matrix with bending's blocks; VBD left at the old physics (noted).
+  `export_app.py --press --bend --tag`: cases `young-<case>-s2` (press 0.15, bend 1e-6) beside the plain ones.
+- **App.** `refit-wgsl.js` `tri`: the same blended target (`P.press`); `refit.js hingesOf` (twin of `energy.hinges`, same order;
+  `app/test/hinges.test.js` diffs them on 600 triangles of a race case) and bending in `constantMatrix` (the cached matrix is
+  rebuilt when `bend` changes). `fitted-case.js buildCase(..., { press, bend })` writes them into the case head; `render/fitted.js`
+  options `press`, `bend` (default 0: today's fit; no control); `dev/fit-stills.js all(tag, { options })` runs stills with them.
+  Port check against Python (`young-*-s2`, 10 CG): after 20 steps 0.08-0.21 mm mean, 1.4-3.7 mm worst, as the plain cases
+  (0.19-0.23 mean, 3.6-4.2 worst): the rounding spread already recorded in [the re-fit in the app](/engineering/app/refit-in-the-app.md).
+- **First sweep** (hybrid high cut, `young`, 3.5 mm, on the skin, standing and back arch, seat and small of the back; stills
+  `app/captures/fit-stills/s2-*`, sheets `s2-sweep-1.png`, `s2-sweep-2.png`, git-ignored): press 0.1 with bend 1e-7 to 1e-5 shows
+  no folds in the shape (the fabric squeezes instead; the painted waves stay). **Press 1** (squeezing as costly as stretching, as
+  knit that buckles rather than shortens) gives real horizontal folds at the arched back's waist and a soft one at the standing
+  small of the back, and the painted waves fade there by themselves (little squeeze left); bend 1e-7 sharper and narrower, 1e-6
+  broader and softer. At the arched seat the fabric looks looser. Re-fit in the preview pane (wall time with the page drawing)
+  2.5-2.7 s against 2.3-2.4 s for 3.5 mm without them: over the gate's 1.5 s, as 3.5 mm already is.
+- Not yet: the owner's judgement, other poses and the underarm, the crotch measures, `bend` between 1e-7 and 1e-6, more steps.
+
 # Stage 3: elastic as a band
 
 1. **Cheap stage (springs kept).**

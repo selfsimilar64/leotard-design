@@ -74,6 +74,9 @@ export const FIT_DEFAULTS = {
 	// fit, on the drawn garment's surface (the skin plus the membrane's lift and the seat sheet), kept to go back to. No control
 	// offers it (Settings' Fabric fit face has no room: owner, 2026-11-10, "at least in the backend"): the display setting fitBody
 	// (render/display.js, dev only) or app.engine.fitted.setOptions({ body: 'bridged' })
+	press: 0,                 // fit realism plan stage 2, a trial (no control; app.engine.fitted.setOptions, dev/fit-stills.js): how much
+	bend: 0,                  // squeezing the fabric costs against stretching it (0: free), and its bending stiffness over its stretch
+	// modulus (m^2; 0: none). Twins: gpu.Problem press and bend (pipeline/race), energy.py
 	mesh: 7,                  // mm between the garment's points. Finer (5, 3.5) is a dev-only trial: those fits are made by
 	// `WRAP_STEP=5 python pipeline/wrap_block.py --drafted <block> young` into app/captures and served at /fitted-local/
 	// (knowledge/engineering/app/fit-mesh-resolution-trial.md); a garment without one shows its 7 mm fit and says so
@@ -137,7 +140,7 @@ export class FittedView {
 		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
 		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
-		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
+		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
 		else this.show();
 	}
 
@@ -417,7 +420,8 @@ export class FittedView {
 				this.device ||= await Refit.device();
 				const man = this.engine.body, t0 = performance.now(), skin = this.options.body === 'skin';
 				// the body it stands on, and its start there (fitted-case.js startOf): the bare skin, or the drawn garment's surface
-				const data = buildCase(this.data, this.garment, skin ? man.aPos.array : man.garmentPos, man.idx, man.wArm, this.cache ??= {});
+				const data = buildCase(this.data, this.garment, skin ? man.aPos.array : man.garmentPos, man.idx, man.wArm, this.cache ??= {},
+					{ press: this.options.press, bend: this.options.bend });
 				const r = new Refit(this.device, data, { maxSteps: this.options.steps, mu: this.options.mu, tol: 0 });
 				const built = performance.now() - t0;
 				const steps = this.options.steps, W = r.settings.window, tRun = performance.now(), free = skin ? FREE_STEPS : 0;
