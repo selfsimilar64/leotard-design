@@ -37,6 +37,9 @@ sources:
   - id: shelved
     resource: /decisions/2026-11-11-folds-as-geometry-shelved.md
     title: Folds as geometry (fit realism stage 2) shelved
+  - id: folds-cut
+    resource: /decisions/2026-11-11-folds-cut-length-and-dressing.md
+    title: Fewer painted folds, blocks cut 12% shorter, poses fitted from a standing fit
   - id: bare-skin
     resource: /decisions/2026-11-10-fit-on-bare-skin.md
     title: The re-fit stands on the bare skin, settled without friction first; the older fit is kept
@@ -287,6 +290,7 @@ firmness built as a trial behind options; stills at 88% length.**[^owner]
 - **Cost:** none measured: re-fit 0.7-1.0 s at 88% without, 0.8-1.0 s with the band, 0.6-1.1 s firm 1.5 (pane wall time, 300 steps
   with the frictionless phase).
 - Not yet: the owner's judgement; the gate's leg-line turn and half widths.
+- **Owner on these stills (2026-11-11):** 88% length looks better in most poses (the standing back smooth), but the lunge's seat rode up; the band and firmness looked the same as without. Asked what removes the many pronounced ripples (raised arm, arched back, seat) without the ride-up. **Built, all on by default** ([decision](/decisions/2026-11-11-folds-cut-length-and-dressing.md)):[^folds-cut] painted folds only beyond the knit's take-up (88%) and 30 mm broad; Armstrong's block and the hybrid cut at 88% length; poses fitted from the garment's own standing fit with 50 steps of slip (stage 5 steps 1 and 2, below).
 
 # Stage 4: fabric that differs along and across
 
@@ -314,6 +318,8 @@ firmness built as a trial behind options; stills at 88% length.**[^owner]
   the same fit every time.
 - **Expected cost:** the ramp none; the per-body fit about 1 s once per body and design, then cached.
 
+**Progress (2026-11-11): steps 1 and 2 built** with the folds and cut length above ([decision](/decisions/2026-11-11-folds-cut-length-and-dressing.md)). Standing fit per body: on the bare skin a pose is fitted from the same body's `standing` fit (cached), carried by each point's host motion; slip: `slip` steps without friction (50) before 150 with. Lunge leg openings stay at their standing height (97 mm above the crotch on the body against 103-106 free); the back arch at slip 0 pulls one side up, at 50 looks as before. The gate's armhole check not yet made.
+
 # Stage 6: soft body
 
 1. A softness value per canonical body vertex (soft seat, bust, thigh, belly; firm ribs, hip bones, shoulders), carried in the free
@@ -339,4 +345,5 @@ firmness built as a trial behind options; stills at 88% length.**[^owner]
 [^code]: The fit's code as read for this plan.
 [^diagnosis]: Why the re-fit does not span hollows on bare skin (diagnosis), 2026-11-10.
 [^shelved]: Decision of 2026-11-11: folds as geometry shelved.
+[^folds-cut]: Decision of 2026-11-11: fewer painted folds, blocks cut 12% shorter, poses fitted from a standing fit.
 [^bare-skin]: Decision of 2026-11-10: the re-fit stands on the bare skin; the older fit is kept; stage 0 as in-app stills.

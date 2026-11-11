@@ -52,8 +52,14 @@ ELASTIC = {('front', 'leg'): 1.0, ('back', 'leg'): 0.75, ('front', 'neck'): 0.95
 # elastic was found: an estimated 3-10 N per unit strain against fabric's 100-400 N/m (research_notes/Tight garment fit solver audit/fabric_mechanics.md) gives 10-50 mm, most likely 10-30.
 ELASTIC_WIDTH = 0.020
 # TUNABLE. How far apart folds form in tight fabric: wavelength = 2 sqrt(pi) (B/T)^(1/4) sqrt(L) (Cerda and Mahadevan 2003), with bending B about 5 uN m, tension T about 50 N/m,
-# length L about 0.1 m (research_notes/Tight garment fit solver audit/fabric_mechanics.md). Twin: 314 in app/src/materials/fabric.js.
-FOLD_WAVELENGTH = 0.02
+# length L about 0.1 m (research_notes/Tight garment fit solver audit/fabric_mechanics.md): 20 mm at T 50 N/m, the first value. 30 mm
+# (2026-11-11, owner: the painted ripples were too many and too pronounced) is the same formula at T about 10 N/m, the low tension
+# where fabric has spare length to fold. Twins: fit/folds.js, and 209 (2 pi / 30 mm) in app/src/materials/fabric.js and fabric-node.js.
+FOLD_WAVELENGTH = 0.03
+# The squeeze a knit takes up in its own loops, invisibly, before it buckles: only fabric shorter than this share of its flat length
+# folds, and only by what is beyond it (fit realism plan, 2026-11-11, owner: realistic leotards fold only where there is considerable
+# extra fabric). The same idea as the re-fit's `jam`. [INFERRED], no measured value for tricot; TUNABLE, by eye.
+FOLD_TAKE_UP = 0.88
 FOLD_MAX = 0.006  # a fold no higher than this, however much fabric the fit has gathered
 FOLD_SMOOTH = 12  # passes over the mesh: about 25 mm at 7 mm. Folds run coherently over several wavelengths; triangle-to-triangle squeeze is mesh noise (TUNABLE)
 # a finer mesh takes more passes for the same distance (a pass spreads about one edge, so the reach goes as spacing * sqrt(passes));
@@ -390,7 +396,8 @@ def closest_on_triangle(p, tri):
 
 def folds_of(q, uv, tri):
 	"""Where fabric lies smaller than flat, the folds its spare length goes into: per point, as twice the angle of the squeezed direction on the flat piece, x and y scaled
-	by height, then height, from height = wavelength / pi * sqrt(flat / now - 1). Smoothed over the mesh.
+	by height, then height, from height = wavelength / pi * sqrt(FOLD_TAKE_UP * flat / now - 1) (the spare length beyond what the knit takes
+	up, as waves of that wavelength). Smoothed over the mesh.
 	Twin: foldsOf in app/src/fit/folds.js (the app recomputes them after every re-fit); keep the steps and FOLD_* constants alike."""
 	a, b = uv[tri], q[tri]
 	Dm = np.stack([a[:, 1] - a[:, 0], a[:, 2] - a[:, 0]], axis=2)
@@ -399,7 +406,7 @@ def folds_of(q, uv, tri):
 	F = np.stack([b[:, 1] - b[:, 0], b[:, 2] - b[:, 0]], axis=2)[ok] @ np.linalg.inv(Dm[ok])
 	uu, vv, cross_ = (F[:, :, 0] ** 2).sum(1), (F[:, :, 1] ** 2).sum(1), (F[:, :, 0] * F[:, :, 1]).sum(1)
 	least = np.sqrt(np.maximum((uu + vv) / 2 - np.hypot((uu - vv) / 2, cross_), 1e-6))
-	height = np.minimum(FOLD_WAVELENGTH / math.pi * np.sqrt(np.maximum(1 / least - 1, 0)), FOLD_MAX)
+	height = np.minimum(FOLD_WAVELENGTH / math.pi * np.sqrt(np.maximum(FOLD_TAKE_UP / least - 1, 0)), FOLD_MAX)
 	angle = np.arctan2(cross_, (uu - vv) / 2) + math.pi  # the larger direction's doubled angle, turned to the smaller's
 	area = np.abs(det[ok]) / 2
 	values = np.column_stack([height * np.cos(angle), height * np.sin(angle), height]) * area[:, None]

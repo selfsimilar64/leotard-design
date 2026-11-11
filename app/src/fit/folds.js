@@ -1,7 +1,8 @@
 // Folds where a fit leaves fabric smaller on the body than flat: the shader's aFold.xyz (materials/fabric.js), from the fit itself.
 // Twin of folds_of in pipeline/wrap_block.py (which bakes them into a fitted file's cells): same constants, same steps. The app
 // recomputes them after every re-fit (render/fitted.js show), so a pose, a body or the garment's size (meta.fitSize) moves them.
-const FOLD_WAVELENGTH = 0.02; // wrap_block.FOLD_WAVELENGTH
+const FOLD_WAVELENGTH = 0.03; // wrap_block.FOLD_WAVELENGTH; the shaders' 209 (2 pi / 30 mm: materials/fabric.js, fabric-node.js)
+const FOLD_TAKE_UP = 0.88;    // wrap_block.FOLD_TAKE_UP: the squeeze the knit takes up unseen; only what is beyond it folds
 const FOLD_MAX = 0.006;       // wrap_block.FOLD_MAX
 const FOLD_SMOOTH = 12;       // wrap_block.FOLD_SMOOTH
 
@@ -27,7 +28,7 @@ export function foldsOf(q, uv, tri, passes = FOLD_SMOOTH) {
 			uu += f0 * f0; vv += f1 * f1; cr += f0 * f1;
 		}
 		const least = Math.sqrt(Math.max((uu + vv) / 2 - Math.hypot((uu - vv) / 2, cr), 1e-6));
-		const h = Math.min(FOLD_WAVELENGTH / Math.PI * Math.sqrt(Math.max(1 / least - 1, 0)), FOLD_MAX);
+		const h = Math.min(FOLD_WAVELENGTH / Math.PI * Math.sqrt(Math.max(FOLD_TAKE_UP / least - 1, 0)), FOLD_MAX);
 		const ang = Math.atan2(cr, (uu - vv) / 2) + Math.PI, area = Math.abs(det) / 2;
 		const vx = h * Math.cos(ang) * area, vy = h * Math.sin(ang) * area, vz = h * area;
 		for (const p of [a, b, c]) { total[3 * p] += vx; total[3 * p + 1] += vy; total[3 * p + 2] += vz; weight[p] += area; }

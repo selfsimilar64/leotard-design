@@ -586,12 +586,12 @@ const FABRIC_FRAGMENT = /* glsl */`
 	}
 
 	// --- folds a fit leaves: soft waves across the direction the fabric is squeezed, shorter than the garment and uneven, deeper where more length is spare.
-	// 314 is 2 pi over the 20 mm wavelength in pipeline/wrap_block.py FOLD_WAVELENGTH. A bump can only shade a fold, and full height shades as hard stripes: .25 is by eye (TUNABLE)
+	// 209 is 2 pi over the 30 mm wavelength in pipeline/wrap_block.py FOLD_WAVELENGTH (fit/folds.js). A bump can only shade a fold, and full height shades as hard stripes: .25 is by eye (TUNABLE)
 	if ( uZone == 5 && vFold.z > .00005 ) {
 		float fa = .5 * atan( vFold.y, vFold.x ); // fd has no true sign and flips where this wraps: every wave below is a cosine of an odd phase, so a flip changes nothing
 		vec2 fd = vec2( cos( fa ), sin( fa ) ), fs = vec2( - fd.y, fd.x );
 		float fu = dot( vUV, fd ), fv = dot( vUV, fs );
-		float wave = cos( fu * 314. + sin( fv * 31. ) * 2.2 + sin( fv * 83. + fu * 40. ) * .7 );
+		float wave = cos( fu * 209. + sin( fv * 31. ) * 2.2 + sin( fv * 83. + fu * 40. ) * .7 );
 		float runs = .55 + .45 * cos( fv * 47. + fu * 120. + sin( fu * 70. ) * 1.5 );
 		float h = wave * wave * sign( wave ) * runs;
 		float depth = smoothstep( .0002, .002, vFold.z ) * vFold.z;

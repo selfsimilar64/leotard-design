@@ -82,6 +82,11 @@ export const FIT_DEFAULTS = {
 	kink: 0,                  // fit realism plan stage 3, a trial (no control): the elastic as a band that will not shorten along its line
 	firm: 1,                  // (push-only spans between second neighbours, this times the elastic's stiffness; 0: none), and the
 	// elastic's firmness (its stiffness times this). refit.js elasticSprings; twins energy.springs, gpu.Problem kink and firm
+	slip: 50,                 // in a pose, steps without friction before the rest (no control): how far the garment may slide from where
+	// dressing standing put it (fit realism plan stage 5 step 1, "fabric slip in poses"; owner, 2026-11-11: the shorter pattern rode up
+	// the seat in the lunge). Leg openings' mean height on the body above the crotch, young, 88% length, standing 91-97 mm: lunge with
+	// arms up 97-98 at 0 and 50, 103-106 at 150 (as free); back arch 90/102 at 0 (one side pulled up, diagonal folds), 95/100 at 50
+	// (looks as before). 50: little ride-up and no lopsided pull
 	mesh: 7,                  // mm between the garment's points. Finer (5, 3.5) is a dev-only trial: those fits are made by
 	// `WRAP_STEP=5 python pipeline/wrap_block.py --drafted <block> young` into app/captures and served at /fitted-local/
 	// (knowledge/engineering/app/fit-mesh-resolution-trial.md); a garment without one shows its 7 mm fit and says so
@@ -90,6 +95,9 @@ export const FIT_MESHES = [7, 5, 3.5];
 // Steps without friction before a re-fit on the bare skin (fit realism plan stage 1 step 3): the fabric finds its tension balance and
 // leaves the hollows the start put it in, then friction is anchored where it settled. 150: the seat as the owner chose it (dev/bridge-probe.js).
 const FREE_STEPS = 150;
+// The pose a fitted garment is put on in (fit realism plan stage 5 step 2): every other pose is fitted from this pose's fit, carried by
+// the body's motion, not from the file's (owner, 2026-11-11). On the bare skin only; a body without it fits each pose from the file's.
+const DRESS_POSE = 'standing';
 
 // The finer fit's file for a garment entry (garment/fitted.js): wrap_block's names with its STEP_TAG before the cut,
 // e.g. hybrid-6-block -> wrap-hybrid-6-s5-block, wrap-XS-high-resolved -> wrap-XS-s3p5-high-resolved.
@@ -140,12 +148,13 @@ export class FittedView {
 	// The designer's fit settings: a change to the re-fit runs it again; the lift only redraws.
 	setOptions(o) {
 		const before = this.options;
+		this.dressed = null; // the standing fit is made again with the new settings
 		this.options = { ...before, ...o };
 		if (!this.active) return;
 		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
 		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
-		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
+		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm') || changed('slip')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
 		else this.show();
 	}
 
@@ -424,29 +433,35 @@ export class FittedView {
 				this.setStatus({ state: 'fitting' });
 				this.device ||= await Refit.device();
 				const man = this.engine.body, t0 = performance.now(), skin = this.options.body === 'skin';
-				// the body it stands on, and its start there (fitted-case.js startOf): the bare skin, or the drawn garment's surface
-				const data = buildCase(this.data, this.garment, skin ? man.aPos.array : man.garmentPos, man.idx, man.wArm, this.cache ??= {},
-					{ press: this.options.press, bend: this.options.bend, jam: this.options.jam, kink: this.options.kink, firm: this.options.firm });
-				const r = new Refit(this.device, data, { maxSteps: this.options.steps, mu: this.options.mu, tol: 0 });
-				const built = performance.now() - t0;
-				const steps = this.options.steps, W = r.settings.window, tRun = performance.now(), free = skin ? FREE_STEPS : 0;
-				if (free) { // frictionless, read back once, then friction anchored where it settled (reset: anchor and held forces anew)
-					r.setSettings({ mu: 0 }); r.settings.window = free;
-					await r.run({ steps: free });
-					r.reset(await r.positions(false));
-					r.setSettings({ mu: this.options.mu }); r.settings.window = W;
+				// the body it stands on: the bare skin, or the drawn garment's surface
+				const Q = skin ? man.aPos.array : man.garmentPos;
+				// on the skin in a pose: dressed standing first (kept while design, size, body and settings stay), then that fit carried
+				// into the pose by the body's motion (each point by its host's move: fitted-case.js startOf's hosts) and fitted there
+				// with friction from the start (options.slip steps without), so the garment stays where it was put unless pulled off it
+				const dressAt = skin && man.poseKey !== JSON.stringify(DRESS_POSE) ? DRESS_POSE : null;
+				let start = null, dressSteps = 0, dressSec = 0;
+				if (dressAt) {
+					const key = JSON.stringify([man.key, man.head, this.size, this.meshMm]);
+					if (this.dressed?.key !== key || this.dressed.data !== this.data) {
+						let Qs = null;
+						try { Qs = man.positionsIn(dressAt); } catch { /* the body lacks the pose: fitted from the file's start */ }
+						if (Qs) {
+							const d = await this.fitOn(Qs, null, FREE_STEPS);
+							this.dressed = { key, data: this.data, X: d.X, base: startOf(this.data, Qs) };
+							dressSteps = d.steps; dressSec = d.seconds;
+						}
+					}
+					if (this.dressed?.key === key && this.dressed.data === this.data) {
+						const now = startOf(this.data, Q), { X: D, base } = this.dressed;
+						start = Float32Array.from(now, (v, i) => v + D[i] - base[i]);
+					}
 				}
-				// no early stop (the step count is the lever), so no reading back every window: all but the last window in one run,
-				// then the last window, whose average is what is drawn (the shoulder's chatter hidden), as the tuning page shows it
-				if (steps > W) { r.settings.window = steps - W; await r.run({ steps: steps - W }); r.settings.window = W; }
-				const res = await r.run({ steps });
-				const X = await r.positions(steps > W);
-				r.destroy();
+				const fit = await this.fitOn(Q, start, start ? this.options.slip : skin ? FREE_STEPS : 0);
 				if (this.again || gen !== this.gen || !this.active) continue; // the body changed meanwhile: run again on the new one
-				this.solved = X;
+				this.solved = fit.X;
 				this.show();
 				this.hold(false);
-				this.setStatus({ state: 'fitted', steps: free + res.steps, seconds: (performance.now() - tRun) / 1000, setup: built / 1000 });
+				this.setStatus({ state: 'fitted', steps: dressSteps + fit.steps, seconds: dressSec + fit.seconds, setup: (performance.now() - t0) / 1000 - dressSec - fit.seconds, dressed: !!start });
 			} while (this.again && this.active);
 		} catch (e) {
 			console.error('re-fit', e);
@@ -456,6 +471,30 @@ export class FittedView {
 			this.running = false;
 			if (!this.running && !this.again) this.hold(false);
 		}
+	}
+
+	// One re-fit on body points Q from start (null: the file's, fitted-case.js startOf): `free` steps without friction, read back once,
+	// then options.steps with friction anchored where it settled (reset: anchor and held forces anew). -> { X, steps, seconds }
+	async fitOn(Q, start, free) {
+		const man = this.engine.body;
+		const data = buildCase(this.data, this.garment, Q, man.idx, man.wArm, this.cache ??= {},
+			{ press: this.options.press, bend: this.options.bend, jam: this.options.jam, kink: this.options.kink, firm: this.options.firm });
+		if (start) data.arrays.start = start;
+		const r = new Refit(this.device, data, { maxSteps: this.options.steps, mu: this.options.mu, tol: 0 });
+		const steps = this.options.steps, W = r.settings.window, t = performance.now();
+		if (free) {
+			r.setSettings({ mu: 0 }); r.settings.window = free;
+			await r.run({ steps: free });
+			r.reset(await r.positions(false));
+			r.setSettings({ mu: this.options.mu }); r.settings.window = W;
+		}
+		// no early stop (the step count is the lever), so no reading back every window: all but the last window in one run,
+		// then the last window, whose average is what is drawn (the shoulder's chatter hidden), as the tuning page shows it
+		if (steps > W) { r.settings.window = steps - W; await r.run({ steps: steps - W }); r.settings.window = W; }
+		const res = await r.run({ steps });
+		const X = await r.positions(steps > W);
+		r.destroy();
+		return { X, steps: free + res.steps, seconds: (performance.now() - t) / 1000 };
 	}
 
 	// The design's materials on the fitted pieces, and the app's own pieces and edges out of sight.

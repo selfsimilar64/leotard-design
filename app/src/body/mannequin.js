@@ -165,6 +165,15 @@ class Mannequin {
 	// The canonical mesh of a body's A-pose (cached).
 	restOf(b) { return (b.rest ??= applyStencil(this.stencil, b.cages['a-pose'])); }
 
+	// The skin of the body shown in another pose, as setBody makes it (the cage, the mannequin head), the mesh left as it is: where a
+	// fitted garment is dressed before it is carried into the pose shown (render/fitted.js refit). Throws if the body lacks the pose.
+	positionsIn(pose) {
+		const P = new Float32Array(this.vertices * 3);
+		applyStencil(this.stencil, this.cageOf(this.bodies[this.key], pose), P);
+		if (this.head === 'mannequin') this.sculptHead(P);
+		return P;
+	}
+
 	// The cage of a body in a pose: a Daz pose as baked, or the A-pose plus each posed arm's change.
 	cageOf(b, pose) {
 		const p = poseSpec(pose), A = b.cages['a-pose'];

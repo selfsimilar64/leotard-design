@@ -455,11 +455,11 @@ export function createFabricNodeMaterial(zone, u) {
 					trimAO.mulAssign(float(1).sub(env.mul(0.1).mul(ZN.w).mul(clamp(h.negate(), 0, 1))));
 				});
 			});
-			// folds a fit leaves (pipeline/wrap_block.py; 314 = 2 pi / 20 mm; .25 by eye)
+			// folds a fit leaves (pipeline/wrap_block.py; 209 = 2 pi / 30 mm, FOLD_WAVELENGTH; .25 by eye)
 			if (!skip('folds')) If(vFold.z.greaterThan(0.00005), () => {
 				const fa = atan(vFold.y, vFold.x).mul(0.5), fd = vec2(cos(fa), sin(fa)), fs = vec2(fd.y.negate(), fd.x);
 				const fu = dot(aUV, fd), fv = dot(aUV, fs);
-				const wave = cos(fu.mul(314).add(sin(fv.mul(31)).mul(2.2)).add(sin(fv.mul(83).add(fu.mul(40))).mul(0.7)));
+				const wave = cos(fu.mul(209).add(sin(fv.mul(31)).mul(2.2)).add(sin(fv.mul(83).add(fu.mul(40))).mul(0.7)));
 				const runs = cos(fv.mul(47).add(fu.mul(120)).add(sin(fu.mul(70)).mul(1.5))).mul(0.45).add(0.55);
 				const h = wave.mul(wave).mul(sign(wave)).mul(runs), depth = smoothstep(0.0002, 0.002, vFold.z).mul(vFold.z);
 				bumpH.addAssign(h.mul(depth).mul(0.25));

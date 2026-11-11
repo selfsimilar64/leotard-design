@@ -4,6 +4,12 @@
 // Files: app/public/fitted/, copied there by pipeline/publish_fitted.py from the fit's output (twin: its OWNED list).
 // Only blocks the project owns are listed: a block derived from a bought pattern stays out (its licence bars
 // redistributing it). knowledge/engineering/app/fitted-garments-in-the-app.md
+
+// The size a block is cut at by default, against its draft (fitSizeOf): Armstrong's block and the hybrid take almost no length out
+// for stretch (the seat about 3% stretched up and down standing), where real leotards are cut about 8-24% shorter than the body
+// (knowledge: real-leotard-yardsticks, negative-ease). Owner, 2026-11-11: width 100%, length 85-90%; 88% looked better in most poses.
+const CUT = { width: 1, length: 0.88 };
+
 // The purchased block (BasicPatternBlock 0005, XS on `young`), for comparison only: its fits stay in app/captures, served by the
 // dev server at /fitted-local/ (vite.config.js) and listed only in dev, so they are never bundled or shipped (licence).
 // Only the high-cut garments are offered (owner, 2026-11-10): the basic and thigh legs, the bodyshaper and the stretch-knit leotard
@@ -14,14 +20,14 @@
 // cut from the binding, in the design's binding look (fittedTrimOf).
 const LOCAL = [
 	{ key: 'bought-XS-high', label: 'Purchased block, high cut (local)', leg: 'High-hips leg', file: 'wrap-XS-high-resolved', fittedOn: 'young', local: true, hint: 'The purchased block, size XS, high-hips leg; fitted by simulation on the young body. Shown only on this computer (its licence bars shipping it)' },
-	{ key: 'hybrid-6-strappy', label: 'Strappy back (local)', leg: 'Hybrid, preview', file: 'wrap-hybrid-6-strappy-resolved', fittedOn: 'young', local: true, bound: true, hint: 'The hybrid high cut recut as a strappy back: thin straps, bound neck and armholes, open upper back. A preview, shown only on this computer' },
+	{ key: 'hybrid-6-strappy', label: 'Strappy back (local)', leg: 'Hybrid, preview', file: 'wrap-hybrid-6-strappy-resolved', fittedOn: 'young', local: true, bound: true, size: CUT, hint: 'The hybrid high cut recut as a strappy back: thin straps, bound neck and armholes, open upper back. A preview, shown only on this computer' },
 ];
 
 export const FITTED = [
 	...(import.meta.env.DEV ? LOCAL : []),
-	{ key: 'armstrong-6-high', label: 'Textbook leotard, high cut', leg: 'High-cut leg', file: 'armstrong-6-high-resolved', fittedOn: 'young' },
+	{ key: 'armstrong-6-high', label: 'Textbook leotard, high cut', leg: 'High-cut leg', file: 'armstrong-6-high-resolved', fittedOn: 'young', size: CUT },
 	// The hybrid (pipeline/draft_hybrid.py): Armstrong's block with its crotch seam moved 29 mm forward, a front strip joined to the back
-	{ key: 'hybrid-6-high', label: 'Hybrid leotard, high cut', leg: 'High-cut leg', file: 'hybrid-6-high-resolved', fittedOn: 'young' },
+	{ key: 'hybrid-6-high', label: 'Hybrid leotard, high cut', leg: 'High-cut leg', file: 'hybrid-6-high-resolved', fittedOn: 'young', size: CUT },
 ];
 const MOVED = { 'bought-XS': 'bought-XS-high', 'armstrong-6': 'armstrong-6-high', 'hybrid-6': 'hybrid-6-high' };
 
@@ -30,8 +36,13 @@ export const fittedOf = (doc) => { const k = doc?.meta?.fitted; return FITTED.fi
 // The fitted garment's size: its pattern made wider (across the grain) and longer (along it) by these factors, op fitted.size.
 // The re-fit takes the scaled pattern as its rest shape (fit/fitted-case.js garmentArrays): smaller sits tauter, larger looser.
 // Without a re-fit (none run yet, re-fit off, no WebGPU) the fit shown is the file's, at 1 x 1. The range is ours, not a maker's.
+// Unset (meta.fitSize null), a garment is at its own default (FITTED size, CUT above; 1 x 1 without one).
 export const FIT_SIZE_RANGE = [0.8, 1.1];
-export const fitSizeOf = (doc) => ({ width: doc?.meta?.fitSize?.width ?? 1, length: doc?.meta?.fitSize?.length ?? 1 });
+export const fitSizeDefault = (doc) => fittedOf(doc)?.size ?? { width: 1, length: 1 };
+export const fitSizeOf = (doc) => {
+	const d = fitSizeDefault(doc);
+	return { width: doc?.meta?.fitSize?.width ?? d.width, length: doc?.meta?.fitSize?.length ?? d.length };
+};
 
 // The binding on a fitted garment's bound openings and its straps (render/fitted.js): meta.fittedTrim (op fitted.trim) over the
 // default, white shiny, the default a drawn edge's binding starts at too (ui/ShapeCard.jsx Finish).
