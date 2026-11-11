@@ -60,6 +60,23 @@ def main():
 			fd = (Eb(x + h * d, False)[0] - Eb(x - h * d, False)[0]) / (2 * h)
 			worst = max(worst, abs(fd - (g * d).sum()) / max(abs(fd), 1e-12))
 		print(f'  press {press}, bend {bend}, jam {jam}: worst relative difference {worst:.2e}; bending {parts["bending"]:.4g}, squeeze {parts["squeeze"]:.4g}')
+	print('\n== 1c. the elastic as a band (fit realism plan stage 3): the gradient with kink and firm, at these points and squeezed along x')
+	for kink, firm in ((1.0, 1.0), (4.0, 1.5)):
+		for label, y in (('as given', x), ('x squeezed to 0.8', x * np.array([0.8, 1.0, 1.0]))):
+			Ek = Energy(case, kink=kink, firm=firm)
+			Ek(y)
+			_, g, parts = Ek(y, keep_normals=False)
+			now = np.linalg.norm(y[Ek.sj] - y[Ek.si], axis=1)
+			pushing = int((now[Ek.npull:] < Ek.rest_len[Ek.npull:]).sum())
+			worst = 0.0
+			for _ in range(20):
+				d = rng.normal(0, 1, y.shape)
+				d /= np.linalg.norm(d)
+				h = 1e-7
+				fd = (Ek(y + h * d, False)[0] - Ek(y - h * d, False)[0]) / (2 * h)
+				worst = max(worst, abs(fd - (g * d).sum()) / max(abs(fd), 1e-12))
+			print(f'  kink {kink}, firm {firm}, {label}: worst relative difference {worst:.2e}; elastic {parts["elastic"]:.4g}; '
+				f'{len(Ek.si) - Ek.npull} kink spans, {pushing} pushing')
 	# each hinge laid flat on its own: the first triangle as on the pattern, the second turned (and if need be mirrored: the garment's
 	# halves share their flat places) onto the other side of the shared edge
 	ids, K, tris, rest = Eb.hinge_ids, Eb.hinge_K, case['tris'], case['rest']

@@ -79,6 +79,9 @@ export const FIT_DEFAULTS = {
 	// modulus (m^2; 0: none). Twins: gpu.Problem press and bend (pipeline/race), energy.py
 	jam: 1,                   // squeezing is free down to this share of the length (the knit's loops and wrinkles finer than the mesh take
 	// it up), costs press beyond (owner, 2026-11-11: taut in most places, folds only where there is considerable extra fabric)
+	kink: 0,                  // fit realism plan stage 3, a trial (no control): the elastic as a band that will not shorten along its line
+	firm: 1,                  // (push-only spans between second neighbours, this times the elastic's stiffness; 0: none), and the
+	// elastic's firmness (its stiffness times this). refit.js elasticSprings; twins energy.springs, gpu.Problem kink and firm
 	mesh: 7,                  // mm between the garment's points. Finer (5, 3.5) is a dev-only trial: those fits are made by
 	// `WRAP_STEP=5 python pipeline/wrap_block.py --drafted <block> young` into app/captures and served at /fitted-local/
 	// (knowledge/engineering/app/fit-mesh-resolution-trial.md); a garment without one shows its 7 mm fit and says so
@@ -142,7 +145,7 @@ export class FittedView {
 		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
 		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
-		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
+		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
 		else this.show();
 	}
 
@@ -423,7 +426,7 @@ export class FittedView {
 				const man = this.engine.body, t0 = performance.now(), skin = this.options.body === 'skin';
 				// the body it stands on, and its start there (fitted-case.js startOf): the bare skin, or the drawn garment's surface
 				const data = buildCase(this.data, this.garment, skin ? man.aPos.array : man.garmentPos, man.idx, man.wArm, this.cache ??= {},
-					{ press: this.options.press, bend: this.options.bend, jam: this.options.jam });
+					{ press: this.options.press, bend: this.options.bend, jam: this.options.jam, kink: this.options.kink, firm: this.options.firm });
 				const r = new Refit(this.device, data, { maxSteps: this.options.steps, mu: this.options.mu, tol: 0 });
 				const built = performance.now() - t0;
 				const steps = this.options.steps, W = r.settings.window, tRun = performance.now(), free = skin ? FREE_STEPS : 0;

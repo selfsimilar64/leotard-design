@@ -337,19 +337,25 @@ def tri_k(x: wp.array(dtype=wp.vec3), tris: wp.array(dtype=wp.vec3i), Dinv: wp.a
 
 @wp.kernel
 def spring_k(x: wp.array(dtype=wp.vec3), si: wp.array(dtype=wp.int32), sj: wp.array(dtype=wp.int32), rest: wp.array(dtype=float), k: wp.array(dtype=float),
-		mode: int, e_out: wp.array(dtype=float), e_off: int, gs: wp.array(dtype=wp.vec3), Hs: wp.array(dtype=wp.mat33)):
+		npull: int, mode: int, e_out: wp.array(dtype=float), e_off: int, gs: wp.array(dtype=wp.vec3), Hs: wp.array(dtype=wp.mat33)):
+	"""Spans below npull pull only (the elastic), the rest push only (fit realism plan stage 3's kink spans; energy.springs)."""
 	s = wp.tid()
 	span = x[sj[s]] - x[si[s]]
 	l = wp.length(span) + 1.0e-12
-	ext = wp.max(l - rest[s], 0.0)
+	ext = l - rest[s]
+	if s < npull:
+		ext = wp.max(ext, 0.0)
+	else:
+		ext = wp.min(ext, 0.0)
 	e_out[e_off + s] = 0.5 * k[s] * ext * ext
 	if mode >= 1:
 		gs[s] = span * (k[s] * ext / l)
 	if mode >= 2:
 		K = wp.mat33(0.0)
-		if ext > 0.0:
+		if ext != 0.0:
 			u = span / l
-			K = k[s] * ((1.0 - rest[s] / l) * wp.identity(n=3, dtype=float) + (rest[s] / l) * wp.outer(u, u))
+			# projected: a squeezed span's sideways part (1 - rest / l < 0) left out
+			K = k[s] * (wp.max(1.0 - rest[s] / l, 0.0) * wp.identity(n=3, dtype=float) + (rest[s] / l) * wp.outer(u, u))
 		Hs[s * 4 + 0] = K
 		Hs[s * 4 + 1] = K
 		Hs[s * 4 + 2] = -K
@@ -526,9 +532,10 @@ def csr(keys, n):
 class Problem:
 	"""One case on the GPU: the garment, the body surface, and the shared evaluation (energy, gradient, projected Hessian)."""
 
-	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, jam=1.0, device='cuda:0'):
+	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0, device='cuda:0'):
 		"""press, bend, jam: squeeze resistance, bending stiffness, the squeeze taken up free (fit realism plan stage 2; press 0 and bend 0:
-		the physics before it). energy.py."""
+		the physics before it). kink, firm: the elastic's push-only spans along its line and its firmness (stage 3; 0 and 1: before it).
+		energy.py."""
 		wp.init()
 		self.device = device
 		dev = device
@@ -548,8 +555,9 @@ class Problem:
 		self.mu, self.stick = float(mu), float(stick)  # mu 0: frictionless, the race's first physics; a re-fit's is MU (set_anchor)
 		self.grip = float(grip)  # how far each freeze moves friction's held contact force to the new one (1: all the way)
 		self.fresh = True
-		el = case['elastic']
-		si, sj = el[:, 0].astype(np.int32), el[:, 1].astype(np.int32)
+		from energy import springs
+		si, sj, rest_len, k, self.npull = springs(case['elastic'], kink, firm)
+		si, sj = si.astype(np.int32), sj.astype(np.int32)
 		self.ns = ns = len(si)
 		self.tris_np, self.si_np, self.sj_np = tris, si, sj
 		f32 = lambda a, dt=float: wp.array(np.ascontiguousarray(a, dtype=np.float32), dtype=dt, device=dev)
@@ -559,7 +567,7 @@ class Problem:
 		self.area = f32(self.area_np)
 		self.facing = f32(case['facing'])
 		self.si, self.sj = wp.array(si, dtype=wp.int32, device=dev), wp.array(sj, dtype=wp.int32, device=dev)
-		self.rest_len, self.k = f32(el[:, 2]), f32(el[:, 3])
+		self.rest_len, self.k = f32(rest_len), f32(k)
 		self.sleeve_np = case['sleeve'].astype(np.int32)
 		self.sleeve = wp.array(self.sleeve_np, dtype=wp.int32, device=dev)
 		# the body surface, one mesh per part as Surface.parts / surface_field.PartFields
@@ -671,7 +679,7 @@ class Problem:
 		else:
 			self.query(x)
 		wp.launch(tri_k, self.nt, [x, self.tris, self.Dinv, self.area, self.facing, self.gn, self.gather, self.turn, self.press, self.jam, mode, self.e, self.gt, self.H, self.flip], device=self.device)
-		wp.launch(spring_k, self.ns, [x, self.si, self.sj, self.rest_len, self.k, mode, self.e, self.nt, self.gs, self.H[self.off_s:]], device=self.device)
+		wp.launch(spring_k, self.ns, [x, self.si, self.sj, self.rest_len, self.k, self.npull, mode, self.e, self.nt, self.gs, self.H[self.off_s:]], device=self.device)
 		if mode >= 1:
 			wp.launch(gather_grad_k, self.n, [self.vt_start, self.vt_src, self.gt, self.vs_start, self.vs_src, self.gs, self.d, self.gn, self.plane, self.hold, self.grad], device=self.device)
 		if self.nh:

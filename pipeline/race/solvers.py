@@ -230,11 +230,14 @@ def pd_tri_matrix_k(tris: wp.array(dtype=wp.vec3i), Dinv: wp.array(dtype=wp.mat2
 
 @wp.kernel
 def pd_spring_k(x: wp.array(dtype=wp.vec3), si: wp.array(dtype=wp.int32), sj: wp.array(dtype=wp.int32), rest: wp.array(dtype=float), k: wp.array(dtype=float),
-		gs: wp.array(dtype=wp.vec3), Hs: wp.array(dtype=wp.mat33)):
+		npull: int, gs: wp.array(dtype=wp.vec3), Hs: wp.array(dtype=wp.mat33)):
 	s = wp.tid()
 	span = x[sj[s]] - x[si[s]]
 	l = wp.length(span) + 1.0e-12
-	gs[s] = span * (k[s] * wp.min(rest[s], l) / l)  # tension only: a slack span is its own target
+	target = wp.min(rest[s], l)  # the elastic, tension only: a slack span is its own target
+	if s >= npull:
+		target = wp.max(rest[s], l)  # stage 3's kink spans, push only: a long one is its own target (energy.springs)
+	gs[s] = span * (k[s] * target / l)
 	K = k[s] * wp.identity(n=3, dtype=float)
 	Hs[s * 4 + 0] = K
 	Hs[s * 4 + 1] = K
@@ -274,7 +277,7 @@ def local_global(pb, x0, rec, cg_iters=20, damp=G.DAMP, precond=None):
 	while True:
 		pb.freeze(x)
 		wp.launch(pd_tri_k, pb.nt, [x, pb.tris, pb.Dinv, pb.area, pb.facing, pb.gn, pb.gather, pb.turn, pb.press, pb.jam, pb.gt], device=pb.device)
-		wp.launch(pd_spring_k, pb.ns, [x, pb.si, pb.sj, pb.rest_len, pb.k, pb.gs, H[pb.off_s:]], device=pb.device)
+		wp.launch(pd_spring_k, pb.ns, [x, pb.si, pb.sj, pb.rest_len, pb.k, pb.npull, pb.gs, H[pb.off_s:]], device=pb.device)
 		wp.launch(pd_rhs_k, pb.n, [x, pb.vt_start, pb.vt_src, pb.gt, pb.vs_start, pb.vs_src, pb.gs, pb.d, pb.gn, pb.q, pb.plane, pb.hold, damp, rhs], device=pb.device)
 		wp.launch(G.surface_hess_k, pb.n, [pb.d, pb.gn, pb.plane, pb.hold, damp, H, pb.off_v], device=pb.device)
 		if pb.mu > 0:
@@ -354,7 +357,8 @@ def colour(pb):
 def vbd(pb, x0, rec, colours, reg=1e-3, max_move=0.002):
 	"""Vertex Block Descent (Chen et al. 2024), quasi-static: no inertia, reg on each point's block in its place (a point in the
 	gather band, slack, has almost no curvature). One iteration: look up the contact, then every colour once.
-	Without stage 2's press and bending (pb.press, pb.bend): it is not the app's method, so it was left at the physics before them."""
+	Without stage 2's press and bending (pb.press, pb.bend) and stage 3's kink (it reads every span as pull only): it is not the app's
+	method, so it was left at the physics before them."""
 	x = wp.clone(x0)
 	rec.start()
 	while True:

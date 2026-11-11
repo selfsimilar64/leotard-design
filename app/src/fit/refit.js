@@ -83,6 +83,27 @@ export function hingesOf(tris, Dinv, area) {
 	return { ids: Int32Array.from(ids), K: Float64Array.from(K), c: Float64Array.from(c) };
 }
 
+// The spans the re-fit uses (fit realism plan stage 3): the case's elastic first, pull only, k times firm (the elastic's firmness), then,
+// with kink, per point touched by exactly two of them (s0 < s1, points ascending) a push-only span from s0's far end to s1's, rest the
+// sum of theirs, k kink * k0 k1 / (k0 + k1): the band will not shorten along its line, so a slack edge stays a smooth line. Twin of
+// pipeline/race/energy.py springs (app/test/springs.test.js diffs them). -> { si, sj, rest, k, npull }
+export function elasticSprings(si, sj, rest, k, kink = 0, firm = 1) {
+	const npull = si.length, a = [], b = [], r = [], kk = [], kf = Float32Array.from(k, (x) => x * firm);
+	if (kink) {
+		const touch = new Map();
+		for (let s = 0; s < npull; s++) for (const p of [si[s], sj[s]]) { if (!touch.has(p)) touch.set(p, []); touch.get(p).push(s); }
+		for (const p of [...touch.keys()].sort((x, y) => x - y)) {
+			const ss = touch.get(p);
+			if (ss.length !== 2) continue;
+			const [s0, s1] = ss, o0 = si[s0] === p ? sj[s0] : si[s0], o1 = si[s1] === p ? sj[s1] : si[s1];
+			if (o0 === o1) continue;
+			a.push(o0); b.push(o1); r.push(rest[s0] + rest[s1]); kk.push(kink * kf[s0] * kf[s1] / (kf[s0] + kf[s1]));
+		}
+	}
+	const join = (T, x, y) => { const o = new T(x.length + y.length); o.set(x); o.set(y, x.length); return o; };
+	return { si: join(Int32Array, si, a), sj: join(Int32Array, sj, b), rest: join(Float32Array, rest, r), k: join(Float32Array, kf, kk), npull };
+}
+
 // The constant part of the global matrix (solvers.pd_tri_matrix_k, pd_spring_k, gpu.Problem's bending blocks), as scalar rows: per
 // triangle area * b_a . b_b, per span k on the ends and -k across, per hinge bend * c * K_a K_b. Summed in float64 from the float32 inputs.
 function constantMatrix(n, tris, Dinv, area, si, sj, k, bend = 0) {
@@ -144,22 +165,25 @@ export class Refit {
 		this.head = data.head;
 		this.settings = { ...DEFAULTS, ...settings };
 		const A = data.arrays, h = data.head, cache = data.cache ?? {};
-		const n = this.n = h.n, nt = h.nt, ns = h.ns;
+		// the spans: the case's elastic (head.ns of them) and stage 3's kink spans (elasticSprings; kink 0 and firm 1: as before)
+		const kink = h.kink ?? 0, firm = h.firm ?? 1, key = `${h.bend ?? 0}|${kink}|${firm}`;
+		if (cache.springKey !== key) { delete cache.matrix; delete cache.vs; cache.springKey = key; }
+		const SP = this.springs = elasticSprings(A.si, A.sj, A.rest_len, A.k, kink, firm);
+		const n = this.n = h.n, nt = h.nt, ns = this.ns = SP.si.length;
 		this.data = data;
 		// gather lists, as gpu.Problem
 		const vt = cache.vt ??= csr(A.tris, n);
 		const ends = new Int32Array(2 * ns), signed = new Int32Array(2 * ns);
-		ends.set(A.sj, 0); ends.set(A.si, ns);
+		ends.set(SP.sj, 0); ends.set(SP.si, ns);
 		for (let s = 0; s < ns; s++) { signed[s] = s; signed[ns + s] = -s - 1; }
 		const vs = cache.vs ??= csr(ends, n);
 		const vsSrc = Int32Array.from(vs.order, (o) => signed[o]);
-		// the matrix holds bending (head.bend): kept between runs only while that is the same
+		// the matrix holds bending (head.bend) and the spans: kept between runs only while those are the same (springKey above)
 		const bend = h.bend ?? 0;
-		if (cache.matrixBend !== bend) { delete cache.matrix; cache.matrixBend = bend; }
-		const M = this.matrix = cache.matrix ??= constantMatrix(n, A.tris, A.Dinv, A.area, A.si, A.sj, A.k, bend);
+		const M = this.matrix = cache.matrix ??= constantMatrix(n, A.tris, A.Dinv, A.area, SP.si, SP.sj, SP.k, bend);
 		const topo = concat(Int32Array, [['tri', A.tris], ['sleeve', A.sleeve], ['vts', vt.start], ['vtc', vt.order], ['vss', vs.start], ['vsc', vsSrc],
-			['si', A.si], ['sj', A.sj], ['cp', M.ptr], ['cc', M.cols]]);
-		const kon = concat(Float32Array, [['dinv', A.Dinv], ['area', A.area], ['facing', A.facing], ['rest', A.rest_len], ['k', A.k], ['cv', M.vals], ['lii', M.lii]]);
+			['si', SP.si], ['sj', SP.sj], ['cp', M.ptr], ['cc', M.cols]]);
+		const kon = concat(Float32Array, [['dinv', A.Dinv], ['area', A.area], ['facing', A.facing], ['rest', SP.rest], ['k', SP.k], ['cv', M.vals], ['lii', M.lii]]);
 		// the body: per part its tree, faces in one list (torso then arm), per part per vertex pseudo-normals
 		const m = h.body_points;
 		const vec4 = (src, count, w) => { const o = new Float32Array(count * 4); for (let i = 0; i < count; i++) { o[4 * i] = src[3 * i]; o[4 * i + 1] = src[3 * i + 1]; o[4 * i + 2] = src[3 * i + 2]; o[4 * i + 3] = w ? w[i] : 0; } return o; };
@@ -190,7 +214,7 @@ export class Refit {
 			off_lii: kon.offsets.lii, node0: q(bodyF.offsets.node0), node1: q(bodyF.offsets.node1), order0: bodyI.offsets.order0,
 			order1: bodyI.offsets.order1, face0: 0, face1: nf[0], off_fn: q(bodyF.offsets.fn),
 			vn0: q(bodyF.offsets.vn0), vn1: q(bodyF.offsets.vn1), off_pts: q(bodyF.offsets.pts), off_fi: bodyI.offsets.fi,
-			link0: bodyI.offsets.link0, link1: bodyI.offsets.link1, pad0: 0, pad1: 0,
+			link0: bodyI.offsets.link0, link1: bodyI.offsets.link1, npull: SP.npull, pad1: 0,
 			plane: h.plane, hold: h.hold, gather: h.gather, turn: h.turn, press: h.press ?? 0, jam: h.jam ?? 1,
 		};
 		const S = GPUBufferUsage.STORAGE, D = GPUBufferUsage.COPY_DST, C = GPUBufferUsage.COPY_SRC;
@@ -260,7 +284,7 @@ export class Refit {
 		const pass = enc.beginComputePass();
 		pass.setBindGroup(0, this.bind);
 		const run = (name, groups) => { pass.setPipeline(this.pipe[name]); pass.dispatchWorkgroups(groups); };
-		const gn = this.nwg, gt = Math.ceil(this.head.nt / WG), gs = Math.ceil(this.head.ns / WG);
+		const gn = this.nwg, gt = Math.ceil(this.head.nt / WG), gs = Math.ceil(this.ns / WG);
 		for (let s = 0; s < count; s++) {
 			run('query', gn); run('tri', gt); run('spring', gs); run('rhs', gn);
 			run('cg_init', gn); run('finish_rz0', 1);

@@ -30,7 +30,7 @@ export const PARAMS = [
 	'off_lii', 'node0', 'node1', 'order0',
 	'order1', 'face0', 'face1', 'off_fn',
 	'vn0', 'vn1', 'off_pts', 'off_fi',
-	'link0', 'link1', 'pad0', 'pad1',
+	'link0', 'link1', 'npull', 'pad1',
 ];
 export const FPARAMS = ['plane', 'hold', 'gather', 'turn', 'damp', 'mu', 'stick', 'grip', 'press', 'jam'];
 
@@ -277,7 +277,9 @@ fn spring(@builtin(global_invocation_id) gid: vec3<u32>) {
 	let span = X(u32(topo[P.off_sj + s])) - X(u32(topo[P.off_si + s]));
 	let l = length(span) + 1.0e-12;
 	let k = kon[P.off_k + s];
-	loc[3u * P.nt + s] = vec4<f32>(span * (k * min(kon[P.off_rest + s], l) / l), 0.0);  // tension only: a slack span is its own target
+	var goal = min(kon[P.off_rest + s], l);  // the elastic, tension only: a slack span is its own target
+	if (s >= P.npull) { goal = max(kon[P.off_rest + s], l); }  // stage 3's kink spans, push only (refit.js elasticSprings)
+	loc[3u * P.nt + s] = vec4<f32>(span * (k * goal / l), 0.0);
 }
 
 fn contact_k(d: f32) -> f32 {

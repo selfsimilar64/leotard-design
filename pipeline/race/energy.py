@@ -28,7 +28,11 @@ E = membrane + surface + elastic (+ friction on a re-fit), no gravity, metres.
   shape (hinges below): the isometric quadratic bending energy (Bergou, Wardetzky, Harmon, Zorin, Grinspun 2006), zero on a flat
   sheet, quadratic in the points, so a constant part of the local/global matrix. bend in m^2: bending stiffness over the stretch
   modulus the energy is measured in.
-- elastic, per span: k / 2 * max(length - rest, 0)^2, tension only.
+- elastic, per span: k / 2 * max(length - rest, 0)^2, tension only. Fit realism plan stage 3 (2026-11-11; firm 1 and kink 0 are the
+  above): firm scales every span's k (the elastic's firmness); kink adds, at each point where exactly two spans meet, a span between
+  their far ends at rest the two rests' sum and stiffness kink times theirs in series, that only pushes: k / 2 * min(length - rest, 0)^2.
+  The elastic is a band that will not shorten along its line, so a slack edge stays a smooth line rather than crumpling; its tension is
+  left to the spans as they were. springs() below; twin fit/fitted-case.js elasticSprings.
 - friction, on re-fits only (owner, 2026-11-03), per point (friction below): mu * lam * f(r), r how far the point has slid along the body
   since the re-fit began, lam its contact force PLANE * depth, held through each step with the normal (lagged friction, as IPC, Li et al.
   2020), f(r) = r^2 / (2 STICK) up to STICK, r - STICK / 2 beyond: Coulomb's force mu * lam once sliding, a spring before. Without it the
@@ -48,6 +52,33 @@ import wrap_block as W  # noqa: E402
 HOLD = 1.0e-4  # twin: gpu.HOLD
 MU = 0.4  # twin: gpu.MU (the source there)
 STICK = 1.0e-3  # twin: gpu.STICK
+
+
+def springs(el, kink=0.0, firm=1.0):
+	"""The spans the energy and solvers use (the module's header: elastic): (si, sj, rest, k, npull), the case's elastic spans first (pull
+	only, k times firm), then kink's push-only spans: per point touched by exactly two spans (s0 < s1), from s0's far end to s1's, rest the
+	sum, k kink * k0 k1 / (k0 + k1). Points in ascending order. Twin: fit/fitted-case.js elasticSprings (app/test/springs.test.js)."""
+	si, sj, rest, k = el[:, 0].astype(np.int64), el[:, 1].astype(np.int64), el[:, 2].astype(np.float64), el[:, 3] * float(firm)
+	npull = len(si)
+	if not kink:
+		return si, sj, rest, k, npull
+	touch = {}
+	for s in range(npull):
+		touch.setdefault(int(si[s]), []).append(s)
+		touch.setdefault(int(sj[s]), []).append(s)
+	a, b, r, kk = [], [], [], []
+	for p in sorted(touch):
+		ss = touch[p]
+		if len(ss) != 2:
+			continue
+		s0, s1 = ss
+		o0 = int(sj[s0]) if si[s0] == p else int(si[s0])
+		o1 = int(sj[s1]) if si[s1] == p else int(si[s1])
+		if o0 == o1:
+			continue
+		a.append(o0); b.append(o1); r.append(rest[s0] + rest[s1]); kk.append(kink * k[s0] * k[s1] / (k[s0] + k[s1]))
+	return (np.concatenate([si, a]).astype(np.int64), np.concatenate([sj, b]).astype(np.int64), np.concatenate([rest, r]),
+		np.concatenate([k, kk]), npull)
 
 
 def hinges(tris, rest):
@@ -91,7 +122,7 @@ def hinges(tris, rest):
 
 
 class Energy:
-	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0, jam=1.0):
+	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0):
 		self.contact, self.hold = contact, hold
 		self.press, self.bend, self.jam = float(press), float(bend), float(jam)
 		self.tris = case['tris']
@@ -101,8 +132,7 @@ class Energy:
 		self.area = 0.5 * np.abs(np.linalg.det(Dm))
 		self.facing = case['facing']
 		self.gather, self.plane = float(case['gather']), float(case['plane'])
-		el = case['elastic']
-		self.si, self.sj, self.rest_len, self.k = el[:, 0].astype(int), el[:, 1].astype(int), el[:, 2], el[:, 3]
+		self.si, self.sj, self.rest_len, self.k, self.npull = springs(case['elastic'], kink, firm)
 		self.part = case['sleeve'].astype(bool)
 		self.hinge_ids, self.hinge_K, self.hinge_c = hinges(self.tris, rest) if self.bend else (np.zeros((0, 4), int), np.zeros((0, 4)), np.zeros(0))
 		self.surface = W.Surface(case['surface_P'], case['surface_idx'], case['surface_arm'])
@@ -158,7 +188,9 @@ class Energy:
 		# elastic
 		span = x[self.sj] - x[self.si]
 		now = np.linalg.norm(span, axis=1) + 1e-12
-		ext = np.maximum(now - self.rest_len, 0)
+		ext = now - self.rest_len
+		ext[:self.npull] = np.maximum(ext[:self.npull], 0)  # pull only; kink's spans push only
+		ext[self.npull:] = np.minimum(ext[self.npull:], 0)
 		e_elastic = 0.5 * (self.k * ext ** 2).sum()
 		f = (self.k * ext / now)[:, None] * span
 		np.add.at(grad, self.sj, f)

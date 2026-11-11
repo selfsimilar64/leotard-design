@@ -259,6 +259,35 @@ wider than plain: once fabric can buckle, rounding picks where.
   range the firmness sweep gave (102-115 mm at 7 cm)[^audit]; with stage 2 on, puckers radiate from the openings; the gusset's V.
 - **Expected cost:** cheap stage negligible; the band perhaps 10-20% more steps (a stiff strip beside soft fabric).
 
+**Progress (2026-11-11, owner: "move on to stage 3 ... keep width at 100% and height at 85-90%"): the cheap stage's band and
+firmness built as a trial behind options; stills at 88% length.**[^owner]
+- **Built (all twins):** `kink` and `firm`. `firm` scales every elastic span's `k`. `kink` adds, at each point where exactly two
+  spans meet, a span between their far ends at rest the two rests' sum, stiffness `kink` times theirs in series, that **only
+  pushes**: the band will not shorten along its line, so a slack edge stays a smooth line instead of crumpling. Its tension is left
+  to the spans as they were (a both-ways span would also have stiffened the elastic's pull). Python: `energy.springs` (used by
+  `Energy`, `gpu.Problem(kink, firm)`, `spring_k` with `npull`, `solvers.pd_spring_k`); `check_energy.py` section 1c (gradient
+  4e-7 to 2e-5 relative, 252 band spans on the young case, 31 pushing as given, 63 squeezed); `check_gpu.py --kink --firm` (elastic
+  energy identical numpy / GPU; the other loose figures as without); `export_app.py --kink --firm` (cases `young-*-e3`, kink 2,
+  firm 1.5). App: `refit.js elasticSprings` (twin, `app/test/springs.test.js` diffs them), the uniform's `pad0` is now `npull`,
+  `refit-wgsl.js spring` pushes from `npull` on; `fitted-case.js buildCase(..., { kink, firm })`; `render/fitted.js` options `kink`
+  0, `firm` 1 (no control). Port check, 20 steps: 0.03-0.23 mm mean, 2.9-4.6 mm worst, as the plain cases (0.03-0.24, 3.6-4.8).
+  VBD left at the old physics (reads every span as pull only).
+- **Not built, and why:** per-section ratios: the sources give front leg 1:1 and back leg 3/4 and nothing finer
+  ([edge finishing](/domain/construction/edge-finishing-elastic-and-binding.md)), which the case already has. Grip: turned elastic is
+  folded inside the hem, so fabric, not rubber, touches the skin; its extra hold is its pressure, which the fit already has. A grip
+  factor would be a band-aid. The full band waits for stage 4.
+- **Gotcha:** `target` is a reserved word in WGSL. The shader failed to compile, nothing reported it, and every re-fit silently
+  stood still (port check 1.2 mm mean after one step: the start itself). Check `getCompilationInfo()` when a port check jumps.
+- **Stills** (`app/captures/fit-stills/e3-L88-*`, sheets `e3-leg-seat.png`, `e3-back-front.png`, git-ignored; hybrid high cut,
+  7 mm, `young`, pattern width 1, length 0.88): today's fit, 88% length, 88% with `kink` 1, 88% with `kink` 1 and `firm` 1.5.
+  88% length is the visible change: the standing small of the back and seat lose their painted waves, the leg line sits higher;
+  the back arch still ripples across the waist and seat; the underarm with the arm up still folds. The band barely shows: without it
+  the edge is squeezed to 0.66 of the elastic's length at 52 band spans (standing and back arch), with it to 0.99; edge points move
+  1 mm median (0.3 in the back arch), 6-8 mm at most. A small crumple at the back arch's leg opening (by the crotch) stays with it.
+- **Cost:** none measured: re-fit 0.7-1.0 s at 88% without, 0.8-1.0 s with the band, 0.6-1.1 s firm 1.5 (pane wall time, 300 steps
+  with the frictionless phase).
+- Not yet: the owner's judgement; the gate's leg-line turn and half widths.
+
 # Stage 4: fabric that differs along and across
 
 1. **Local step rewritten per direction.** The flat rest shape's x is across the grain and y along it (as `meta.fitSize` assumes).
