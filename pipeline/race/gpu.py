@@ -23,31 +23,38 @@ STICK = 1.0e-3  # m a point gives before it slides: friction's spring part, the 
 SNAP = 1.0e-5  # m: closer to the body than this, a point's surface normal is the feature's pseudo-normal, not the direction to it (surface_at). Twin: refit-wgsl.js
 
 
-# The membrane's energy density per singular value s: stretch above 1; from g to 1 squeezing costs p (press) times as much (0: free,
-# today's), below g (gather) the target stops at mix(g, 1, p). Twin: energy.Energy.phi (and the local step's target, solvers.pd_tri_k).
+# The membrane's energy density per singular value s: stretch above 1; squeezing free down to j (jam), from there to g (gather) it
+# costs p (press) times as much as stretch (0: free, today's), below g the target stops at mix(g, j, p). Twin: energy.Energy.phi
+# (and the local step's target, solvers.pd_tri_k).
 @wp.func
-def phi(s: float, g: float, p: float):
+def phi(s: float, g: float, p: float, j: float):
 	if s > 1.0:
 		return (s - 1.0) * (s - 1.0)
 	if s < g:
-		return p * (1.0 - g) * (1.0 - g) + (s - g) * (s - g) - 2.0 * p * (1.0 - g) * (s - g)
-	return p * (1.0 - s) * (1.0 - s)
+		return p * (j - g) * (j - g) + (s - g) * (s - g) - 2.0 * p * (j - g) * (s - g)
+	if s < j:
+		return p * (j - s) * (j - s)
+	return 0.0
 
 
 @wp.func
-def dphi(s: float, g: float, p: float):
+def dphi(s: float, g: float, p: float, j: float):
 	if s > 1.0:
 		return 2.0 * (s - 1.0)
 	if s < g:
-		return 2.0 * (s - g) - 2.0 * p * (1.0 - g)
-	return -2.0 * p * (1.0 - s)
+		return 2.0 * (s - g) - 2.0 * p * (j - g)
+	if s < j:
+		return -2.0 * p * (j - s)
+	return 0.0
 
 
 @wp.func
-def ddphi(s: float, g: float, p: float):
+def ddphi(s: float, g: float, p: float, j: float):
 	if s > 1.0 or s < g:
 		return 2.0
-	return 2.0 * p
+	if s < j:
+		return 2.0 * p
+	return 0.0
 
 
 @wp.struct
@@ -173,7 +180,7 @@ class Tri:
 
 
 @wp.func
-def tri_state(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, Di: wp.mat22, area: float, tn: wp.vec3, facing: float, g: float, turn: float, p: float):
+def tri_state(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, Di: wp.mat22, area: float, tn: wp.vec3, facing: float, g: float, turn: float, p: float, j: float):
 	"""The membrane term of one triangle. Inside out (today's `wrong` in wrap_block.solve): the triangle's facing c = cos of the angle
 	between its normal and the body's (times `facing`) is below 0. Today's solver then charges phi(-s2) instead of phi(s2), which
 	jumps where the triangle stands square to the body (c = 0, s2 not small), and a jump never settles (Newton: thousands of points
@@ -232,8 +239,8 @@ def tri_state(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, Di: wp.mat22, area: float, 
 			m = tnn - c * jh
 			gc0 = wp.cross(f1, m) / lj  # dc / df0
 			gc1 = wp.cross(m, f0) / lj  # dc / df1
-	jump = phi(-s2, g, p) - phi(s2, g, p)
-	T.e = 0.5 * area * (phi(s1, g, p) + (1.0 - w) * phi(s2, g, p) + w * phi(-s2, g, p))
+	jump = phi(-s2, g, p, j) - phi(s2, g, p, j)
+	T.e = 0.5 * area * (phi(s1, g, p, j) + (1.0 - w) * phi(s2, g, p, j) + w * phi(-s2, g, p, j))
 	T.u1 = u1
 	T.u2 = u2
 	T.u3 = wp.cross(u1, u2)
@@ -241,10 +248,10 @@ def tri_state(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, Di: wp.mat22, area: float, 
 	T.v2 = v2
 	T.s1 = s1
 	T.s2 = s2
-	T.dp1 = dphi(s1, g, p)
-	T.dp2 = (1.0 - w) * dphi(s2, g, p) - w * dphi(-s2, g, p)
-	T.dd1 = ddphi(s1, g, p)
-	T.dd2 = (1.0 - w) * ddphi(s2, g, p) + w * ddphi(-s2, g, p)
+	T.dp1 = dphi(s1, g, p, j)
+	T.dp2 = (1.0 - w) * dphi(s2, g, p, j) - w * dphi(-s2, g, p, j)
+	T.dd1 = ddphi(s1, g, p, j)
+	T.dd2 = (1.0 - w) * ddphi(s2, g, p, j) + w * ddphi(-s2, g, p, j)
 	T.gc0 = gc0 * (jump * dw)
 	T.gc1 = gc1 * (jump * dw)
 	T.flip = 0
@@ -309,13 +316,13 @@ def tri_hess(T: Tri, L: wp.spatial_vector, area: float, ba: wp.vec2, bb: wp.vec2
 
 @wp.kernel
 def tri_k(x: wp.array(dtype=wp.vec3), tris: wp.array(dtype=wp.vec3i), Dinv: wp.array(dtype=wp.mat22), area: wp.array(dtype=float),
-		facing: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), gather: float, turn: float, press: float, mode: int,
+		facing: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), gather: float, turn: float, press: float, jam: float, mode: int,
 		e_out: wp.array(dtype=float), gt: wp.array(dtype=wp.vec3), Ht: wp.array(dtype=wp.mat33), flip: wp.array(dtype=wp.int32)):
 	"""mode 0: energy; 1: and gradient; 2: and Hessian blocks."""
 	t = wp.tid()
 	i = tris[t]
 	Di = Dinv[t]
-	T = tri_state(x[i[0]], x[i[1]], x[i[2]], Di, area[t], gn[i[0]] + gn[i[1]] + gn[i[2]], facing[t], gather, turn, press)
+	T = tri_state(x[i[0]], x[i[1]], x[i[2]], Di, area[t], gn[i[0]] + gn[i[1]] + gn[i[2]], facing[t], gather, turn, press, jam)
 	e_out[t] = T.e
 	flip[t] = T.flip
 	if mode >= 1:
@@ -519,8 +526,9 @@ def csr(keys, n):
 class Problem:
 	"""One case on the GPU: the garment, the body surface, and the shared evaluation (energy, gradient, projected Hessian)."""
 
-	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, device='cuda:0'):
-		"""press, bend: squeeze resistance and bending stiffness (fit realism plan stage 2; 0 and 0: the physics before it). energy.py."""
+	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, jam=1.0, device='cuda:0'):
+		"""press, bend, jam: squeeze resistance, bending stiffness, the squeeze taken up free (fit realism plan stage 2; press 0 and bend 0:
+		the physics before it). energy.py."""
 		wp.init()
 		self.device = device
 		dev = device
@@ -530,7 +538,7 @@ class Problem:
 		n, nt = self.n, self.nt
 		Dm = np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2)
 		self.plane, self.gather, self.hold, self.turn = float(case['plane']), float(case['gather']), float(hold), float(turn)
-		self.press, self.bend = float(press), float(bend)
+		self.press, self.bend, self.jam = float(press), float(bend), float(jam)
 		from energy import hinges
 		hid, hK, hc = hinges(tris, rest) if self.bend else (np.zeros((0, 4), np.int32), np.zeros((0, 4)), np.zeros(0))
 		self.nh = nh = len(hid)
@@ -662,7 +670,7 @@ class Problem:
 			wp.launch(plane_k, self.n, [x, self.q, self.gn, self.plane, self.hold, self.d, self.e, self.nt + self.ns], device=self.device)
 		else:
 			self.query(x)
-		wp.launch(tri_k, self.nt, [x, self.tris, self.Dinv, self.area, self.facing, self.gn, self.gather, self.turn, self.press, mode, self.e, self.gt, self.H, self.flip], device=self.device)
+		wp.launch(tri_k, self.nt, [x, self.tris, self.Dinv, self.area, self.facing, self.gn, self.gather, self.turn, self.press, self.jam, mode, self.e, self.gt, self.H, self.flip], device=self.device)
 		wp.launch(spring_k, self.ns, [x, self.si, self.sj, self.rest_len, self.k, mode, self.e, self.nt, self.gs, self.H[self.off_s:]], device=self.device)
 		if mode >= 1:
 			wp.launch(gather_grad_k, self.n, [self.vt_start, self.vt_src, self.gt, self.vs_start, self.vs_src, self.gs, self.d, self.gn, self.plane, self.hold, self.grad], device=self.device)

@@ -1,5 +1,5 @@
 """Does the GPU energy (gpu.py) compute the race's energy? Against the numpy one (energy.py) and against its own finite differences.
-    <venv python> pipeline/race/check_gpu.py [case] [--press P] [--bend B]       (default case-young-back-arched; stage 2's terms off)
+    <venv python> pipeline/race/check_gpu.py [case] [--press P] [--bend B] [--jam J]       (default case-young-back-arched; stage 2's terms off)
 Spec: knowledge/engineering/app/solver-race-plan.md (stage 3).
 """
 import os
@@ -22,18 +22,18 @@ CAP = os.path.join(HERE, '..', '..', 'app', 'captures', 'race')
 def main():
 	args = [a for a in sys.argv[1:] if not a.startswith('--')]
 	opt = lambda k: float(sys.argv[sys.argv.index(k) + 1]) if k in sys.argv else 0.0
-	press, bend = opt('--press'), opt('--bend')
-	args = [a for a in args if a not in (str(press), str(bend)) and not a.replace('.', '').replace('e-', '').isdigit()]
+	press, bend, jam = opt('--press'), opt('--bend'), (opt('--jam') or 1.0)
+	args = [a for a in args if a not in (str(press), str(bend), str(jam)) and not a.replace('.', '').replace('e-', '').isdigit()]
 	name = args[0] if args else 'case-young-back-arched'
 	case = dict(np.load(os.path.join(CAP, name + '.npz')))
 	t = time.perf_counter()
-	pb = Problem(case, press=press, bend=bend)
+	pb = Problem(case, press=press, bend=bend, jam=jam)
 	print(f'GPU problem set up in {time.perf_counter() - t:.2f} s: {pb.n} points, {pb.nt} triangles, {pb.ns} spans, {pb.nnz} Hessian blocks', flush=True)
 	rng = np.random.default_rng(0)
 	states = [('start', case['start'])] + ([('today, 1440 iterations', case['alt_1440'])] if 'alt_1440' in case else [])
 
 	print('\n== against the numpy energy (surface by grid there, exact here: expect the surface part to differ slightly)', flush=True)
-	En = Energy(case, surface='field', contact='push', press=press, bend=bend) if '--no-numpy' not in sys.argv else None
+	En = Energy(case, surface='field', contact='push', press=press, bend=bend, jam=jam) if '--no-numpy' not in sys.argv else None
 	for label, x in (states if En else ()):
 		E, g, parts = En(x)
 		X = pb.array(x)

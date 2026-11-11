@@ -32,7 +32,7 @@ export const PARAMS = [
 	'vn0', 'vn1', 'off_pts', 'off_fi',
 	'link0', 'link1', 'pad0', 'pad1',
 ];
-export const FPARAMS = ['plane', 'hold', 'gather', 'turn', 'damp', 'mu', 'stick', 'grip', 'press'];
+export const FPARAMS = ['plane', 'hold', 'gather', 'turn', 'damp', 'mu', 'stick', 'grip', 'press', 'jam'];
 
 export const WGSL = /* wgsl */ `
 struct Params {
@@ -258,11 +258,12 @@ fn tri(@builtin(global_invocation_id) gid: vec3<u32>) {
 	}
 	var sg = 1.0;
 	if (w > 0.5) { sg = -1.0; }
-	// a squeezed singular value's target moved press of the way back to 1, so squeezing costs (fit realism plan stage 2; 0: free)
+	// squeezed below jam, a singular value's target is moved press of the way back to jam, so squeezing beyond what the knit takes up
+	// costs (fit realism plan stage 2; press 0: free)
 	var c1 = clamp(s1, g, 1.0);
 	var c2 = clamp(sg * s2, g, 1.0);
-	c1 = c1 + P.press * (1.0 - c1);
-	c2 = c2 + P.press * (1.0 - c2);
+	if (c1 < P.jam) { c1 = c1 + P.press * (P.jam - c1); }
+	if (c2 < P.jam) { c2 = c2 + P.press * (P.jam - c2); }
 	for (var k = 0u; k < 3u; k++) {
 		let bb = tri_b(D, k);
 		loc[3u * t + k] = vec4<f32>(area * (u1 * (c1 * dot(v1, bb)) + u2 * (sg * c2 * dot(v2, bb))), 0.0);

@@ -48,8 +48,8 @@ def main():
 	print(f'  worst relative difference over 20 directions: {worst:.2e}')
 
 	print('\n== 1b. with squeeze resistance and bending (fit realism plan stage 2): the gradient, and bending zero on the flat pattern')
-	for press, bend in ((0.15, 0.0), (0.0, 1e-5), (0.15, 1e-5)):
-		Eb = Energy(case, press=press, bend=bend)
+	for press, bend, jam in ((0.15, 0.0, 1.0), (0.0, 1e-5, 1.0), (0.15, 1e-5, 1.0), (1.0, 1e-6, 0.88)):
+		Eb = Energy(case, press=press, bend=bend, jam=jam)
 		Eb(x)
 		_, g, parts = Eb(x, keep_normals=False)
 		worst = 0.0
@@ -59,7 +59,7 @@ def main():
 			h = 1e-7
 			fd = (Eb(x + h * d, False)[0] - Eb(x - h * d, False)[0]) / (2 * h)
 			worst = max(worst, abs(fd - (g * d).sum()) / max(abs(fd), 1e-12))
-		print(f'  press {press}, bend {bend}: worst relative difference {worst:.2e}; bending {parts["bending"]:.4g}, squeeze {parts["squeeze"]:.4g}')
+		print(f'  press {press}, bend {bend}, jam {jam}: worst relative difference {worst:.2e}; bending {parts["bending"]:.4g}, squeeze {parts["squeeze"]:.4g}')
 	# each hinge laid flat on its own: the first triangle as on the pattern, the second turned (and if need be mirrored: the garment's
 	# halves share their flat places) onto the other side of the shared edge
 	ids, K, tris, rest = Eb.hinge_ids, Eb.hinge_K, case['tris'], case['rest']

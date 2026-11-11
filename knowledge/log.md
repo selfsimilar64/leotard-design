@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-11-11
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 2: owner found the first folds too loose (taut in most places, folds only with considerable extra fabric). Measured where the fit squeezes; added `jam` (squeeze free down to it, costing beyond) to every twin, checked; sweep at jam 0.85-0.9: standing taut, folds fan from the armpit with the arm up, the back arch still folds; a 5% shorter pattern makes standing tauter. Re-fit 3.2-3.7 s at 3.5 mm in the pane.
+
 ## 2026-11-10
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 2 begun (owner: "we can proceed"): squeeze resistance (`press`) and isometric bending (`bend`) in `energy.py` (gradient-checked), `gpu.py`/`solvers.py` (Python twin), `export_app.py` (check cases `young-*-s2`), and the app's re-fit (`refit-wgsl.js`, `refit.js hingesOf`, twin test `app/test/hinges.test.js`), as options off by default. Port matches Python as before. First sweep at 3.5 mm: real folds at the arched back waist only with press 1; re-fit 2.5-2.7 s in the pane.
 * **Update**: [Designs recut from a fitted block](/engineering/app/designs-recut-from-a-block.md): back straps 3 in from centre back; the "fangs" where the straps met the back edge were the binding looping up each strap, now laid as open runs from strap to strap (front neck; one band round the front armholes and straight across the back, its elastic continuous under the straps), drawn open by `render/fitted.js finish()`.

@@ -191,7 +191,7 @@ export class Refit {
 			order1: bodyI.offsets.order1, face0: 0, face1: nf[0], off_fn: q(bodyF.offsets.fn),
 			vn0: q(bodyF.offsets.vn0), vn1: q(bodyF.offsets.vn1), off_pts: q(bodyF.offsets.pts), off_fi: bodyI.offsets.fi,
 			link0: bodyI.offsets.link0, link1: bodyI.offsets.link1, pad0: 0, pad1: 0,
-			plane: h.plane, hold: h.hold, gather: h.gather, turn: h.turn, press: h.press ?? 0,
+			plane: h.plane, hold: h.hold, gather: h.gather, turn: h.turn, press: h.press ?? 0, jam: h.jam ?? 1,
 		};
 		const S = GPUBufferUsage.STORAGE, D = GPUBufferUsage.COPY_DST, C = GPUBufferUsage.COPY_SRC;
 		const make = (data, usage = S | D | C) => {

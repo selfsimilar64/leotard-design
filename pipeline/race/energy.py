@@ -18,9 +18,11 @@ E = membrane + surface + elastic (+ friction on a re-fit), no gravity, metres.
   about 4-12 times the weight of the fabric it carries (0.2 kg/m^2 over 42 mm^2 at 7 mm). A span across a 6 cm hollow at 10% stretch resists
   being pulled in about 90 times harder (8 T A / (HOLD L^2)), so taut fabric bridges, sagging about 1% of the hollow's depth; only slack fabric
   follows the hold. A modelling stand-in, not measured: sensitivity in the race record.
-  press (fit realism plan stage 2, 2026-11-10; 0 is the above): squeezing costs press times what stretching does. phi(s) =
-  press * (1 - s)^2 from GATHER to 1, press * (1 - g)^2 + (s - g)^2 - 2 press (1 - g)(s - g) below GATHER: the energy whose
-  stationary points the local step's target mix(clamp(s, GATHER, 1), 1, press) reaches (solvers.pd_tri_k).
+  press, jam (fit realism plan stage 2, 2026-11-11; press 0 is the above): a knit takes up squeeze in its own loops and in
+  wrinkles finer than the mesh down to jam of its length for free; beyond, squeezing costs press times what stretching does.
+  phi(s) = 0 from jam to 1, press (jam - s)^2 from GATHER to jam, press (jam - g)^2 + (s - g)^2 - 2 press (jam - g)(s - g)
+  below GATHER: the energy whose stationary points the local step's target (c below jam moved press of the way to jam, c the
+  clamped s) reaches (solvers.pd_tri_k). jam 1: squeezing costs from the start (the first trial, 2026-11-10).
 - bending (stage 2; 0: none), per pair of triangles sharing an inside edge (hinge): bend / 2 * 3 / (A0 + A1) * |K . X|^2, X the
   four points (the edge's two ends, then the corner opposite it in each triangle), K their cotangent weights in the flat rest
   shape (hinges below): the isometric quadratic bending energy (Bergou, Wardetzky, Harmon, Zorin, Grinspun 2006), zero on a flat
@@ -89,9 +91,9 @@ def hinges(tris, rest):
 
 
 class Energy:
-	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0):
+	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0, jam=1.0):
 		self.contact, self.hold = contact, hold
-		self.press, self.bend = float(press), float(bend)
+		self.press, self.bend, self.jam = float(press), float(bend), float(jam)
 		self.tris = case['tris']
 		rest = case['rest']
 		Dm = np.stack([rest[:, 1] - rest[:, 0], rest[:, 2] - rest[:, 0]], axis=2)
@@ -111,12 +113,12 @@ class Energy:
 			self.field = PartFields(case['surface_P'], case['surface_idx'], case['surface_arm'])
 
 	def phi(self, s):
-		g, p = self.gather, self.press
-		return np.where(s > 1, (s - 1) ** 2, np.where(s < g, p * (1 - g) ** 2 + (s - g) ** 2 - 2 * p * (1 - g) * (s - g), p * (1 - s) ** 2))
+		g, p, j = self.gather, self.press, self.jam
+		return np.where(s > 1, (s - 1) ** 2, np.where(s < g, p * (j - g) ** 2 + (s - g) ** 2 - 2 * p * (j - g) * (s - g), np.where(s < j, p * (j - s) ** 2, 0.0)))
 
 	def dphi(self, s):
-		g, p = self.gather, self.press
-		return np.where(s > 1, 2 * (s - 1), np.where(s < g, 2 * (s - g) - 2 * p * (1 - g), -2 * p * (1 - s)))
+		g, p, j = self.gather, self.press, self.jam
+		return np.where(s > 1, 2 * (s - 1), np.where(s < g, 2 * (s - g) - 2 * p * (j - g), np.where(s < j, -2 * p * (j - s), 0.0)))
 
 	def __call__(self, x, keep_normals=True):
 		"""Energy, gradient (n, 3) and the parts {membrane, stretch, squeeze, surface, elastic, bending, inside_out, off_field}."""

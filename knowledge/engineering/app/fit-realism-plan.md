@@ -216,6 +216,25 @@ wrinkles finer than the mesh.[^owner]
   2.5-2.7 s against 2.3-2.4 s for 3.5 mm without them: over the gate's 1.5 s, as 3.5 mm already is.
 - Not yet: the owner's judgement, other poses and the underarm, the crotch measures, `bend` between 1e-7 and 1e-6, more steps.
 
+**Owner on the first sweep (2026-11-11):** realistic folds, but the garment reads much looser; it should be taut in most places and
+fold only where there is considerable extra fabric (the shoulder with the arm up).[^owner] Measured on today's fit (3.5 mm, on the
+skin; share of triangles whose smaller stretch is under 0.95 / under 0.85): standing front 0 / 0%, seat 15 / 12%, back waist 16 / 8%,
+shoulders 44 / 34%, sleeve 30 / 29%; back arch back waist 49 / 35%, seat 45 / 41%; lunge with arms up shoulders 54 / 44%. So press 1
+turned the many small squeezes into folds. **`jam` added** (all twins, as press: `energy.py`, `gpu.py`, `solvers.pd_tri_k`,
+`refit-wgsl.js`, `fitted-case.js`, `render/fitted.js` option, `export_app.py --jam`, `check_gpu.py --jam`): squeezing is free down to
+`jam` of the length (the knit's loops and wrinkles finer than the mesh, which the painted waves still show) and costs `press` beyond;
+the same everywhere, a property of the fabric. Gradient check 6.4e-7 (press 1, bend 1e-6, jam 0.88). Port check on `young-*-s3`
+(press 1, bend 3e-7, jam 0.88): one step as the plain cases (0.04-0.11 mm mean); 20 steps 0.10-0.35 mm mean, worst 4.7-7.0 mm,
+wider than plain: once fabric can buckle, rounding picks where.
+- **Sweep 2** (`s3-*`, sheet `app/captures/fit-stills/s3-sweep.png`): press 1 with jam 0.9 or 0.85, bend 1e-7 or 3e-7; standing,
+  back arch, lunge with arms up. Standing seat and small of the back taut and smooth, as today; with the arm up real folds fan from
+  the armpit; the back arch still folds and ripples across the waist and seat. Re-fit 3.2-3.7 s in the pane (one 7.1 s), against
+  2.3-2.4 s for 3.5 mm without them.
+- **Pattern length** (`s3-length.png`, `fitted.size` length 0.95 through `fit-stills.js all(..., { size })`): today's seat is barely
+  stretched up and down standing (median 1.03); 5% shorter makes standing visibly tauter, the small of the back smooth with folds on
+  or off; the back arch still folds at the waist and seat, a little less. **[INFERRED]** that the back arch's folds are the spare
+  length a back loses when it arches, and that the remaining looseness standing is the pattern's length, not the fold physics.
+
 # Stage 3: elastic as a band
 
 1. **Cheap stage (springs kept).**
