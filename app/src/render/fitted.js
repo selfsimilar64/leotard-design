@@ -6,8 +6,9 @@
 // Grew out of the dev viewer, dev/wrap-eval.js (show, cover, finish): change one, look at the other.
 import * as THREE from 'three';
 import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
-import { fittedOf, fitSizeOf } from '../garment/fitted.js';
+import { fittedOf, fitSizeOf, fittedTrimOf } from '../garment/fitted.js';
 import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
+import { applyFabric, bindScan, texScaleOf, fabricSide } from '../materials/fabric.js';
 import { Refit, DEFAULTS } from '../fit/refit.js';
 import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
 import { foldsOf, foldPasses } from '../fit/folds.js';
@@ -456,12 +457,24 @@ export class FittedView {
 		const byName = new Map(L0.map((p) => [p.name, p]));
 		const front = byName.get('Front') ?? L0[0];
 		for (const mesh of this.meshes) {
+			// a strap (pipeline/design_strappy.py) is the binding carried on: the binding's look, not a panel's
 			const p = byName.get(mesh.userData.fitted) ?? front;
-			if (p) mesh.material = view.material(p.id);
+			if (mesh.userData.fitted === 'Strap') mesh.material = this.trimMaterial(doc);
+			else if (p) mesh.material = view.material(p.id);
 			if (mesh.parent !== view.group) view.group.add(mesh);
 		}
 		this.finish();
 		this.quiet();
+	}
+
+	// The design's binding look (garment/fitted.js fittedTrimOf) as a fabric for the straps, made as a panel's is (render/garment.js).
+	trimMaterial(doc) {
+		const view = this.view, t = fittedTrimOf(doc), m = view.material('fitted:trim'), u = m.userData.u;
+		applyFabric(m, t.fabric, t.colour, t.second ?? 'Tone-on-tone', t.colour2 ?? null, texScaleOf(t), t.satin);
+		bindScan(m, t, view.textures);
+		fabricSide(m, view.doubleSided);
+		u.uUV.value = 1; // its cells carry their flat metres (aUV)
+		return m;
 	}
 
 	// What the fitted garment replaces: the app's own pieces and their edge finishes, and the app's fixed wrinkle zones
@@ -481,7 +494,7 @@ export class FittedView {
 		this.hold(false);
 		for (const m of this.meshes) { m.parent?.remove(m); m.geometry.dispose(); }
 		this.meshes = [];
-		if (this.edges) { this.edges.parent?.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
+		if (this.edges) { this.edges.parent?.remove(this.edges); for (const m of this.edges.children) m.geometry.dispose(); this.edges = null; }
 		if (this.lines) { this.lines.parent?.remove(this.lines); for (const l of this.lines.children) l.geometry.dispose(); this.lines = null; }
 		this.data = null; this.garment = null; this.near = null; this.solved = null; this.cache = null; this.pairs = null;
 		this.cloths.clear(); this.twin = null; this.shownP = this.shownN = null; this.keepOut = null;
@@ -501,7 +514,7 @@ export class FittedView {
 	// garment's own edge points (re-fitted, or carried by their hosts), with the body's normal there.
 	finish() {
 		const e = this.engine, view = this.view, doc = e.app?.doc;
-		if (this.edges) { this.edges.parent?.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
+		if (this.edges) { this.edges.parent?.remove(this.edges); for (const m of this.edges.children) m.geometry.dispose(); this.edges = null; }
 		if (!doc || !view || !this.data?.openings?.length) return;
 		const L = e.layers.get('L0'), man = e.body, G = man.garmentPos, GN = man.aGNormal.array, X = this.solved;
 		const at = (I, W, i, out) => { out.set(0, 0, 0); for (let j = 0; j < 3; j++) { const v = I[i * 3 + j] * 3, w = W[i * 3 + j]; out.x += w * G[v]; out.y += w * G[v + 1]; out.z += w * G[v + 2]; } return out; };
@@ -539,9 +552,19 @@ export class FittedView {
 		const L0 = doc.panels.filter((p) => (p.layer ?? 'L0') === 'L0' && !p.removed);
 		const s = (L0.find((p) => p.name === 'Front') ?? L0[0])?.stack?.[0];
 		if (!s) return;
-		this.edges = new THREE.Mesh(buildGeometry(built, TRIMS.elastic.profile), L.rims.material({ kind: 'elastic', fabric: s.fabric, colour: s.colour, second: s.second ?? 'Tone-on-tone' }));
-		this.edges.renderOrder = -4;
-		this.edges.frustumCulled = false;
+		// openings the file marks bound (pipeline/design_strappy.py BOUND) take the binding in the design's binding look; the rest
+		// turned elastic in the front's. One mesh per kind, kept together as this.edges.
+		const t = fittedTrimOf(doc), bound = this.data.openings.map((o) => o.finish === 'binding');
+		this.edges = new THREE.Group();
+		for (const kind of ['elastic', 'binding']) {
+			const these = built.filter((_, i) => bound[i] === (kind === 'binding'));
+			if (!these.length) continue;
+			const look = kind === 'binding' ? t : s;
+			const mesh = new THREE.Mesh(buildGeometry(these, TRIMS[kind].profile), L.rims.material({ kind, fabric: look.fabric, colour: look.colour, second: look.second ?? 'Tone-on-tone' }));
+			mesh.renderOrder = -4;
+			mesh.frustumCulled = false;
+			this.edges.add(mesh);
+		}
 		view.group.add(this.edges);
 	}
 }

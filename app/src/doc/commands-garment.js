@@ -139,6 +139,18 @@ defineCommand('fitted.size', {
 	},
 });
 
+// The look of a fitted garment's binding and the straps cut from it (garment/fitted.js fittedTrimOf): the given fields over the
+// current ones. Only a garment with bound openings shows it (FITTED entries marked bound).
+const TRIM_KEYS = ['fabric', 'colour', 'second', 'colour2', 'texture', 'texMode'];
+defineCommand('fitted.trim', {
+	label: 'Binding look', args: `{ ${TRIM_KEYS.map((k) => k + '?').join(', ')} }`,
+	run(tx, a) {
+		const next = { ...(tx.doc.meta.fittedTrim ?? {}) };
+		for (const k of TRIM_KEYS) if (a[k] !== undefined) next[k] = a[k];
+		tx.set('meta/fittedTrim', next);
+	},
+});
+
 // --- changing one element of the shape ---------------------------------------------------------------
 // block.set { neck: 'v' } regenerates only the lines the neckline owns (ELEMENT_CURVES) and keeps
 // everything else: the other block lines as the designer left them, drawn lines (re-attached by

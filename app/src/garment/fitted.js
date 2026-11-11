@@ -8,8 +8,13 @@
 // dev server at /fitted-local/ (vite.config.js) and listed only in dev, so they are never bundled or shipped (licence).
 // Only the high-cut garments are offered (owner, 2026-11-10): the basic and thigh legs, the bodyshaper and the stretch-knit leotard
 // were removed; a design that names one shows its block's high cut where there is one (MOVED), else the drawn pieces.
+// The strappy back (owner's illustration, 2026-11-10): the hybrid high cut recut by pattern changes and fitted from the block's fit
+// (pipeline/design_strappy.py). A preview, so local like the purchased block: its file is made into app/captures by
+// `python pipeline/wrap_block.py --drafted hybrid-6 young --design strappy`. bound: its neck and armholes are bound and its straps
+// cut from the binding, in the design's binding look (fittedTrimOf).
 const LOCAL = [
 	{ key: 'bought-XS-high', label: 'Purchased block, high cut (local)', leg: 'High-hips leg', file: 'wrap-XS-high-resolved', fittedOn: 'young', local: true, hint: 'The purchased block, size XS, high-hips leg; fitted by simulation on the young body. Shown only on this computer (its licence bars shipping it)' },
+	{ key: 'hybrid-6-strappy', label: 'Strappy back (local)', leg: 'Hybrid, preview', file: 'wrap-hybrid-6-strappy-resolved', fittedOn: 'young', local: true, bound: true, hint: 'The hybrid high cut recut as a strappy back: thin straps, bound neck and armholes, open upper back. A preview, shown only on this computer' },
 ];
 
 export const FITTED = [
@@ -27,6 +32,11 @@ export const fittedOf = (doc) => { const k = doc?.meta?.fitted; return FITTED.fi
 // Without a re-fit (none run yet, re-fit off, no WebGPU) the fit shown is the file's, at 1 x 1. The range is ours, not a maker's.
 export const FIT_SIZE_RANGE = [0.8, 1.1];
 export const fitSizeOf = (doc) => ({ width: doc?.meta?.fitSize?.width ?? 1, length: doc?.meta?.fitSize?.length ?? 1 });
+
+// The binding on a fitted garment's bound openings and its straps (render/fitted.js): meta.fittedTrim (op fitted.trim) over the
+// default, white shiny, the default a drawn edge's binding starts at too (ui/ShapeCard.jsx Finish).
+export const TRIM_DEFAULT = { fabric: 'shiny', colour: '#ffffff', second: 'Tone-on-tone' };
+export const fittedTrimOf = (doc) => ({ ...TRIM_DEFAULT, ...(doc?.meta?.fittedTrim ?? {}) });
 
 // A fitted garment's pieces for the flat view (ui/FlatView.jsx), in the shape garment/pattern.js patternPieces gives: each piece
 // once (a cell's half 0), its outline as drafted, in mm with its corner at the origin. The outlines are stitching lines (the fit
@@ -47,7 +57,8 @@ export function fittedPieces(data, doc, fitted = null) {
 		// the frame the stones are laid in: mm = uv * 1000 - origin, uv the cloth's (its origin at its points' mean)
 		const frame = cloth ? { cell: cloth.cell, layer: 'L0', origin: [x0 - cloth.shift[0] * 1000, y0 - cloth.shift[1] * 1000], easeUV: [0, 0], fitted: true } : {};
 		out.push({ ...frame, key: c.piece, panelId: panel?.id, name: c.name, cutLine: pts, stitch: null, grain: { at: [w / 2, h / 2], angle: 0 },
-			cut: (c.name === 'Sleeve' ? 'Cut 2, mirrored' : 'Cut 1') + ' · stitching line' + sized, colour: panel?.stack?.[0]?.colour ?? '#8f8a82', size: [w, h] });
+			cut: (c.name === 'Sleeve' || c.name === 'Strap' ? 'Cut 2, mirrored' : 'Cut 1') + ' · stitching line' + sized,
+			colour: (c.name === 'Strap' ? fittedTrimOf(doc).colour : panel?.stack?.[0]?.colour) ?? '#8f8a82', size: [w, h] });
 	}
 	return out;
 }

@@ -17,7 +17,7 @@ import { TRIMS } from '../garment/trim.js';
 import { overlayLines, panelAt } from '../garment/build.js';
 import { focusOn } from './camera.js';
 import { BLOCK_OPTIONS, blockOf, blockAllows, blockKeyOf } from '../garment/blocks.js';
-import { FITTED, fittedOf, fitSizeOf, FIT_SIZE_RANGE } from '../garment/fitted.js';
+import { FITTED, fittedOf, fitSizeOf, fittedTrimOf, FIT_SIZE_RANGE } from '../garment/fitted.js';
 
 // (an option kept only for older designs has no picture)
 export const hideBroken = (e) => { e.currentTarget.style.visibility = 'hidden'; };
@@ -134,6 +134,7 @@ function Garment({ doc }) {
 			</div>
 			{f ? <>
 				<FitSize doc={doc} />
+				{f.bound ? <Field label="Binding and straps"><LookWells look={fittedTrimOf(doc)} set={(patch, g) => run({ op: 'fitted.trim', ...patch, ...(g ? { gesture: g } : {}) })} /></Field> : null}
 				<Hint>Fitted on the {f.fittedOn} body. Silhouette shapes the drawn pieces, not this one; its fabric comes from the Front, Back and Sleeve pieces.</Hint>
 			</> : null}
 		</>

@@ -287,6 +287,12 @@ The owner removed the purchased thigh leg, the textbook and hybrid basic legs, t
 Garment row and the starting points ([decision](/decisions/2026-11-10-high-cut-fitted-garments-only.md)). The sections above keep
 their history; a design naming one shows its block's high cut, or the drawn pieces.
 
+# A design recut from the hybrid (2026-11-10)
+
+The owner's strappy-back illustration, recut from the hybrid high cut as pattern changes and fitted from the block's fit, is listed in
+dev only as **Strappy back (local)**: [designs recut from a fitted block](/engineering/app/designs-recut-from-a-block.md). Openings a
+file marks `finish: binding` and cells named Strap take the design's binding look (`meta.fittedTrim`).
+
 # Known limits **[INFERRED]**
 
 - **Fitted on one body.** On other bodies the young standing fit is carried by surface coordinates and then re-fitted by the GPU
