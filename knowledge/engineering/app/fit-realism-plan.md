@@ -172,7 +172,7 @@ Goal: the collision body is the bare skin; the membrane, seat sheet and rolling 
 
 # Stage 2: folds as geometry (trial first)
 
-**Shelved 2026-11-11** ([decision](/decisions/2026-11-11-folds-as-geometry-shelved.md)):[^shelved] after the sweeps below the owner
+**Since 2026-11-11 the painted fold waves are off** ([decision](/decisions/2026-11-11-fold-shading-off.md)), so a fitted garment shows a fold only if this stage makes one in the geometry. **Shelved 2026-11-11** ([decision](/decisions/2026-11-11-folds-as-geometry-shelved.md)):[^shelved] after the sweeps below the owner
 found none of the fold looks appealing (the arched back least) and set the stage aside, to revisit if necessary. Its code stays, off
 by default.
 

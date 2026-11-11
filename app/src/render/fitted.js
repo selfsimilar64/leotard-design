@@ -87,6 +87,9 @@ export const FIT_DEFAULTS = {
 	// the seat in the lunge). Leg openings' mean height on the body above the crotch, young, 88% length, standing 91-97 mm: lunge with
 	// arms up 97-98 at 0 and 50, 103-106 at 150 (as free); back arch 90/102 at 0 (one side pulled up, diagonal folds), 95/100 at 50
 	// (looks as before). 50: little ride-up and no lopsided pull
+	folds: false,             // the fold waves the fabric shader paints from the fit's squeeze (fit/folds.js foldsOf). Off (owner,
+	// 2026-11-11: "causing more issues than anything"; the arched back's seat covered in ripples where the posed mannequin's skin is
+	// shortened and pinched, and where knit pulled long only narrows): knowledge/decisions/2026-11-11-fold-shading-off.md. No control
 	mesh: 7,                  // mm between the garment's points. Finer (5, 3.5) is a dev-only trial: those fits are made by
 	// `WRAP_STEP=5 python pipeline/wrap_block.py --drafted <block> young` into app/captures and served at /fitted-local/
 	// (knowledge/engineering/app/fit-mesh-resolution-trial.md); a garment without one shows its 7 mm fit and says so
@@ -241,7 +244,7 @@ export class FittedView {
 			setFabricSlot(geo, 'cover', 1);
 			geo.setIndex(new THREE.BufferAttribute(Uint32Array.from(c.I), 1));
 			geo.attributes.aUV.array.set(c.uv); // flat metres: the cloth's weave and prints follow the pattern piece
-			if (c.fold) setFabricSlot(geo, 'fold', c.fold); // the fit's own folds (pipeline/wrap_block.py)
+			if (c.fold && this.options.folds) setFabricSlot(geo, 'fold', c.fold); // the fit's own folds (pipeline/wrap_block.py)
 			const mesh = new THREE.Mesh(geo, HIDDEN); // dress() gives it its panel's material
 			mesh.frustumCulled = false;
 			mesh.userData = { fitted: c.name, piece: c.piece, cell: c };
@@ -293,7 +296,8 @@ export class FittedView {
 			geo.attributes.aLift.array.fill(0);
 			// folds from the fit shown: the re-fit's own (fit/folds.js, at the pattern's size), else the file's (the fit it was made with)
 			const c = mesh.userData.cell;
-			if (X && mesh.cid) {
+			if (!this.options.folds) setFabricSlot(geo, 'fold', 0);
+			else if (X && mesh.cid) {
 				const q = new Float32Array(n * 3), sx = this.size.width, sy = this.size.length;
 				for (let l = 0; l < n; l++) for (let k = 0; k < 3; k++) q[3 * l + k] = X[3 * mesh.cid[l] + k];
 				setFabricSlot(geo, 'fold', foldsOf(q, Float32Array.from(c.uv, (v, i) => v * (i % 2 ? sy : sx)), c.I, foldPasses(this.meshMm)));
