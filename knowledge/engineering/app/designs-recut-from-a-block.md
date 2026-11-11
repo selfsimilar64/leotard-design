@@ -18,6 +18,10 @@ sources:
     resource: "conversation with the product owner, 2026-11-10 (Claude Code session): the straps still seem too far under the armpit; in the reference images they go straight down to the back, and in the illustration they reach closer to the center"
     title: Owner on the second strappy fit
     author: human:mattj
+  - id: owner4
+    resource: "conversation with the product owner, 2026-11-10 (Claude Code session): a little further outward still; neither the illustration nor the photos have a jagged upward point where the straps meet the back piece, like two fangs facing upwards"
+    title: Owner on the third strappy fit
+    author: human:mattj
   - id: code
     resource: "pipeline/design_strappy.py, pipeline/wrap_block.py (--design, WRAP_REUSE_BASE, solve mu, case placed), app/src/fit/fitted-case.js (placed), app/src/fit/refit.js (reset), app/src/fit/refit-wgsl.js (rhs), app/src/garment/fitted.js (LOCAL hybrid-6-strappy, fittedTrimOf), app/src/render/fitted.js (dress, trimMaterial, finish), app/src/doc/commands-garment.js (fitted.trim), app/src/ui/ShapeCard.jsx (Garment)"
     title: Strappy design code
@@ -48,9 +52,9 @@ a proportion of the block's own landmarks read off the illustration, or a source
 | Sleeveless | Sleeve removed; side seam's top lowered 1 in (`ARM_DROP`), back to the bodice armpit Armstrong raises for the sleeve **[INFERRED]** |
 | Strap | Its own piece, 3/8 in (9.5 mm) wide, the usual covered-elastic strap[^straps]; crosses the shoulder seam 20 mm from the neck point (`CROSS`); length measured on the flat block from foot to foot |
 | Front | The strap's foot hangs straight below the crossing, a third of the way down to the armpit; a shallow neckline from it to centre front at 46% of that height; the armhole cut in from the foot to the new armpit (made fuller in the second fit, below) |
-| Back | Cut straight across at the new armpit; the strap's foot on that edge, its inner side 2 1/4 in from centre back (`BACK_IN`; first 1 1/2 in, Porter's least clearance from centre back[^straps], then 3/4 in further out at the owner's eye; the drawing has it closer). Until the third fit, misread from the drawing, the foot sat near the side seam (below) |
+| Back | Cut straight across at the new armpit; the strap's foot on that edge, its inner side 3 in from centre back (`BACK_IN`; first 1 1/2 in, Porter's least clearance from centre back[^straps], then twice 3/4 in further out at the owner's eye; the drawing has it closer). Until the third fit, misread from the drawing, the foot sat near the side seam (below) |
 | Snug edges | Elastic in the neck, armhole and back-edge binding and along both strap edges at 85% of the edge (`TAUT`, Treasurie's starting rule within the sourced 75-100%[^edges]), tighter than the block's 95% neck at the owner's "taut"; legs as the block's |
-| Finish | Neck (which runs on along the strap's inner edge to the back edge) and armholes (along its outer edge) marked `finish: binding`; legs turned elastic |
+| Finish | Bound in two open runs from strap to strap: the front neck, and one band round both front armholes and straight across the back; the strap's own edges are openings with `finish: none` (the strap is the binding); legs turned elastic. Until the fourth fit the neck and armholes were closed loops running up the strap's edges |
 
 The strap's pattern: front end sewn to a 9.5 mm "shoulder" edge at the front's foot, back end to one on the back edge. It starts the
 fit laid along its path over the block's own fitted front and back (`strap_flat`), facing as the back does (it runs downwards over the
@@ -125,6 +129,22 @@ straps. The back foot now has its inner edge 38.1 mm (1 1/2 in) from centre back
   crosses the shoulder 82 mm from the centre (app 84) and meets the back edge 73-83 mm from it, straight down from behind, as in the
   photos; settled within the 360 iterations (last mean move 0.005 mm).
 
+# Fourth fit: straps further out, no fangs (2026-11-10)
+
+Owner: the straps a little further out still; and neither the illustration nor the photos have the jagged upward point where a strap
+meets the back piece, "like two fangs facing upwards".[^owner4]
+
+- **Back foot** 3 in from centre back (was 2 1/4): the strap crosses the shoulder 85 mm from the centre and meets the back edge
+  77-107 mm from it.
+- **The fangs were mostly the binding.** The neck and armhole openings were closed loops running up each strap's edges, so the
+  binding turned up into the strap with a rounded corner on both sides of its foot. The fabric itself rose only 3.5 mm there (back
+  edge height at the foot over the line between the edge 25 mm either side). Now the binding is laid as the drawing's construction:
+  open runs from strap to strap (`open: true`; `render/fitted.js finish()` resamples and smooths them without wrapping, `resampleOpen`,
+  `smoothOpen`), the back band straight across with the straps on it, and its elastic continuous under each strap's foot
+  (`design_strappy.ELASTIC` `('back', 'shoulder')`). The fabric's own rise stayed 3.8 mm: a slight swell, no point.
+- Seen: the band runs straight across the back, the straps meeting it square; a few pixels of the red back show above the band beside
+  each foot.
+
 # In the app (dev only)
 
 - **Strappy back (local)** in the Garment row (`garment/fitted.js` LOCAL, `bound: true`), beside the purchased block: a preview, so it
@@ -145,6 +165,7 @@ straps. The back foot now has its inner edge 38.1 mm (1 1/2 in) from centre back
 [^owner]: Owner on the strappy-back preview, 2026-11-10.
 [^owner2]: Owner on the first strappy fit, 2026-11-10.
 [^owner3]: Owner on the second strappy fit, 2026-11-10.
+[^owner4]: Owner on the third strappy fit, 2026-11-10.
 [^code]: Strappy design code.
 [^edges]: Edge finishing, elastic and binding.
 [^straps]: Back, strap and keyhole formulas.

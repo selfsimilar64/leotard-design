@@ -212,7 +212,7 @@ export class FittedView {
 		const view = this.view, keys = this.data.case ? seamKeys(this.data.case) : null;
 		if (keys) {
 			const n = this.data.case.n, edge = [];
-			for (const o of this.data.openings) if (o.ids) for (let i = 0; i < o.ids.length; i++) edge.push(o.ids[i], o.ids[(i + 1) % o.ids.length]);
+			for (const o of this.data.openings) if (o.ids) for (let i = 0; i < o.ids.length - (o.open ? 1 : 0); i++) edge.push(o.ids[i], o.ids[(i + 1) % o.ids.length]);
 			this.pairs = { seam: [...keys].flatMap((k) => [Math.floor(k / n), k % n]), edge };
 		}
 		for (const c of this.data.cells) {
@@ -522,6 +522,7 @@ export class FittedView {
 		const pt = (i) => new THREE.Vector3(X[3 * i], X[3 * i + 1], X[3 * i + 2]);
 		const built = [];
 		for (const o of this.data.openings) {
+			if (o.finish === 'none') { built.push(null); continue; } // an opening with no finish of its own (a strap's edge: the strap is the binding)
 			const n = o.hostW.length / 3, recs = [], solved = X && o.ids && this.near;
 			for (let i = 0; i < n; i++) {
 				const nn = nrm(o.hostI, o.hostW, i);
@@ -538,26 +539,29 @@ export class FittedView {
 				inside.addScaledVector(nn, -inside.dot(nn)).normalize();
 				recs.push({ p, n: nn, inside, kappa: 0, ref: p.clone(), keep: 1, sleeve: 0 });
 			}
-			const { pts, length } = resample(recs), m = pts.length, P = pts.map((a) => a.p), Nn = pts.map((a) => a.n), In = pts.map((a) => a.inside);
-			smoothLoop(P, 3, 2, true); smoothLoop(Nn, 4, 2, true); smoothLoop(In, 4, 1, true);
+			// an open run (o.open: a binding from strap to strap, pipeline/wrap_block.py export) is resampled and smoothed without wrapping
+			const open = !!o.open, sm = open ? smoothOpen : smoothLoop;
+			const { pts, length } = open ? resampleOpen(recs) : resample(recs), m = pts.length, P = pts.map((a) => a.p), Nn = pts.map((a) => a.n), In = pts.map((a) => a.inside);
+			sm(P, 3, 2, true); sm(Nn, 4, 2, true); sm(In, 4, 1, true);
 			const frames = [], scale = [];
+			const near = (i) => (open ? Math.min(Math.max(i, 0), m - 1) : (i + m) % m);
 			for (let i = 0; i < m; i++) {
-				const nn = Nn[i].normalize(), t = P[(i + 1) % m].clone().sub(P[(i - 1 + m) % m]).normalize(), d = new THREE.Vector3().crossVectors(nn, t).normalize();
+				const nn = Nn[i].normalize(), t = P[near(i + 1)].clone().sub(P[near(i - 1)]).normalize(), d = new THREE.Vector3().crossVectors(nn, t).normalize();
 				if (d.dot(In[i]) < 0) d.negate();
 				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: 0 });
 				scale.push(1);
 			}
-			built.push({ frames, scale, pts, length });
+			built.push({ frames, scale, pts, length, open });
 		}
 		const L0 = doc.panels.filter((p) => (p.layer ?? 'L0') === 'L0' && !p.removed);
 		const s = (L0.find((p) => p.name === 'Front') ?? L0[0])?.stack?.[0];
 		if (!s) return;
-		// openings the file marks bound (pipeline/design_strappy.py BOUND) take the binding in the design's binding look; the rest
-		// turned elastic in the front's. One mesh per kind, kept together as this.edges.
+		// openings the file marks bound (pipeline/wrap_block.py export, a design's) take the binding in the design's binding look; the
+		// rest turned elastic in the front's. One mesh per kind, kept together as this.edges.
 		const t = fittedTrimOf(doc), bound = this.data.openings.map((o) => o.finish === 'binding');
 		this.edges = new THREE.Group();
 		for (const kind of ['elastic', 'binding']) {
-			const these = built.filter((_, i) => bound[i] === (kind === 'binding'));
+			const these = built.filter((b, i) => b && bound[i] === (kind === 'binding'));
 			if (!these.length) continue;
 			const look = kind === 'binding' ? t : s;
 			const mesh = new THREE.Mesh(buildGeometry(these, TRIMS[kind].profile), L.rims.material({ kind, fabric: look.fabric, colour: look.colour, second: look.second ?? 'Tone-on-tone' }));
@@ -566,5 +570,32 @@ export class FittedView {
 			this.edges.add(mesh);
 		}
 		view.group.add(this.edges);
+	}
+}
+
+// An open run of edge records (an opening's o.open) at the rims' spacing, its ends kept: garment/trim.js resample and smoothLoop wrap
+// round a closed loop.
+function resampleOpen(recs, step = 0.0015) {
+	const n = recs.length, cum = [0];
+	for (let i = 1; i < n; i++) cum.push(cum[i - 1] + recs[i].p.distanceTo(recs[i - 1].p));
+	const total = cum[n - 1], m = Math.max(Math.round(total / step), 2) + 1, out = [];
+	let s = 0;
+	for (let k = 0; k < m; k++) {
+		const d = (k / (m - 1)) * total;
+		while (s < n - 2 && cum[s + 1] < d) s++;
+		const a = recs[s], b = recs[s + 1], t = Math.min(Math.max((d - cum[s]) / Math.max(cum[s + 1] - cum[s], 1e-9), 0), 1);
+		out.push({ p: a.p.clone().lerp(b.p, t), n: a.n.clone().lerp(b.n, t), inside: a.inside.clone().lerp(b.inside, t), ref: a.ref.clone().lerp(b.ref, t), keep: 1 });
+	}
+	return { pts: out, length: total };
+}
+function smoothOpen(a, r, passes) {
+	const n = a.length;
+	for (let p = 0; p < passes; p++) {
+		const src = a.map((v) => v.clone());
+		for (let i = 1; i < n - 1; i++) {
+			a[i].set(0, 0, 0);
+			for (let k = -r; k <= r; k++) a[i].add(src[Math.min(Math.max(i + k, 0), n - 1)]);
+			a[i].multiplyScalar(1 / (2 * r + 1));
+		}
 	}
 }

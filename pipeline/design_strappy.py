@@ -25,10 +25,10 @@ landmarks, so the same recipe can be laid on another block; none from a bought p
   close to the neck (front: about half the half-width at the armpit from centre front).
 - FRONT_FOOT 1/3, FRONT_NECK 0.46: the strap's foot in front, and the neckline at centre front, as shares of the height from
   the shoulder crossing down to the new armpit (drawing: 40 / 120 and 55 / 120).
-- BACK_IN 57.2: the back strap's inner edge 2 1/4 in from centre back. Owner's eye, 2026-11-10: first at 1 1/2 in (38.1 mm),
+- BACK_IN 76.2: the back strap's inner edge 3 in from centre back. Owner's eye, 2026-11-10: first at 1 1/2 in (38.1 mm),
   Porter's least clearance from centre back for strappy backs (knowledge/domain/construction/back-strap-and-keyhole-formulas.md),
   after "the straps should reach closer to the centre, as drawn, not run out under the armpit"; then "a little further outwards"
-  (3/4 in more). The drawing puts the feet closer still (inner edge about 16 mm from the centre here).
+  twice, 3/4 in each. The drawing puts the feet closer (inner edge about 16 mm from the centre here).
   History: first placed near the side as misread from the drawing (outer edge 20% of the half width in from the side seam, then
   Porter's 2 in from a side seam). The fit then slid each strap about 5 cm out along the shoulder (74 to 123 mm from the centre)
   until the straps were held by friction (wrap_block.MU on the strap's points).
@@ -43,16 +43,19 @@ ARM_DROP = 25.4
 CROSS = 20.0
 FRONT_FOOT = 1 / 3
 FRONT_NECK = 0.46
-BACK_IN = 57.2
+BACK_IN = 76.2
 # the front armhole, from the strap's foot to the new armpit: its direction leaving each end and its handles (shares of the chord).
 # Owner, 2026-11-10, on the first fit: "a little more of the bust should be covered, further towards the armpit". The first curve,
 # (0.1, -1) / (1, -0.3) / (0.5, 0.45), dropped straight from the foot and swept out low; this one leaves it outwards and arrives
 # rising, 16-19 mm wider each side 60-100 mm above the armpit (front half width 114 / 124 mm at y 460 / 440, was 98 / 105).
 ARM_START, ARM_END, ARM_HANDLES = (0.3, -1), (1, -0.7), (0.35, 0.35)
 TAUT = 0.85
-ELASTIC = {('front', 'neck'): TAUT, ('back', 'neck'): TAUT, ('front', 'armhole'): TAUT, ('back', 'armhole'): TAUT,
+# The back's edge is one band of binding from side seam to side seam with the straps sewn on it (the drawing's straight back edge),
+# so its elastic runs on under each strap's foot ('shoulder'), as the front's does not (the strap rises from the neckline's corner).
+# How the openings are bound is set where the fit writes them (wrap_block.py export): the front neck, and one band round each front
+# armhole and across the back, in the binding; the legs turned elastic.
+ELASTIC = {('front', 'neck'): TAUT, ('back', 'neck'): TAUT, ('back', 'shoulder'): TAUT, ('front', 'armhole'): TAUT, ('back', 'armhole'): TAUT,
 	('strap', 'inner'): TAUT, ('strap', 'outer'): TAUT}
-BOUND = ('neck', 'armhole')  # the openings finished with the white binding (the legs keep turned elastic)
 
 
 def arclen(p):

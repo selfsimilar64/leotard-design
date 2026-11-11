@@ -916,23 +916,30 @@ def main(after=None):
 		leg = np.concatenate([w_of('front', 'leg'), w_of('back', 'leg')[::-1][1:-1]])
 		into_of = lambda ids: np.array([pts[neighbours[i]].mean(0) - pts[i] for i in ids])
 		if 'strap' in G['pieces']:
-			# the neck runs on along the strap's inner edge to the back's top edge; each armhole along the strap's outer edge back to the front
-			neck = np.concatenate([w_of('front', 'neck'), w_of('strap', 'inner')[::-1][1:], w_of('back', 'neck')[::-1][1:]])
-			arm = np.concatenate([w_of('front', 'armhole'), w_of('back', 'armhole')[::-1][1:], w_of('strap', 'outer')[::-1][1:]])[:-1]
-			loops = (('leg', leg), ('armhole', arm))
+			# bound as the straps are sewn (design_strappy.py ELASTIC): the front neck from strap to strap, and one band from strap to strap round
+			# the front armholes and straight across the back, the straps sitting on it; neither runs up a strap. Open runs (open: true),
+			# each a half from its end at a strap to the fold, then the same mirrored back out. The strap's own edges are openings too,
+			# with no finish (the strap is the binding).
+			openings.append(loop_of('leg', pts[leg], into_of(leg), G['on_sleeve'][leg], leg))
+			openings.append(loop_of('leg', pts[leg] * mirror, into_of(leg) * mirror, G['on_sleeve'][leg], twin[leg]))
+			neck_half = w_of('front', 'neck')[::-1]  # strap to centre front
+			band_half = np.concatenate([w_of('front', 'armhole'), w_of('back', 'armhole')[::-1][1:], w_of('back', 'shoulder')[::-1][1:], w_of('back', 'neck')[::-1][1:]])  # strap round the armpit to centre back
+			for name, half, finish in (('neck', neck_half, 'binding'), ('band', band_half, 'binding')):
+				d = into_of(half)
+				o = loop_of(name, np.vstack([pts[half], (pts[half] * mirror)[::-1][1:]]), np.vstack([d, (d * mirror)[::-1][1:]]), np.zeros(2 * len(half) - 1, bool), np.concatenate([half, twin[half][::-1][1:]]))
+				openings.append(dict(o, open=True, finish=finish))
+			for edge in ('inner', 'outer'):
+				ids = w_of('strap', edge)
+				openings.append(dict(loop_of('strap', pts[ids], into_of(ids), G['on_sleeve'][ids], ids), open=True, finish='none'))
+				openings.append(dict(loop_of('strap', pts[ids] * mirror, into_of(ids) * mirror, G['on_sleeve'][ids], twin[ids]), open=True, finish='none'))
 		else:
 			neck = np.concatenate([w_of('front', 'neck'), w_of('back', 'neck')[::-1][1:]])
-			loops = (('leg', leg), ('wrist', w_of('sleeve', 'wrist')[:-1]))
-		for name, ids in loops:
-			openings.append(loop_of(name, pts[ids], into_of(ids), G['on_sleeve'][ids], ids))
-			openings.append(loop_of(name, pts[ids] * mirror, into_of(ids) * mirror, G['on_sleeve'][ids], twin[ids]))
-		# the neck is one loop across the body: one half, then the same points mirrored coming back
-		d = into_of(neck)
-		openings.append(loop_of('neck', np.vstack([pts[neck], (pts[neck] * mirror)[-2:0:-1]]), np.vstack([d, (d * mirror)[-2:0:-1]]), np.zeros(2 * len(neck) - 2, bool), np.concatenate([neck, twin[neck][-2:0:-1]])))
-		if 'strap' in G['pieces']:
-			for o in openings:
-				if o['name'] in design_strappy.BOUND:
-					o['finish'] = 'binding'  # render/fitted.js finish(): drawn in the design's binding look
+			for name, ids in (('leg', leg), ('wrist', w_of('sleeve', 'wrist')[:-1])):
+				openings.append(loop_of(name, pts[ids], into_of(ids), G['on_sleeve'][ids], ids))
+				openings.append(loop_of(name, pts[ids] * mirror, into_of(ids) * mirror, G['on_sleeve'][ids], twin[ids]))
+			# the neck is one loop across the body: one half, then the same points mirrored coming back
+			d = into_of(neck)
+			openings.append(loop_of('neck', np.vstack([pts[neck], (pts[neck] * mirror)[-2:0:-1]]), np.vstack([d, (d * mirror)[-2:0:-1]]), np.zeros(2 * len(neck) - 2, bool), np.concatenate([neck, twin[neck][-2:0:-1]])))
 		with open(os.path.join(CAPTURES, f'wrap-{size}{STEP_TAG}-{label}.json'), 'w', encoding='utf-8') as f:
 			json.dump({'size': size, 'cut': label, 'side': side, 'cells': cells, 'openings': openings, 'case': case}, f, separators=(',', ':'))
 
