@@ -34,6 +34,9 @@ sources:
   - id: diagnosis
     resource: /engineering/app/hollows-on-bare-skin-diagnosis.md
     title: Why the re-fit does not span hollows on bare skin (diagnosis)
+  - id: bare-skin
+    resource: /decisions/2026-11-10-fit-on-bare-skin.md
+    title: The re-fit stands on the bare skin, settled without friction first; the older fit is kept
 ---
 
 # Takeaway
@@ -90,6 +93,19 @@ So every later stage has a "before". Also closes the audit's open step 6 (photo 
 - The owner picks reference photos (moodboard) for seat, back waist, underarm and leg opening.
 - **Gate:** captures and a table recorded here; the owner has seen them.
 
+**Changed by the owner (2026-11-10):** no measurements and no reference photos; the baseline is in-app stills in a light matte
+lycra.[^bare-skin] **Taken 2026-11-10** with `app/src/dev/fit-stills.js` (resumable; keeps and restores the page's autosave):
+hybrid high cut at 7 mm, matte lycra `#e8e4dc`; bodies `young`, `older-teen`, `child`; poses standing, `back-arched`, `passe`,
+`lunge-arms-up`; views seat, small of the back, front, underarm (wearer's left), left leg opening; both fits (on the skin, and the
+older fit). 120 stills in `app/captures/fit-stills/2026-11-10/<fit>/<body>-<pose>-<view>.png` with a record per case, and one
+sheet per body (`sheet-<body>.png`; git-ignored). Seen on them:
+- On the skin, the painted fold waves at the small of the back and over the seat are much fainter than in the older fit
+  (standing, passe, lunge); in the back arch both fits show heavy waves there.
+- `child` wears the pattern drafted for `young` (stage 5: the pattern is still young's), so its stills mostly show surplus
+  fabric: dense waves in both fits.
+- `child`, passe, on the skin: a ring of fold waves on the hip crease just above the leg opening (not in the older fit).
+- The back arch's small-of-the-back view is partly blocked by the body; arms-down poses hide the underarm.
+
 # Stage 1: hollows bridged by the fit
 
 Goal: the collision body is the bare skin; the membrane, seat sheet and rolling ball no longer shape a fitted garment.[^one-sim]
@@ -125,6 +141,11 @@ Goal: the collision body is the bare skin; the membrane, seat sheet and rolling 
 - **Owner's verdict on the captures (2026-11-10):** the bare-skin fit with a frictionless first phase (comparison row 4) is the
   best-looking: "the effect is less pronounced, which mimics real fabrics pretty closely". So the lowest seat's remaining dip is
   accepted as realistic for now, and steps 3 and 5 are the direction.[^owner]
+- **Steps 3 and 5 in the app, 2026-11-10** ([decision](/decisions/2026-11-10-fit-on-bare-skin.md)):[^bare-skin] the re-fit stands
+  on the bare skin with `FREE_STEPS` (150) frictionless steps first, by default; the older fit (`body: 'bridged'`) is kept with no
+  control. Done without a new `reanchor()`: `Refit.reset(positions)` already re-anchors and clears the held forces, so the
+  Python twin is unchanged. Steps 2 (dressing start) and 4 (thickness) not built; step 6 (shipped fits) and 7 (removing the
+  membrane and seat sheet) wait while the older fit is kept.
 - **Step 2 (dressing start) not needed for what was measured:** starting on the bridged surface gave the same fit as starting on
   the skin, with and without friction.
 - **Step 3 (two phases) confirmed** for the seat from 6 cm up (6/3/1 mm below the cheek-to-cheek chord at 6/10/14 cm with friction
@@ -235,3 +256,4 @@ wrinkles finer than the mesh.[^owner]
 [^block-fit]: Fitting a block like the app.
 [^code]: The fit's code as read for this plan.
 [^diagnosis]: Why the re-fit does not span hollows on bare skin (diagnosis), 2026-11-10.
+[^bare-skin]: Decision of 2026-11-10: the re-fit stands on the bare skin; the older fit is kept; stage 0 as in-app stills.

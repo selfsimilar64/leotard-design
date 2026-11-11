@@ -68,11 +68,19 @@ export const FIT_DEFAULTS = {
 	lift: 0.0012,             // m the fabric is drawn off the surface it was fitted to (the dev viewer's 1.2 mm), on top of the
 	// fabric material's own 1.2 mm: a fitted mesh's flat 7 mm triangles dip under a curved body between their points
 	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look)
+	body: 'skin',             // what the re-fit stands on: 'skin', the bare skin, settled FREE_STEPS without friction before `steps`
+	// with it (owner chose this look, 2026-11-10: knowledge/engineering/app/hollows-on-bare-skin-diagnosis.md); 'bridged', the older
+	// fit, on the drawn garment's surface (the skin plus the membrane's lift and the seat sheet), kept to go back to. No control
+	// offers it (Settings' Fabric fit face has no room: owner, 2026-11-10, "at least in the backend"): the display setting fitBody
+	// (render/display.js, dev only) or app.engine.fitted.setOptions({ body: 'bridged' })
 	mesh: 7,                  // mm between the garment's points. Finer (5, 3.5) is a dev-only trial: those fits are made by
 	// `WRAP_STEP=5 python pipeline/wrap_block.py --drafted <block> young` into app/captures and served at /fitted-local/
 	// (knowledge/engineering/app/fit-mesh-resolution-trial.md); a garment without one shows its 7 mm fit and says so
 };
 export const FIT_MESHES = [7, 5, 3.5];
+// Steps without friction before a re-fit on the bare skin (fit realism plan stage 1 step 3): the fabric finds its tension balance and
+// leaves the hollows the start put it in, then friction is anchored where it settled. 150: the seat as the owner chose it (dev/bridge-probe.js).
+const FREE_STEPS = 150;
 
 // The finer fit's file for a garment entry (garment/fitted.js): wrap_block's names with its STEP_TAG before the cut,
 // e.g. hybrid-6-block -> wrap-hybrid-6-s5-block, wrap-XS-high-resolved -> wrap-XS-s3p5-high-resolved.
@@ -128,7 +136,7 @@ export class FittedView {
 		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
 		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
-		else if ((changed('refit') || changed('steps') || changed('mu')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
+		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
 		else this.show();
 	}
 
@@ -406,13 +414,20 @@ export class FittedView {
 				const gen = this.gen; // clear() moves it on: a garment taken away meanwhile is not drawn
 				this.setStatus({ state: 'fitting' });
 				this.device ||= await Refit.device();
-				const man = this.engine.body, t0 = performance.now();
-				const data = buildCase(this.data, this.garment, man.garmentPos, man.idx, man.wArm, this.cache ??= {});
+				const man = this.engine.body, t0 = performance.now(), skin = this.options.body === 'skin';
+				// the body it stands on, and its start there (fitted-case.js startOf): the bare skin, or the drawn garment's surface
+				const data = buildCase(this.data, this.garment, skin ? man.aPos.array : man.garmentPos, man.idx, man.wArm, this.cache ??= {});
 				const r = new Refit(this.device, data, { maxSteps: this.options.steps, mu: this.options.mu, tol: 0 });
 				const built = performance.now() - t0;
+				const steps = this.options.steps, W = r.settings.window, tRun = performance.now(), free = skin ? FREE_STEPS : 0;
+				if (free) { // frictionless, read back once, then friction anchored where it settled (reset: anchor and held forces anew)
+					r.setSettings({ mu: 0 }); r.settings.window = free;
+					await r.run({ steps: free });
+					r.reset(await r.positions(false));
+					r.setSettings({ mu: this.options.mu }); r.settings.window = W;
+				}
 				// no early stop (the step count is the lever), so no reading back every window: all but the last window in one run,
 				// then the last window, whose average is what is drawn (the shoulder's chatter hidden), as the tuning page shows it
-				const steps = this.options.steps, W = r.settings.window, tRun = performance.now();
 				if (steps > W) { r.settings.window = steps - W; await r.run({ steps: steps - W }); r.settings.window = W; }
 				const res = await r.run({ steps });
 				const X = await r.positions(steps > W);
@@ -421,7 +436,7 @@ export class FittedView {
 				this.solved = X;
 				this.show();
 				this.hold(false);
-				this.setStatus({ state: 'fitted', steps: res.steps, seconds: (performance.now() - tRun) / 1000, setup: built / 1000 });
+				this.setStatus({ state: 'fitted', steps: free + res.steps, seconds: (performance.now() - tRun) / 1000, setup: built / 1000 });
 			} while (this.again && this.active);
 		} catch (e) {
 			console.error('re-fit', e);
