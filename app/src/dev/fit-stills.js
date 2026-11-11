@@ -1,5 +1,5 @@
-// Stills of the fitted garment in several bodies and poses, the "before" of the fit realism plan's later stages (stage 0, as the owner
-// set it on 2026-11-10: in-app camera angles in a light matte lycra, no measurements): per fit ('skin', the app's fit; 'bridged', the
+// Stills of the fitted garment in several poses, the "before" of the fit realism plan's later stages (stage 0, as the owner set it on
+// 2026-11-10: in-app camera angles in a bright matte lycra, no measurements): per fit ('skin', the app's fit; 'bridged', the
 // older fit kept to go back to: render/fitted.js FIT_DEFAULTS.body), body and pose, the seat, the small of the back, the front, the
 // underarm and a leg opening. Written to captures/fit-stills/<tag>/<fit>/<body>-<pose>-<view>.png.
 // Opens its own design, so it keeps the page's autosave and puts it back at the end (reload the page afterwards to see it); a run cut
@@ -13,9 +13,13 @@ const app = () => window.app;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 export const KEY = 'hybrid-6-high';
 export const FITS = ['skin', 'bridged'];
-export const BODIES = ['young', 'older-teen', 'child'];
+// only the body the garment is sized for (owner, 2026-11-10: the hybrid's pattern is drafted for young; on another body the stills
+// show a wrong size, not the fit)
+export const BODIES = ['young'];
 export const POSES = ['standing', 'back-arched', 'passe', 'lunge-arms-up'];
-export const COLOUR = '#e8e4dc'; // light, so the fabric's shape shows in its shading (owner, 2026-10-25)
+// light enough that the fabric's shape shows in its shading (owner, 2026-10-25), and a colour that stands out from the white
+// mannequin and backdrop: blue, more teal (owner, 2026-11-10; an off-white was unreadable)
+export const COLOUR = '#2a9db0';
 const AUTOSAVE = 'leotard.autosave.v1';
 
 // The design: the fitted garment, every panel matte lycra in the light colour, nothing printed on it.

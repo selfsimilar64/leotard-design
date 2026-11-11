@@ -94,16 +94,16 @@ So every later stage has a "before". Also closes the audit's open step 6 (photo 
 - **Gate:** captures and a table recorded here; the owner has seen them.
 
 **Changed by the owner (2026-11-10):** no measurements and no reference photos; the baseline is in-app stills in a light matte
-lycra.[^bare-skin] **Taken 2026-11-10** with `app/src/dev/fit-stills.js` (resumable; keeps and restores the page's autosave):
-hybrid high cut at 7 mm, matte lycra `#e8e4dc`; bodies `young`, `older-teen`, `child`; poses standing, `back-arched`, `passe`,
-`lunge-arms-up`; views seat, small of the back, front, underarm (wearer's left), left leg opening; both fits (on the skin, and the
-older fit). 120 stills in `app/captures/fit-stills/2026-11-10/<fit>/<body>-<pose>-<view>.png` with a record per case, and one
-sheet per body (`sheet-<body>.png`; git-ignored). Seen on them:
+lycra.[^bare-skin] Owner, on the first set: only the body the garment is sized for (the hybrid is drafted for `young`; on other
+bodies the stills show a wrong size, not the fit), and a blue-teal, not an off-white (white fabric on the white mannequin and
+backdrop was unreadable).[^owner] **Taken 2026-11-10** with `app/src/dev/fit-stills.js` (resumable; keeps and restores the
+page's autosave): hybrid high cut at 7 mm, matte lycra `#2a9db0`, body `young`; poses standing, `back-arched`, `passe`,
+`lunge-arms-up`; views seat, small of the back, front, underarm (wearer's left), left leg opening; both fits (on the skin, and
+the older fit). 40 stills in `app/captures/fit-stills/2026-11-10-teal/<fit>/young-<pose>-<view>.png` with a record per case and
+`sheet-young.png` (git-ignored; the first, off-white set with `older-teen` and `child` is beside it and superseded). Seen on them:
 - On the skin, the painted fold waves at the small of the back and over the seat are much fainter than in the older fit
-  (standing, passe, lunge); in the back arch both fits show heavy waves there.
-- `child` wears the pattern drafted for `young` (stage 5: the pattern is still young's), so its stills mostly show surplus
-  fabric: dense waves in both fits.
-- `child`, passe, on the skin: a ring of fold waves on the hip crease just above the leg opening (not in the older fit).
+  (standing, passe, lunge); in the back arch both fits show heavy waves there. Measured over the whole garment, the share of
+  points marked folded more than 1 mm is lower on the skin in every pose (standing 27% against 37%; back arch 39% against 48%).
 - The back arch's small-of-the-back view is partly blocked by the body; arms-down poses hide the underarm.
 
 # Stage 1: hollows bridged by the fit
