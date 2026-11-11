@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { framed, lightsTurned } from '../render/pictures.js';
 import { surfaceLandmarks } from '../body/landmarks.js';
+import { DEFAULT_RIG } from '../render/presets.js';
 
 const app = () => window.app;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -27,6 +28,8 @@ const AUTOSAVE = 'leotard.autosave.v1';
 export async function prepare(key = KEY) {
 	const a = app();
 	a.new('Fit stills');
+	// the default studio (a new design takes the open one's: a studio picked in the page meanwhile darkened a whole run, 2026-11-11)
+	a.exec({ op: 'scene.set', rig: DEFAULT_RIG, exposure: 1, bloom: 0.18, envRotation: 0, glare: 'plain' });
 	a.exec({ op: 'fitted.set', key });
 	for (const p of a.doc.panels) a.exec({ op: 'panel.set', id: p.id, fabric: 'matte', colour: COLOUR, print: null, ombre: null, texture: null });
 	await a.engine.settled();
