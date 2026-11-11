@@ -3,7 +3,7 @@
 // (membrane + seat sheet), one factor at a time, and measures how far the fabric stays off the hollows the bridged fit spans.
 // Opens its own design: run it in a tab and port nobody designs in (the autosave follows the open design).
 //   const p = await import('/src/dev/bridge-probe.js'); await p.setup(); const r = await p.all(); p.table(r)
-//   p.show(X)  draws a probe's points in place of the app's re-fit (p.show(null): back to the app's own)
+//   p.show(X)  draws a probe's points in place of the app's re-fit (p.show(null): back to the app's own); p.capture(tag) pictures
 import * as THREE from 'three';
 import { Refit } from '../fit/refit.js';
 import { buildCase, startOf, garmentArrays } from '../fit/fitted-case.js';
@@ -299,30 +299,13 @@ export function table(rows) {
 	return lines.join('\n');
 }
 
-// Draw a probe's points as the app's fitted garment (the app's own re-fit result is put back by show(null)). own: shade it by its
-// own shape (normals from its points, each triangle's turned out by its facing sign) instead of the body's garment surface normals,
-// which render/fitted.js show() takes from the body (view.interpolate: normal and aGNormal from the body's vertices).
-export function show(X, own = false) {
+// Draw a probe's points as the app's fitted garment (the app's own re-fit result is put back by show(null)). Lit by its own shape,
+// as render/fitted.js show() lights every re-fit since 2026-11-10 (the captures' "own shading" rows were made before that, by a copy
+// of it here).
+export function show(X) {
 	const fv = app().engine.fitted;
 	if (X) { fv._probeKeep ??= fv.solved; fv.solved = X; } else if (fv._probeKeep !== undefined) { fv.solved = fv._probeKeep; delete fv._probeKeep; }
 	fv.show();
-	if (!own || !fv.solved) return;
-	const c = fv.data.case, T = c.tris, F = c.facing, S = fv.solved, Nw = new Float32Array(c.n * 3);
-	for (let t = 0; t < T.length / 3; t++) {
-		const a = 3 * T[3 * t], b = 3 * T[3 * t + 1], d = 3 * T[3 * t + 2];
-		const u = [S[b] - S[a], S[b + 1] - S[a + 1], S[b + 2] - S[a + 2]], v = [S[d] - S[a], S[d + 1] - S[a + 1], S[d + 2] - S[a + 2]];
-		const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-		for (const p of [a, b, d]) for (let k = 0; k < 3; k++) Nw[p + k] += F[t] * n[k];
-	}
-	for (const mesh of fv.meshes) {
-		if (!mesh.cid) continue;
-		const A = mesh.geometry.attributes;
-		for (let l = 0; l < mesh.cid.length; l++) {
-			const i = 3 * mesh.cid[l], L = Math.hypot(Nw[i], Nw[i + 1], Nw[i + 2]) || 1;
-			for (let k = 0; k < 3; k++) { A.normal.array[3 * l + k] = Nw[i + k] / L; A.aGNormal.array[3 * l + k] = Nw[i + k] / L; }
-		}
-		A.normal.needsUpdate = A.aGNormal.needsUpdate = true;
-	}
 }
 
 // Pictures for the comparison: views of the seat from behind and low behind, the small of the back, the front waist.

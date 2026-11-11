@@ -237,14 +237,27 @@ export class FittedView {
 
 	// Every attribute from the body's arrays; positions where the re-fit settled each point, or carried by surface coordinates, then
 	// lifted off the garment surface by options.lift (the garment surface already holds the body's own lift: aLift is zeroed).
+	// A re-fitted garment is lit by its own shape: its normal and aGNormal (what the fabric shader shades with) from its solved points,
+	// not the body's under it, which showed the navel and spine groove through fabric that spans them
+	// (knowledge/engineering/app/hollows-on-bare-skin-diagnosis.md). The carried fit keeps the body's: it lies on that surface.
 	show() {
 		const view = this.view;
 		if (!view) return;
 		const man = this.engine.body, G = man.garmentPos, X = this.solved, lift = this.options.lift;
+		const own = X && this.data.case ? this.ownNormals(X) : null;
 		for (const mesh of this.meshes) {
 			if (mesh.parent !== view.group) view.group.add(mesh); // the layer's view was rebuilt
 			view.interpolate({ mesh, hosts: mesh.hosts });
 			const geo = mesh.geometry, P = geo.attributes.position.array, N = geo.attributes.normal.array, hi = mesh.hosts.i, hw = mesh.hosts.w, n = hw.length / 3;
+			if (own && mesh.cid) {
+				const GN = geo.attributes.aGNormal.array;
+				for (let l = 0; l < n; l++) {
+					const i = 3 * mesh.cid[l];
+					if (own[i] === 0 && own[i + 1] === 0 && own[i + 2] === 0) continue; // no area round it: the body's stays
+					for (let k = 0; k < 3; k++) N[l * 3 + k] = GN[l * 3 + k] = own[i + k];
+				}
+				geo.attributes.normal.needsUpdate = geo.attributes.aGNormal.needsUpdate = true;
+			}
 			for (let l = 0; l < n; l++) for (let k = 0; k < 3; k++) {
 				let v;
 				if (X && mesh.cid) v = X[3 * mesh.cid[l] + k];
@@ -273,6 +286,24 @@ export class FittedView {
 		this.finish();
 		this.drawLines();
 		this.quiet();
+	}
+
+	// Per whole-garment point the unit normal of its solved shape: its triangles' area-weighted normals, each turned out by the case's
+	// facing sign (+1 where the winding faces away from the body; the halves are mirrored), as the tuning page lifts its view
+	// (dev/refit-lab.js paint). Zero where no triangle has area.
+	ownNormals(X) {
+		const c = this.data.case, T = c.tris, F = c.facing, out = new Float32Array(c.n * 3);
+		for (let t = 0; t < T.length / 3; t++) {
+			const a = 3 * T[3 * t], b = 3 * T[3 * t + 1], d = 3 * T[3 * t + 2];
+			const ux = X[b] - X[a], uy = X[b + 1] - X[a + 1], uz = X[b + 2] - X[a + 2], vx = X[d] - X[a], vy = X[d + 1] - X[a + 1], vz = X[d + 2] - X[a + 2];
+			const nx = (uy * vz - uz * vy) * F[t], ny = (uz * vx - ux * vz) * F[t], nz = (ux * vy - uy * vx) * F[t];
+			for (const p of [a, b, d]) { out[p] += nx; out[p + 1] += ny; out[p + 2] += nz; }
+		}
+		for (let i = 0; i < out.length; i += 3) {
+			const L = Math.hypot(out[i], out[i + 1], out[i + 2]);
+			if (L > 0) { out[i] /= L; out[i + 1] /= L; out[i + 2] /= L; }
+		}
+		return out;
 	}
 
 	// The garment's seams (yellow) and edges (blue), as the overlay draws a drawn design's, at its points as now shown.

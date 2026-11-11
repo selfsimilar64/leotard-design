@@ -118,15 +118,20 @@ Goal: the collision body is the bare skin; the membrane, seat sheet and rolling 
 
 **Progress (2026-11-10): step 1 done**, recorded in [the diagnosis](/engineering/app/hollows-on-bare-skin-diagnosis.md)
 (hybrid high cut, `young`, standing; `app/src/dev/bridge-probe.js`).[^diagnosis] What it changes in the steps below:
-- **A new step before the others: shade a fitted garment by its own points' normals.** The navel and spine groove are already
-  spanned on bare skin (0.84-1.0 of the bridged lift kept); they showed because `render/fitted.js show()` takes `normal` and
-  `aGNormal` from the body. This is also stage 2 step 4's check, answered: today the normals do not come from the solved points.
+- **A new step before the others: shade a fitted garment by its own points' normals. Done 2026-11-10** (owner: "go ahead"):
+  `render/fitted.js show()` writes `normal` and `aGNormal` from the solved points (`FittedView.ownNormals`) for a re-fitted
+  garment; a carried fit keeps the body's. The navel and spine groove are already spanned on bare skin (0.84-1.0 of the bridged
+  lift kept); they showed because the body's normals were used. This also answers stage 2 step 4.
+- **Owner's verdict on the captures (2026-11-10):** the bare-skin fit with a frictionless first phase (comparison row 4) is the
+  best-looking: "the effect is less pronounced, which mimics real fabrics pretty closely". So the lowest seat's remaining dip is
+  accepted as realistic for now, and steps 3 and 5 are the direction.[^owner]
 - **Step 2 (dressing start) not needed for what was measured:** starting on the bridged surface gave the same fit as starting on
   the skin, with and without friction.
 - **Step 3 (two phases) confirmed** for the seat from 6 cm up (6/3/1 mm below the cheek-to-cheek chord at 6/10/14 cm with friction
   from the start, 4/1/0 with a frictionless first phase; today 1/0/1); it also lets the leg openings creep up the cheeks.
 - **The lowest 4 cm of the seat stays 8-10 mm in the groove (today 3/1 mm)** under every change tried, including a stand-in for
-  step 4's thickness that was not a fair test. The gate below therefore fails there as things stand.
+  step 4's thickness that was not a fair test. The gate's number fails there, but the owner judged the look (row 4) closest to
+  real fabric, so the owner's eye stands in for that number.
 - The gate's numbers came from a different body and measure; the like-for-like reference is today's bridged re-fit in the probe
   (seat dip 3/1/1/0/1 mm at 2/4/6/10/14 cm).
 

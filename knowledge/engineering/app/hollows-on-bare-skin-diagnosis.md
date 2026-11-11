@@ -41,6 +41,18 @@ before building anything.[^plan] Three separate causes, measured on the hybrid h
    There the groove ends in a slit 1-2 mm wide and the fabric goes into it. Not tested: thickness in the contact query itself,
    bending, the elastic as a band, direction-dependent fabric.
 
+# Since then (2026-11-10)
+
+- **Owner's verdict:** of the four capture rows, row 4 (bare skin, frictionless first phase, own shading) looks best: "the effect
+  is less pronounced, which mimics real fabrics pretty closely".[^owner]
+- **Fitted garments are now lit by their own shape** (owner: go ahead): `render/fitted.js show()` takes a re-fitted garment's
+  `normal` and `aGNormal` from its solved points (`FittedView.ownNormals`: area-weighted triangle normals turned out by the case's
+  `facing`), and its 1.2 mm display lift follows them too; a carried fit keeps the body's. Checked in the app: every drawn normal
+  equals its point's own (46,546 drawn points, no NaN, no console errors). With today's bridged surface the look changes only a
+  little (`app/captures/bridge-probe/own-lighting-before-after.png`); the difference is large on bare skin (comparison rows 2-3).
+  Stones on the fabric take the same normals (`shownN`). The AO still comes from the body's lift, and the seam/edge lines and
+  elastic trims are still placed along the body's normals.
+
 # What was measured and how
 
 `app/src/dev/bridge-probe.js` builds the re-fit case exactly as the app does (`fit/fitted-case.js buildCase`) but chooses the
