@@ -48,7 +48,7 @@ a proportion of the block's own landmarks read off the illustration, or a source
 | Sleeveless | Sleeve removed; side seam's top lowered 1 in (`ARM_DROP`), back to the bodice armpit Armstrong raises for the sleeve **[INFERRED]** |
 | Strap | Its own piece, 3/8 in (9.5 mm) wide, the usual covered-elastic strap[^straps]; crosses the shoulder seam 20 mm from the neck point (`CROSS`); length measured on the flat block from foot to foot |
 | Front | The strap's foot hangs straight below the crossing, a third of the way down to the armpit; a shallow neckline from it to centre front at 46% of that height; the armhole cut in from the foot to the new armpit (made fuller in the second fit, below) |
-| Back | Cut straight across at the new armpit; the strap's foot on that edge, its inner side 1 1/2 in from centre back (`BACK_IN`, Porter's least clearance from centre back[^straps]; the drawing has it a little closer). Until the third fit, misread from the drawing, the foot sat near the side seam (below) |
+| Back | Cut straight across at the new armpit; the strap's foot on that edge, its inner side 2 1/4 in from centre back (`BACK_IN`; first 1 1/2 in, Porter's least clearance from centre back[^straps], then 3/4 in further out at the owner's eye; the drawing has it closer). Until the third fit, misread from the drawing, the foot sat near the side seam (below) |
 | Snug edges | Elastic in the neck, armhole and back-edge binding and along both strap edges at 85% of the edge (`TAUT`, Treasurie's starting rule within the sourced 75-100%[^edges]), tighter than the block's 95% neck at the owner's "taut"; legs as the block's |
 | Finish | Neck (which runs on along the strap's inner edge to the back edge) and armholes (along its outer edge) marked `finish: binding`; legs turned elastic |
 
@@ -121,6 +121,9 @@ straps. The back foot now has its inner edge 38.1 mm (1 1/2 in) from centre back
 - Not fully settled after 360 iterations: three quarters of the strap's points were still sliding against their friction (last
   iteration's largest move 0.82 mm, mean 0.015 mm), the strap easing in towards its shorter way. The app's re-fit runs on from there.
 - Above the waist the design moved 12.6 mm mean from the block's fit (95% 22.5); settled 1.161 across, 1.087 along.
+- Owner on that fit: "a little further outwards". The foot moved 3/4 in out (inner edge 57.2 mm from centre back): the strap now
+  crosses the shoulder 82 mm from the centre (app 84) and meets the back edge 73-83 mm from it, straight down from behind, as in the
+  photos; settled within the 360 iterations (last mean move 0.005 mm).
 
 # In the app (dev only)
 
