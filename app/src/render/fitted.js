@@ -151,7 +151,6 @@ export class FittedView {
 	// The designer's fit settings: a change to the re-fit runs it again; the lift only redraws.
 	setOptions(o) {
 		const before = this.options;
-		this.dressed = null; // the standing fit is made again with the new settings
 		this.options = { ...before, ...o };
 		if (!this.active) return;
 		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
@@ -445,7 +444,9 @@ export class FittedView {
 				const dressAt = skin && man.poseKey !== JSON.stringify(DRESS_POSE) ? DRESS_POSE : null;
 				let start = null, dressSteps = 0, dressSec = 0;
 				if (dressAt) {
-					const key = JSON.stringify([man.key, man.head, this.size, this.meshMm]);
+					// the standing fit depends on the body, the pattern's size and mesh, and every fit setting it ran with (dev scripts set
+					// options directly, so the key, not setOptions, decides)
+					const o = this.options, key = JSON.stringify([man.key, man.head, this.size, this.meshMm, o.steps, o.mu, o.press, o.bend, o.jam, o.kink, o.firm]);
 					if (this.dressed?.key !== key || this.dressed.data !== this.data) {
 						let Qs = null;
 						try { Qs = man.positionsIn(dressAt); } catch { /* the body lacks the pose: fitted from the file's start */ }

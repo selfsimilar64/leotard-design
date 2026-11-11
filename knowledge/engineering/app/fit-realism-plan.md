@@ -245,6 +245,8 @@ wider than plain: once fabric can buckle, rounding picks where.
   or off; the back arch still folds at the waist and seat, a little less. **[INFERRED]** that the back arch's folds are the spare
   length a back loses when it arches, and that the remaining looseness standing is the pattern's length, not the fold physics.
 
+**Checked 2026-11-11, after the fold shading went off** (owner: the earlier stage 2 looks were judged with the painted waves on top, which may have thrown them off): every part still present and running with today's fit (bare skin, 88% length, poses from the standing fit). Sweep 2's settings (`press` 1, `bend` 3e-7, `jam` 0.88) at 7 mm: back arch and lunge with arms up re-fit in 0.6-0.75 s in the pane; a few soft folds over the arched seat and one across the small of the back, soft folds from the raised armpit (`app/captures/fit-stills/f5-s2-check`, sheet `f5-stage2-check.png`). Without stage 2 the squeeze is free, so where fabric is squeezed (the hanging sleeve at the shoulder in the back arch) the surface crumples at the mesh's scale with nothing to shape it. Fixed meanwhile: the standing fit's cache now keys on the fit settings (a dev script setting options directly reused a stale one).
+
 # Stage 3: elastic as a band
 
 1. **Cheap stage (springs kept).**
