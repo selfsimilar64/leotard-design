@@ -21,6 +21,7 @@
 # Roadmap
 
 * [Designer app build status](build-status.md) (draft) - Where the build of the designer app stands against the roadmap phases P0-P8: what each phase delivered, measured numbers, known gaps, how to run and test, and what comes next. Updated at the end of every phase.
+* [Fit realism plan](fit-realism-plan.md) (draft) - Plan of 2026-11-10 for making the fit simulation the one realistic fit: a baseline, then hollows bridged by the fit's own tension on the bare skin, folds as real geometry (the owner's priority), elastic as a band, direction-dependent fabric, a friction ramp for poses with a per-body standing fit, and a soft body. Each stage has its code touchpoints, twins, gate and expected cost; nothing is built yet.
 * [Solver race plan](solver-race-plan.md) - Plan (2026-11-02) and results (2026-11-03) for choosing the fit solver that meets the owner's 5-second re-fit target. Raced on the GTX 1650 in NVIDIA Warp: today's local/global method on the GPU won (5 ms per step against 820 ms on the CPU; cutouts to the accuracy bar in 2-4 s, pose shapes settled in 1-2 s); Newton, L-BFGS, VBD and a multi-level V-cycle lost. Frictionless, the garment's placement along the body is nearly free and no solver pins it within 5 s; with friction on re-fits (owner, same day) poses still end 1.2-2.2 mm mean from the reference, the sleeve turning round the arm most; an early result of 0.3-0.6 mm was a bug (random normals on points resting on the body).
 
 # Section
