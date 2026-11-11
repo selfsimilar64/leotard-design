@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: Designs recut from a fitted block (strappy back preview)
-description: "2026-11-10: the first design made on a fitted block instead of the drawn pieces: the owner's strappy-back illustration recut from the hybrid high cut as pattern changes (sleeve off, cut-in armholes, shallow neck, low straight back, thin straps as their own piece, 85% binding elastic), fitted offline from the block's fit with friction holding the straps where they are put, and shown in the app in dev only with white binding and straps."
+description: "2026-11-10: the first design made on a fitted block instead of the drawn pieces: the owner's strappy-back illustration recut from the hybrid high cut as pattern changes (sleeve off, cut-in armholes, shallow neck, low straight back, thin straps as their own piece angled in to near centre back, 85% binding elastic), fitted offline from the block's fit with friction holding the straps where they are put, and shown in the app in dev only with white binding and straps."
 tags: [fit, block, design, straps, binding, preview]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-10T22:00:00Z }
@@ -13,6 +13,10 @@ sources:
   - id: owner2
     resource: "conversation with the product owner, 2026-11-10 (Claude Code session): the straps need to be closer in, and a little more of the bust covered, further towards the armpit"
     title: Owner on the first strappy fit
+    author: human:mattj
+  - id: owner3
+    resource: "conversation with the product owner, 2026-11-10 (Claude Code session): the straps still seem too far under the armpit; in the reference images they go straight down to the back, and in the illustration they reach closer to the center"
+    title: Owner on the second strappy fit
     author: human:mattj
   - id: code
     resource: "pipeline/design_strappy.py, pipeline/wrap_block.py (--design, WRAP_REUSE_BASE, solve mu, case placed), app/src/fit/fitted-case.js (placed), app/src/fit/refit.js (reset), app/src/fit/refit-wgsl.js (rhs), app/src/garment/fitted.js (LOCAL hybrid-6-strappy, fittedTrimOf), app/src/render/fitted.js (dress, trimMaterial, finish), app/src/doc/commands-garment.js (fitted.trim), app/src/ui/ShapeCard.jsx (Garment)"
@@ -44,7 +48,7 @@ a proportion of the block's own landmarks read off the illustration, or a source
 | Sleeveless | Sleeve removed; side seam's top lowered 1 in (`ARM_DROP`), back to the bodice armpit Armstrong raises for the sleeve **[INFERRED]** |
 | Strap | Its own piece, 3/8 in (9.5 mm) wide, the usual covered-elastic strap[^straps]; crosses the shoulder seam 20 mm from the neck point (`CROSS`); length measured on the flat block from foot to foot |
 | Front | The strap's foot hangs straight below the crossing, a third of the way down to the armpit; a shallow neckline from it to centre front at 46% of that height; the armhole cut in from the foot to the new armpit (made fuller in the second fit, below) |
-| Back | Cut straight across at the new armpit; the strap's foot on that edge, its outer side 20% of the half width in from the side seam (`BACK_OUT`, as drawn: Porter's strappy backs keep 2 in from a side seam[^straps]) |
+| Back | Cut straight across at the new armpit; the strap's foot on that edge, its inner side 1 1/2 in from centre back (`BACK_IN`, Porter's least clearance from centre back[^straps]; the drawing has it a little closer). Until the third fit, misread from the drawing, the foot sat near the side seam (below) |
 | Snug edges | Elastic in the neck, armhole and back-edge binding and along both strap edges at 85% of the edge (`TAUT`, Treasurie's starting rule within the sourced 75-100%[^edges]), tighter than the block's 95% neck at the owner's "taut"; legs as the block's |
 | Finish | Neck (which runs on along the strap's inner edge to the back edge) and armholes (along its outer edge) marked `finish: binding`; legs turned elastic |
 
@@ -105,6 +109,19 @@ Owner on the first fit: the straps need to be closer in, and a little more of th
 Seen: the straps rise from the neckline's corners close to the neck and spread apart down the back to the back edge, as drawn; the
 front covers more towards the armpits.
 
+# Third fit: back straps near centre back (2026-11-10)
+
+Owner on the second fit: the straps still sat too far under the armpit; in the photos they go straight down the back, and in the
+illustration they reach closer to the centre.[^owner3] Read again, the illustration's back straps run from the shoulders inwards to the
+back edge near centre back; the curves outside them are the front's armholes seen from behind, which the first reading took for the
+straps. The back foot now has its inner edge 38.1 mm (1 1/2 in) from centre back.
+
+- The strap crosses the shoulder 80 mm from the centre (app 81) and meets the back edge 49-60 mm from it: seen from behind it runs
+  from beside the neck nearly straight down, angling slightly in, as drawn.
+- Not fully settled after 360 iterations: three quarters of the strap's points were still sliding against their friction (last
+  iteration's largest move 0.82 mm, mean 0.015 mm), the strap easing in towards its shorter way. The app's re-fit runs on from there.
+- Above the waist the design moved 12.6 mm mean from the block's fit (95% 22.5); settled 1.161 across, 1.087 along.
+
 # In the app (dev only)
 
 - **Strappy back (local)** in the Garment row (`garment/fitted.js` LOCAL, `bound: true`), beside the purchased block: a preview, so it
@@ -124,6 +141,7 @@ front covers more towards the armpits.
 
 [^owner]: Owner on the strappy-back preview, 2026-11-10.
 [^owner2]: Owner on the first strappy fit, 2026-11-10.
+[^owner3]: Owner on the second strappy fit, 2026-11-10.
 [^code]: Strappy design code.
 [^edges]: Edge finishing, elastic and binding.
 [^straps]: Back, strap and keyhole formulas.

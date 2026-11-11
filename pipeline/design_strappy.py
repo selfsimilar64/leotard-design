@@ -9,7 +9,8 @@ What the illustration shows (front and back flat sketches; the photos of a simil
 - sleeveless; a thin strap each side, bound in the same white as the edges and running on from them;
 - front: a high, shallow neckline from strap to strap; armholes cut in from the strap's foot to the side seam;
 - back: open above a straight edge across the back at the top of the side seams; each strap runs from the shoulder, close to
-  the neck, down and outwards to that edge near the side;
+  the neck, down and inwards to that edge near centre back (the curves outside the straps in the back view are the front's
+  armholes seen from behind; first read as the straps reaching the edge near the side);
 - white binding on the neckline, armholes and back edge; the legs (the block's high cut) unbound.
 The owner (2026-11-10): new edges taut, for a snug fit as in the photos; straps as drawn.
 
@@ -24,13 +25,13 @@ landmarks, so the same recipe can be laid on another block; none from a bought p
   close to the neck (front: about half the half-width at the armpit from centre front).
 - FRONT_FOOT 1/3, FRONT_NECK 0.46: the strap's foot in front, and the neckline at centre front, as shares of the height from
   the shoulder crossing down to the new armpit (drawing: 40 / 120 and 55 / 120).
-- BACK_OUT 0.2: the back strap's outer edge in from the side seam, as a share of the back's half width at its top edge
-  (drawing: 15-25%; about 33 mm here). Porter's strappy backs keep a strap at least 2 in (51 mm) from a side seam (knowledge/
-  domain/construction/back-strap-and-keyhole-formulas.md); the owner asked for the straps as drawn.
-  The fit slides each strap about 5 cm out along the shoulder, from beside the neck (x 74 mm from the centre where it starts) to
-  123 mm (shoulder landmark 147): a taut strap finds the lower, shorter way over the sloping shoulder and nothing in the offline
-  fit holds it (it has no friction). Porter's 51 mm, tried 2026-11-10, moved it in only 4 mm (to 119), so the foot is not the
-  cause.
+- BACK_IN 38.1: the back strap's inner edge 1 1/2 in from centre back, Porter's least clearance from centre back for strappy
+  backs (knowledge/domain/construction/back-strap-and-keyhole-formulas.md). The drawing puts the feet a little closer (inner
+  edge about 10% of the back's half width from the centre, about 16 mm here); owner, 2026-11-10: the straps should reach closer to
+  the centre, as drawn, not run out under the armpit.
+  History: first placed near the side as misread from the drawing (outer edge 20% of the half width in from the side seam, then
+  Porter's 2 in from a side seam). The fit then slid each strap about 5 cm out along the shoulder (74 to 123 mm from the centre)
+  until the straps were held by friction (wrap_block.MU on the strap's points).
 - ELASTIC: binding and strap elastic cut to 85% of the edge, Treasurie's starting rule (knowledge/domain/construction/edge-
   finishing-elastic-and-binding.md: 75-100% across sources), at the owner's "taut, snug" rather than the looser 95% the block's
   neck has. The legs keep the block's (front 1:1, back 3/4).
@@ -42,7 +43,7 @@ ARM_DROP = 25.4
 CROSS = 20.0
 FRONT_FOOT = 1 / 3
 FRONT_NECK = 0.46
-BACK_OUT = 0.2
+BACK_IN = 38.1
 # the front armhole, from the strap's foot to the new armpit: its direction leaving each end and its handles (shares of the chord).
 # Owner, 2026-11-10, on the first fit: "a little more of the bust should be covered, further towards the armpit". The first curve,
 # (0.1, -1) / (1, -0.3) / (0.5, 0.45), dropped straight from the foot and swept out low; this one leaves it outwards and arrives
@@ -115,8 +116,8 @@ def apply(raw):
 			w['armhole'] = bezier(outer, ARM_START, ARM_HANDLES[0] * d, top, ARM_END, ARM_HANDLES[1] * d)
 		else:
 			y = top[1]
-			out_x = top[0] * (1 - BACK_OUT)
-			outer, inner = np.array([out_x, y]), np.array([out_x - STRAP_W, y])
+			inner = np.array([BACK_IN, y])
+			outer = inner + [STRAP_W, 0]
 			cf = np.array([0.0, y])
 			foot = (inner + outer) / 2
 			w['neck'] = line(cf, inner)
