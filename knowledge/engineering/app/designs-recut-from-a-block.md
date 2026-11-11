@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: Designs recut from a fitted block (strappy back preview)
-description: "2026-11-10: the first design made on a fitted block instead of the drawn pieces: the owner's strappy-back illustration recut from the hybrid high cut as pattern changes (sleeve off, cut-in armholes, shallow neck, low straight back, thin straps as their own piece, 85% binding elastic), fitted offline from the block's fit and shown in the app in dev only with white binding and straps."
+description: "2026-11-10: the first design made on a fitted block instead of the drawn pieces: the owner's strappy-back illustration recut from the hybrid high cut as pattern changes (sleeve off, cut-in armholes, shallow neck, low straight back, thin straps as their own piece, 85% binding elastic), fitted offline from the block's fit with friction holding the straps where they are put, and shown in the app in dev only with white binding and straps."
 tags: [fit, block, design, straps, binding, preview]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-10T22:00:00Z }
@@ -10,8 +10,12 @@ sources:
     resource: "conversation with the product owner, 2026-11-10 (Claude Code session): the strappy design re-created on the hybrid; new edges taut for a snug fit as in the photos; straps as drawn; not every design is for competition; create the preview look"
     title: Owner on the strappy-back preview
     author: human:mattj
+  - id: owner2
+    resource: "conversation with the product owner, 2026-11-10 (Claude Code session): the straps need to be closer in, and a little more of the bust covered, further towards the armpit"
+    title: Owner on the first strappy fit
+    author: human:mattj
   - id: code
-    resource: "pipeline/design_strappy.py, pipeline/wrap_block.py (--design, WRAP_REUSE_BASE), app/src/garment/fitted.js (LOCAL hybrid-6-strappy, fittedTrimOf), app/src/render/fitted.js (dress, trimMaterial, finish), app/src/doc/commands-garment.js (fitted.trim), app/src/ui/ShapeCard.jsx (Garment)"
+    resource: "pipeline/design_strappy.py, pipeline/wrap_block.py (--design, WRAP_REUSE_BASE, solve mu, case placed), app/src/fit/fitted-case.js (placed), app/src/fit/refit.js (reset), app/src/fit/refit-wgsl.js (rhs), app/src/garment/fitted.js (LOCAL hybrid-6-strappy, fittedTrimOf), app/src/render/fitted.js (dress, trimMaterial, finish), app/src/doc/commands-garment.js (fitted.trim), app/src/ui/ShapeCard.jsx (Garment)"
     title: Strappy design code
     author: claude-code/claude-opus-5-5
   - id: edges
@@ -39,7 +43,7 @@ a proportion of the block's own landmarks read off the illustration, or a source
 |---|---|
 | Sleeveless | Sleeve removed; side seam's top lowered 1 in (`ARM_DROP`), back to the bodice armpit Armstrong raises for the sleeve **[INFERRED]** |
 | Strap | Its own piece, 3/8 in (9.5 mm) wide, the usual covered-elastic strap[^straps]; crosses the shoulder seam 20 mm from the neck point (`CROSS`); length measured on the flat block from foot to foot |
-| Front | The strap's foot hangs straight below the crossing, a third of the way down to the armpit; a shallow neckline from it to centre front at 46% of that height; the armhole cut in from the foot to the new armpit |
+| Front | The strap's foot hangs straight below the crossing, a third of the way down to the armpit; a shallow neckline from it to centre front at 46% of that height; the armhole cut in from the foot to the new armpit (made fuller in the second fit, below) |
 | Back | Cut straight across at the new armpit; the strap's foot on that edge, its outer side 20% of the half width in from the side seam (`BACK_OUT`, as drawn: Porter's strappy backs keep 2 in from a side seam[^straps]) |
 | Snug edges | Elastic in the neck, armhole and back-edge binding and along both strap edges at 85% of the edge (`TAUT`, Treasurie's starting rule within the sourced 75-100%[^edges]), tighter than the block's 95% neck at the owner's "taut"; legs as the block's |
 | Finish | Neck (which runs on along the strap's inner edge to the back edge) and armholes (along its outer edge) marked `finish: binding`; legs turned elastic |
@@ -68,12 +72,38 @@ Seen (front, side, back, back three-quarter on `young`, A-pose, red matte with w
 and straps as drawn; the back edge lies flat and snug across the back at the armpits; seat and legs as the hybrid high cut, with its
 faint crease at the small of the back.
 
-**The straps slide out along the shoulder.** Each starts where the pattern puts it, beside the neck (74 mm from the centre), and ends
-123 mm out (the shoulder landmark is at 147), 128 in the app; the drawing has them by the neck, the photos about mid-shoulder.
-**[INFERRED]** cause: a taut strap takes the lower, shorter way over the sloping shoulder, and nothing holds it, since the offline fit
-has no friction and the app's re-fit runs 150 frictionless steps before friction comes in. Porter's 2 in from the side seam for the
-back foot, tried in its place, moved it in only 4 mm (119 mm), so the back foot is not the cause; the drawn position was kept. What
-holds a real strap (friction against the skin, strap tension) is the thing to model next.
+**The straps slid out along the shoulder** in that first fit. Each starts where the pattern puts it, beside the neck (74 mm from
+the centre), and ended 123 mm out (the shoulder landmark is at 147), 128 in the app; the drawing has them by the neck. Cause
+**[INFERRED]**: a taut strap takes the lower, shorter way over the sloping shoulder, and nothing held it, since the offline fit had no
+friction and the app's re-fit runs 150 frictionless steps before friction comes in. Porter's 2 in from the side seam for the back foot
+moved it in only 4 mm (119 mm), so the drawn position was kept.
+
+# Second fit: straps held, more bust covered (2026-11-10)
+
+Owner on the first fit: the straps need to be closer in, and a little more of the bust covered, further towards the armpit.[^owner2]
+
+- **Front armhole** (`ARM_START`, `ARM_END`, `ARM_HANDLES`): it now leaves the strap's foot heading outwards and reaches the armpit
+  rising, in place of dropping straight down and sweeping out low: 16-19 mm more front each side 60-100 mm above the armpit (front
+  half width 114 / 124 mm at 460 / 440 mm on the pattern, was 98 / 105).
+- **Straps held where they are put.** A strap is placed by hand when dressing, and skin friction holds it there (a strap bent over the
+  shoulder presses hard on it). `wrap_block.solve` takes friction, the GPU re-fit's model (mu 0.4 times the contact force, 1 mm of
+  give, anchored at the start; [friction on re-fits](/decisions/2026-11-03-friction-on-refits.md)), per point: on the strap only; the
+  rest of the design settles frictionless from the block's fit as before. The fitted file's case lists the strap's points
+  (`placed`); the app's re-fit gives them mu 0.4 at least through its frictionless first phase (`fit/refit.js reset`: the anchor's 4th
+  value; `refit-wgsl.js rhs`: `max(P.mu, anchor.w)`). The race's `gpu.py` twin has no such points.
+- **Friction on every point was tried first:** the straps stayed, but the recut neck, armholes and back edge barely moved from the
+  block's fit (0.8 mm mean, 21% of points still sliding after 360 iterations), so the snug edges never pulled in.
+
+| | First fit | Second fit |
+|---|---|---|
+| Strap over the shoulder, from the centre | 123 mm (app 128) | 92 mm (app 93) |
+| Settled, all pieces | 1.159 / 1.064 | 1.162 / 1.078 |
+| Moved from the block's fit, above the waist (mean / 95%) | 21.3 / 34.8 mm | 13.7 / 22.9 mm |
+| Strap points with friction | none | 93: 82% pressing, none sliding |
+| App re-fit (300 steps) | 0.6 s | 1.8 s with the page drawing |
+
+Seen: the straps rise from the neckline's corners close to the neck and spread apart down the back to the back edge, as drawn; the
+front covers more towards the armpits.
 
 # In the app (dev only)
 
@@ -93,6 +123,7 @@ holds a real strap (friction against the skin, strap tension) is the thing to mo
 - Choosing the strap in the flat view chooses the Front panel.
 
 [^owner]: Owner on the strappy-back preview, 2026-11-10.
+[^owner2]: Owner on the first strappy fit, 2026-11-10.
 [^code]: Strappy design code.
 [^edges]: Edge finishing, elastic and binding.
 [^straps]: Back, strap and keyhole formulas.

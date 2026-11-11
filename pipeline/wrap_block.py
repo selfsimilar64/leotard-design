@@ -33,6 +33,15 @@ ITERS = 240
 CUT_ITERS = 360  # re-solving a cut from the whole block's fit: 120 left it 1.7 mm mean, 7 mm at most, from settled (pipeline/fit_checks.py)
 FACING = {'front': 1, 'back': -1, 'sleeve': -1, 'strap': -1}  # on the +x side of the body; the block lays a sleeve out with its front at +x; a strap (design_strappy.py) runs down over the front
 PLANE = 300.0  # how hard points keep to the surface's tangent plane, against the fabric's own shape
+# Friction holding a point where the solve started it: Coulomb's mu times its contact force, after STICK of give
+# (decisions/2026-11-03-friction-on-refits.md). Used for a design's straps only (--design): they are put in place by hand when dressing,
+# while the rest of the design settles without friction from the block's fit, as the app's re-fit settles on the skin before its
+# friction (render/fitted.js FREE_STEPS; there the straps keep theirs too, case.placed). Friction on every point of a design was tried
+# (2026-11-10): the straps stayed, but the recut neck, armholes and back edge barely moved from the block's fit (0.8 mm mean). Same model
+# and values as the GPU re-fit (pipeline/race/gpu.py MU, STICK, pd_friction_k; app/src/fit/refit-wgsl.js rhs), with the contact force
+# taken from this solve's own plane (PLANE times how far the point is pressed under it) each iteration rather than lagged by grip.
+MU = 0.4
+STICK = 0.001
 DAMP = 0.05  # how much each step stays where it was
 GATHER = 0.5  # TUNABLE, not measured. How far fabric may be compressed at no cost, as its size over flat: fabric resists stretch but gathers when pushed. 1 resists both alike
 # TUNABLE, not measured. Elastic sewn into each opening, as its length over the edge it is sewn to. A loop shorter than the opening is what holds
@@ -410,13 +419,15 @@ def folds_of(q, uv, tri):
 	return folds
 
 
-def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=ITERS, label='', elastic=None):
+def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=ITERS, label='', elastic=None, mu=0.0):
 	"""ARAP against the flat rest shapes. Each point keeps to the surface's tangent plane, free to slide
 	along it, so the piece can settle (a pull towards the closest point holds it nearly still). Folds stay
 	on x = 0. tris: welded vertex ids; rest: [tri, corner, 2] flat coordinates in metres; facing: +1 where
 	the flat triangle's face looks outward from the body, -1 where a piece is laid out the other way up;
 	part: per point True on the sleeve; held: points that do not move; elastic: (i, j, length, stiffness) of each
-	span of elastic along an opening.
+	span of elastic along an opening; mu: friction holding each point where it started (MU, STICK), per point or one for all (0, the
+	default, none). The twins
+	below have no friction: they copy the frictionless solve.
 	Twin: pipeline/speed_probe.py run() copies this loop with timers, for speed work; pipeline/race/energy.py writes out the energy it minimises
 	and alternating_residual repeats its balance. Change the physics here and there together.
 	"""
@@ -501,6 +512,21 @@ def solve(tris, rest, pos, folds, surface, facing, part=None, held=None, iters=I
 		for a_ in range(3):
 			nn[:, a_, a_] += holdw
 		b += np.einsum('tij,tj->ti', np.einsum('ti,tj->tij', normal, normal) * PLANE, target) + DAMP * p + holdw[:, None] * hold_at
+		if np.any(mu):
+			# friction (gpu.pd_friction_k): a tangential spring to the anchor, w = mu * contact / STICK, past STICK the anchor moved
+			# along with the point so the force stays mu * contact
+			lam = PLANE * np.maximum(-((p - target) * normal).sum(1), 0.0)
+			dx = p - hold_at
+			u = dx - normal * (dx * normal).sum(1, keepdims=True)
+			r = np.linalg.norm(u, axis=1, keepdims=True)
+			slip = u * np.maximum(0.0, 1.0 - STICK / np.maximum(r, 1e-12))
+			wf = np.broadcast_to(mu, lam.shape) * lam / STICK
+			tang = np.eye(3)[None] - np.einsum('ti,tj->tij', normal, normal)
+			nn += wf[:, None, None] * tang
+			b += wf[:, None] * (hold_at - normal * (hold_at * normal).sum(1, keepdims=True) + slip)
+			if it % 20 == 0 or it == iters - 1:
+				m = np.broadcast_to(mu, lam.shape) > 0  # the points with friction
+				print(f'    {label} friction on {m.sum()} points: {np.mean(lam[m] > 0) * 100:.0f}% pressing, {np.mean(r[m, 0] > STICK) * 100:.0f}% sliding', flush=True)
 		A = coo_matrix((np.concatenate([lv, nn.transpose(1, 2, 0).ravel()]), (np.concatenate([li, rows]), np.concatenate([lj, cols]))), shape=(3 * n, 3 * n)).tocsc()
 		next_p = splu(A).solve(b.ravel()).reshape(-1, 3)
 		move = np.linalg.norm(next_p - p, axis=1)
@@ -728,9 +754,12 @@ def main(after=None):
 			for x, y in zip(ids[:-1], ids[1:]):
 				length = ratio * np.linalg.norm(pieces[name].V[x] - pieces[name].V[y]) / 1000
 				spans.append((welded[offs[name] + x], welded[offs[name] + y], length, ELASTIC_WIDTH / length))
-		return dict(raw=raw, pieces=pieces, offs=offs, welded=welded, nw=nw, tris=np.vstack(tt), rest=np.vstack(rr), tag=np.array(tag), facing=np.concatenate(face), folds=folds, on_sleeve=on_sleeve, ring=ring, elastic=np.array(spans))
+		on_strap = np.zeros(nw, bool)
+		if st is not None:
+			on_strap[welded[offs['strap']:offs['strap'] + len(strap.V)]] = True
+		return dict(raw=raw, pieces=pieces, offs=offs, welded=welded, nw=nw, tris=np.vstack(tt), rest=np.vstack(rr), tag=np.array(tag), facing=np.concatenate(face), folds=folds, on_sleeve=on_sleeve, ring=ring, elastic=np.array(spans), on_strap=on_strap)
 
-	def part_solve(G, tr_mask, start, held_ids=None, iters=ITERS, label='', over=None):
+	def part_solve(G, tr_mask, start, held_ids=None, iters=ITERS, label='', over=None, mu=0.0):
 		tris, nw = G['tris'], G['nw']
 		used = np.unique(tris[tr_mask])
 		remap = -np.ones(nw, int)
@@ -739,7 +768,7 @@ def main(after=None):
 		a, b = remap[G['elastic'][:, 0].astype(int)], remap[G['elastic'][:, 1].astype(int)]
 		on = (a >= 0) & (b >= 0)
 		elastic = np.column_stack([a[on], b[on], G['elastic'][on, 2], G['elastic'][on, 3]])
-		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], over or surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label, elastic=elastic)
+		q, _ = solve(remap[tris[tr_mask]], G['rest'][tr_mask], start[used], remap[np.intersect1d(G['folds'], used)], over or surface, G['facing'][tr_mask], part=G['on_sleeve'][used], held=held, iters=iters, label=label, elastic=elastic, mu=mu[used] if np.ndim(mu) else mu)
 		out = start.copy()
 		out[used] = q
 		return out
@@ -837,6 +866,9 @@ def main(after=None):
 			'facing': np.concatenate([G['facing'], G['facing']]).round(3).tolist(), 'si': whole_of[w_el[:, 0].astype(int)].tolist(),
 			'sj': whole_of[w_el[:, 1].astype(int)].tolist(), 'rest_len': w_el[:, 2].round(7).tolist(), 'k': w_el[:, 3].round(5).tolist(),
 			'sleeve': sleeve_w.astype(int).tolist(), 'plane': PLANE, 'gather': GATHER}
+		if G['on_strap'].any():
+			# straps are put in place by hand when dressing: the app's re-fit keeps their friction through its frictionless first phase
+			case['placed'] = np.concatenate([G['on_strap'], G['on_strap']])[used_w].astype(int).tolist()
 		cells = []
 		for name, piece in G['pieces'].items():
 			used = np.unique(piece.T)
@@ -929,7 +961,8 @@ def main(after=None):
 		start = from_block(G)
 		print('solving', label)
 		all_tris = np.ones(len(G['tris']), bool)
-		pos = part_solve(G, all_tris, start, iters=CUT_ITERS, label=label)
+		# a design's straps are held where they are put (MU); everything else settles without friction, as the block's own cuts
+		pos = part_solve(G, all_tris, start, iters=CUT_ITERS, label=label, mu=MU * G['on_strap'] if design_name else 0.0)
 		d = np.linalg.norm(pos - start, axis=1) * 1000
 		print(f'  reuse error, {label}: mean {d.mean():.1f} mm, 95% {np.percentile(d, 95):.1f} mm, max {d.max():.1f} mm')
 		y, s_ = start[:, 1], G['on_sleeve']

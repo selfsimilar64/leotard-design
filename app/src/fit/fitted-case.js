@@ -92,6 +92,9 @@ export function garmentArrays(data, size = { width: 1, length: 1 }) {
 	return {
 		tris: Int32Array.from(c.tris), Dinv, area, facing: Float32Array.from(c.facing), si: Int32Array.from(c.si), sj: Int32Array.from(c.sj),
 		rest_len: sx === 1 && sy === 1 ? Float32Array.from(c.rest_len) : spanLengths(c, sx, sy), k: Float32Array.from(c.k), sleeve: Int32Array.from(c.sleeve),
+		// points put in place by hand when dressing (a strap: pipeline/wrap_block.py export, case.placed), which keep their friction
+		// through a frictionless phase (fit/refit.js reset); null for a garment without
+		placed: c.placed ? Uint8Array.from(c.placed) : null,
 	};
 }
 

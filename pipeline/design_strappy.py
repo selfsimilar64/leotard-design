@@ -43,6 +43,11 @@ CROSS = 20.0
 FRONT_FOOT = 1 / 3
 FRONT_NECK = 0.46
 BACK_OUT = 0.2
+# the front armhole, from the strap's foot to the new armpit: its direction leaving each end and its handles (shares of the chord).
+# Owner, 2026-11-10, on the first fit: "a little more of the bust should be covered, further towards the armpit". The first curve,
+# (0.1, -1) / (1, -0.3) / (0.5, 0.45), dropped straight from the foot and swept out low; this one leaves it outwards and arrives
+# rising, 16-19 mm wider each side 60-100 mm above the armpit (front half width 114 / 124 mm at y 460 / 440, was 98 / 105).
+ARM_START, ARM_END, ARM_HANDLES = (0.3, -1), (1, -0.7), (0.35, 0.35)
 TAUT = 0.85
 ELASTIC = {('front', 'neck'): TAUT, ('back', 'neck'): TAUT, ('front', 'armhole'): TAUT, ('back', 'armhole'): TAUT,
 	('strap', 'inner'): TAUT, ('strap', 'outer'): TAUT}
@@ -107,7 +112,7 @@ def apply(raw):
 			cf = np.array([0.0, cross[1] - FRONT_NECK * drop])
 			w['neck'] = bezier(cf, (1, 0), 0.55 * inner[0], inner, (0.35, 1), 0.6 * (inner[1] - cf[1]))
 			d = np.linalg.norm(top - outer)
-			w['armhole'] = bezier(outer, (0.1, -1), 0.5 * d, top, (1, -0.3), 0.45 * d)
+			w['armhole'] = bezier(outer, ARM_START, ARM_HANDLES[0] * d, top, ARM_END, ARM_HANDLES[1] * d)
 		else:
 			y = top[1]
 			out_x = top[0] * (1 - BACK_OUT)

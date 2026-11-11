@@ -299,7 +299,8 @@ fn rhs(@builtin(global_invocation_id) gid: vec3<u32>) {
 		if (s >= 0) { acc += loc[3u * P.nt + u32(s)].xyz; } else { acc -= loc[3u * P.nt + u32(-s - 1)].xyz; }
 	}
 	var w = 0.0;
-	let L = P.mu * lam;
+	// the anchor's 4th value: a point placed by hand keeps that much friction at least (refit.js reset; the race's gpu.py has none)
+	let L = max(P.mu, v[${BLOCK.A}u * P.n + i].w) * lam;
 	if (L > 0.0) {
 		let anchor = v[${BLOCK.A}u * P.n + i].xyz;
 		let dx = x - anchor;

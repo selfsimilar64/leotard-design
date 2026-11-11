@@ -188,13 +188,17 @@ export class Refit {
 		this.device.queue.writeBuffer(this.uniform, 0, u);
 	}
 
-	// Back to the start: positions, friction's anchor and held forces, the windows.
+	// Back to the start: positions, friction's anchor and held forces, the windows. A point placed by hand (arrays.placed: a strap)
+	// keeps DEFAULTS.mu as its least friction whatever the setting (the anchor's 4th value, refit-wgsl.js rhs), so a frictionless
+	// phase does not slide it off where it was put.
 	reset(start = this.data.arrays.start) {
-		const n = this.n, v4 = new Float32Array(n * 4);
+		const n = this.n, v4 = new Float32Array(n * 4), placed = this.data.arrays.placed;
 		for (let i = 0; i < n; i++) v4.set([start[3 * i], start[3 * i + 1], start[3 * i + 2], 0], 4 * i);
 		const q = this.device.queue;
 		q.writeBuffer(this.buf.v, BLOCK.X * n * 16, v4);
+		if (placed) for (let i = 0; i < n; i++) v4[4 * i + 3] = placed[i] ? DEFAULTS.mu : 0;
 		q.writeBuffer(this.buf.v, BLOCK.A * n * 16, v4);
+		if (placed) for (let i = 0; i < n; i++) v4[4 * i + 3] = 0;
 		q.writeBuffer(this.buf.v, PREV * n * 16, v4);
 		q.writeBuffer(this.buf.v, SUM * n * 16, new Float32Array(n * 4));
 		q.writeBuffer(this.buf.pt, 0, new Float32Array(3 * n * 4));
