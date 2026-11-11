@@ -476,7 +476,7 @@ export class FittedView {
 				if (this.again || gen !== this.gen || !this.active) continue; // the body changed meanwhile: run again on the new one
 				this.solved = fit.X;
 				this.show();
-				this.dent.set(skin && fit.contacts ? pressedSkin(man, fit.contacts, fit.X, this.openingsInward(fit.X)) : null);
+				this.dent.set(skin && fit.contacts ? pressedSkin(man, fit.contacts, fit.X, this.openingsInward(fit.X), this.data.case.tris) : null);
 				this.hold(false);
 				this.setStatus({ state: 'fitted', steps: dressSteps + fit.steps, seconds: dressSec + fit.seconds, setup: (performance.now() - t0) / 1000 - dressSec - fit.seconds, dressed: !!start });
 			} while (this.again && this.active);
@@ -490,14 +490,29 @@ export class FittedView {
 		}
 	}
 
-	// Every point on an opening and its inward direction (towards its neighbours' mean, into the fabric): render/skin-dent.js.
+	// Every point on an opening and its inward direction (unit, into the fabric, across the edge): render/skin-dent.js. Towards the
+	// point's neighbours' mean, less its part along the edge (the opening's points run round it in order: the next less the previous),
+	// then smoothed along the edge: each point's own followed its neighbours in the mesh, up to 70° from the next point's, which
+	// striped the groove the skin is drawn with outside the opening.
 	openingsInward(X) {
 		const out = new Map();
 		if (!this.near) return out;
-		for (const o of this.data.openings) for (const i of o.ids ?? []) {
-			const nb = this.near[i], d = [0, 0, 0];
-			for (const j of nb) for (let k = 0; k < 3; k++) d[k] += X[3 * j + k] / nb.length;
-			out.set(i, d.map((x, k) => x - X[3 * i + k]));
+		const across = (d, t) => {
+			const tt = t[0] * t[0] + t[1] * t[1] + t[2] * t[2] || 1, a = (d[0] * t[0] + d[1] * t[1] + d[2] * t[2]) / tt;
+			const r = d.map((x, k) => x - a * t[k]), l = Math.hypot(...r) || 1;
+			return r.map((x) => x / l);
+		};
+		for (const o of this.data.openings) {
+			const ids = o.ids ?? [], n = ids.length;
+			if (n < 3) continue;
+			const tangent = ids.map((_, j) => { const a = ids[(j + n - 1) % n], b = ids[(j + 1) % n]; return [0, 1, 2].map((k) => X[3 * b + k] - X[3 * a + k]); });
+			let D = ids.map((i, j) => {
+				const nb = this.near[i], d = [0, 0, 0];
+				for (const q of nb) for (let k = 0; k < 3; k++) d[k] += X[3 * q + k] / nb.length;
+				return across(d.map((x, k) => x - X[3 * i + k]), tangent[j]);
+			});
+			for (let p = 0; p < 3; p++) D = D.map((d, j) => across(d.map((x, k) => D[(j + n - 1) % n][k] + 2 * x + D[(j + 1) % n][k]), tangent[j]));
+			ids.forEach((i, j) => out.set(i, D[j]));
 		}
 		return out;
 	}
