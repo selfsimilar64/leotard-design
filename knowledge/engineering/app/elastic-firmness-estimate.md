@@ -35,7 +35,7 @@ sources:
 
 **Real 3/8 in swim elastic on a leotard is most likely 1-2 times the fit's current elastic firmness, 3-4 times at the stiff
 end** (thick rubber elastic on a soft fabric). No published force data for narrow elastic or leotard tricot was found; this is
-worked out from the elastic's size and rubber's stiffness. **[INFERRED]** The owner chose to go by eye between 2, 3 and 4 times.[^owner]
+worked out from the elastic's size and rubber's stiffness. **[INFERRED]** The owner chose by eye from stills at 1, 2, 3 and 4 times: **firm 3 is the app's default** (2026-11-11, `render/fitted.js`).[^owner]
 
 # The fit's elastic
 

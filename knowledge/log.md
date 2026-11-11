@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-11
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 3 done (cheap stage): owner chose elastic firmness 3x by eye; it is the default.
 * **Creation**: [How firm leotard elastic is against the fabric](/engineering/app/elastic-firmness-estimate.md): no published force data for narrow elastic or tricot found; from rubber swim elastic's size and rubber's stiffness against Carvico's strip tests, firm 1-2 most likely, 3-4 at the stiff end. Stills at 2x, 3x, 4x on the tank and hybrid (`app/captures/fit-stills/h-*`) for the owner to choose by eye.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 3: default length 90%; a tank leotard recut from the hybrid (`design_tank.py`, dev only) to see elastic at every opening; `snug` (elastic cut shorter) in every twin; sweep with the shading off: 4x firmer elastic draws the openings in about 10% and the leg line 15-23 mm down the body, a 30% shorter cut about 3%, the band nothing; firmness is the open question (no force data).
 * **Decision**: [Fold shading on fitted garments switched off](/decisions/2026-11-11-fold-shading-off.md): owner found the arched back's seat covered in painted ripples; measured why (the posed mannequin's lower back shortens 24%, its skin under the seat is pulled long, narrowed and crushed in the cleft; knit pulled long only narrows); shading off behind the fit option `folds`, code kept; real folds stay the plan's shelved stage 2.

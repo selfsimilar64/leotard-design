@@ -320,6 +320,7 @@ elastic dialled up to see its range):**
   ride-up). The band changes nothing measurable. `ELASTIC_WIDTH` (20 mm of fabric's stiffness) is an estimate with no force data,
   so how firm the elastic is is the open question; the range 10-50 mm the estimate gives is about firm 0.5-2.5.
 - Re-fit 0.35-0.7 s in the pane whatever the elastic.
+- **Firmness:** no force data published; estimated real elastic at firm 1-2, 3-4 at the stiff end ([estimate](/engineering/app/elastic-firmness-estimate.md)). Owner chose **firm 3** by eye from 1-4x stills (the band holds each opening in place); it is the default. The band (`kink`) stays 0. Stage 3's cheap stage done; the full band waits for stage 4.
 
 # Stage 4: fabric that differs along and across
 

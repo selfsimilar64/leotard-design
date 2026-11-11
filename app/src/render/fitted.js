@@ -80,8 +80,10 @@ export const FIT_DEFAULTS = {
 	jam: 1,                   // squeezing is free down to this share of the length (the knit's loops and wrinkles finer than the mesh take
 	// it up), costs press beyond (owner, 2026-11-11: taut in most places, folds only where there is considerable extra fabric)
 	kink: 0,                  // fit realism plan stage 3, a trial (no control): the elastic as a band that will not shorten along its line
-	firm: 1,                  // (push-only spans between second neighbours, this times the elastic's stiffness; 0: none), and the
-	// elastic's firmness (its stiffness times this). refit.js elasticSprings; twins energy.springs, gpu.Problem kink and firm
+	firm: 3,                  // (push-only spans between second neighbours, this times the elastic's stiffness; 0: none), and the
+	// elastic's firmness (its stiffness times this). refit.js elasticSprings; twins energy.springs, gpu.Problem kink and firm.
+	// firm 3 (owner, 2026-11-11, by eye from 1-4x stills: the band holds each opening where it belongs against the fabric's pull);
+	// the estimate puts real elastic at 1-2x, 3-4x at the stiff end: knowledge/engineering/app/elastic-firmness-estimate.md
 	snug: 1,                  // the elastic's length against what each opening is cut with (wrap_block.ELASTIC, design_*.ELASTIC): below 1
 	// it is cut shorter and holds tighter (a trial, no control; 2026-11-11)
 	slip: 50,                 // in a pose, steps without friction before the rest (no control): how far the garment may slide from where
