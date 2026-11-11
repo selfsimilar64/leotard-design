@@ -24,6 +24,8 @@ export const MANNEQUIN_MATERIALS = [
 	['Brushed metal', 'Brushed metal'],
 	['Flocked velvet', 'Flocked velvet'],
 	['Linen, no tapes', 'Linen'],
+	// the person's skin, no head (render/figure.js part 'body'): brought back 2026-11-11 (owner) to judge the fit's soft body against
+	[REALISTIC_SKIN, 'Realistic skin'],
 ];
 
 export const MANNEQUIN_FINISHES = {

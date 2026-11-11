@@ -282,6 +282,29 @@ class Mannequin {
 			for (let i = 0; i < N; i++) { let s2 = g2[i]; for (let k = S[i]; k < S[i + 1]; k++) s2 += g2[A[k]]; grad[i] = s2 / (S[i + 1] - S[i] + 1); }
 		}
 		for (let i = 0; i < N; i++) this.armF[i] = clamp((this.wArm[i] - 0.5) / max(grad[i], 6), -0.08, 0.08);
+
+		// How soft the flesh is under the skin, 0 (bone close under it: ribs, spine, hip bones, shoulders, shins) to 1 (the seat and
+		// inner thigh), on the reference body (fit realism plan stage 6: the fitted garment's contact is softer here, render/fitted.js
+		// option give). [INFERRED] by anatomy and eye, no measured values: the seat 1, inner thigh 1, thigh 0.8, bust 0.7, belly 0.6,
+		// upper arm 0.4; the regions' edges blended, then smoothed over about 3 cm.
+		const soft = this.soft = new Float32Array(N), { waist: waistY2, bust: bustY2 } = this.formLines;
+		const band = (y, a, b, w = 0.03) => smoothstep(a - w, a + w, y) * (1 - smoothstep(b - w, b + w, y));
+		for (let i = 0; i < N; i++) {
+			if (this.wHead[i] > 0.5) continue;
+			const ax = abs(R[i * 3]), y = R[i * 3 + 1], fz = this.form[i * 2];
+			const back = smoothstep(0.01, -0.03, fz), front = 1 - back;
+			const arm = smoothstep(0.3, 0.7, this.wArm[i]), leg = smoothstep(0.3, 0.7, this.wLeg[i]), trunk = (1 - arm) * (1 - leg);
+			const seat = back * band(y, crotchY - 0.02, crotchY + 0.16) * (1 - smoothstep(0.12, 0.17, ax)) * trunk;
+			const thigh = leg * band(y, crotchY - 0.3, crotchY + 0.02) * mix(0.8, 1, 1 - smoothstep(0.03, 0.08, ax));
+			const belly = front * band(y, crotchY + 0.07, waistY2 + 0.02) * (1 - smoothstep(0.09, 0.13, ax)) * trunk;
+			const bust = front * band(y, bustY2 - 0.07, bustY2 + 0.06, 0.02) * smoothstep(0.015, 0.04, ax) * (1 - smoothstep(0.11, 0.15, ax)) * trunk;
+			const upperArm = arm * (1 - smoothstep(0.3, 0.45, this.armT[i])); // armT: 0 at the shoulder, 1 at the wrist
+			soft[i] = max(seat, thigh, 0.6 * belly, 0.7 * bust, 0.4 * upperArm);
+		}
+		for (let it = 0; it < 10; it++) {
+			const s0 = soft.slice();
+			for (let i = 0; i < N; i++) { let s2 = s0[i]; for (let k = S[i]; k < S[i + 1]; k++) s2 += s0[A[k]]; soft[i] = s2 / (S[i + 1] - S[i] + 1); }
+		}
 	}
 
 	refCrotch() {

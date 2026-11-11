@@ -120,9 +120,14 @@ function spanLengths(c, sx, sy) {
 // own matrix and trees in the same object).
 // physics: { press, bend, jam } of the fit realism plan's stage 2 (squeeze resistance, bending stiffness, the squeeze taken up free;
 // press 0 and bend 0: the physics before it) and { kink, firm, snug } of its stage 3 (the elastic as a band, its firmness, how short it
-// is cut; 0, 1 and 1: before it; Refit makes the spans, refit.js elasticSprings), as gpu.Problem's.
+// is cut; 0, 1 and 1: before it; Refit makes the spans, refit.js elasticSprings), as gpu.Problem's. { soft, give } of its stage 6:
+// per body point how soft the flesh is (0-1, body/mannequin.js soft) and how much softer than the firm body the softest is (give;
+// 1 or no soft: a rigid body), written as each point's compliance 1 + (give - 1) soft, which the contact divides PLANE by
+// (refit-wgsl.js surface_at).
 export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {}) {
 	const c = data.case, arrays = { ...garment, start: startOf(data, Q), body: Float32Array.from(Q) };
+	const give = physics.give ?? 1;
+	if (physics.soft && give !== 1) arrays.soft = Float32Array.from(physics.soft, (s) => 1 + (give - 1) * s);
 	const parts = [];
 	cache.parts ??= [['torso', (w) => w < 0.5], ['arm', (w) => w > 0.15]].map(([label, keep]) => {
 		const t = [];
@@ -136,6 +141,6 @@ export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {})
 		parts.push(ti.length / 3);
 	}
 	const head = { n: c.n, nt: c.tris.length / 3, ns: c.si.length, body_points: Q.length / 3, part_faces: parts, plane: c.plane, gather: c.gather, hold: HOLD, turn: TURN,
-		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1, snug: physics.snug ?? 1 };
+		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1, snug: physics.snug ?? 1, give };
 	return { head, arrays, cache };
 }

@@ -350,6 +350,12 @@ elastic dialled up to see its range):**
 
 **Progress (2026-11-11): steps 1 and 2 built** with the folds and cut length above ([decision](/decisions/2026-11-11-folds-cut-length-and-dressing.md)). Standing fit per body: on the bare skin a pose is fitted from the same body's `standing` fit (cached), carried by each point's host motion; slip: `slip` steps without friction (50) before 150 with. Lunge leg openings stay at their standing height (97 mm above the crotch on the body against 103-106 free); the back arch at slip 0 pulls one side up, at 50 looks as before. The gate's armhole check not yet made.
 
+**Gate checked 2026-11-11 (owner: "do that one check"):** hybrid high cut, `young`, 90% length, firm 3, slip 50 (`slip` 0 and 150
+alongside). Fabric within 6 cm of the left underarm lies against the skin in the arms-up lunge: distance to the nearest skin vertex
+median 2.8-3.2 mm, 90% 6.1-6.4 mm (standing 3.5 / 6.3; at slip 150 the 90% rises to 9.9 mm); back arch 2.4-3.2 / 4.0-4.6. Leg lines do not
+creep: mean height above the crotch on the body standing 77 mm, lunge 74-79, back arch 76-79 at every slip. **Passed.** (Distances
+include the skin's own vertex spacing, a few mm.)
+
 # Stage 6: soft body
 
 1. A softness value per canonical body vertex (soft seat, bust, thigh, belly; firm ribs, hip bones, shoulders), carried in the free
@@ -358,6 +364,29 @@ elastic dialled up to see its range):**
    through. No bulge beside the elastic at first.
 - **Gate:** elastic visibly dips at the leg opening; no skin through; the owner's eye.
 - **Expected cost:** almost none.
+
+**Progress (2026-11-11, owner: "proceed", with the realistic skin brought back to judge it on):**
+- **Realistic skin offered again**: `render/presets.js MANNEQUIN_MATERIALS` lists `REALISTIC_SKIN` ('Realistic skin', the Daz skin drawn by
+  `render/figure.js` part 'body', no head); `body.set` accepts it (`doc/commands-core.js`); tile `public/thumbs/mannequin/realistic-skin-daz.jpg`.
+  The Stage card's finish row wraps to a second line and still fits 1024 x 768.
+- **Softness** per canonical vertex, `body/mannequin.js soft` (0-1, [INFERRED] by anatomy: seat and inner thigh 1, thigh 0.8, bust 0.7,
+  belly 0.6, upper arm 0.4, bone 0; blended and smoothed about 3 cm), saved for the twins to `app/captures/race/soft-young.json`.
+- **Solver**: `give` (render/fitted.js option, default 1: rigid; no control): each body point's compliance 1 + (give - 1) soft rides in the
+  body points' 4th value (`fitted-case.js buildCase`, `refit.js`); `refit-wgsl.js surface_at` divides PLANE by it at the closest point
+  (`Hit.k`), `query` keeps it per point (pt[3i+2].w) for `rhs`, contact and friction's force. Twins: `gpu.py` (`Hit.c`, `Part.comp`,
+  per-point `kc` through `query_k`, `plane_k`, `gather_grad_k`, `surface_hess_k`, `friction_lam_k`), `solvers.pd_rhs_k`, `energy.py`
+  (at the nearest vertex), `energy.body_soft`; `check_energy.py` 1d (gradient 4-5e-7 at give 100 and 1000), `check_gpu.py --give`,
+  `export_app.py --give` (cases `young-*-s6`). Port check, 20 steps: 0.02-0.13 mm mean, 2.7-4.5 mm worst, as the plain cases. VBD left rigid.
+- **Calibration**: PLANE (300 per point) is stiff: give 40 moved nothing visible. Leg elastic's mean depth into the skin (hybrid, standing,
+  firm 3): give 200 0.9 mm (deepest 6.5), 1000 3.1 mm, 3000 5.0 mm (deepest at the drawing's 10 mm cap); taut fabric over the seat 0.15-0.8 mm.
+  Re-fit time unchanged (0.8 s in the pane).
+- **Skin drawn pressed in** (`render/skin-dent.js`): each fit point's depth under the skin at its nearest skin vertex, spread (2 passes of
+  the deepest neighbour) and softened (3 passes), capped 10 mm; the mannequin's mesh takes positions and normals of its own while dented
+  (the body's arrays, which the fit reads, are never changed) and `figure.js setDent` moves the realistic skin's first level the same way.
+  Cleared when the body or pose changes, set after each re-fit. No bulge yet.
+- **Stills** (tank, realistic skin, give 1 / 500 / 1500: `app/captures/fit-stills/k-tank-give*`, sheets `k-softbody.png`,
+  `k-softbody-closeup.png`): the elastic sits into the thigh and the seat's edge into the flesh at 1500, faintly at 500.
+- Not yet: the owner's choice of `give` (and whether it becomes the default); a bulge beside the elastic.
 
 # Open for the owner
 

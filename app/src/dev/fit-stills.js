@@ -111,7 +111,8 @@ async function shoot(dir, name, pick) {
 // (render/fitted.js FIT_DEFAULTS: press, bend, mesh, steps), put back at the end.
 // size: the pattern's { width, length } (op fitted.size, garment/fitted.js fitSizeOf), applied to the stills' own design.
 // garment: the fitted garment's key (KEY, the hybrid high cut; 'hybrid-6-tank' for the elastic at every opening, with OPENING_VIEWS).
-export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, views: pick = VIEWS, redo = false, options = {}, size = null, garment = KEY } = {}) {
+// finish: the body's finish (render/presets.js; REALISTIC_SKIN for the soft body), else the mannequin's.
+export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, views: pick = VIEWS, redo = false, options = {}, size = null, garment = KEY, finish = null } = {}) {
 	const a = app(), e = a.engine, fv = e.fitted, vp = e.viewport, cam = vp.getCamera();
 	let saved = null;
 	try { saved = localStorage.getItem(AUTOSAVE); } catch { /* storage blocked */ }
@@ -119,6 +120,7 @@ export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, vi
 	try {
 		fv.options = { ...fv.options, ...options }; // before the design opens: its fit is made with them
 		await prepare(garment);
+		if (finish) { a.exec({ op: 'body.set', finish }); await e.settled(); }
 		if (size) { a.exec({ op: 'fitted.size', ...size }); await e.settled(); await refitDone(fv); }
 		for (const fit of fits) {
 			if (fv.options.body !== fit) { fv.setOptions({ body: fit }); await refitDone(fv); }

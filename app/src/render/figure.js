@@ -126,7 +126,9 @@ export class FigureView {
 				e += n * 3;
 			});
 		}
-		const L1 = applyStencil(man.stencil, skinCage), L2 = applyStencil(S2, L1), N2 = new Float32Array(L2.length);
+		const L1 = applyStencil(man.stencil, skinCage);
+		this.skinL1 = L1; this.skinS2 = S2; this.skinT2 = T2; // for setDent
+		const L2 = applyStencil(S2, this.dentD1?.length === L1.length ? L1.map((x, j) => x + this.dentD1[j]) : L1), N2 = new Float32Array(L2.length);
 		vertexNormals(L2, T2, N2);
 		// per skin vertex: the head bone's weight (where head and body part) and the mannequin's cut
 		this.headW ??= applyStencil(S2, man.wHead, new Float32Array(S2.n), 1);
@@ -162,6 +164,7 @@ export class FigureView {
 			let W, WN; // welded positions and normals of this part
 			if (m.name === 'skin') {
 				W = L2; WN = N2;
+				this.skinMesh = { mesh, map: m.map }; // for setDent
 				const g = mesh.geometry;
 				if (!g.attributes.aHead) {
 					g.setAttribute('aHead', new THREE.BufferAttribute(Float32Array.from(m.map, (j) => this.headW[j]), 1));
@@ -190,6 +193,24 @@ export class FigureView {
 		this.baked = bake;
 		if (this.state === key) this.group.visible = true;
 		this.timing = performance.now() - t0;
+	}
+
+	// The skin pressed in under a fitted garment (render/skin-dent.js, fit realism plan stage 6): D1 per vertex of the skin's first
+	// level (the mannequin's mesh) the move (x, y, z), or null. Kept, so a skin shown later (a new pose's) is drawn with it; the fitted
+	// garment clears it when the body or pose changes and sets it again once re-fitted.
+	setDent(D1) {
+		this.dentD1 = D1;
+		const sm = this.skinMesh, L1 = this.skinL1;
+		if (!sm || !L1 || !sm.mesh.visible) return;
+		const L = D1?.length === L1.length ? L1.map((x, j) => x + D1[j]) : L1, L2 = applyStencil(this.skinS2, L), N2 = new Float32Array(L2.length);
+		vertexNormals(L2, this.skinT2, N2);
+		const g = sm.mesh.geometry, P = g.attributes.position.array, Nn = g.attributes.normal.array;
+		for (let r = 0; r < sm.map.length; r++) {
+			const j = sm.map[r] * 3;
+			P[r * 3] = L2[j]; P[r * 3 + 1] = L2[j + 1]; P[r * 3 + 2] = L2[j + 2];
+			Nn[r * 3] = N2[j]; Nn[r * 3 + 1] = N2[j + 1]; Nn[r * 3 + 2] = N2[j + 2];
+		}
+		g.attributes.position.needsUpdate = g.attributes.normal.needsUpdate = true;
 	}
 
 	// Centres of the eyes (for framing a face): the eyeball meshes' bounding-box centres.

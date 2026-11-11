@@ -35,7 +35,8 @@ def depth(pb, pts, sleeve):
 	g = wp.zeros(n, dtype=wp.vec3, device=pb.device)
 	q = wp.zeros(n, dtype=wp.vec3, device=pb.device)
 	e = wp.zeros(n, dtype=float, device=pb.device)
-	wp.launch(G.query_k, n, [x, sl, pb.torso_part, pb.arm_part, pb.plane, pb.hold, d, g, q, e, 0], device=pb.device)
+	kc = wp.zeros(n, dtype=float, device=pb.device)
+	wp.launch(G.query_k, n, [x, sl, pb.torso_part, pb.arm_part, pb.plane, pb.hold, d, g, q, e, 0, kc], device=pb.device)
 	return d.numpy().astype(np.float64)
 
 

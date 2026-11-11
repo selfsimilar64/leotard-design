@@ -77,6 +77,24 @@ def main():
 				worst = max(worst, abs(fd - (g * d).sum()) / max(abs(fd), 1e-12))
 			print(f'  kink {kink}, firm {firm}, {label}: worst relative difference {worst:.2e}; elastic {parts["elastic"]:.4g}; '
 				f'{len(Ek.si) - Ek.npull} kink spans, {pushing} pushing')
+	print('\n== 1d. a soft body (fit realism plan stage 6): the gradient with give, the contact softer where the flesh is')
+	from energy import body_soft
+	soft = body_soft(case)
+	if soft is None:
+		print('  no soft field (app/captures/race/soft-young.json): skipped')
+	else:
+		for give in (100.0, 1000.0):
+			Es = Energy(dict(case, surface_soft=soft), give=give)
+			Es(x)
+			_, g, parts = Es(x, keep_normals=False)
+			worst = 0.0
+			for _ in range(20):
+				d = rng.normal(0, 1, x.shape)
+				d /= np.linalg.norm(d)
+				h = 1e-7
+				fd = (Es(x + h * d, False)[0] - Es(x - h * d, False)[0]) / (2 * h)
+				worst = max(worst, abs(fd - (g * d).sum()) / max(abs(fd), 1e-12))
+			print(f'  give {give}: worst relative difference {worst:.2e}; surface {parts["surface"]:.4g}')
 	# each hinge laid flat on its own: the first triangle as on the pattern, the second turned (and if need be mirrored: the garment's
 	# halves share their flat places) onto the other side of the shared edge
 	ids, K, tris, rest = Eb.hinge_ids, Eb.hinge_K, case['tris'], case['rest']

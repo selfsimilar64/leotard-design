@@ -204,7 +204,7 @@ export class Refit {
 		}
 		const bodyI = concat(Int32Array, [['order0', bvhs[0].order], ['order1', bvhs[1].order], ['link0', bvhs[0].link], ['link1', bvhs[1].link], ['fi', faceI]]);
 		const bodyF = concat(Float32Array, [['node0', bvhs[0].box], ['node1', bvhs[1].box], ['fn', faceN],
-			['vn0', vec4(parts[0].vn, m, parts[0].vb)], ['vn1', vec4(parts[1].vn, m, parts[1].vb)], ['pts', vec4(A.body, m)]]);
+			['vn0', vec4(parts[0].vn, m, parts[0].vb)], ['vn1', vec4(parts[1].vn, m, parts[1].vb)], ['pts', vec4(A.body, m, A.soft)]]);
 		const q = (o) => o / 4;  // vec4 index
 		this.nwg = Math.ceil(n / WG);
 		this.p = {

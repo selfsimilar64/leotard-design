@@ -1,6 +1,6 @@
 // Core commands: raw edits, document metadata, body, scene, and the first-generation garment.
 import { defineCommand } from './store.js';
-import { RIGS, MANNEQUIN_FINISHES } from '../render/presets.js';
+import { RIGS, MANNEQUIN_FINISHES, REALISTIC_SKIN } from '../render/presets.js';
 import { FABRICS, SECOND } from '../materials/fabric.js';
 import { PATTERNS, FINISHES } from '../stones/stones.js';
 import { TRIMS } from '../garment/trim.js';
@@ -49,7 +49,7 @@ defineCommand('body.set', {
 	// The body is always the headless mannequin (owner, 2026-10-29): no realistic person, no head,
 	// so no appearance, head, expression or hair to set (doc/migrate-g9.js opens older designs so).
 	get args() {
-		return `{ size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, finish? (a mannequin finish: ${Object.keys(MANNEQUIN_FINISHES).join(', ')}), colour?: '#rrggbb' | null (the mannequin finish's colour; null: the finish's own), `
+		return `{ size?: ${(bodyKeys.length ? bodyKeys : SIZES).join('|')}, form?: full|torso, finish? (a mannequin finish: ${[...Object.keys(MANNEQUIN_FINISHES), REALISTIC_SKIN].join(', ')}), colour?: '#rrggbb' | null (the mannequin finish's colour; null: the finish's own), `
 			+ `pose?: ${[...Object.keys(POSES), ...DAZ_POSES].join('|')} | { left, right } (arms: ${ARMS.join('|')}) }`;
 	},
 	run(tx, a) {
@@ -59,7 +59,8 @@ defineCommand('body.set', {
 		setFields(tx, 'body', a, {
 			size: (v) => oneOf('size', v, bodyKeys.length ? bodyKeys : SIZES),
 			form: (v) => oneOf('form', v, ['full', 'torso']),
-			finish: (v) => oneOf('finish', v, Object.keys(MANNEQUIN_FINISHES)),
+			// or the realistic skin (render/figure.js part 'body', no head; brought back 2026-11-11 to judge the soft body against)
+			finish: (v) => oneOf('finish', v, [...Object.keys(MANNEQUIN_FINISHES), REALISTIC_SKIN]),
 			colour: (v) => { if (v !== null && !/^#[0-9a-f]{6}$/i.test(v)) throw new Error('colour must be a colour like #e9e7e2, or null'); },
 			pose: (v) => { poseSpec(v); },
 		});
