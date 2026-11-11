@@ -190,6 +190,7 @@ export class FigureView {
 		// a new expression on the same body and pose only changes the face
 		const bake = shape + '|' + part + '|' + hairNode;
 		bakeOcclusion(this.renderer, this.meshes.filter((x) => x.visible), !fresh && this.baked === bake);
+		this.applyDentOcc(); // the fitted garment's contact occlusion on the new bake (setDent)
 		this.baked = bake;
 		if (this.state === key) this.group.visible = true;
 		this.timing = performance.now() - t0;
@@ -198,8 +199,10 @@ export class FigureView {
 	// The skin pressed in under a fitted garment (render/skin-dent.js, fit realism plan stage 6): D1 per vertex of the skin's first
 	// level (the mannequin's mesh) the move (x, y, z), or null. Kept, so a skin shown later (a new pose's) is drawn with it; the fitted
 	// garment clears it when the body or pose changes and sets it again once re-fitted.
-	setDent(D1) {
-		this.dentD1 = D1;
+	// occ1: per vertex of the first level the fabric's contact occlusion (0-1), on top of the bake (aOcc), or null.
+	setDent(D1, occ1 = null) {
+		this.dentD1 = D1; this.dentOcc = occ1;
+		this.applyDentOcc();
 		const sm = this.skinMesh, L1 = this.skinL1;
 		if (!sm || !L1 || !sm.mesh.visible) return;
 		const L = D1?.length === L1.length ? L1.map((x, j) => x + D1[j]) : L1, L2 = applyStencil(this.skinS2, L), N2 = new Float32Array(L2.length);
@@ -211,6 +214,17 @@ export class FigureView {
 			Nn[r * 3] = N2[j]; Nn[r * 3 + 1] = N2[j + 1]; Nn[r * 3 + 2] = N2[j + 2];
 		}
 		g.attributes.position.needsUpdate = g.attributes.normal.needsUpdate = true;
+	}
+
+	// The skin's baked occlusion (aOcc: bakeOcclusion's) times the fitted garment's (setDent occ1, carried to the second level as the
+	// positions are); the bake kept the first time, and again whenever a new bake replaced the attribute.
+	applyDentOcc() {
+		const sm = this.skinMesh, a = sm?.mesh.geometry.attributes.aOcc;
+		if (!a) return;
+		if (this.occAttr !== a) { this.occAttr = a; this.occBase = Float32Array.from(a.array); }
+		const o2 = this.dentOcc && this.skinS2 ? applyStencil(this.skinS2, this.dentOcc, new Float32Array(this.skinS2.n), 1) : null;
+		for (let r = 0; r < sm.map.length; r++) a.array[r] = this.occBase[r] * (o2 ? o2[sm.map[r]] : 1);
+		a.needsUpdate = true;
 	}
 
 	// Centres of the eyes (for framing a face): the eyeball meshes' bounding-box centres.

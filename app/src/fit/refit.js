@@ -352,6 +352,21 @@ export class Refit {
 		for (const b of [...Object.values(this.buf), this.uniform, this.stage]) b.destroy();
 	}
 
+	// Each point's closest body point and signed distance as the last step's query left them (xyz, d; d < 0 inside): where a soft body
+	// was pressed in, for the skin drawn so (render/skin-dent.js).
+	async contacts() {
+		const size = this.n * 48, U = GPUBufferUsage, st = this.device.createBuffer({ size, usage: U.MAP_READ | U.COPY_DST });
+		const enc = this.device.createCommandEncoder();
+		enc.copyBufferToBuffer(this.buf.pt, 0, st, 0, size);
+		this.device.queue.submit([enc.finish()]);
+		await st.mapAsync(GPUMapMode.READ);
+		const a = new Float32Array(st.getMappedRange().slice(0));
+		st.unmap(); st.destroy();
+		const out = new Float32Array(this.n * 4);
+		for (let i = 0; i < this.n; i++) for (let k = 0; k < 4; k++) out[4 * i + k] = a[12 * i + k];
+		return out;
+	}
+
 	async positions(averaged = false) {
 		const v4 = await this.read(averaged ? PREV : BLOCK.X);
 		const x = new Float32Array(this.n * 3);

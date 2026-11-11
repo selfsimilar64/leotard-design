@@ -13,7 +13,7 @@ import { Refit, DEFAULTS } from '../fit/refit.js';
 import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
 import { foldsOf, foldPasses } from '../fit/folds.js';
 import { LineSegments2 } from './lines.js'; // (WebGL or WebGPU lines)
-import { SkinDent, dentOf } from './skin-dent.js';
+import { SkinDent, pressedSkin } from './skin-dent.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { ROLE_COLOURS } from './overlay.js';
 import { FittedCloth } from '../stones/fitted-cloth.js';
@@ -85,9 +85,10 @@ export const FIT_DEFAULTS = {
 	// elastic's firmness (its stiffness times this). refit.js elasticSprings; twins energy.springs, gpu.Problem kink and firm.
 	// firm 3 (owner, 2026-11-11, by eye from 1-4x stills: the band holds each opening where it belongs against the fabric's pull);
 	// the estimate puts real elastic at 1-2x, 3-4x at the stiff end: knowledge/engineering/app/elastic-firmness-estimate.md
-	give: 1,                  // fit realism plan stage 6, a soft body (a trial, no control): how many times softer the softest flesh
+	give: 2000,               // fit realism plan stage 6, a soft body (no control): how many times softer the softest flesh
 	// (body/mannequin.js soft: the seat, inner thigh) takes the fabric than the firm body; 1: a rigid body. The skin is drawn pressed
-	// in by what sinks (render/skin-dent.js)
+	// in by what sinks and shaded there (render/skin-dent.js). 2000 (owner, 2026-11-11: 1500-3000 look real, 5000 a little beyond):
+	// the leg elastic about 3-4 mm into the thigh
 	snug: 1,                  // the elastic's length against what each opening is cut with (wrap_block.ELASTIC, design_*.ELASTIC): below 1
 	// it is cut shorter and holds tighter (a trial, no control; 2026-11-11)
 	slip: 50,                 // in a pose, steps without friction before the rest (no control): how far the garment may slide from where
@@ -475,7 +476,7 @@ export class FittedView {
 				if (this.again || gen !== this.gen || !this.active) continue; // the body changed meanwhile: run again on the new one
 				this.solved = fit.X;
 				this.show();
-				this.dent.set(skin && this.options.give > 1 ? dentOf(man, fit.X) : null);
+				this.dent.set(skin && fit.contacts ? pressedSkin(man, fit.contacts, fit.X, this.openingsInward(fit.X)) : null);
 				this.hold(false);
 				this.setStatus({ state: 'fitted', steps: dressSteps + fit.steps, seconds: dressSec + fit.seconds, setup: (performance.now() - t0) / 1000 - dressSec - fit.seconds, dressed: !!start });
 			} while (this.again && this.active);
@@ -487,6 +488,18 @@ export class FittedView {
 			this.running = false;
 			if (!this.running && !this.again) this.hold(false);
 		}
+	}
+
+	// Every point on an opening and its inward direction (towards its neighbours' mean, into the fabric): render/skin-dent.js.
+	openingsInward(X) {
+		const out = new Map();
+		if (!this.near) return out;
+		for (const o of this.data.openings) for (const i of o.ids ?? []) {
+			const nb = this.near[i], d = [0, 0, 0];
+			for (const j of nb) for (let k = 0; k < 3; k++) d[k] += X[3 * j + k] / nb.length;
+			out.set(i, d.map((x, k) => x - X[3 * i + k]));
+		}
+		return out;
 	}
 
 	// One re-fit on body points Q from start (null: the file's, fitted-case.js startOf): `free` steps without friction, read back once,
@@ -509,8 +522,9 @@ export class FittedView {
 		if (steps > W) { r.settings.window = steps - W; await r.run({ steps: steps - W }); r.settings.window = W; }
 		const res = await r.run({ steps });
 		const X = await r.positions(steps > W);
+		const contacts = this.options.give > 1 ? await r.contacts() : null; // a soft body: where the skin is drawn pressed in
 		r.destroy();
-		return { X, steps: free + res.steps, seconds: (performance.now() - t) / 1000 };
+		return { X, contacts, steps: free + res.steps, seconds: (performance.now() - t) / 1000 };
 	}
 
 	// The design's materials on the fitted pieces, and the app's own pieces and edges out of sight.

@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-11
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: soft body on by default (give 2000); the pressed skin rebuilt from the fit's exact contacts (stops at the fabric edge, flesh rises past it, no pinch in creases) and lit by a contact occlusion baked per fit into both skins (shadow map and GTAO cannot see mm grooves); softness map blended wider.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: bare-body normals stills under the fabric's pressure (give 1 to 20000); 5000 shows clear grooves at the leg openings, 20000 overdone. The fitted leotard casts no shadows.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): stage 5 gate checked and passed (underarm fabric lies against the skin with the arms up; leg lines do not creep). Stage 6 built as a trial: realistic skin offered again as a body finish; per-region softness (`mannequin.soft`), a soft contact (`give`) in the app and every twin, the skin drawn pressed in (`skin-dent.js`); give about 1000 sinks the leg elastic about 3 mm.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 3 done (cheap stage): owner chose elastic firmness 3x by eye; it is the default.
