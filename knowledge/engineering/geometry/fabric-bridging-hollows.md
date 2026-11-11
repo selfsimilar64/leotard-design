@@ -302,6 +302,10 @@ pose `standing`, re-fit at 150 steps (11,388 fitted points, 24,216 covered body 
 On bare skin the fitted fabric follows the navel, the spine groove and the seat cleft, at 150 steps
 and at 750; without friction the navel still shows and the leg openings creep (captures
 `app/captures/bridging-compare.png`, `bridging-steps-compare.png`, git-ignored).[^fit-2026-11-08]
+**Corrected 2026-11-10:** the navel and spine groove were shading, not fit: the re-fit spans them on bare skin, but a fitted
+garment is shaded with the body's normals (`render/fitted.js show()`), which were the skin's with bridging off. The seat is a
+real sink: friction holds it in from 6 cm up, and the lowest 4 cm stays in the groove under every change tried. See
+[the diagnosis](/engineering/app/hollows-on-bare-skin-diagnosis.md).
 So: the slide only moves the fitted garment off its fit and costs 1.3 s a pose; the membrane and seat
 sheet are what keep fitted fabric off the hollows today, and dropping them needs a fit sim that spans
 hollows by its own tension first (and every shipped fit redone on the bare skin). **[INFERRED]** for

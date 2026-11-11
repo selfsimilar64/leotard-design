@@ -31,6 +31,9 @@ sources:
   - id: code
     resource: "app/src/fit/refit.js, refit-wgsl.js, fitted-case.js, folds.js; app/src/render/fitted.js; app/src/materials/fabric.js, fabric-node.js; pipeline/race/gpu.py, solvers.py, energy.py; pipeline/wrap_block.py (read 2026-11-10)"
     title: The fit's code as read for this plan
+  - id: diagnosis
+    resource: /engineering/app/hollows-on-bare-skin-diagnosis.md
+    title: Why the re-fit does not span hollows on bare skin (diagnosis)
 ---
 
 # Takeaway
@@ -112,6 +115,20 @@ Goal: the collision body is the bare skin; the membrane, seat sheet and rolling 
 7. **Remove** for fitted garments: the seat sheet (`body/seat.js`), the ball (`body/ball.js`), their settings. **The drawn garment
    still stands on the membrane** and its stored curves on the reference surface (`body/reference.js`, `LIFT_DEFAULTS`), so
    `computeLift` stays while Drawn is offered: an owner decision, not part of this stage.
+
+**Progress (2026-11-10): step 1 done**, recorded in [the diagnosis](/engineering/app/hollows-on-bare-skin-diagnosis.md)
+(hybrid high cut, `young`, standing; `app/src/dev/bridge-probe.js`).[^diagnosis] What it changes in the steps below:
+- **A new step before the others: shade a fitted garment by its own points' normals.** The navel and spine groove are already
+  spanned on bare skin (0.84-1.0 of the bridged lift kept); they showed because `render/fitted.js show()` takes `normal` and
+  `aGNormal` from the body. This is also stage 2 step 4's check, answered: today the normals do not come from the solved points.
+- **Step 2 (dressing start) not needed for what was measured:** starting on the bridged surface gave the same fit as starting on
+  the skin, with and without friction.
+- **Step 3 (two phases) confirmed** for the seat from 6 cm up (6/3/1 mm below the cheek-to-cheek chord at 6/10/14 cm with friction
+  from the start, 4/1/0 with a frictionless first phase; today 1/0/1); it also lets the leg openings creep up the cheeks.
+- **The lowest 4 cm of the seat stays 8-10 mm in the groove (today 3/1 mm)** under every change tried, including a stand-in for
+  step 4's thickness that was not a fair test. The gate below therefore fails there as things stand.
+- The gate's numbers came from a different body and measure; the like-for-like reference is today's bridged re-fit in the probe
+  (seat dip 3/1/1/0/1 mm at 2/4/6/10/14 cm).
 
 - **Gate:** midline sink over the cleft no worse than the seat sheet's (46/23/11/6/3 mm at 2/4/6/10/14 cm, teen, arms-down)[^bridging];
   navel and spine groove spanned; no skin through; the V into the gusset judged by the owner; no region-specific code.
@@ -212,3 +229,4 @@ wrinkles finer than the mesh.[^owner]
 [^refit]: The re-fit in the app.
 [^block-fit]: Fitting a block like the app.
 [^code]: The fit's code as read for this plan.
+[^diagnosis]: Why the re-fit does not span hollows on bare skin (diagnosis), 2026-11-10.
