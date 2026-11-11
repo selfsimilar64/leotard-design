@@ -33,7 +33,8 @@ Three changes together, all on by default (owner: "let's build all three").[^own
 2. **Blocks cut at 88% length.** Armstrong's block and the hybrid take almost no length out for stretch (the seat about 3%
    stretched up and down standing); real leotards are cut about 8-24% shorter than the body.[^yardsticks] `garment/fitted.js`
    gives them `size: { width: 1, length: 0.88 }` (`CUT`), the default `fitSizeOf` returns while `meta.fitSize` is unset; the
-   Length slider shows 88% and `fitted.size` stores a size only when it differs from the garment's default. The purchased block
+   Length slider shows 88% and `fitted.size` stores a size only when it differs from the garment's default. **Changed the same day to
+   90%** (owner: 90-95%, so the leg is not cut so high and rides up the seat less; 95% compared in `g-hybrid-L95`). The purchased block
    (a comparison) stays at 1 x 1.
 3. **Poses fitted from the garment's standing fit (plan stage 5 steps 1-2).** A pose used to start from the file's fit carried
    onto the posed body and slide without friction for 150 steps, so a shorter pattern rode up. Now, on the bare skin, a fit in any

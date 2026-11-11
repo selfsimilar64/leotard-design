@@ -23,6 +23,7 @@ from scipy.sparse.linalg import splu
 from scipy.spatial import Delaunay, cKDTree
 
 import design_strappy
+import design_tank
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DERIVED = os.path.join(HERE, '..', 'assets', 'patterns', 'basicpatternblock-leotard-0005', 'derived')
@@ -583,6 +584,7 @@ def main(after=None):
 	# python pipeline/wrap_block.py [size]                    a size of the bought block on the young body, and its trial cuts
 	# python pipeline/wrap_block.py --drafted body-young young  a drafted block on a body
 	# python pipeline/wrap_block.py --drafted hybrid-6 young --design strappy   a design recut from a drafted block (design_strappy.py)
+	# python pipeline/wrap_block.py --drafted hybrid-6 young --design tank      the block recut as a tank, no sleeve (design_tank.py)
 	#   instead of the block's high cut. WRAP_REUSE_BASE=1 takes the block's own fit from the last run (wrap-<size>-base.npz).
 	args = sys.argv[1:]
 	design_name = None
@@ -683,6 +685,8 @@ def main(after=None):
 			# recut front and back, no sleeve, a strap piece; where the strap lies on the block is kept for its start (from_block)
 			raw, path = design_strappy.apply({'front': raw['front'], 'back': raw['back']})
 			strap_path.update(path)
+		if 'tank' in cut:
+			raw = design_tank.apply({'front': raw['front'], 'back': raw['back']})  # recut front and back, no sleeve
 		return raw
 
 	def build(raw, seed_lines=False):
@@ -754,7 +758,8 @@ def main(after=None):
 			ring = np.unique(welded[offs['sleeve'] + np.array(sleeve.edge['cap'])])
 			on_sleeve[ring] = False  # the armhole belongs to the torso
 		spans = []
-		for (name, edge), ratio in ({**ELASTIC, **design_strappy.ELASTIC} if st is not None else ELASTIC).items():
+		# a design's own elastic over the block's: the strappy back's binding, or a sleeveless design's armholes (design_tank.py)
+		for (name, edge), ratio in {**ELASTIC, **(design_strappy.ELASTIC if st is not None else design_tank.ELASTIC if s is None else {})}.items():
 			if name not in pieces:
 				continue
 			ids = pieces[name].edge[edge]
@@ -941,7 +946,9 @@ def main(after=None):
 				openings.append(dict(loop_of('strap', pts[ids] * mirror, into_of(ids) * mirror, G['on_sleeve'][ids], twin[ids]), open=True, finish='none'))
 		else:
 			neck = np.concatenate([w_of('front', 'neck'), w_of('back', 'neck')[::-1][1:]])
-			for name, ids in (('leg', leg), ('wrist', w_of('sleeve', 'wrist')[:-1])):
+			# the sleeve's wrist, or without a sleeve (design_tank.py) the armhole: front from the shoulder to the armpit, back back up
+			arm = (('wrist', w_of('sleeve', 'wrist')[:-1]),) if 'sleeve' in G['pieces'] else (('armhole', np.concatenate([w_of('front', 'armhole'), w_of('back', 'armhole')[::-1][1:-1]])),)
+			for name, ids in (('leg', leg),) + arm:
 				openings.append(loop_of(name, pts[ids], into_of(ids), G['on_sleeve'][ids], ids))
 				openings.append(loop_of(name, pts[ids] * mirror, into_of(ids) * mirror, G['on_sleeve'][ids], twin[ids]))
 			# the neck is one loop across the body: one half, then the same points mirrored coming back

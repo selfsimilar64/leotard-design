@@ -119,8 +119,8 @@ function spanLengths(c, sx, sy) {
 // cache: kept by the caller between re-fits on the same garment and body mesh (the parts' faces and edge pairing; Refit keeps its
 // own matrix and trees in the same object).
 // physics: { press, bend, jam } of the fit realism plan's stage 2 (squeeze resistance, bending stiffness, the squeeze taken up free;
-// press 0 and bend 0: the physics before it) and { kink, firm } of its stage 3 (the elastic as a band, its firmness; 0 and 1: before
-// it; Refit makes the spans, refit.js elasticSprings), as gpu.Problem's.
+// press 0 and bend 0: the physics before it) and { kink, firm, snug } of its stage 3 (the elastic as a band, its firmness, how short it
+// is cut; 0, 1 and 1: before it; Refit makes the spans, refit.js elasticSprings), as gpu.Problem's.
 export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {}) {
 	const c = data.case, arrays = { ...garment, start: startOf(data, Q), body: Float32Array.from(Q) };
 	const parts = [];
@@ -136,6 +136,6 @@ export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {})
 		parts.push(ti.length / 3);
 	}
 	const head = { n: c.n, nt: c.tris.length / 3, ns: c.si.length, body_points: Q.length / 3, part_faces: parts, plane: c.plane, gather: c.gather, hold: HOLD, turn: TURN,
-		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1 };
+		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1, snug: physics.snug ?? 1 };
 	return { head, arrays, cache };
 }

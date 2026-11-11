@@ -32,7 +32,8 @@ E = membrane + surface + elastic (+ friction on a re-fit), no gravity, metres.
   above): firm scales every span's k (the elastic's firmness); kink adds, at each point where exactly two spans meet, a span between
   their far ends at rest the two rests' sum and stiffness kink times theirs in series, that only pushes: k / 2 * min(length - rest, 0)^2.
   The elastic is a band that will not shorten along its line, so a slack edge stays a smooth line rather than crumpling; its tension is
-  left to the spans as they were. springs() below; twin fit/fitted-case.js elasticSprings.
+  left to the spans as they were. snug (2026-11-11, 1: as cut) scales every span's rest length: the elastic cut shorter (snug < 1)
+  against the opening. springs() below; twin fit/refit.js elasticSprings.
 - friction, on re-fits only (owner, 2026-11-03), per point (friction below): mu * lam * f(r), r how far the point has slid along the body
   since the re-fit began, lam its contact force PLANE * depth, held through each step with the normal (lagged friction, as IPC, Li et al.
   2020), f(r) = r^2 / (2 STICK) up to STICK, r - STICK / 2 beyond: Coulomb's force mu * lam once sliding, a spring before. Without it the
@@ -54,11 +55,11 @@ MU = 0.4  # twin: gpu.MU (the source there)
 STICK = 1.0e-3  # twin: gpu.STICK
 
 
-def springs(el, kink=0.0, firm=1.0):
+def springs(el, kink=0.0, firm=1.0, snug=1.0):
 	"""The spans the energy and solvers use (the module's header: elastic): (si, sj, rest, k, npull), the case's elastic spans first (pull
-	only, k times firm), then kink's push-only spans: per point touched by exactly two spans (s0 < s1), from s0's far end to s1's, rest the
+	only, k times firm, rest times snug), then kink's push-only spans: per point touched by exactly two spans (s0 < s1), from s0's far end to s1's, rest the
 	sum, k kink * k0 k1 / (k0 + k1). Points in ascending order. Twin: fit/fitted-case.js elasticSprings (app/test/springs.test.js)."""
-	si, sj, rest, k = el[:, 0].astype(np.int64), el[:, 1].astype(np.int64), el[:, 2].astype(np.float64), el[:, 3] * float(firm)
+	si, sj, rest, k = el[:, 0].astype(np.int64), el[:, 1].astype(np.int64), el[:, 2].astype(np.float64) * float(snug), el[:, 3] * float(firm)
 	npull = len(si)
 	if not kink:
 		return si, sj, rest, k, npull
@@ -122,7 +123,7 @@ def hinges(tris, rest):
 
 
 class Energy:
-	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0):
+	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0, snug=1.0):
 		self.contact, self.hold = contact, hold
 		self.press, self.bend, self.jam = float(press), float(bend), float(jam)
 		self.tris = case['tris']
@@ -132,7 +133,7 @@ class Energy:
 		self.area = 0.5 * np.abs(np.linalg.det(Dm))
 		self.facing = case['facing']
 		self.gather, self.plane = float(case['gather']), float(case['plane'])
-		self.si, self.sj, self.rest_len, self.k, self.npull = springs(case['elastic'], kink, firm)
+		self.si, self.sj, self.rest_len, self.k, self.npull = springs(case['elastic'], kink, firm, snug)
 		self.part = case['sleeve'].astype(bool)
 		self.hinge_ids, self.hinge_K, self.hinge_c = hinges(self.tris, rest) if self.bend else (np.zeros((0, 4), int), np.zeros((0, 4)), np.zeros(0))
 		self.surface = W.Surface(case['surface_P'], case['surface_idx'], case['surface_arm'])

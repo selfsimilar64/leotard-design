@@ -7,8 +7,9 @@
 
 // The size a block is cut at by default, against its draft (fitSizeOf): Armstrong's block and the hybrid take almost no length out
 // for stretch (the seat about 3% stretched up and down standing), where real leotards are cut about 8-24% shorter than the body
-// (knowledge: real-leotard-yardsticks, negative-ease). Owner, 2026-11-11: width 100%, length 85-90%; 88% looked better in most poses.
-const CUT = { width: 1, length: 0.88 };
+// (knowledge: real-leotard-yardsticks, negative-ease). Owner, 2026-11-11: width 100%, length 85-90%; 88% looked better in most poses;
+// then 90-95%, so the leg is not cut so high and rides up the seat less: 90%, still inside the yardsticks' range.
+const CUT = { width: 1, length: 0.9 };
 
 // The purchased block (BasicPatternBlock 0005, XS on `young`), for comparison only: its fits stay in app/captures, served by the
 // dev server at /fitted-local/ (vite.config.js) and listed only in dev, so they are never bundled or shipped (licence).
@@ -20,6 +21,9 @@ const CUT = { width: 1, length: 0.88 };
 // cut from the binding, in the design's binding look (fittedTrimOf).
 const LOCAL = [
 	{ key: 'bought-XS-high', label: 'Purchased block, high cut (local)', leg: 'High-hips leg', file: 'wrap-XS-high-resolved', fittedOn: 'young', local: true, hint: 'The purchased block, size XS, high-hips leg; fitted by simulation on the young body. Shown only on this computer (its licence bars shipping it)' },
+	// The tank (pipeline/design_tank.py): the hybrid high cut without sleeves, 2 in straps, turned elastic at every opening; made, as the
+	// strappy back, by `WRAP_REUSE_BASE=1 python pipeline/wrap_block.py --drafted hybrid-6 young --design tank`. A preview for the elastic.
+	{ key: 'hybrid-6-tank', label: 'Tank (local)', leg: 'Hybrid, preview', file: 'wrap-hybrid-6-tank-resolved', fittedOn: 'young', local: true, size: CUT, hint: 'The hybrid high cut recut as a tank leotard: no sleeves, turned elastic at the neck, armholes and legs. A preview, shown only on this computer' },
 	{ key: 'hybrid-6-strappy', label: 'Strappy back (local)', leg: 'Hybrid, preview', file: 'wrap-hybrid-6-strappy-resolved', fittedOn: 'young', local: true, bound: true, size: CUT, hint: 'The hybrid high cut recut as a strappy back: thin straps, bound neck and armholes, open upper back. A preview, shown only on this computer' },
 ];
 

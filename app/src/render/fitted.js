@@ -82,6 +82,8 @@ export const FIT_DEFAULTS = {
 	kink: 0,                  // fit realism plan stage 3, a trial (no control): the elastic as a band that will not shorten along its line
 	firm: 1,                  // (push-only spans between second neighbours, this times the elastic's stiffness; 0: none), and the
 	// elastic's firmness (its stiffness times this). refit.js elasticSprings; twins energy.springs, gpu.Problem kink and firm
+	snug: 1,                  // the elastic's length against what each opening is cut with (wrap_block.ELASTIC, design_*.ELASTIC): below 1
+	// it is cut shorter and holds tighter (a trial, no control; 2026-11-11)
 	slip: 50,                 // in a pose, steps without friction before the rest (no control): how far the garment may slide from where
 	// dressing standing put it (fit realism plan stage 5 step 1, "fabric slip in poses"; owner, 2026-11-11: the shorter pattern rode up
 	// the seat in the lunge). Leg openings' mean height on the body above the crotch, young, 88% length, standing 91-97 mm: lunge with
@@ -156,7 +158,7 @@ export class FittedView {
 		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
 		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
-		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm') || changed('slip')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
+		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm') || changed('snug') || changed('slip')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
 		else this.show();
 	}
 
@@ -446,7 +448,7 @@ export class FittedView {
 				if (dressAt) {
 					// the standing fit depends on the body, the pattern's size and mesh, and every fit setting it ran with (dev scripts set
 					// options directly, so the key, not setOptions, decides)
-					const o = this.options, key = JSON.stringify([man.key, man.head, this.size, this.meshMm, o.steps, o.mu, o.press, o.bend, o.jam, o.kink, o.firm]);
+					const o = this.options, key = JSON.stringify([man.key, man.head, this.size, this.meshMm, o.steps, o.mu, o.press, o.bend, o.jam, o.kink, o.firm, o.snug]);
 					if (this.dressed?.key !== key || this.dressed.data !== this.data) {
 						let Qs = null;
 						try { Qs = man.positionsIn(dressAt); } catch { /* the body lacks the pose: fitted from the file's start */ }
@@ -483,7 +485,7 @@ export class FittedView {
 	async fitOn(Q, start, free) {
 		const man = this.engine.body;
 		const data = buildCase(this.data, this.garment, Q, man.idx, man.wArm, this.cache ??= {},
-			{ press: this.options.press, bend: this.options.bend, jam: this.options.jam, kink: this.options.kink, firm: this.options.firm });
+			{ press: this.options.press, bend: this.options.bend, jam: this.options.jam, kink: this.options.kink, firm: this.options.firm, snug: this.options.snug });
 		if (start) data.arrays.start = start;
 		const r = new Refit(this.device, data, { maxSteps: this.options.steps, mu: this.options.mu, tol: 0 });
 		const steps = this.options.steps, W = r.settings.window, t = performance.now();

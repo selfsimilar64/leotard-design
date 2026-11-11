@@ -85,10 +85,12 @@ export function hingesOf(tris, Dinv, area) {
 
 // The spans the re-fit uses (fit realism plan stage 3): the case's elastic first, pull only, k times firm (the elastic's firmness), then,
 // with kink, per point touched by exactly two of them (s0 < s1, points ascending) a push-only span from s0's far end to s1's, rest the
-// sum of theirs, k kink * k0 k1 / (k0 + k1): the band will not shorten along its line, so a slack edge stays a smooth line. Twin of
-// pipeline/race/energy.py springs (app/test/springs.test.js diffs them). -> { si, sj, rest, k, npull }
-export function elasticSprings(si, sj, rest, k, kink = 0, firm = 1) {
+// sum of theirs, k kink * k0 k1 / (k0 + k1): the band will not shorten along its line, so a slack edge stays a smooth line. snug
+// scales the elastic's rest lengths (cut shorter against the opening below 1). Twin of pipeline/race/energy.py springs
+// (app/test/springs.test.js diffs them). -> { si, sj, rest, k, npull }
+export function elasticSprings(si, sj, rest0, k, kink = 0, firm = 1, snug = 1) {
 	const npull = si.length, a = [], b = [], r = [], kk = [], kf = Float32Array.from(k, (x) => x * firm);
+	const rest = snug === 1 ? rest0 : Float32Array.from(rest0, (x) => x * snug);
 	if (kink) {
 		const touch = new Map();
 		for (let s = 0; s < npull; s++) for (const p of [si[s], sj[s]]) { if (!touch.has(p)) touch.set(p, []); touch.get(p).push(s); }
@@ -166,9 +168,9 @@ export class Refit {
 		this.settings = { ...DEFAULTS, ...settings };
 		const A = data.arrays, h = data.head, cache = data.cache ?? {};
 		// the spans: the case's elastic (head.ns of them) and stage 3's kink spans (elasticSprings; kink 0 and firm 1: as before)
-		const kink = h.kink ?? 0, firm = h.firm ?? 1, key = `${h.bend ?? 0}|${kink}|${firm}`;
+		const kink = h.kink ?? 0, firm = h.firm ?? 1, snug = h.snug ?? 1, key = `${h.bend ?? 0}|${kink}|${firm}|${snug}`;
 		if (cache.springKey !== key) { delete cache.matrix; delete cache.vs; cache.springKey = key; }
-		const SP = this.springs = elasticSprings(A.si, A.sj, A.rest_len, A.k, kink, firm);
+		const SP = this.springs = elasticSprings(A.si, A.sj, A.rest_len, A.k, kink, firm, snug);
 		const n = this.n = h.n, nt = h.nt, ns = this.ns = SP.si.length;
 		this.data = data;
 		// gather lists, as gpu.Problem

@@ -23,10 +23,10 @@ export const COLOUR = '#2a9db0';
 const AUTOSAVE = 'leotard.autosave.v1';
 
 // The design: the fitted garment, every panel matte lycra in the light colour, nothing printed on it.
-export async function prepare() {
+export async function prepare(key = KEY) {
 	const a = app();
 	a.new('Fit stills');
-	a.exec({ op: 'fitted.set', key: KEY });
+	a.exec({ op: 'fitted.set', key });
 	for (const p of a.doc.panels) a.exec({ op: 'panel.set', id: p.id, fabric: 'matte', colour: COLOUR, print: null, ombre: null, texture: null });
 	await a.engine.settled();
 }
@@ -55,6 +55,7 @@ function views() {
 	}
 	const seatC = c.map((x) => x / k), seatB = b.map((x) => x / Math.hypot(...b));
 	const back = landmark(lm['cb-waist']), front = landmark(lm.navel), arm = landmark(lm['underarm-l']), hip = landmark(lm['hip-l']);
+	const neck = landmark(lm['cf-neck']), shoulder = landmark(lm['shoulder-l']);
 	// a leg opening: the fitted garment's opening on the wearer's left leg, as drawn (its points re-fitted), seen from the hip's side
 	const fv = e.fitted, X = fv.solved;
 	let leg = null;
@@ -74,9 +75,13 @@ function views() {
 		front: v(add(front.p, up, 0.02), add(front.n, up, 0.05), 0.42),
 		underarm: v(arm.p, add(arm.n, up, -0.2), 0.26),
 		leg: v(legC, add(hip.n, up, 0.15), 0.34),
+		// a sleeveless garment's openings (2026-11-11, the tank): the front neck, and the left armhole from the side
+		neck: v(add(neck.p, up, -0.06), add(neck.n, up, 0.15), 0.32),
+		armhole: v(shoulder.p.map((x, i) => (x + arm.p[i]) / 2), add(arm.n, up, 0.1), 0.3),
 	};
 }
 export const VIEWS = ['seat', 'back-waist', 'front', 'underarm', 'leg'];
+export const OPENING_VIEWS = ['neck', 'armhole', 'leg', 'seat'];
 
 async function refitDone(fv) {
 	await wait(300);
@@ -105,14 +110,15 @@ async function shoot(dir, name, pick) {
 // A case already taken under this tag (its <body>-<pose>.json record) is skipped unless redo. options: other fit options for the run
 // (render/fitted.js FIT_DEFAULTS: press, bend, mesh, steps), put back at the end.
 // size: the pattern's { width, length } (op fitted.size, garment/fitted.js fitSizeOf), applied to the stills' own design.
-export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, views: pick = VIEWS, redo = false, options = {}, size = null } = {}) {
+// garment: the fitted garment's key (KEY, the hybrid high cut; 'hybrid-6-tank' for the elastic at every opening, with OPENING_VIEWS).
+export async function all(tag, { fits = FITS, bodies = BODIES, poses = POSES, views: pick = VIEWS, redo = false, options = {}, size = null, garment = KEY } = {}) {
 	const a = app(), e = a.engine, fv = e.fitted, vp = e.viewport, cam = vp.getCamera();
 	let saved = null;
 	try { saved = localStorage.getItem(AUTOSAVE); } catch { /* storage blocked */ }
 	const keepBody = fv.options.body, keep = Object.fromEntries(Object.keys(options).map((k) => [k, fv.options[k]])), shots = [], log = [];
 	try {
 		fv.options = { ...fv.options, ...options }; // before the design opens: its fit is made with them
-		await prepare();
+		await prepare(garment);
 		if (size) { a.exec({ op: 'fitted.size', ...size }); await e.settled(); await refitDone(fv); }
 		for (const fit of fits) {
 			if (fv.options.body !== fit) { fv.setOptions({ body: fit }); await refitDone(fv); }

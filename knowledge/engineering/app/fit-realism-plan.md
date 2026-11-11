@@ -294,6 +294,33 @@ firmness built as a trial behind options; stills at 88% length.**[^owner]
 - Not yet: the owner's judgement; the gate's leg-line turn and half widths.
 - **Owner on these stills (2026-11-11):** 88% length looks better in most poses (the standing back smooth), but the lunge's seat rode up; the band and firmness looked the same as without. Asked what removes the many pronounced ripples (raised arm, arched back, seat) without the ride-up. **Built, all on by default** ([decision](/decisions/2026-11-11-folds-cut-length-and-dressing.md)):[^folds-cut] painted folds only beyond the knit's take-up (88%) and 30 mm broad; Armstrong's block and the hybrid cut at 88% length; poses fitted from the garment's own standing fit with 50 steps of slip (stage 5 steps 1 and 2, below).
 
+**Progress (2026-11-11, owner: stage 2 stays off, fine ripples from the fit itself stay; compare stage 3 with the shading off, on a tank,
+elastic dialled up to see its range):**
+- **Length default 90%** (`garment/fitted.js CUT`; 95% compared: the leg line a little lower, the seat a little more covered).
+- **A tank to see the elastic** (`pipeline/design_tank.py`, dev-only `hybrid-6-tank`): the hybrid high cut without sleeves, the
+  armpit back down 1 in, 2 in straps, turned elastic at the neck (0.95), armholes (0.9) and legs (1 and 3/4). `wrap_block.py` takes
+  `--design tank` (no sleeve: the armhole is an opening, the design's elastic over the block's). Fitted cleanly (reuse error 4.6 mm mean).
+- **`snug`**, the elastic's rest lengths times this (cut shorter below 1), in every twin (`energy.springs`, `gpu.Problem`,
+  `export_app.py --snug`, `refit.js elasticSprings`, fixture remade, test passes) and as a fit option (no control).
+- **Sweep** (`app/captures/fit-stills/g-*`, sheets `g-hybrid-length.png`, `g-tank-neck-armhole.png`, `g-tank-leg-seat.png`; tank, 90%
+  length, shading and stage 2 off; `fit-stills.js` takes `garment` and the `neck` and `armhole` views). Openings measured on the tank
+  (length round each opening in mm; leg line's mean height above the crotch on the body), standing / lunge with arms up:
+
+  | Elastic | Neck | Armhole | Leg | Leg line height |
+  |---|---|---|---|---|
+  | as cut | 358 / 353 | 541 / 521 | 613 / 638 | 87 / 81 |
+  | 4x firmer | 328 / 326 | 487 / 483 | 569 / 590 | 72 / 58 |
+  | cut 15% shorter | 350 / 345 | 532 / 515 | 607 / 631 | 85 / 79 |
+  | cut 30% shorter | 344 / 339 | 524 / 509 | 602 / 626 | 83 / 77 |
+  | 30% shorter, 4x firmer | 310 / 308 | 450 / 454 | 537 / 571 | 63 / 48 |
+  | strong band (`kink` 5) | 358 / 352 | 540 / 520 | 613 / 638 | 86 / 82 |
+
+  Firmness is the stronger lever (the elastic's pull is its stiffness times its stretch; 4x firmer quadruples a stretch already
+  there, a 30% shorter cut adds 30% to it); tighter elastic draws every opening in and the leg line down the body (less high, less
+  ride-up). The band changes nothing measurable. `ELASTIC_WIDTH` (20 mm of fabric's stiffness) is an estimate with no force data,
+  so how firm the elastic is is the open question; the range 10-50 mm the estimate gives is about firm 0.5-2.5.
+- Re-fit 0.35-0.7 s in the pane whatever the elastic.
+
 # Stage 4: fabric that differs along and across
 
 1. **Local step rewritten per direction.** The flat rest shape's x is across the grain and y along it (as `meta.fitSize` assumes).

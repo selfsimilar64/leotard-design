@@ -532,9 +532,10 @@ def csr(keys, n):
 class Problem:
 	"""One case on the GPU: the garment, the body surface, and the shared evaluation (energy, gradient, projected Hessian)."""
 
-	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0, device='cuda:0'):
+	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0, snug=1.0, device='cuda:0'):
 		"""press, bend, jam: squeeze resistance, bending stiffness, the squeeze taken up free (fit realism plan stage 2; press 0 and bend 0:
-		the physics before it). kink, firm: the elastic's push-only spans along its line and its firmness (stage 3; 0 and 1: before it).
+		the physics before it). kink, firm, snug: the elastic's push-only spans along its line, its firmness and how short it is cut
+		(stage 3; 0, 1 and 1: before it).
 		energy.py."""
 		wp.init()
 		self.device = device
@@ -556,7 +557,7 @@ class Problem:
 		self.grip = float(grip)  # how far each freeze moves friction's held contact force to the new one (1: all the way)
 		self.fresh = True
 		from energy import springs
-		si, sj, rest_len, k, self.npull = springs(case['elastic'], kink, firm)
+		si, sj, rest_len, k, self.npull = springs(case['elastic'], kink, firm, snug)
 		si, sj = si.astype(np.int32), sj.astype(np.int32)
 		self.ns = ns = len(si)
 		self.tris_np, self.si_np, self.sj_np = tris, si, sj
