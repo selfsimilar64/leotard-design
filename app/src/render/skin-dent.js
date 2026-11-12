@@ -42,14 +42,15 @@ const NORMAL_PASSES = 12; // smoothing of the directions the skin moves along (a
 const ROOM = 0.5;        // the skin moved at most this share of the way to skin facing it across a fold
 const OCC_PASSES = 4;    // smoothing of the contact occlusion (a per-vertex estimate from point samples is noisy)
 const REACH = 0.015;     // m, the occlusion's reach
-const LIFT = 0.0024;     // m, the fabric drawn off its fit (render/fitted.js options.lift and the fabric material's own)
+const OWN_LIFT = 0.0012; // m, the fabric material's own offset (materials/fabric.js uOffset, a panel's); render/fitted.js options.lift on
+// top is shape.lift (the Fabric fit face's "Fabric drawn off the body", 0-5 mm): LIFT below, the two together
 // The finished edge drawn over each opening (render/fitted.js finish: garment/trim.js TRIMS.elastic swept along the opening's points,
 // lifted render/fitted.js options.lift; the rims' material adds none): BAND_W across, into the fabric (its profile's widest, 11.2 mm),
 // its lowest at RIM_CLEAR over the edge points' fit (the lift and the rolled lip's 0.2 mm). The skin is kept under it too: the fabric's
 // own depth climbs inward under the band where the fit's next row sits shallower, and the skin following it covered the band's half
 // (owner, 2026-11-11: "the elastic bands disappear").
 const BAND_W = 0.0112;
-const RIM_CLEAR = 0.0012 + 0.0002;
+const RIM_LOW = 0.0002;  // the band's lowest over its frame (the rolled lip), its frame shape.lift over the fit: RIM_CLEAR below
 const BAND_MARGIN = 0.0015; // m, the skin kept that much under the band (hidden by it; only its outer lip meets the skin)
 const COS_MIN = 0.7;     // the skin moves along smoothed normals: its move is lengthened by 1 / (smoothed . own normal), to this at most
 const OCC_MIN = 0.35;
@@ -104,9 +105,11 @@ function smooth(f, man, passes, list, dim = 1) {
 // The skin drawn under a soft-body fit: { P, N (positions and normals pressed in), occ (per vertex, 0-1), move }. contacts: per fit
 // point (closest skin point xyz, signed depth: refit.js contacts); X: the fit's points; edges: Map of the fit points on the garment's
 // openings to their inward direction (unit, into the fabric, across the edge: render/fitted.js openingsInward); tris: the fit's
-// triangles (points' indices); shape: DENT_DEFAULTS' fields; Q, N: the skin they stood on.
+// triangles (points' indices); shape: DENT_DEFAULTS' fields and lift (render/fitted.js options.lift); Q, N: the skin they stood on.
 export function pressedSkin(man, contacts, X, edges, tris, shape = DENT_DEFAULTS, Q = man.aPos.array, N = man.aNrm.array) {
-	const { out: OUT, outSlope: OUT_SLOPE, rise: RISE, riseW: RISE_W, shade: OCC } = { ...DENT_DEFAULTS, ...shape };
+	const { out: OUT, outSlope: OUT_SLOPE, rise: RISE, riseW: RISE_W, shade: OCC, lift = 0.0012 } = { ...DENT_DEFAULTS, ...shape };
+	// the fabric and the band as drawn over the fit (a lift of 0 drew the fabric 1.2 mm lower than these assumed: owner, 2026-11-11)
+	const LIFT = lift + OWN_LIFT, RIM_CLEAR = lift + RIM_LOW;
 	const nv = man.vertices, np = X.length / 3, near = gridOf(Q, nv), bump = (d, r) => (d >= r ? 0 : (1 - (d / r) ** 2) ** 2);
 	const C = (i, k) => contacts[4 * i + k], depthOf = (i) => Math.min(-contacts[4 * i + 3], MAX_DENT); // under the skin (< 0: over)
 	// each fit point's nearest skin vertex (at its contact): which way the skin faces there (the garment's halves wind opposite ways)

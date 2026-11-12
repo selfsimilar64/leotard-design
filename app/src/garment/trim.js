@@ -15,7 +15,7 @@ import { setFabricSlot } from '../materials/fabric-attributes.js';
 // above the garment surface (the fabric itself sits at 1.2 mm), ao = contact darkening where the
 // rim rolls under against the skin. Each profile ends just below the fabric, under its pulled-back
 // cut, so there is never a gap. rows = topstitch rows (metres from the edge). The elastic's widest u and lowest v are copied in
-// render/skin-dent.js BAND_W and RIM_CLEAR (the pressed skin kept under a fitted garment's band): change them together.
+// render/skin-dent.js BAND_W and RIM_LOW (the pressed skin kept under a fitted garment's band): change them together.
 export const TRIMS = {
 	elastic: {
 		label: 'Turned elastic (self fabric)', width: 0.010, rows: [0.0085, 0.0045],
@@ -203,10 +203,12 @@ export function buildGeometry(loops, prof) {
 	for (const { frames, scale, pts, length, open } of loops) {
 		const n = frames.length;
 		for (let i = 0; i < n; i++) {
-			const { p, n: sn, d, kap } = frames[i], s = scale[i], along = (i / n) * length;
+			const { p, n: sn, d, kap, h } = frames[i], s = scale[i], along = (i / n) * length;
 			for (let k = 0; k < M; k++) {
 				const o = base + i * M + k, u = prof[k][0] * s;
-				v.copy(p).addScaledVector(d, u).addScaledVector(sn, prof[k][1] - kap * u * u / 2);
+				// h (a fitted garment's band, render/fitted.js fabricUnder): per profile point, where the fabric under it lies along sn;
+				// else the bend kap estimates it
+				v.copy(p).addScaledVector(d, u).addScaledVector(sn, prof[k][1] + (h && Number.isFinite(h[k]) ? h[k] : -kap * u * u / 2));
 				v.toArray(pos, o * 3);
 				nv.copy(d).multiplyScalar(pn[k][0]).addScaledVector(sn, pn[k][1]).normalize().toArray(nrm, o * 3);
 				pts[i].ref.toArray(ref, o * 3);

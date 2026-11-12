@@ -69,8 +69,8 @@ export const FIT_DEFAULTS = {
 	mu: DEFAULTS.mu,          // friction against the skin
 	lift: 0.0012,             // m the fabric is drawn off the surface it was fitted to (the dev viewer's 1.2 mm), on top of the
 	// fabric material's own 1.2 mm: a fitted mesh's flat 7 mm triangles dip under a curved body between their points
-	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look). render/skin-dent.js LIFT and RIM_CLEAR take it as 1.2 mm
-	// (a Settings bar can change it: the pressed skin then keeps its margins for 1.2)
+	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look). render/skin-dent.js pressedSkin is passed it (shape.lift)
+	// to keep the skin under the fabric and band as drawn
 	body: 'skin',             // what the re-fit stands on: 'skin', the bare skin, settled FREE_STEPS without friction before `steps`
 	// with it (owner chose this look, 2026-11-10: knowledge/engineering/app/hollows-on-bare-skin-diagnosis.md); 'bridged', the older
 	// fit, on the drawn garment's surface (the skin plus the membrane's lift and the seat sheet), kept to go back to. No control
@@ -171,7 +171,7 @@ export class FittedView {
 		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
 		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm') || changed('snug') || changed('slip') || changed('give')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
-		else if (o.dent && JSON.stringify(o.dent) !== JSON.stringify(before.dent)) this.redent();
+		else if ((o.dent && JSON.stringify(o.dent) !== JSON.stringify(before.dent)) || changed('lift')) { this.show(); this.redent(); } // (the skin is kept under the fabric as drawn)
 		else this.show();
 	}
 
@@ -183,7 +183,7 @@ export class FittedView {
 			this.redentTimer = null;
 			const f = this.pressed;
 			if (!f || this.running || !this.active) return;
-			this.dent.set(pressedSkin(this.engine.body, f.contacts, f.X, this.openingsInward(f.X), this.data.case.tris, this.options.dent));
+			this.dent.set(pressedSkin(this.engine.body, f.contacts, f.X, this.openingsInward(f.X), this.data.case.tris, { ...this.options.dent, lift: this.options.lift }));
 		}, 0);
 	}
 
@@ -494,7 +494,7 @@ export class FittedView {
 				this.solved = fit.X;
 				this.show();
 				this.pressed = skin && fit.contacts ? { contacts: fit.contacts, X: fit.X } : null;
-				this.dent.set(this.pressed ? pressedSkin(man, fit.contacts, fit.X, this.openingsInward(fit.X), this.data.case.tris, this.options.dent) : null);
+				this.dent.set(this.pressed ? pressedSkin(man, fit.contacts, fit.X, this.openingsInward(fit.X), this.data.case.tris, { ...this.options.dent, lift: this.options.lift }) : null);
 				this.hold(false);
 				this.setStatus({ state: 'fitted', steps: dressSteps + fit.steps, seconds: dressSec + fit.seconds, setup: (performance.now() - t0) / 1000 - dressSec - fit.seconds, dressed: !!start });
 			} while (this.again && this.active);
@@ -636,8 +636,11 @@ export class FittedView {
 		// across it as the fabric bends to the point one row in (kappa, as render/rims.js bends a cut garment's rims). On the body's
 		// normal and flat across, it stood off a convex fabric and sank under a concave one: where a soft body pressed the edge in, its
 		// inner half went under the fabric and the skin (owner, 2026-11-11)
+		// (bent by that estimate it still crossed the fabric's flat 7 mm triangles near its tucked-in end, the crossing a sawtooth along
+		// its quads: owner, 2026-11-11. So each point of its profile is set on the fabric under it: fabricUnder)
 		const own = X && this.data.case ? this.ownNormals(X) : null, ownAt = (i) => new THREE.Vector3(own[3 * i], own[3 * i + 1], own[3 * i + 2]);
 		const built = [];
+		let surface = null;
 		for (const o of this.data.openings) {
 			if (o.finish === 'none') { built.push(null); continue; } // an opening with no finish of its own (a strap's edge: the strap is the binding)
 			const n = o.hostW.length / 3, recs = [], solved = X && o.ids && this.near;
@@ -675,6 +678,7 @@ export class FittedView {
 				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: THREE.MathUtils.clamp(Kp[i], -KAPPA_MAX, KAPPA_MAX) });
 				scale.push(1);
 			}
+			if (solved && own) fabricUnder(frames, BAND_PROFILES[o.finish === 'binding' ? 'binding' : 'elastic'].map((q) => q[0]), surface ??= fittedSurface(X, own, this.data.case.tris, this.options.lift));
 			built.push({ frames, scale, pts, length, open });
 		}
 		const L0 = doc.panels.filter((p) => (p.layer ?? 'L0') === 'L0' && !p.removed);
@@ -688,13 +692,76 @@ export class FittedView {
 			const these = built.filter((b, i) => b && bound[i] === (kind === 'binding'));
 			if (!these.length) continue;
 			const look = kind === 'binding' ? t : s;
-			const mesh = new THREE.Mesh(buildGeometry(these, TRIMS[kind].profile), L.rims.material({ kind, fabric: look.fabric, colour: look.colour, second: look.second ?? 'Tone-on-tone' }));
+			const mesh = new THREE.Mesh(buildGeometry(these, BAND_PROFILES[kind]), L.rims.material({ kind, fabric: look.fabric, colour: look.colour, second: look.second ?? 'Tone-on-tone' }));
 			mesh.renderOrder = -4;
 			mesh.frustumCulled = false;
 			this.edges.add(mesh);
 		}
 		view.group.add(this.edges);
 	}
+}
+
+// The finishes' profiles (garment/trim.js TRIMS) with a point at least every BAND_STEP across their width: set on the fitted fabric
+// point by point (fabricUnder), the band follows it between them only straight, and the fabric folds 5 mm across the band where an
+// opening lies in the groin's crease (owner's arms-outstretched, 2026-11-11: the fabric came through the band's top between its points
+// 3 and 7.5 mm in). The rolled lip (u going back towards the edge) is kept as it is.
+const BAND_STEP = 0.001;
+const BAND_PROFILES = Object.fromEntries(['elastic', 'binding'].map((kind) => {
+	const prof = TRIMS[kind].profile, out = [prof[0]];
+	for (let k = 1; k < prof.length; k++) {
+		const a = prof[k - 1], b = prof[k], gap = b[0] - a[0], n = gap > BAND_STEP ? Math.ceil(gap / BAND_STEP) : 1;
+		for (let j = 1; j < n; j++) out.push(a.map((x, c) => x + (b[c] - x) * j / n));
+		out.push(b);
+	}
+	return [kind, out];
+}));
+
+// The fitted fabric's surface exactly as drawn: each point lifted `lift` (show()) and the fabric material's own FABRIC_OFFSET
+// (materials/fabric.js uOffset, a panel's 1.2 mm, along the vertex normals show() gives it: its own) along its own normal, flat over
+// each triangle; its triangles hashed by centroid (1 cm cells) for fabricUnder.
+const FABRIC_OFFSET = 0.0012;
+function fittedSurface(X, own, tris, lift) {
+	const B = Float32Array.from(X, (x, i) => x + own[i] * (lift + FABRIC_OFFSET)), cell = 0.01, grid = new Map();
+	for (let t = 0; t < tris.length / 3; t++) {
+		const a = 3 * tris[3 * t], b = 3 * tris[3 * t + 1], c = 3 * tris[3 * t + 2];
+		const k = [0, 1, 2].map((j) => Math.floor((B[a + j] + B[b + j] + B[c + j]) / 3 / cell)).join();
+		(grid.get(k) ?? grid.set(k, []).get(k)).push(t);
+	}
+	return { B, tris, cell, grid };
+}
+
+// Per frame of a re-fitted opening's band (garment/trim.js buildGeometry) and per point of its profile (us: metres across), where the
+// fabric's surface lies along the frame's normal from the frame's plane there (frame.h): the band set on the fabric point by point.
+// The fabric is flat 7 mm triangles; the band's tucked-in end clears it by 0.2 mm (garment/trim.js TRIMS: v over the garment surface,
+// the fabric at 1.2 mm), so a bend estimated from the normals (kap) crossed it in places, and so did a surface before the fabric's
+// offset or one smoothed along the opening: the crossing is set exactly here. A point with no fabric within 1 cm along the normal
+// keeps the bend's estimate.
+function fabricUnder(frames, us, S) {
+	const { B, tris, cell, grid } = S, M = us.length, H = frames.map(() => new Float32Array(M).fill(NaN));
+	const q = [0, 0, 0];
+	frames.forEach((f, i) => {
+		const n = f.n, cx = [0, 1, 2];
+		for (let k = 0; k < M; k++) {
+			for (const j of cx) q[j] = f.p.getComponent(j) + f.d.getComponent(j) * us[k];
+			let best = Infinity, hit = NaN;
+			const gx = Math.floor(q[0] / cell), gy = Math.floor(q[1] / cell), gz = Math.floor(q[2] / cell);
+			for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) for (const t of grid.get(`${gx + a},${gy + b},${gz + c}`) ?? []) {
+				// the line q + s n against triangle t (Moller-Trumbore, either way along n)
+				const A = 3 * tris[3 * t], Bv = 3 * tris[3 * t + 1], C = 3 * tris[3 * t + 2];
+				const e1 = [B[Bv] - B[A], B[Bv + 1] - B[A + 1], B[Bv + 2] - B[A + 2]], e2 = [B[C] - B[A], B[C + 1] - B[A + 1], B[C + 2] - B[A + 2]];
+				const px = n.y * e2[2] - n.z * e2[1], py = n.z * e2[0] - n.x * e2[2], pz = n.x * e2[1] - n.y * e2[0], det = e1[0] * px + e1[1] * py + e1[2] * pz;
+				if (Math.abs(det) < 1e-12) continue;
+				const tx = q[0] - B[A], ty = q[1] - B[A + 1], tz = q[2] - B[A + 2], u = (tx * px + ty * py + tz * pz) / det;
+				if (u < -1e-4 || u > 1 + 1e-4) continue;
+				const qx = ty * e1[2] - tz * e1[1], qy = tz * e1[0] - tx * e1[2], qz = tx * e1[1] - ty * e1[0], v = (n.x * qx + n.y * qy + n.z * qz) / det;
+				if (v < -1e-4 || u + v > 1 + 1e-4) continue;
+				const s = (e2[0] * qx + e2[1] * qy + e2[2] * qz) / det;
+				if (Math.abs(s) < best && Math.abs(s) < 0.01) { best = Math.abs(s); hit = s - FABRIC_OFFSET; } // (the profile's v counts from under the fabric's offset)
+			}
+			H[i][k] = hit;
+		}
+	});
+	frames.forEach((f, i) => { f.h = H[i]; }); // (a miss, NaN: buildGeometry takes the bend's estimate there)
 }
 
 // An open run of edge records (an opening's o.open) at the rims' spacing, its ends kept: garment/trim.js resample and smoothLoop wrap

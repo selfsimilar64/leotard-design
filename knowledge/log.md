@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-11
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: a fitted garment's elastic band is set point by point on the fabric under it (a comb of teeth where it crossed the fabric's flat triangles is gone); reloads now bring back the camera and keep the realistic skin; the pressed skin follows the fabric's lift setting.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: the elastic bands no longer vanish under the fabric or the skin: the fit spreads the elastic's pull over its 1 cm width (a band-wide, shallower groove), the drawn band lies on the fabric, and the drawn skin is kept under the band; recovery widths below 4 mm (finer than the body's mesh) are no longer offered.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: the pressed skin's recovery width swept (the fabric's depth had been leaking past the elastic and hiding it; fixed), then built into the app as a Pressed skin face on the Settings card, so the owner can tune the softness, recovery width, flesh roll and shading live.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: the pressed skin rebuilt a fourth time after the owner saw jagged artifacts in the normals: the skin follows the fabric's own depth over its triangles (not a bump or disc per fit point), the elastic's groove drawn as a set cross-section that widens with depth, the openings' edge directions smoothed, and the skin kept from crossing into skin across a fold.

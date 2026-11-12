@@ -2,7 +2,7 @@ import { render } from 'preact';
 import { app } from './instance.js';
 import { withKnownPose } from './app.js';
 import { Studio, useShortcuts } from './ui/Studio.jsx';
-import { rev, stats, display, hideMannequin, libraryOpen, savedRev, fitStatus, compiling, settle } from './ui/state.js';
+import { rev, stats, display, hideMannequin, hideOverlay, libraryOpen, savedRev, fitStatus, compiling, settle } from './ui/state.js';
 import { warmEarly, warmUp } from './render/warmup.js';
 import { curtainStep, curtainNote, liftCurtain } from './ui/curtain.js';
 import { loadDisplay, fitOptions } from './render/display.js';
@@ -55,8 +55,26 @@ async function start(el) {
 	rev.value++;
 	setInterval(() => { stats.value = { ...viewport.stats, stones: engine.stoneCount?.() ?? 0 }; }, 500);
 	performance.mark?.('start: design applied');
+	keepView(viewport);
 	await reveal(engine);
 	clearTimeout(long);
+}
+
+// The view as it was when this tab last reloaded (owner, 2026-11-11: "make sure any app reloads bring this exact configuration back
+// up"; a code change reloads the page mid-work): the camera and the view chip's lines and mannequin switches, kept per tab in
+// sessionStorage, so a new tab still starts framed as usual. The design itself is the autosave (app.js), the settings
+// render/display.js's.
+const VIEW_KEY = 'leotard.view.v1';
+function keepView(vp) {
+	try {
+		const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? 'null');
+		if (v) { vp.setCamera(v.camera); hideOverlay.value = !!v.hideOverlay; hideMannequin.value = !!v.hideMannequin; }
+	} catch { /* storage blocked or the entry unreadable: framed as usual */ }
+	const save = () => { try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ camera: vp.getCamera(), hideOverlay: hideOverlay.value, hideMannequin: hideMannequin.value })); } catch { /* blocked */ } };
+	let t = 0;
+	vp.controls.addEventListener('change', () => { clearTimeout(t); t = setTimeout(save, 250); });
+	hideOverlay.subscribe(save); hideMannequin.subscribe(save);
+	addEventListener('pagehide', save);
 }
 
 // The first frame, and the curtain lifted off it: the studio lit, a fitted garment fitted, then every shader the app can draw

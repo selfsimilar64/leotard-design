@@ -6,6 +6,7 @@
 // reference body gives the new surface point. The body section's old keys map to the new choices.
 import * as THREE from 'three';
 import { Surface, toSP } from '../body/surface.js';
+import { REALISTIC_SKIN } from '../render/presets.js';
 
 export const MESH = 'g9-sd1';
 
@@ -15,7 +16,9 @@ const SIZES = { 'daz-petite': 'young', 'daz-young': 'young', 'daz-adult': 'adult
 
 // The body section of any saved design -> { size, form, head, expression, pose, finish, headFinish }.
 // The body is always the headless mannequin (owner, 2026-10-29: no realistic person, no head): a
-// design saved with the person, her skin or a mannequin head opens on the matte white mannequin.
+// design saved with the person, her skin or a mannequin head opens on the matte white mannequin. The body's realistic skin
+// (REALISTIC_SKIN, offered again 2026-11-11 to judge the soft body: render/presets.js MANNEQUIN_MATERIALS) is kept: it was turned to
+// fibreglass on every reload (owner, 2026-11-11: reloads must bring the exact configuration back).
 export function migrateBody(b, bodyKeys = []) {
 	const out = { ...b };
 	if (out.form === 'headless') out.form = 'full';
@@ -24,7 +27,7 @@ export function migrateBody(b, bodyKeys = []) {
 	if (bodyKeys.length && !bodyKeys.includes(out.size)) out.size = 'young';
 	out.head = 'none';
 	out.expression ??= 'neutral';
-	if (!out.finish || /^Realistic/.test(out.finish)) out.finish = 'Matte white fibreglass';
+	if (!out.finish || (/^Realistic/.test(out.finish) && out.finish !== REALISTIC_SKIN)) out.finish = 'Matte white fibreglass';
 	out.headFinish = out.finish;
 	delete out.hair; delete out.mannequinHair;
 	return out;
