@@ -62,12 +62,11 @@ class Hit:
 	d: float  # signed distance, + on the side the surface's normals face
 	g: wp.vec3  # its gradient: the unit direction away from the closest point
 	q: wp.vec3  # the closest point
-	c: float  # the body's compliance there (1: firm; fit realism plan stage 6, a soft body): the contact's stiffness is PLANE / c
 
 
 @wp.func
 def surface_at(p: wp.vec3, mid: wp.uint64, fn: wp.array(dtype=wp.vec3), en: wp.array(dtype=wp.vec3), eb: wp.array(dtype=wp.int32),
-		vn: wp.array(dtype=wp.vec3), vb: wp.array(dtype=wp.int32), comp: wp.array(dtype=float)):
+		vn: wp.array(dtype=wp.vec3), vb: wp.array(dtype=wp.int32)):
 	"""Signed distance to a part's surface. Inside or outside by the angle-weighted pseudo-normal of the closest feature (face, edge or vertex;
 	Baerentzen and Aanaes 2005), which is right for any point near a closed surface; an interpolated normal is not, at sharp edges.
 	Past an open edge of the part (the wrist end, the line where torso and arm parts stop) the surface carries on as its tangent plane
@@ -76,15 +75,11 @@ def surface_at(p: wp.vec3, mid: wp.uint64, fn: wp.array(dtype=wp.vec3), en: wp.a
 	h.d = 0.0
 	h.g = wp.vec3(0.0, 1.0, 0.0)
 	h.q = p
-	h.c = 1.0
 	r = wp.mesh_query_point_no_sign(mid, p, 10.0)
 	if r.result:
 		f = r.face
 		c = wp.mesh_eval_position(mid, f, r.u, r.v)
 		w = wp.vec3(r.u, r.v, 1.0 - r.u - r.v)
-		# the compliance at the closest point, from its face's corners (each at least 1), as refit-wgsl.js surface_at
-		h.c = wp.max(w[0] * wp.max(comp[wp.mesh_get_index(mid, f * 3)], 1.0) + w[1] * wp.max(comp[wp.mesh_get_index(mid, f * 3 + 1)], 1.0)
-			+ w[2] * wp.max(comp[wp.mesh_get_index(mid, f * 3 + 2)], 1.0), 1.0)
 		eps = 1.0e-3  # float32 barycentrics: a closest point on an edge can come back up to about 1e-4 inside the face. Wider is safe: a point
 		# whose closest point is that near an edge gets the same distance and side from the edge rule as from the face rule
 		zeros = 0
@@ -144,28 +139,25 @@ class Part:
 	eb: wp.array(dtype=wp.int32)  # 1 where that edge is open
 	vn: wp.array(dtype=wp.vec3)  # per surface vertex: angle-weighted normal over this part's faces
 	vb: wp.array(dtype=wp.int32)  # 1 on an open edge
-	comp: wp.array(dtype=float)  # per surface vertex: its compliance, 1 or more (Problem: 1 + (give - 1) surface_soft)
 
 
 @wp.func
 def part_at(p: wp.vec3, sleeve: int, torso: Part, arm: Part):
 	if sleeve != 0:
-		return surface_at(p, arm.mesh, arm.fn, arm.en, arm.eb, arm.vn, arm.vb, arm.comp)
-	return surface_at(p, torso.mesh, torso.fn, torso.en, torso.eb, torso.vn, torso.vb, torso.comp)
+		return surface_at(p, arm.mesh, arm.fn, arm.en, arm.eb, arm.vn, arm.vb)
+	return surface_at(p, torso.mesh, torso.fn, torso.en, torso.eb, torso.vn, torso.vb)
 
 
 @wp.kernel
 def query_k(x: wp.array(dtype=wp.vec3), sleeve: wp.array(dtype=wp.int32), torso: Part, arm: Part,
 		plane: float, hold: float, d_out: wp.array(dtype=float), g_out: wp.array(dtype=wp.vec3), q_out: wp.array(dtype=wp.vec3),
-		e_out: wp.array(dtype=float), e_off: int, kc_out: wp.array(dtype=float)):
+		e_out: wp.array(dtype=float), e_off: int):
 	i = wp.tid()
 	h = part_at(x[i], sleeve[i], torso, arm)
 	d_out[i] = h.d
 	g_out[i] = h.g
 	q_out[i] = h.q
-	kc = plane / h.c  # the contact's stiffness here, held with the closest point (plane_k, gather_grad_k, surface_hess_k, friction_lam_k)
-	kc_out[i] = kc
-	e_out[e_off + i] = 0.5 * contact_k(h.d, kc, hold) * h.d * h.d
+	e_out[e_off + i] = 0.5 * contact_k(h.d, plane, hold) * h.d * h.d
 
 
 @wp.struct
@@ -371,21 +363,21 @@ def spring_k(x: wp.array(dtype=wp.vec3), si: wp.array(dtype=wp.int32), sj: wp.ar
 
 
 @wp.kernel
-def plane_k(x: wp.array(dtype=wp.vec3), q: wp.array(dtype=wp.vec3), gn: wp.array(dtype=wp.vec3), kc: wp.array(dtype=float), hold: float,
+def plane_k(x: wp.array(dtype=wp.vec3), q: wp.array(dtype=wp.vec3), gn: wp.array(dtype=wp.vec3), plane: float, hold: float,
 		d_out: wp.array(dtype=float), e_out: wp.array(dtype=float), e_off: int):
 	"""The surface held through a step: height over the tangent plane at the closest point found at the step's start (Problem.freeze)."""
 	i = wp.tid()
 	d = wp.dot(x[i] - q[i], gn[i])
 	d_out[i] = d
-	e_out[e_off + i] = 0.5 * contact_k(d, kc[i], hold) * d * d
+	e_out[e_off + i] = 0.5 * contact_k(d, plane, hold) * d * d
 
 
 @wp.kernel
 def gather_grad_k(vt_start: wp.array(dtype=wp.int32), vt_src: wp.array(dtype=wp.int32), gt: wp.array(dtype=wp.vec3),
 		vs_start: wp.array(dtype=wp.int32), vs_src: wp.array(dtype=wp.int32), gs: wp.array(dtype=wp.vec3),
-		d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), kc: wp.array(dtype=float), hold: float, grad: wp.array(dtype=wp.vec3)):
+		d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), plane: float, hold: float, grad: wp.array(dtype=wp.vec3)):
 	v = wp.tid()
-	acc = gn[v] * (contact_k(d[v], kc[v], hold) * d[v])
+	acc = gn[v] * (contact_k(d[v], plane, hold) * d[v])
 	for c in range(vt_start[v], vt_start[v + 1]):
 		acc += gt[vt_src[c]]
 	for c in range(vs_start[v], vs_start[v + 1]):
@@ -398,9 +390,9 @@ def gather_grad_k(vt_start: wp.array(dtype=wp.int32), vt_src: wp.array(dtype=wp.
 
 
 @wp.kernel
-def surface_hess_k(d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), kc: wp.array(dtype=float), hold: float, reg: float, H: wp.array(dtype=wp.mat33), off: int):
+def surface_hess_k(d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), plane: float, hold: float, reg: float, H: wp.array(dtype=wp.mat33), off: int):
 	v = wp.tid()
-	H[off + v] = contact_k(d[v], kc[v], hold) * wp.outer(gn[v], gn[v]) + reg * wp.identity(n=3, dtype=float)
+	H[off + v] = contact_k(d[v], plane, hold) * wp.outer(gn[v], gn[v]) + reg * wp.identity(n=3, dtype=float)
 
 
 @wp.kernel
@@ -434,11 +426,11 @@ def friction_k(x: wp.array(dtype=wp.vec3), anchor: wp.array(dtype=wp.vec3), fn: 
 
 
 @wp.kernel
-def friction_lam_k(d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), kc: wp.array(dtype=float), blend: float, lam: wp.array(dtype=float), fn: wp.array(dtype=wp.vec3)):
+def friction_lam_k(d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), plane: float, blend: float, lam: wp.array(dtype=float), fn: wp.array(dtype=wp.vec3)):
 	"""The contact force each point presses on the body with (the push-only surface term's, PLANE * depth) and its normal, held for a step.
 	blend < 1 moves the held force only that far toward the new one each step (Problem.grip)."""
 	i = wp.tid()
-	lam[i] = (1.0 - blend) * lam[i] + blend * kc[i] * wp.max(-d[i], 0.0)
+	lam[i] = (1.0 - blend) * lam[i] + blend * plane * wp.max(-d[i], 0.0)
 	fn[i] = gn[i]
 
 
@@ -540,11 +532,10 @@ def csr(keys, n):
 class Problem:
 	"""One case on the GPU: the garment, the body surface, and the shared evaluation (energy, gradient, projected Hessian)."""
 
-	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0, snug=1.0, give=1.0, device='cuda:0'):
+	def __init__(self, case, hold=HOLD, turn=TURN, mu=0.0, stick=STICK, grip=1.0, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0, snug=1.0, device='cuda:0'):
 		"""press, bend, jam: squeeze resistance, bending stiffness, the squeeze taken up free (fit realism plan stage 2; press 0 and bend 0:
 		the physics before it). kink, firm, snug: the elastic's push-only spans along its line, its firmness and how short it is cut
-		(stage 3; 0, 1 and 1: before it). give: a soft body (stage 6; 1: rigid): with case['surface_soft'] (0-1 per surface vertex) each
-		vertex's compliance is 1 + (give - 1) soft, and the contact's stiffness PLANE over it (app: fitted-case.js buildCase, refit-wgsl.js).
+		(stage 3; 0, 1 and 1: before it).
 		energy.py."""
 		wp.init()
 		self.device = device
@@ -583,10 +574,6 @@ class Problem:
 		# the body surface, one mesh per part as Surface.parts / surface_field.PartFields
 		Q, idx, arm = case['surface_P'], case['surface_idx'].reshape(-1, 3), case['surface_arm']
 		self.Qpts = f32(Q, wp.vec3)
-		self.give = float(give)
-		soft = case.get('surface_soft')
-		self.comp_np = (1 + (self.give - 1) * np.asarray(soft, np.float64)) if soft is not None and self.give != 1 else np.ones(len(Q))
-		self.comp = f32(self.comp_np)
 		self.meshes, self.parts_ = [], []
 		for keep in (arm < 0.5, arm > 0.15):
 			t = idx[keep[idx].all(1)].astype(np.int32)
@@ -595,7 +582,6 @@ class Problem:
 			part = Part()
 			part.mesh, part.fn, part.en, part.vn = m.id, f32(fn, wp.vec3), f32(en, wp.vec3), f32(vn, wp.vec3)
 			part.eb, part.vb = wp.array(eb, dtype=wp.int32, device=dev), wp.array(vb, dtype=wp.int32, device=dev)
-			part.comp = self.comp
 			self.meshes.append(m)
 			self.parts_.append(part)
 		self.torso_part, self.arm_part = self.parts_
@@ -662,13 +648,12 @@ class Problem:
 		self.anchor = wp.zeros(n, dtype=wp.vec3, device=dev)  # where each point was when the re-fit began
 		self.lam = wp.zeros(n, dtype=float, device=dev)  # its contact force at the last freeze
 		self.fn = wp.zeros(n, dtype=wp.vec3, device=dev)  # and the body's normal there
-		self.kc = wp.zeros(n, dtype=float, device=dev)  # per point the contact's stiffness at its closest point (query_k)
 
 	def array(self, x):
 		return wp.array(np.ascontiguousarray(x, dtype=np.float32), dtype=wp.vec3, device=self.device)
 
 	def query(self, x):
-		wp.launch(query_k, self.n, [x, self.sleeve, self.torso_part, self.arm_part, self.plane, self.hold, self.d, self.gn, self.q, self.e, self.nt + self.ns, self.kc], device=self.device)
+		wp.launch(query_k, self.n, [x, self.sleeve, self.torso_part, self.arm_part, self.plane, self.hold, self.d, self.gn, self.q, self.e, self.nt + self.ns], device=self.device)
 
 	def set_anchor(self, x):
 		"""Friction holds each point to where it is now: call with the re-fit's start, before the solve."""
@@ -684,24 +669,24 @@ class Problem:
 		Friction's contact force is held the same way, from the depth here (lagged friction, as IPC's; Li et al. 2020)."""
 		self.query(x)
 		if self.mu > 0:
-			wp.launch(friction_lam_k, self.n, [self.d, self.gn, self.kc, 1.0 if self.fresh else self.grip, self.lam, self.fn], device=self.device)
+			wp.launch(friction_lam_k, self.n, [self.d, self.gn, self.plane, 1.0 if self.fresh else self.grip, self.lam, self.fn], device=self.device)
 			self.fresh = False
 
 	def evaluate(self, x, mode=1, reg=0.0, held=False):
 		"""mode 0: per-element energies into self.e; 1: and the gradient into self.grad; 2: and the projected Hessian into self.A.
 		held: contact and inside-out as at the last freeze."""
 		if held:
-			wp.launch(plane_k, self.n, [x, self.q, self.gn, self.kc, self.hold, self.d, self.e, self.nt + self.ns], device=self.device)
+			wp.launch(plane_k, self.n, [x, self.q, self.gn, self.plane, self.hold, self.d, self.e, self.nt + self.ns], device=self.device)
 		else:
 			self.query(x)
 		wp.launch(tri_k, self.nt, [x, self.tris, self.Dinv, self.area, self.facing, self.gn, self.gather, self.turn, self.press, self.jam, mode, self.e, self.gt, self.H, self.flip], device=self.device)
 		wp.launch(spring_k, self.ns, [x, self.si, self.sj, self.rest_len, self.k, self.npull, mode, self.e, self.nt, self.gs, self.H[self.off_s:]], device=self.device)
 		if mode >= 1:
-			wp.launch(gather_grad_k, self.n, [self.vt_start, self.vt_src, self.gt, self.vs_start, self.vs_src, self.gs, self.d, self.gn, self.kc, self.hold, self.grad], device=self.device)
+			wp.launch(gather_grad_k, self.n, [self.vt_start, self.vt_src, self.gt, self.vs_start, self.vs_src, self.gs, self.d, self.gn, self.plane, self.hold, self.grad], device=self.device)
 		if self.nh:
 			wp.launch(bend_k, self.nh, [x, self.hinge_ids, self.hinge_K, self.hinge_c, self.bend, mode, self.e, self.off_eb, self.grad], device=self.device)
 		if mode >= 2:
-			wp.launch(surface_hess_k, self.n, [self.d, self.gn, self.kc, self.hold, reg, self.H, self.off_v], device=self.device)
+			wp.launch(surface_hess_k, self.n, [self.d, self.gn, self.plane, self.hold, reg, self.H, self.off_v], device=self.device)
 		if self.mu > 0:
 			wp.launch(friction_k, self.n, [x, self.anchor, self.fn, self.lam, self.mu, self.stick, mode, self.e, self.off_f, self.grad, self.H, self.off_v], device=self.device)
 		if mode >= 2:

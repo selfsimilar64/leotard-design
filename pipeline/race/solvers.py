@@ -248,9 +248,9 @@ def pd_spring_k(x: wp.array(dtype=wp.vec3), si: wp.array(dtype=wp.int32), sj: wp
 @wp.kernel
 def pd_rhs_k(x: wp.array(dtype=wp.vec3), vt_start: wp.array(dtype=wp.int32), vt_src: wp.array(dtype=wp.int32), gt: wp.array(dtype=wp.vec3),
 		vs_start: wp.array(dtype=wp.int32), vs_src: wp.array(dtype=wp.int32), gs: wp.array(dtype=wp.vec3),
-		d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), q: wp.array(dtype=wp.vec3), kc: wp.array(dtype=float), hold: float, damp: float, rhs: wp.array(dtype=wp.vec3)):
+		d: wp.array(dtype=float), gn: wp.array(dtype=wp.vec3), q: wp.array(dtype=wp.vec3), plane: float, hold: float, damp: float, rhs: wp.array(dtype=wp.vec3)):
 	v = wp.tid()
-	acc = gn[v] * (G.contact_k(d[v], kc[v], hold) * wp.dot(gn[v], q[v])) + damp * x[v]  # kc: the stage 6 soft body's (gpu.query_k)
+	acc = gn[v] * (G.contact_k(d[v], plane, hold) * wp.dot(gn[v], q[v])) + damp * x[v]
 	for c in range(vt_start[v], vt_start[v + 1]):
 		acc += gt[vt_src[c]]
 	for c in range(vs_start[v], vs_start[v + 1]):
@@ -278,8 +278,8 @@ def local_global(pb, x0, rec, cg_iters=20, damp=G.DAMP, precond=None):
 		pb.freeze(x)
 		wp.launch(pd_tri_k, pb.nt, [x, pb.tris, pb.Dinv, pb.area, pb.facing, pb.gn, pb.gather, pb.turn, pb.press, pb.jam, pb.gt], device=pb.device)
 		wp.launch(pd_spring_k, pb.ns, [x, pb.si, pb.sj, pb.rest_len, pb.k, pb.npull, pb.gs, H[pb.off_s:]], device=pb.device)
-		wp.launch(pd_rhs_k, pb.n, [x, pb.vt_start, pb.vt_src, pb.gt, pb.vs_start, pb.vs_src, pb.gs, pb.d, pb.gn, pb.q, pb.kc, pb.hold, damp, rhs], device=pb.device)
-		wp.launch(G.surface_hess_k, pb.n, [pb.d, pb.gn, pb.kc, pb.hold, damp, H, pb.off_v], device=pb.device)
+		wp.launch(pd_rhs_k, pb.n, [x, pb.vt_start, pb.vt_src, pb.gt, pb.vs_start, pb.vs_src, pb.gs, pb.d, pb.gn, pb.q, pb.plane, pb.hold, damp, rhs], device=pb.device)
+		wp.launch(G.surface_hess_k, pb.n, [pb.d, pb.gn, pb.plane, pb.hold, damp, H, pb.off_v], device=pb.device)
 		if pb.mu > 0:
 			wp.launch(G.pd_friction_k, pb.n, [x, pb.anchor, pb.fn, pb.lam, pb.mu, pb.stick, rhs, H, pb.off_v], device=pb.device)
 		wp.launch(G.fill_bsr_k, pb.nnz, [pb.blk_start, pb.blk_src, H, A.values], device=pb.device)
@@ -357,8 +357,7 @@ def colour(pb):
 def vbd(pb, x0, rec, colours, reg=1e-3, max_move=0.002):
 	"""Vertex Block Descent (Chen et al. 2024), quasi-static: no inertia, reg on each point's block in its place (a point in the
 	gather band, slack, has almost no curvature). One iteration: look up the contact, then every colour once.
-	Without stage 2's press and bending (pb.press, pb.bend), stage 3's kink (it reads every span as pull only) and stage 6's soft body (it
-	takes the firm body's PLANE everywhere): it is not the app's
+	Without stage 2's press and bending (pb.press, pb.bend) and stage 3's kink (it reads every span as pull only): it is not the app's
 	method, so it was left at the physics before them."""
 	x = wp.clone(x0)
 	rec.start()

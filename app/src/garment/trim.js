@@ -14,8 +14,7 @@ import { setFabricSlot } from '../materials/fabric-attributes.js';
 // Profiles: [u, v, ao] with u = metres in from the finished edge across the surface, v = metres
 // above the garment surface (the fabric itself sits at 1.2 mm), ao = contact darkening where the
 // rim rolls under against the skin. Each profile ends just below the fabric, under its pulled-back
-// cut, so there is never a gap. rows = topstitch rows (metres from the edge). The elastic's widest u and lowest v are copied in
-// render/skin-dent.js BAND_W and RIM_LOW (the pressed skin kept under a fitted garment's band): change them together.
+// cut, so there is never a gap. rows = topstitch rows (metres from the edge).
 export const TRIMS = {
 	elastic: {
 		label: 'Turned elastic (self fabric)', width: 0.010, rows: [0.0085, 0.0045],

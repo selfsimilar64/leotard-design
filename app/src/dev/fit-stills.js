@@ -93,10 +93,8 @@ async function refitDone(fv) {
 	await app().engine.settled();
 }
 
-// bare: also each view without the garment, the body shaded by its normals (<view>-normals.png): where a soft-body fit pressed the skin
-// in (render/skin-dent.js), seen without the fabric over it (fit realism plan stage 6). bare: ['normals', 'soft'] also shows how soft
-// the flesh is (body/mannequin.js soft: blue firm to red soft, <view>-soft.png).
-let normalMaterial = null, softMaterial = null;
+// bare: also each view without the garment, the body shaded by its normals (<view>-normals.png).
+let normalMaterial = null;
 const looks = (bare) => (bare === true ? ['normals'] : bare || []);
 async function shoot(dir, name, pick, bare = false) {
 	const a = app(), e = a.engine, vp = e.viewport, V = views(), out = [];
@@ -116,25 +114,17 @@ async function shoot(dir, name, pick, bare = false) {
 			if (!looks(bare).length) return;
 			const fv = e.fitted, hidden = [...fv.meshes, fv.edges, fv.lines, e.figure?.group].filter((m) => m && m.visible), skin = e.skinMesh, mat = skin.material, shown = skin.visible;
 			normalMaterial ??= new THREE.MeshNormalMaterial();
-			softMaterial ??= new THREE.MeshBasicMaterial({ vertexColors: true });
-			const g = skin.geometry, man = e.body;
 			try {
 				for (const m of hidden) m.visible = false;
 				skin.visible = true;
 				for (const look of looks(bare)) {
-					if (look === 'soft') {
-						const c = new Float32Array(man.vertices * 3);
-						for (let v = 0; v < man.vertices; v++) { const t = man.soft[v]; c[3 * v] = 0.15 + 0.85 * t; c[3 * v + 1] = 0.2 + 0.3 * (1 - Math.abs(2 * t - 1)); c[3 * v + 2] = 0.9 * (1 - t) + 0.1; }
-						g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-					}
-					skin.material = look === 'soft' ? softMaterial : normalMaterial;
+					skin.material = normalMaterial;
 					await wait(400);
 					await put(k, '-' + look);
 				}
 			} finally {
 				for (const m of hidden) m.visible = true;
 				skin.material = mat; skin.visible = shown;
-				g.deleteAttribute('color');
 			}
 		});
 	}

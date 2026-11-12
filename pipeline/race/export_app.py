@@ -1,5 +1,5 @@
 """The race's re-fit cases for the app's tuning page (app/refit.html, app/src/fit/): plain little-endian arrays the WebGPU solver reads.
-    <venv python> pipeline/race/export_app.py [body] [--press P --bend B --jam J --kink K --firm F --snug S --give G --tag T]
+    <venv python> pipeline/race/export_app.py [body] [--press P --bend B --jam J --kink K --firm F --snug S --tag T]
 With --tag, the cases are written as <body>-<case>-<tag> with stage 2's squeeze resistance and bending and stage 3's kink and firm (fit realism plan) in their
 physics and in Python's run, and added to the case list beside the plain ones.
 Per case writes app/captures/refit/<body>-<case>.json (sizes, settings, the Python run to compare against) and .bin (the arrays, in the
@@ -63,7 +63,6 @@ def main():
 	opt = lambda k, d: sys.argv[sys.argv.index(k) + 1] if k in sys.argv else d
 	press, bend, jam, tag = float(opt('--press', 0)), float(opt('--bend', 0)), float(opt('--jam', 1)), opt('--tag', '')
 	kink, firm, snug = float(opt('--kink', 0)), float(opt('--firm', 1)), float(opt('--snug', 1))  # fit realism plan stage 3; the app makes the same spans (refit.js)
-	give = float(opt('--give', 1))  # stage 6, a soft body: the app's soft field (energy.body_soft); the cases carry the compliance
 	key = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else 'young'
 	suffix = '-' + tag if tag else ''
 	os.makedirs(OUT, exist_ok=True)
@@ -76,13 +75,10 @@ def main():
 		if not (os.path.exists(f) and os.path.exists(rf)):
 			continue
 		case = dict(np.load(f))
-		if give != 1:
-			import energy as EN
-			case['surface_soft'] = EN.body_soft(case)
 		ref = np.load(rf)
 		refs[name] = (ref, case)
 		start, came = R.start_of(case, refs, key)
-		pb = G.Problem(case, mu=G.MU, press=press, bend=bend, jam=jam, kink=kink, firm=firm, snug=snug, give=give)
+		pb = G.Problem(case, mu=G.MU, press=press, bend=bend, jam=jam, kink=kink, firm=firm, snug=snug)
 		# Python's own run, for the port's step-by-step check
 		x0 = pb.array(start)
 		pb.set_anchor(x0)
@@ -113,8 +109,6 @@ def main():
 		put('python_20', keep.xs[20], np.float32)
 		Q, idx, arm = case['surface_P'], case['surface_idx'].reshape(-1, 3), case['surface_arm']
 		put('body', Q, np.float32)
-		if give != 1:
-			put('soft', pb.comp_np, np.float32)  # per body point its compliance (refit.js reads it as the points' 4th value)
 		part_sizes = []
 		for label, sel in (('torso', arm < 0.5), ('arm', arm > 0.15)):  # as gpu.Problem
 			t = idx[sel[idx].all(1)].astype(np.int32)
@@ -128,7 +122,7 @@ def main():
 			part_sizes.append(len(t))
 		run = results.get(name, {}).get('runs', {}).get('local-global, 10 CG')
 		head = dict(case=name, body=key, start=came, n=pb.n, nt=pb.nt, ns=pb.npull, body_points=len(Q), part_faces=part_sizes,
-			plane=pb.plane, gather=pb.gather, hold=pb.hold, turn=pb.turn, press=pb.press, bend=pb.bend, jam=pb.jam, kink=kink, firm=firm, snug=snug, give=give, damp=G.DAMP, mu=G.MU, stick=G.STICK,
+			plane=pb.plane, gather=pb.gather, hold=pb.hold, turn=pb.turn, press=pb.press, bend=pb.bend, jam=pb.jam, kink=kink, firm=firm, snug=snug, damp=G.DAMP, mu=G.MU, stick=G.STICK,
 			python_curve=run['curve'] if run else None, python_ms_per_iteration=run['per_iteration_ms'] if run else None, arrays=[])
 		offset = 0
 		with open(os.path.join(OUT, f'{key}-{name}{suffix}.bin'), 'wb') as f:

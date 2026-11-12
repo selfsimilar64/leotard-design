@@ -208,12 +208,11 @@ export function Slider({ label, value, min, max, step = 0.01, onChange, format =
 	return <SliderView label={label} hint={hint} value={value} min={min} max={max} step={step} format={format} log={log} def={def} parse={parse}
 		onInput={(v) => onChange(v, g.id())} onCommit={() => g.end()} onOnce={once} />;
 }
-// A slider that applies when it is let go (changes that take a while, such as a re-fit). def and log as Slider's.
-export function CommitSlider({ label, value, min, max, step, format, onCommit, hint, def, log = false }) {
+// A slider that applies when it is let go (changes that take a while, such as a re-fit).
+export function CommitSlider({ label, value, min, max, step, format, onCommit, hint }) {
 	const [v, setV] = useState(value);
 	useEffect(() => setV(value), [value]);
-	return <SliderView label={label} hint={hint} value={v} min={min} max={max} step={step} format={format} def={def} log={log} onInput={setV} onCommit={(x) => onCommit(x)}
-		onOnce={def !== undefined ? (x) => { setV(x); onCommit(x); } : undefined} />;
+	return <SliderView label={label} hint={hint} value={v} min={min} max={max} step={step} format={format} onInput={setV} onCommit={(x) => onCommit(x)} />;
 }
 function SliderView({ label, hint, value, min, max, step, format, onInput, onCommit, onOnce, def, log = false, parse }) {
 	const [typing, setTyping] = useState(null), bar = useRef(null), held = useRef(false);

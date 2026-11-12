@@ -10,10 +10,9 @@ import { fittedOf, fitSizeOf, fittedTrimOf } from '../garment/fitted.js';
 import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
 import { applyFabric, bindScan, texScaleOf, fabricSide } from '../materials/fabric.js';
 import { Refit, DEFAULTS } from '../fit/refit.js';
-import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
+import { buildCase, garmentArrays, startOf, skinHosts, carriedStart } from '../fit/fitted-case.js';
 import { foldsOf, foldPasses } from '../fit/folds.js';
 import { LineSegments2 } from './lines.js'; // (WebGL or WebGPU lines)
-import { SkinDent, pressedSkin, DENT_DEFAULTS } from './skin-dent.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { ROLE_COLOURS } from './overlay.js';
 import { FittedCloth } from '../stones/fitted-cloth.js';
@@ -69,8 +68,7 @@ export const FIT_DEFAULTS = {
 	mu: DEFAULTS.mu,          // friction against the skin
 	lift: 0.0012,             // m the fabric is drawn off the surface it was fitted to (the dev viewer's 1.2 mm), on top of the
 	// fabric material's own 1.2 mm: a fitted mesh's flat 7 mm triangles dip under a curved body between their points
-	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look). render/skin-dent.js pressedSkin is passed it (shape.lift)
-	// to keep the skin under the fabric and band as drawn
+	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look)
 	body: 'skin',             // what the re-fit stands on: 'skin', the bare skin, settled FREE_STEPS without friction before `steps`
 	// with it (owner chose this look, 2026-11-10: knowledge/engineering/app/hollows-on-bare-skin-diagnosis.md); 'bridged', the older
 	// fit, on the drawn garment's surface (the skin plus the membrane's lift and the seat sheet), kept to go back to. No control
@@ -86,12 +84,6 @@ export const FIT_DEFAULTS = {
 	// elastic's firmness (its stiffness times this). refit.js elasticSprings; twins energy.springs, gpu.Problem kink and firm.
 	// firm 3 (owner, 2026-11-11, by eye from 1-4x stills: the band holds each opening where it belongs against the fabric's pull);
 	// the estimate puts real elastic at 1-2x, 3-4x at the stiff end: knowledge/engineering/app/elastic-firmness-estimate.md
-	give: 2000,               // fit realism plan stage 6, a soft body (Settings, Pressed skin: display fitGive): how many times softer the
-	// softest flesh (body/mannequin.js soft: the seat, inner thigh) takes the fabric than the firm body; 1: a rigid body. The skin is
-	// drawn pressed in by what sinks and shaded there (render/skin-dent.js). 2000 (owner, 2026-11-11: 1500-3000 look real, 5000 a little
-	// beyond): the leg elastic about 3-4 mm into the thigh
-	dent: DENT_DEFAULTS,      // the pressed skin's groove and shading (render/skin-dent.js; Settings, Pressed skin: display dent*): a change
-	// redraws it on the fit there is, no re-fit
 	snug: 1,                  // the elastic's length against what each opening is cut with (wrap_block.ELASTIC, design_*.ELASTIC): below 1
 	// it is cut shorter and holds tighter (a trial, no control; 2026-11-11)
 	slip: 50,                 // in a pose, steps without friction before the rest (no control): how far the garment may slide from where
@@ -143,8 +135,6 @@ export class FittedView {
 		this.running = false; this.again = false; this.gen = 0;
 		engine.coverHooks.push((C) => { if (this.on) for (const v of this.on) C[v] = 1; });
 		engine.body.onGarment.push(() => this.place());
-		this.dent = new SkinDent(engine); // the skin pressed in under a soft-body fit
-		this.pressed = null;     // the fit it is drawn for ({ contacts, X }): redrawn on it when options.dent changes (redent)
 	}
 
 	get active() { return !!this.data; }
@@ -170,21 +160,8 @@ export class FittedView {
 		const changed = (k) => o[k] !== undefined && o[k] !== before[k];
 		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
-		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm') || changed('snug') || changed('slip') || changed('give')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
-		else if ((o.dent && JSON.stringify(o.dent) !== JSON.stringify(before.dent)) || changed('lift')) { this.show(); this.redent(); } // (the skin is kept under the fabric as drawn)
+		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm') || changed('snug') || changed('slip')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
 		else this.show();
-	}
-
-	// The pressed skin drawn again with options.dent on the fit it was drawn for (0.25-0.45 s on the CPU): a slider dragged asks many
-	// times, so one runs at a time and the last asked runs next. A re-fit under way draws it with the new options itself.
-	redent() {
-		if (this.redentTimer || this.running) return;
-		this.redentTimer = setTimeout(() => {
-			this.redentTimer = null;
-			const f = this.pressed;
-			if (!f || this.running || !this.active) return;
-			this.dent.set(pressedSkin(this.engine.body, f.contacts, f.X, this.openingsInward(f.X), this.data.case.tris, { ...this.options.dent, lift: this.options.lift }));
-		}, 0);
 	}
 
 	// After every document change the engine has applied.
@@ -283,7 +260,6 @@ export class FittedView {
 
 	// The body changed (a new body, pose or cover): draw the fit carried onto it at once, then re-fit it there.
 	place() {
-		this.dent.set(null); this.pressed = null; // the body or pose changed: the skin as it is until re-fitted
 		if (!this.active) return;
 		this.solved = null;
 		if (this.options.refit && this.data.case) { this.hold(true); this.refit(); return; } // shown once fitted (hold)
@@ -467,34 +443,31 @@ export class FittedView {
 				// the body it stands on: the bare skin, or the drawn garment's surface
 				const Q = skin ? man.aPos.array : man.garmentPos;
 				// on the skin in a pose: dressed standing first (kept while design, size, body and settings stay), then that fit carried
-				// into the pose by the body's motion (each point by its host's move: fitted-case.js startOf's hosts) and fitted there
+				// into the pose by the body's motion (each point with the skin right under it standing: fitted-case.js skinHosts, carriedStart) and fitted there
 				// with friction from the start (options.slip steps without), so the garment stays where it was put unless pulled off it
 				const dressAt = skin && man.poseKey !== JSON.stringify(DRESS_POSE) ? DRESS_POSE : null;
 				let start = null, dressSteps = 0, dressSec = 0;
 				if (dressAt) {
 					// the standing fit depends on the body, the pattern's size and mesh, and every fit setting it ran with (dev scripts set
 					// options directly, so the key, not setOptions, decides)
-					const o = this.options, key = JSON.stringify([man.key, man.head, this.size, this.meshMm, o.steps, o.mu, o.press, o.bend, o.jam, o.kink, o.firm, o.snug, o.give]);
+					const o = this.options, key = JSON.stringify([man.key, man.head, this.size, this.meshMm, o.steps, o.mu, o.press, o.bend, o.jam, o.kink, o.firm, o.snug]);
 					if (this.dressed?.key !== key || this.dressed.data !== this.data) {
 						let Qs = null;
 						try { Qs = man.positionsIn(dressAt); } catch { /* the body lacks the pose: fitted from the file's start */ }
 						if (Qs) {
 							const d = await this.fitOn(Qs, null, FREE_STEPS);
-							this.dressed = { key, data: this.data, X: d.X, base: startOf(this.data, Qs) };
+							this.dressed = { key, data: this.data, X: d.X, hosts: skinHosts(this.data, Qs, man.idx, man.wArm, d.X) };
 							dressSteps = d.steps; dressSec = d.seconds;
 						}
 					}
 					if (this.dressed?.key === key && this.dressed.data === this.data) {
-						const now = startOf(this.data, Q), { X: D, base } = this.dressed;
-						start = Float32Array.from(now, (v, i) => v + D[i] - base[i]);
+						start = carriedStart(this.dressed.hosts, Q, this.dressed.X);
 					}
 				}
 				const fit = await this.fitOn(Q, start, start ? this.options.slip : skin ? FREE_STEPS : 0);
 				if (this.again || gen !== this.gen || !this.active) continue; // the body changed meanwhile: run again on the new one
 				this.solved = fit.X;
 				this.show();
-				this.pressed = skin && fit.contacts ? { contacts: fit.contacts, X: fit.X } : null;
-				this.dent.set(this.pressed ? pressedSkin(man, fit.contacts, fit.X, this.openingsInward(fit.X), this.data.case.tris, { ...this.options.dent, lift: this.options.lift }) : null);
 				this.hold(false);
 				this.setStatus({ state: 'fitted', steps: dressSteps + fit.steps, seconds: dressSec + fit.seconds, setup: (performance.now() - t0) / 1000 - dressSec - fit.seconds, dressed: !!start });
 			} while (this.again && this.active);
@@ -508,39 +481,12 @@ export class FittedView {
 		}
 	}
 
-	// Every point on an opening and its inward direction (unit, into the fabric, across the edge): render/skin-dent.js. Towards the
-	// point's neighbours' mean, less its part along the edge (the opening's points run round it in order: the next less the previous),
-	// then smoothed along the edge: each point's own followed its neighbours in the mesh, up to 70° from the next point's, which
-	// striped the groove the skin is drawn with outside the opening.
-	openingsInward(X) {
-		const out = new Map();
-		if (!this.near) return out;
-		const across = (d, t) => {
-			const tt = t[0] * t[0] + t[1] * t[1] + t[2] * t[2] || 1, a = (d[0] * t[0] + d[1] * t[1] + d[2] * t[2]) / tt;
-			const r = d.map((x, k) => x - a * t[k]), l = Math.hypot(...r) || 1;
-			return r.map((x) => x / l);
-		};
-		for (const o of this.data.openings) {
-			const ids = o.ids ?? [], n = ids.length;
-			if (n < 3) continue;
-			const tangent = ids.map((_, j) => { const a = ids[(j + n - 1) % n], b = ids[(j + 1) % n]; return [0, 1, 2].map((k) => X[3 * b + k] - X[3 * a + k]); });
-			let D = ids.map((i, j) => {
-				const nb = this.near[i], d = [0, 0, 0];
-				for (const q of nb) for (let k = 0; k < 3; k++) d[k] += X[3 * q + k] / nb.length;
-				return across(d.map((x, k) => x - X[3 * i + k]), tangent[j]);
-			});
-			for (let p = 0; p < 3; p++) D = D.map((d, j) => across(d.map((x, k) => D[(j + n - 1) % n][k] + 2 * x + D[(j + 1) % n][k]), tangent[j]));
-			ids.forEach((i, j) => out.set(i, D[j]));
-		}
-		return out;
-	}
-
 	// One re-fit on body points Q from start (null: the file's, fitted-case.js startOf): `free` steps without friction, read back once,
 	// then options.steps with friction anchored where it settled (reset: anchor and held forces anew). -> { X, steps, seconds }
 	async fitOn(Q, start, free) {
 		const man = this.engine.body;
 		const data = buildCase(this.data, this.garment, Q, man.idx, man.wArm, this.cache ??= {},
-			{ press: this.options.press, bend: this.options.bend, jam: this.options.jam, kink: this.options.kink, firm: this.options.firm, snug: this.options.snug, soft: man.soft, give: this.options.give });
+			{ press: this.options.press, bend: this.options.bend, jam: this.options.jam, kink: this.options.kink, firm: this.options.firm, snug: this.options.snug });
 		if (start) data.arrays.start = start;
 		const r = new Refit(this.device, data, { maxSteps: this.options.steps, mu: this.options.mu, tol: 0 });
 		const steps = this.options.steps, W = r.settings.window, t = performance.now();
@@ -555,9 +501,8 @@ export class FittedView {
 		if (steps > W) { r.settings.window = steps - W; await r.run({ steps: steps - W }); r.settings.window = W; }
 		const res = await r.run({ steps });
 		const X = await r.positions(steps > W);
-		const contacts = this.options.give > 1 ? await r.contacts() : null; // a soft body: where the skin is drawn pressed in
 		r.destroy();
-		return { X, contacts, steps: free + res.steps, seconds: (performance.now() - t) / 1000 };
+		return { X, steps: free + res.steps, seconds: (performance.now() - t) / 1000 };
 	}
 
 	// The design's materials on the fitted pieces, and the app's own pieces and edges out of sight.
@@ -601,7 +546,6 @@ export class FittedView {
 
 	clear(doc) {
 		const view = this.view, e = this.engine;
-		this.dent.set(null); this.pressed = null;
 		this.gen++; // any re-fit under way is for the garment going
 		this.hold(false);
 		for (const m of this.meshes) { m.parent?.remove(m); m.geometry.dispose(); }
@@ -634,7 +578,7 @@ export class FittedView {
 		const pt = (i) => new THREE.Vector3(X[3 * i], X[3 * i + 1], X[3 * i + 2]);
 		// a re-fitted garment's band lies on its fabric as drawn: in the fabric's own surface at the edge (its normal, ownNormals), bent
 		// across it as the fabric bends to the point one row in (kappa, as render/rims.js bends a cut garment's rims). On the body's
-		// normal and flat across, it stood off a convex fabric and sank under a concave one: where a soft body pressed the edge in, its
+		// normal and flat across, it stood off a convex fabric and sank under a concave one: where the fit pressed the edge in, its
 		// inner half went under the fabric and the skin (owner, 2026-11-11)
 		// (bent by that estimate it still crossed the fabric's flat 7 mm triangles near its tucked-in end, the crossing a sawtooth along
 		// its quads: owner, 2026-11-11. So each point of its profile is set on the fabric under it: fabricUnder)

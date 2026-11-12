@@ -1195,7 +1195,7 @@ const FOIL_FRAGMENT = /* glsl */`
 export function createFabricMaterial(zone) {
 	const panel = zone === 5;
 	const u = {
-		// (a panel's 1.2 mm is copied in render/fitted.js FABRIC_OFFSET and render/skin-dent.js OWN_LIFT: change them together)
+		// (a panel's 1.2 mm is copied in render/fitted.js FABRIC_OFFSET: change them together)
 		uZone: { value: zone }, uSleeveSplit: { value: 0 }, uOffset: { value: panel ? 0.0012 : zone >= 3 ? 0 : 0.0012 + zone * 0.00015 },
 		uGarment: { value: panel || zone < 3 ? 1 : 0 }, uClip: { value: 0 }, uTape: { value: 0 }, uUV: { value: panel ? 1 : 0 }, uGrain: { value: 0 },
 		uTrimInset: { value: 0 }, uTrimWidth: { value: 0 }, uRows: { value: new THREE.Vector2() }, uZig: { value: 0 }, uThread: { value: new THREE.Color() },

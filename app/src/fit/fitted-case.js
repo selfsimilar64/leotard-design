@@ -146,6 +146,87 @@ export function elasticBand(c, width = ELASTIC_W) {
 	return { si: Int32Array.from(si), sj: Int32Array.from(sj), rest_len: Float32Array.from(rest), k: Float32Array.from(kk) };
 }
 
+// A fit made on body points Qs (D: its points) anchored to the skin right under it, to be carried by the body's motion (carriedStart):
+// per point the closest point of the skin (face, barycentric weights) and its height over it along the face's normal, a sleeve's points
+// on the arm's faces and the rest on the torso's (every corner's arm weight over 0.15 / under 0.5: the re-fit's parts, buildCase), so
+// a sleeve lying against the side standing is not anchored to the torso. The file's hosts (startOf) are where the pattern was first put
+// on: dressing standing slides sleeve points 4-6 cm from them, across the elbow for some, and carried by those hosts (as offsets, even
+// turned with the hosts' triangle) the stag jump's and passe's sleeves started 1100-1500 of 7136 triangles inside out, which the fit
+// kept (owner, 2026-11-11: "the sleeve fit breaks"). idx: the body's faces; wArm: per body vertex.
+export function skinHosts(data, Qs, idx, wArm, D) {
+	const n = data.case.n, sleeve = data.case.sleeve, nv = Qs.length / 3, nf = idx.length / 3;
+	const vf = Array.from({ length: nv }, () => []); // each vertex's faces, by part (0 torso, 1 arm)
+	const part = (f, k) => (k ? [0, 1, 2].every((j) => wArm[idx[3 * f + j]] > 0.15) : [0, 1, 2].every((j) => wArm[idx[3 * f + j]] < 0.5));
+	const inPart = [new Uint8Array(nf), new Uint8Array(nf)];
+	for (let f = 0; f < nf; f++) for (let k = 0; k < 2; k++) if (part(f, k)) { inPart[k][f] = 1; for (let j = 0; j < 3; j++) vf[idx[3 * f + j]].push(f); }
+	// vertices hashed (1 cm cells) per part: those on a face of it
+	const cell = 0.01, grids = [new Map(), new Map()], key = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+	for (let v = 0; v < nv; v++) for (let k = 0; k < 2; k++) if (vf[v].some((f) => inPart[k][f])) { const kk = key(Qs[3 * v], Qs[3 * v + 1], Qs[3 * v + 2]); (grids[k].get(kk) ?? grids[k].set(kk, []).get(kk)).push(v); }
+	const face = new Int32Array(n), bary = new Float32Array(n * 3), h = new Float32Array(n);
+	const p = [0, 0, 0];
+	for (let i = 0; i < n; i++) {
+		const k = sleeve[i] ? 1 : 0, g = grids[k];
+		for (let j = 0; j < 3; j++) p[j] = D[3 * i + j];
+		// the nearest vertex of the part (growing rings of cells until one is found)
+		let best = Infinity, bv = -1;
+		const cx = Math.floor(p[0] / cell), cy = Math.floor(p[1] / cell), cz = Math.floor(p[2] / cell);
+		for (let r = 1; r <= 8 && bv < 0; r *= 2) for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) for (let c = -r; c <= r; c++) for (const v of g.get(`${cx + a},${cy + b},${cz + c}`) ?? []) {
+			const d = (Qs[3 * v] - p[0]) ** 2 + (Qs[3 * v + 1] - p[1]) ** 2 + (Qs[3 * v + 2] - p[2]) ** 2;
+			if (d < best) { best = d; bv = v; }
+		}
+		face[i] = -1;
+		if (bv < 0) continue;
+		// the closest point on the faces round it and round its neighbours on those faces
+		const cand = new Set();
+		for (const f of vf[bv]) if (inPart[k][f]) { cand.add(f); for (let j = 0; j < 3; j++) for (const f2 of vf[idx[3 * f + j]]) if (inPart[k][f2]) cand.add(f2); }
+		let bd = Infinity;
+		for (const f of cand) {
+			const q = closestOnTri(p, Qs, idx[3 * f], idx[3 * f + 1], idx[3 * f + 2]);
+			if (q.d2 < bd) { bd = q.d2; face[i] = f; bary[3 * i] = q.w0; bary[3 * i + 1] = q.w1; bary[3 * i + 2] = q.w2; h[i] = q.h; }
+		}
+	}
+	return { face, bary, h, idx };
+}
+
+// The skin-anchored fit (skinHosts) carried onto body points Q: each point on its face, at its weights, its height along the face's
+// normal now. D: the fit itself, for a point that found no face.
+export function carriedStart(H, Q, D) {
+	const { face, bary, h, idx } = H, n = face.length, X = Float32Array.from(D);
+	for (let i = 0; i < n; i++) {
+		const f = face[i];
+		if (f < 0) continue;
+		const a = 3 * idx[3 * f], b = 3 * idx[3 * f + 1], c = 3 * idx[3 * f + 2], nn = triNormal(Q, a, b, c);
+		for (let k = 0; k < 3; k++) X[3 * i + k] = bary[3 * i] * Q[a + k] + bary[3 * i + 1] * Q[b + k] + bary[3 * i + 2] * Q[c + k] + h[i] * nn[k];
+	}
+	return X;
+}
+
+const triNormal = (P, a, b, c) => {
+	const u = [P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]], w = [P[c] - P[a], P[c + 1] - P[a + 1], P[c + 2] - P[a + 2]];
+	const nn = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], l = Math.hypot(...nn) || 1;
+	return nn.map((x) => x / l);
+};
+
+// The closest point of triangle (a, b, c) (vertex indices into P) to p: its weights, squared distance, and p's height over the
+// triangle's plane along its normal (Ericson, Real-Time Collision Detection 5.1.5).
+function closestOnTri(p, P, ia, ib, ic) {
+	const a = [P[3 * ia], P[3 * ia + 1], P[3 * ia + 2]], b = [P[3 * ib], P[3 * ib + 1], P[3 * ib + 2]], c = [P[3 * ic], P[3 * ic + 1], P[3 * ic + 2]];
+	const sub = (x, y) => [x[0] - y[0], x[1] - y[1], x[2] - y[2]], dot = (x, y) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
+	const ab = sub(b, a), ac = sub(c, a), ap = sub(p, a);
+	let w0, w1, w2;
+	const d1 = dot(ab, ap), d2 = dot(ac, ap), bp = sub(p, b), d3 = dot(ab, bp), d4 = dot(ac, bp), cp = sub(p, c), d5 = dot(ab, cp), d6 = dot(ac, cp);
+	const vc = d1 * d4 - d3 * d2, vb = d5 * d2 - d1 * d6, va = d3 * d6 - d5 * d4;
+	if (d1 <= 0 && d2 <= 0) [w0, w1, w2] = [1, 0, 0];
+	else if (d3 >= 0 && d4 <= d3) [w0, w1, w2] = [0, 1, 0];
+	else if (d6 >= 0 && d5 <= d6) [w0, w1, w2] = [0, 0, 1];
+	else if (vc <= 0 && d1 >= 0 && d3 <= 0) { const v = d1 / (d1 - d3); [w0, w1, w2] = [1 - v, v, 0]; }
+	else if (vb <= 0 && d2 >= 0 && d6 <= 0) { const w = d2 / (d2 - d6); [w0, w1, w2] = [1 - w, 0, w]; }
+	else if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) { const w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); [w0, w1, w2] = [0, 1 - w, w]; }
+	else { const den = 1 / (va + vb + vc), v = vb * den, w = vc * den; [w0, w1, w2] = [1 - v - w, v, w]; }
+	const q = [0, 1, 2].map((k) => w0 * a[k] + w1 * b[k] + w2 * c[k]), nn = triNormal(P, 3 * ia, 3 * ib, 3 * ic), dq = sub(p, q);
+	return { w0, w1, w2, d2: dot(dq, dq), h: dot(sub(p, q), nn) };
+}
+
 // The garment's part of a case: depends only on the fitted file and its size, so it is made once per garment and size.
 // size (meta.fitSize): the pattern made wider (x, across the grain) and longer (y, along it) by these factors before the re-fit, as
 // a pattern maker grades a block: every piece's flat rest shape, and each elastic span's rest length by its own direction.
@@ -192,14 +273,9 @@ function spanLengths(c, sx, sy) {
 // own matrix and trees in the same object).
 // physics: { press, bend, jam } of the fit realism plan's stage 2 (squeeze resistance, bending stiffness, the squeeze taken up free;
 // press 0 and bend 0: the physics before it) and { kink, firm, snug } of its stage 3 (the elastic as a band, its firmness, how short it
-// is cut; 0, 1 and 1: before it; Refit makes the spans, refit.js elasticSprings), as gpu.Problem's. { soft, give } of its stage 6:
-// per body point how soft the flesh is (0-1, body/mannequin.js soft) and how much softer than the firm body the softest is (give;
-// 1 or no soft: a rigid body), written as each point's compliance 1 + (give - 1) soft, which the contact divides PLANE by
-// (refit-wgsl.js surface_at).
+// is cut; 0, 1 and 1: before it; Refit makes the spans, refit.js elasticSprings), as gpu.Problem's.
 export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {}) {
 	const c = data.case, arrays = { ...garment, start: startOf(data, Q), body: Float32Array.from(Q) };
-	const give = physics.give ?? 1;
-	if (physics.soft && give !== 1) arrays.soft = Float32Array.from(physics.soft, (s) => 1 + (give - 1) * s);
 	const parts = [];
 	cache.parts ??= [['torso', (w) => w < 0.5], ['arm', (w) => w > 0.15]].map(([label, keep]) => {
 		const t = [];
@@ -213,6 +289,6 @@ export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {})
 		parts.push(ti.length / 3);
 	}
 	const head = { n: c.n, nt: c.tris.length / 3, ns: garment.si.length, body_points: Q.length / 3, part_faces: parts, plane: c.plane, gather: c.gather, hold: HOLD, turn: TURN,
-		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1, snug: physics.snug ?? 1, give };
+		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1, snug: physics.snug ?? 1 };
 	return { head, arrays, cache };
 }

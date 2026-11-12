@@ -15,12 +15,11 @@ import { Callouts } from './Callouts.jsx';
 import { Library } from './Library.jsx';
 import { FlatView } from './FlatView.jsx';
 import { tools } from './toolbar.js';
-import { Card, Field, Segmented, Switch, Slider, CommitSlider, Button, IconButton } from './kit.jsx';
+import { Card, Field, Segmented, Switch, CommitSlider, Button, IconButton } from './kit.jsx';
 import { I } from './icons.jsx';
 import { viewTo, cancel as cancelFlight } from './camera.js';
 import { DISPLAY_OPTIONS, saveDisplay, fitOptions } from '../render/display.js';
-import { FIT_MESHES, FIT_DEFAULTS } from '../render/fitted.js';
-import { DENT_DEFAULTS, MIN_WALL } from '../render/skin-dent.js';
+import { FIT_MESHES } from '../render/fitted.js';
 import { BACKDROP_COLOUR } from '../render/viewport.js';
 import { symmetryOn } from '../doc/symmetry.js';
 
@@ -166,7 +165,7 @@ function Settings() {
 	const set = (k, v) => { const n = { ...d, [k]: v }; display.value = n; saveDisplay(n); app.engine?.viewport.applyDisplay(n); };
 	return (
 		<div class="inspector settings" ref={ref} role="dialog" aria-label="Settings">
-			<Card kind="settings" title="Settings" onClose={onClose} faces={[['display', 'Display'], ['working', 'Working'], ['fit', 'Fabric fit'], ['skin', 'Pressed skin']]}>
+			<Card kind="settings" title="Settings" onClose={onClose} faces={[['display', 'Display'], ['working', 'Working'], ['fit', 'Fabric fit']]}>
 				{(face) => face === 'display' ? <>
 					<Field label="Resolution"><Segmented value={d.resolution} options={DISPLAY_OPTIONS.resolution.map(([v]) => [v, Math.round(v * 100) + '%'])} onPick={(v) => set('resolution', v)} /></Field>
 					<Field label="Smooth edges"><Segmented value={d.msaa} options={DISPLAY_OPTIONS.msaa} onPick={(v) => set('msaa', v)} /></Field>
@@ -179,7 +178,7 @@ function Settings() {
 					<Switch label="Show the frame rate" value={showStats.value} onChange={(v) => { showStats.value = v; }} />
 					<div class="pop-row"><Button size="small" title="Measure the true GPU cost of a frame" onClick={async () => notify(`Frame cost ${await app.benchmark()} ms`)}>Measure frame cost</Button>
 						{st.fps ? <span class="pop-meta">{st.width}×{st.height} px · {st.fps.toFixed(0)} fps</span> : null}</div>
-				</> : face === 'skin' ? <PressedSkin /> : <><FittedFit /><FabricFit /></>}
+				</> : <><FittedFit /><FabricFit /></>}
 			</Card>
 		</div>
 	);
@@ -251,31 +250,6 @@ function FittedFit() {
 			</> : null}
 			<CommitSlider label="Fabric drawn off the body" value={Math.round(d.fitLift * 10000) / 10} min={0} max={5} step={0.1} format={(v) => `${(+v).toFixed(1)} mm`} onCommit={(v) => apply({ fitLift: v / 1000 })} />
 			<p class="pop-meta" title={points ? `${points.toLocaleString()} points` : undefined}>{f?.meshNote && st.state !== 'off' ? f.meshNote + ' ' : ''}{said}</p>
-		</Field>
-	);
-}
-
-// The soft body (render/fitted.js give) and the skin drawn pressed in where the fabric sinks (render/skin-dent.js DENT_DEFAULTS),
-// this computer's settings like the rest: the softness re-fits when let go; the groove's shape and shading redraw on the fit there is
-// as the bars move (owner, 2026-11-11: the recovery width tried live rather than from stills). Only on a fitted garment re-fitted on
-// the bare skin (FIT_DEFAULTS.body 'skin'), with the softness above 1.
-function PressedSkin() {
-	const d = display.value, f = app.engine?.fitted, st = fitStatus.value;
-	if (!d) return null;
-	const apply = (patch) => { const n = { ...d, ...patch }; display.value = n; saveDisplay(n); f?.setOptions(fitOptions(n)); };
-	const mm = (v) => `${(v * 1000).toFixed(1)} mm`;
-	const said = st.state === 'off' ? 'These apply to a fitted garment (Shape, Garment).' : st.state === 'fitting' ? 'Re-fitting…'
-		: !d.fitRefit ? 'Turn on re-fitting (Fabric fit) to see the skin pressed in.' : d.fitGive <= 1 ? 'A firm body: nothing presses in.'
-		: 'Drag a bar and watch the leg line: the card clears while you drag. A double click on a bar puts it back.';
-	return (
-		<Field label="Where the elastic presses into the skin (experimental)">
-			<CommitSlider label="Flesh softness" hint="How far the fabric sinks into the soft flesh (seat, inner thigh). Re-fits when let go" value={d.fitGive} min={1} max={5000} step={1} log def={FIT_DEFAULTS.give} format={(v) => `${Math.round(v)}×`} onCommit={(v) => apply({ fitGive: Math.round(v) })} />
-			<Slider label="Recovery width" hint="How far outside the elastic the skin comes back up to its surface (4 mm at least: the body's mesh draws nothing narrower)" value={Math.max(d.dentOut, MIN_WALL)} min={MIN_WALL} max={0.025} step={0.0005} def={DENT_DEFAULTS.out} format={mm} onChange={(v) => apply({ dentOut: v })} />
-			<Slider label="Wider where deeper" hint="The recovery at least this many times the depth, so a deep press spreads wider (0: the same width everywhere)" value={d.dentOutSlope} min={0} max={3} step={0.1} def={DENT_DEFAULTS.outSlope} format={(v) => `${v.toFixed(1)}× depth`} onChange={(v) => apply({ dentOutSlope: v })} />
-			<Slider label="Flesh roll" hint="How high the flesh rises just outside the elastic, as a share of how deep it presses" value={d.dentRise} min={0} max={1} step={0.05} def={DENT_DEFAULTS.rise} format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => apply({ dentRise: v })} />
-			<Slider label="Roll width" hint="How far out the flesh roll reaches (its top halfway)" value={d.dentRiseW} min={0.002} max={0.04} step={0.0005} def={DENT_DEFAULTS.riseW} format={mm} onChange={(v) => apply({ dentRiseW: v })} />
-			<Slider label="Contact shading" hint="How dark the skin goes where the fabric's edge overhangs it" value={d.dentShade} min={0} max={3} step={0.1} def={DENT_DEFAULTS.shade} format={(v) => `${v.toFixed(1)}×`} onChange={(v) => apply({ dentShade: v })} />
-			<p class="pop-meta">{said}</p>
 		</Field>
 	);
 }

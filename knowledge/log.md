@@ -1,6 +1,8 @@
 # Bundle update log
 
 ## 2026-11-11
+* **Decision**: [Soft body dropped](/decisions/2026-11-11-soft-body-dropped.md): the body is rigid again, the pressed skin and its settings removed, with their twins in the pipeline.
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): a pose is fitted from the standing fit carried with the skin under each point, which mends the stag jump's broken sleeves (the old carry turned them inside out once the arms swung up).
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: a fitted garment's elastic band is set point by point on the fabric under it (a comb of teeth where it crossed the fabric's flat triangles is gone); reloads now bring back the camera and keep the realistic skin; the pressed skin follows the fabric's lift setting.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: the elastic bands no longer vanish under the fabric or the skin: the fit spreads the elastic's pull over its 1 cm width (a band-wide, shallower groove), the drawn band lies on the fabric, and the drawn skin is kept under the band; recovery widths below 4 mm (finer than the body's mesh) are no longer offered.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: the pressed skin's recovery width swept (the fabric's depth had been leaking past the elastic and hiding it; fixed), then built into the app as a Pressed skin face on the Settings card, so the owner can tune the softness, recovery width, flesh roll and shading live.

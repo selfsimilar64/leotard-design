@@ -55,17 +55,6 @@ MU = 0.4  # twin: gpu.MU (the source there)
 STICK = 1.0e-3  # twin: gpu.STICK
 
 
-def body_soft(case):
-	"""The app's soft body field (body/mannequin.js soft, 0-1 per vertex of the canonical mesh, saved from the app to
-	app/captures/race/soft-young.json) on a case's surface, for give (fit realism plan stage 6); None if there is none."""
-	import json
-	f = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'app', 'captures', 'race', 'soft-young.json')
-	if not os.path.exists(f):
-		return None
-	s = np.array(json.load(open(f))['soft'], float)
-	return s if len(s) == len(case['surface_P']) else None
-
-
 def springs(el, kink=0.0, firm=1.0, snug=1.0):
 	"""The spans the energy and solvers use (the module's header: elastic): (si, sj, rest, k, npull), the case's elastic spans first (pull
 	only, k times firm, rest times snug), then kink's push-only spans: per point touched by exactly two spans (s0 < s1), from s0's far end to s1's, rest the
@@ -134,7 +123,7 @@ def hinges(tris, rest):
 
 
 class Energy:
-	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0, snug=1.0, give=1.0):
+	def __init__(self, case, surface='nearest', contact='both', hold=HOLD, press=0.0, bend=0.0, jam=1.0, kink=0.0, firm=1.0, snug=1.0):
 		self.contact, self.hold = contact, hold
 		self.press, self.bend, self.jam = float(press), float(bend), float(jam)
 		self.tris = case['tris']
@@ -148,10 +137,6 @@ class Energy:
 		self.part = case['sleeve'].astype(bool)
 		self.hinge_ids, self.hinge_K, self.hinge_c = hinges(self.tris, rest) if self.bend else (np.zeros((0, 4), int), np.zeros((0, 4)), np.zeros(0))
 		self.surface = W.Surface(case['surface_P'], case['surface_idx'], case['surface_arm'])
-		# fit realism plan stage 6, a soft body (give 1: rigid): per surface vertex its compliance 1 + (give - 1) soft, the contact's
-		# stiffness PLANE over it at the point's nearest vertex (gpu.py interpolates over the closest point's face)
-		soft = case.get('surface_soft')
-		self.comp = 1 + (float(give) - 1) * np.asarray(soft, float) if soft is not None and give != 1 else None
 		self.was = None  # the last normals, so a point is not matched across to a surface facing the other way (as solve)
 		self.field = None
 		if surface == 'field':
@@ -183,10 +168,7 @@ class Energy:
 			d = ((x - self.surface.P[v]) * n).sum(1)
 			if keep_normals:
 				self.was = n
-		plane = self.plane
-		if self.comp is not None:
-			plane = self.plane / self.comp[v if self.field is None else self.surface.nearest(x, None, part=self.part)]
-		kd = np.where(d < 0, plane, self.hold) if self.contact == 'push' else np.full(len(d), 1.0) * plane
+		kd = np.where(d < 0, self.plane, self.hold) if self.contact == 'push' else np.full(len(d), self.plane)
 		grad += (kd * d)[:, None] * gd
 		e_surface = 0.5 * (kd * d ** 2).sum()
 		# membrane

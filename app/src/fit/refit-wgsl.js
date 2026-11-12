@@ -91,9 +91,7 @@ fn closest_bary(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, c: vec3<f32>) -> vec3<
 fn corner(f: u32, k: u32) -> u32 { return u32(bodyI[P.off_fi + 4u * f + k]); }
 fn bp(i: u32) -> vec3<f32> { return bodyF[P.off_pts + i].xyz; }
 
-// k: the contact's stiffness there, PLANE over the body's compliance at the closest point (the body points' 4th value, 1 or more:
-// fit realism plan stage 6, a soft body; 0 there reads as 1, as the tuning page's cases have it)
-struct Hit { q: vec3<f32>, d: f32, g: vec3<f32>, found: bool, k: f32 }
+struct Hit { q: vec3<f32>, d: f32, g: vec3<f32>, found: bool }
 
 fn box_dist(id: u32, node0: u32, p: vec3<f32>) -> f32 {
 	let o = max(max(bodyF[node0 + 2u * id].xyz - p, p - bodyF[node0 + 2u * id + 1u].xyz), vec3<f32>(0.0));
@@ -137,13 +135,11 @@ fn surface_at(p: vec3<f32>, part: u32, bound: f32) -> Hit {
 		}
 	}
 	var h: Hit;
-	h.d = 0.0; h.g = vec3<f32>(0.0, 1.0, 0.0); h.q = p; h.found = found; h.k = P.plane;
+	h.d = 0.0; h.g = vec3<f32>(0.0, 1.0, 0.0); h.q = p; h.found = found;
 	if (!found) { return h; }
 	let f = face;
 	let A = bp(corner(f, 0u)); let B = bp(corner(f, 1u)); let C = bp(corner(f, 2u));
 	let c = A * bary.x + B * bary.y + C * bary.z;
-	let wc = vec3<f32>(bodyF[P.off_pts + corner(f, 0u)].w, bodyF[P.off_pts + corner(f, 1u)].w, bodyF[P.off_pts + corner(f, 2u)].w);
-	h.k = P.plane / max(dot(max(wc, vec3<f32>(1.0)), bary), 1.0);
 	let eps = 1.0e-3;  // as gpu.surface_at
 	var zeros = 0u;
 	var k = -1;
@@ -199,9 +195,8 @@ fn query(@builtin(global_invocation_id) gid: vec3<u32>) {
 	// friction's held contact force (gpu.friction_lam_k): moved only grip of the way to the new one, all the way on a run's first step
 	var blend = P.grip;
 	if (fresh) { blend = 1.0; }
-	let lam = (1.0 - blend) * pt[3u * i + 1u].w + blend * h.k * max(-h.d, 0.0);
+	let lam = (1.0 - blend) * pt[3u * i + 1u].w + blend * P.plane * max(-h.d, 0.0);
 	pt[3u * i + 1u] = vec4<f32>(h.g, lam);
-	pt[3u * i + 2u].w = h.k;  // the contact's stiffness here, for rhs (which keeps it)
 }
 
 // ---- local step per triangle (solvers.pd_tri_k with gpu.tri_state's decomposition) ---------------------------------------------
@@ -287,8 +282,8 @@ fn spring(@builtin(global_invocation_id) gid: vec3<u32>) {
 	loc[3u * P.nt + s] = vec4<f32>(span * (k * goal / l), 0.0);
 }
 
-fn contact_k(d: f32, k: f32) -> f32 {
-	if (d < 0.0) { return k; }
+fn contact_k(d: f32) -> f32 {
+	if (d < 0.0) { return P.plane; }
 	return P.hold;
 }
 
@@ -301,8 +296,7 @@ fn rhs(@builtin(global_invocation_id) gid: vec3<u32>) {
 	let q = pt[3u * i];
 	let gn = pt[3u * i + 1u].xyz;
 	let lam = pt[3u * i + 1u].w;
-	let kc = pt[3u * i + 2u].w;  // query's: PLANE over the body's compliance
-	let ck = contact_k(q.w, kc);
+	let ck = contact_k(q.w);
 	var acc = gn * (ck * dot(gn, q.xyz)) + P.damp * x;
 	for (var c = topo[P.off_vts + i]; c < topo[P.off_vts + i + 1u]; c++) {
 		acc += loc[u32(topo[P.off_vtc + u32(c)])].xyz;
@@ -324,7 +318,7 @@ fn rhs(@builtin(global_invocation_id) gid: vec3<u32>) {
 		acc += (anchor - gn * dot(gn, anchor) + s) * w;
 	}
 	v[${BLOCK.B}u * P.n + i] = vec4<f32>(acc, 0.0);
-	pt[3u * i + 2u] = vec4<f32>(kon[P.off_lii + i] + P.damp, ck, w, kc);
+	pt[3u * i + 2u] = vec4<f32>(kon[P.off_lii + i] + P.damp, ck, w, 0.0);
 }
 
 // ---- the global solve: preconditioned conjugate gradients (Warp's cg), block Jacobi by the blocks' exact inverse -------------
