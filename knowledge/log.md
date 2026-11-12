@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-11
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): explored the fit's robustness: the leg edge's roll and bridging come from the app's one-sided contact wedging the crotch between the inner thighs in standing, carried into every pose; elastic settings, band stiffness, steps and dressing pose do not change it.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): a fitted garment's band is laid over its fabric by walking across the surface (no ragged, widening stretch where the fabric turns sharply near the crotch); found that the fit itself rolls the strappy hybrid's leg edge over in the groin crease.
 * **Decision**: [Soft body dropped](/decisions/2026-11-11-soft-body-dropped.md): the body is rigid again, the pressed skin and its settings removed, with their twins in the pipeline.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): a pose is fitted from the standing fit carried with the skin under each point, which mends the stag jump's broken sleeves (the old carry turned them inside out once the arms swung up).

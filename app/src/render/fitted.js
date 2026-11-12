@@ -619,7 +619,7 @@ export class FittedView {
 			for (let i = 0; i < m; i++) {
 				const nn = Nn[i].normalize(), t = P[near(i + 1)].clone().sub(P[near(i - 1)]).normalize(), d = new THREE.Vector3().crossVectors(nn, t).normalize();
 				if (d.dot(In[i]) < 0) d.negate();
-				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: THREE.MathUtils.clamp(Kp[i], -KAPPA_MAX, KAPPA_MAX) });
+				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: THREE.MathUtils.clamp(Kp[i], -KAPPA_MAX, KAPPA_MAX), inw: In[i] });
 				scale.push(1);
 			}
 			if (solved && own) fabricLay(frames, BAND_PROFILES[o.finish === 'binding' ? 'binding' : 'elastic'].map((q) => q[0]), surface ??= fittedSurface(X, own, this.data.case.tris, this.options.lift));
@@ -702,7 +702,9 @@ function fabricLay(frames, us, S) {
 		const c = closest([f.p.x, f.p.y, f.p.z]);
 		if (!c) continue;
 		if (c.n[0] * f.n.x + c.n[1] * f.n.y + c.n[2] * f.n.z < 0) c.n = c.n.map((x) => -x); // the frame's side of the fabric
-		let dir = flat([f.d.x, f.d.y, f.d.z], c.n);
+		// into the fabric: towards the opening's inner points (inw), on the fabric's own surface; the frame's d, from the normal at the edge,
+		// can point off the fabric where that normal is off (an edge the fit has rolled over)
+		let dir = (f.inw && flat([f.inw.x, f.inw.y, f.inw.z], c.n)) || flat([f.d.x, f.d.y, f.d.z], c.n);
 		if (!dir) continue;
 		const walk = [{ q: c.q, n: c.n, dir }];
 		for (let s = 1; s < steps; s++) {
