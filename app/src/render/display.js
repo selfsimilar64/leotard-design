@@ -2,6 +2,7 @@
 // skin scattering, ambient occlusion, lower resolution while moving). They belong to the computer, not the design, so they are kept in
 // the browser (not in the document or its undo history) and applied to the viewport at start-up.
 import { FIT_DEFAULTS } from './fitted.js';
+import { DENT_DEFAULTS } from './skin-dent.js';
 
 const KEY = 'leotard.display.v1';
 
@@ -21,12 +22,16 @@ export const DISPLAY_DEFAULTS = { resolution: 1, dynamicRes: true, msaa: 0, shad
 	// a fitted garment (render/fitted.js FIT_DEFAULTS): re-fit on the GPU after a body or pose change, its step count and friction,
 	// and how far its fabric is drawn off the body; the mesh spacing (mm; finer than 7 is a dev-only trial); what it stands on
 	// ('skin', or 'bridged': the older fit, kept to go back to; dev only and no control offers it)
-	fitRefit: FIT_DEFAULTS.refit, fitSteps: FIT_DEFAULTS.steps, fitMu: FIT_DEFAULTS.mu, fitLift: FIT_DEFAULTS.lift, fitMesh: FIT_DEFAULTS.mesh, fitBody: FIT_DEFAULTS.body };
+	fitRefit: FIT_DEFAULTS.refit, fitSteps: FIT_DEFAULTS.steps, fitMu: FIT_DEFAULTS.mu, fitLift: FIT_DEFAULTS.lift, fitMesh: FIT_DEFAULTS.mesh, fitBody: FIT_DEFAULTS.body,
+	// the soft body and the skin pressed in under it (render/fitted.js give, render/skin-dent.js DENT_DEFAULTS; Settings, Pressed skin)
+	fitGive: FIT_DEFAULTS.give, dentOut: DENT_DEFAULTS.out, dentOutSlope: DENT_DEFAULTS.outSlope, dentRise: DENT_DEFAULTS.rise,
+	dentRiseW: DENT_DEFAULTS.riseW, dentShade: DENT_DEFAULTS.shade };
 
 // A fitted garment's options from the display settings. A finer mesh and the older fit only in dev (the mesh's files are in
 // app/captures, never shipped).
 export const fitOptions = (d) => ({ refit: d.fitRefit, steps: d.fitSteps, mu: d.fitMu, lift: d.fitLift, mesh: import.meta.env.DEV ? d.fitMesh : 7,
-	body: import.meta.env.DEV ? d.fitBody : FIT_DEFAULTS.body });
+	body: import.meta.env.DEV ? d.fitBody : FIT_DEFAULTS.body, give: d.fitGive,
+	dent: { out: d.dentOut, outSlope: d.dentOutSlope, rise: d.dentRise, riseW: d.dentRiseW, shade: d.dentShade } });
 
 // Choices the UI offers (value, label).
 export const DISPLAY_OPTIONS = {

@@ -13,7 +13,7 @@ import { Refit, DEFAULTS } from '../fit/refit.js';
 import { buildCase, garmentArrays, startOf } from '../fit/fitted-case.js';
 import { foldsOf, foldPasses } from '../fit/folds.js';
 import { LineSegments2 } from './lines.js'; // (WebGL or WebGPU lines)
-import { SkinDent, pressedSkin } from './skin-dent.js';
+import { SkinDent, pressedSkin, DENT_DEFAULTS } from './skin-dent.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { ROLE_COLOURS } from './overlay.js';
 import { FittedCloth } from '../stones/fitted-cloth.js';
@@ -85,10 +85,12 @@ export const FIT_DEFAULTS = {
 	// elastic's firmness (its stiffness times this). refit.js elasticSprings; twins energy.springs, gpu.Problem kink and firm.
 	// firm 3 (owner, 2026-11-11, by eye from 1-4x stills: the band holds each opening where it belongs against the fabric's pull);
 	// the estimate puts real elastic at 1-2x, 3-4x at the stiff end: knowledge/engineering/app/elastic-firmness-estimate.md
-	give: 2000,               // fit realism plan stage 6, a soft body (no control): how many times softer the softest flesh
-	// (body/mannequin.js soft: the seat, inner thigh) takes the fabric than the firm body; 1: a rigid body. The skin is drawn pressed
-	// in by what sinks and shaded there (render/skin-dent.js). 2000 (owner, 2026-11-11: 1500-3000 look real, 5000 a little beyond):
-	// the leg elastic about 3-4 mm into the thigh
+	give: 2000,               // fit realism plan stage 6, a soft body (Settings, Pressed skin: display fitGive): how many times softer the
+	// softest flesh (body/mannequin.js soft: the seat, inner thigh) takes the fabric than the firm body; 1: a rigid body. The skin is
+	// drawn pressed in by what sinks and shaded there (render/skin-dent.js). 2000 (owner, 2026-11-11: 1500-3000 look real, 5000 a little
+	// beyond): the leg elastic about 3-4 mm into the thigh
+	dent: DENT_DEFAULTS,      // the pressed skin's groove and shading (render/skin-dent.js; Settings, Pressed skin: display dent*): a change
+	// redraws it on the fit there is, no re-fit
 	snug: 1,                  // the elastic's length against what each opening is cut with (wrap_block.ELASTIC, design_*.ELASTIC): below 1
 	// it is cut shorter and holds tighter (a trial, no control; 2026-11-11)
 	slip: 50,                 // in a pose, steps without friction before the rest (no control): how far the garment may slide from where
@@ -141,6 +143,7 @@ export class FittedView {
 		engine.coverHooks.push((C) => { if (this.on) for (const v of this.on) C[v] = 1; });
 		engine.body.onGarment.push(() => this.place());
 		this.dent = new SkinDent(engine); // the skin pressed in under a soft-body fit
+		this.pressed = null;     // the fit it is drawn for ({ contacts, X }): redrawn on it when options.dent changes (redent)
 	}
 
 	get active() { return !!this.data; }
@@ -167,7 +170,20 @@ export class FittedView {
 		if (changed('mesh')) { this.reload(); return; } // another file: loaded and re-fitted afresh
 		if (changed('refit') && !this.options.refit) { this.solved = null; this.show(); this.setStatus({ state: 'carried' }); }
 		else if ((changed('refit') || changed('steps') || changed('mu') || changed('body') || changed('press') || changed('bend') || changed('jam') || changed('kink') || changed('firm') || changed('snug') || changed('slip') || changed('give')) && this.data.case) this.refit(); // the body is the same: the current fit stays until the new one is in
+		else if (o.dent && JSON.stringify(o.dent) !== JSON.stringify(before.dent)) this.redent();
 		else this.show();
+	}
+
+	// The pressed skin drawn again with options.dent on the fit it was drawn for (0.25-0.45 s on the CPU): a slider dragged asks many
+	// times, so one runs at a time and the last asked runs next. A re-fit under way draws it with the new options itself.
+	redent() {
+		if (this.redentTimer || this.running) return;
+		this.redentTimer = setTimeout(() => {
+			this.redentTimer = null;
+			const f = this.pressed;
+			if (!f || this.running || !this.active) return;
+			this.dent.set(pressedSkin(this.engine.body, f.contacts, f.X, this.openingsInward(f.X), this.data.case.tris, this.options.dent));
+		}, 0);
 	}
 
 	// After every document change the engine has applied.
@@ -266,7 +282,7 @@ export class FittedView {
 
 	// The body changed (a new body, pose or cover): draw the fit carried onto it at once, then re-fit it there.
 	place() {
-		this.dent.set(null); // the body or pose changed: the skin as it is until re-fitted
+		this.dent.set(null); this.pressed = null; // the body or pose changed: the skin as it is until re-fitted
 		if (!this.active) return;
 		this.solved = null;
 		if (this.options.refit && this.data.case) { this.hold(true); this.refit(); return; } // shown once fitted (hold)
@@ -476,7 +492,8 @@ export class FittedView {
 				if (this.again || gen !== this.gen || !this.active) continue; // the body changed meanwhile: run again on the new one
 				this.solved = fit.X;
 				this.show();
-				this.dent.set(skin && fit.contacts ? pressedSkin(man, fit.contacts, fit.X, this.openingsInward(fit.X), this.data.case.tris) : null);
+				this.pressed = skin && fit.contacts ? { contacts: fit.contacts, X: fit.X } : null;
+				this.dent.set(this.pressed ? pressedSkin(man, fit.contacts, fit.X, this.openingsInward(fit.X), this.data.case.tris, this.options.dent) : null);
 				this.hold(false);
 				this.setStatus({ state: 'fitted', steps: dressSteps + fit.steps, seconds: dressSec + fit.seconds, setup: (performance.now() - t0) / 1000 - dressSec - fit.seconds, dressed: !!start });
 			} while (this.again && this.active);
@@ -583,7 +600,7 @@ export class FittedView {
 
 	clear(doc) {
 		const view = this.view, e = this.engine;
-		this.dent.set(null);
+		this.dent.set(null); this.pressed = null;
 		this.gen++; // any re-fit under way is for the garment going
 		this.hold(false);
 		for (const m of this.meshes) { m.parent?.remove(m); m.geometry.dispose(); }

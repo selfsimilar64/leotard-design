@@ -5,10 +5,13 @@
 //    corners at its points' contacts on the skin, facing the skin's way; the depth linear across it), then smoothed (the triangles'
 //    facets). Continuous, so nothing point by point: three earlier versions drew a bump or disc per fit point (7-8 mm apart) and
 //    showed teeth, blotches or stripes along the elastic in the body's normals (owner, 2026-11-11);
-//  - along each opening a groove of a set cross-section: the elastic's depth at the edge, smooth walls rising W_IN inside and DIP_R
-//    outside (wider where it is deeper: SLOPE times the depth), and the flesh rising past it (BULGE of the depth, over BULGE_R), what
-//    the elastic pushes in goes somewhere. The fabric's own depth falls off within one row inside the elastic, a groove one skin
-//    vertex wide that smoothing halved (the skin level with the fabric: the elastic lost under it); blended along the edge;
+//  - along each opening a groove of a set cross-section: the elastic's depth at the edge, smooth walls rising W_IN inside (wider where
+//    it is deeper: SLOPE times the depth) and the shape's `out` outside (its recovery: at least outSlope times the depth), and the flesh
+//    rising past it (rise of the depth, over riseW), what the elastic pushes in goes somewhere. The fabric's own depth falls off within
+//    one row inside the elastic, a groove one skin vertex wide that smoothing halved (the skin level with the fabric: the elastic lost
+//    under it); blended along the edge. Outside the edge only the groove: the fabric's depth (smoothed, normalised by its coverage)
+//    reaches about 15 mm onto bare skin, where it hid the recovery's width (the sweep of 2026-11-11), so it is faded out over SIDE_W
+//    across the edge line;
 //  - the skin never rises above the fabric drawn over it: held at least to the fabric's depth (smoothed) less LIFT, plus a margin;
 //  - the skin moves along normals smoothed over a few centimetres, so the two sides of a crease (the cleft) move together instead of
 //    into each other (along their own normals they pinched into a ridge), and no more than ROOM of the way to skin facing it across a
@@ -29,21 +32,25 @@ const MAX_TRI = 0.02;    // m, a fabric triangle with a longer side between its 
 const FACING = 0.5;      // a skin vertex under a triangle faces its way at least this much (not the skin across a fold)
 const SMOOTH = 3;        // smoothing of the fabric's depth under it (its triangles' facets)
 const W_IN = 0.012;      // m, the groove's wall inside an opening (under the fabric)
-const DIP_R = 0.012;     // m, its wall outside (the flesh back at the surface)
-const SLOPE = 1.5;       // the walls at least this many times the depth wide (a deeper press spreads wider; at give 5000, 2 cm deep in
+const SLOPE = 1.5;       // that wall at least this many times the depth wide (a deeper press spreads wider; at give 5000, 2 cm deep in
 // 1.2 cm walls, the skin's triangles crumpled)
+const SIDE_W = 0.002;    // m, across an opening's edge line, the fabric's own depth faded out over this either side (outside: the groove)
 const EDGE_W = 0.01;     // m, along an opening, how far each edge point's cross-section is blended with its neighbours'
 const HOLD_MARGIN = 0.0008; // m, the skin kept that much under the fabric as drawn (LIFT off its fit)
 const MAX_DENT = 0.03;   // m, deepest drawn (a guard; the fit's own depths are what is drawn)
 const NORMAL_PASSES = 12; // smoothing of the directions the skin moves along (about 1.5 cm)
 const ROOM = 0.5;        // the skin moved at most this share of the way to skin facing it across a fold
-const BULGE = 0.35;      // how much of an opening's depth rises just outside it
-const BULGE_R = 0.022;   // m, the rise's reach from the opening (its peak about a centimetre out), widened with DIP_R
 const OCC_PASSES = 4;    // smoothing of the contact occlusion (a per-vertex estimate from point samples is noisy)
 const REACH = 0.015;     // m, the occlusion's reach
 const LIFT = 0.0024;     // m, the fabric drawn off its fit (render/fitted.js options.lift and the fabric material's own)
-const OCC = 1.4;         // occlusion strength (TUNABLE, by eye)
 const OCC_MIN = 0.35;
+// The groove's shape outside an opening and the shading, set by the designer (Settings, Pressed skin: render/display.js dent*, passed as
+// render/fitted.js options.dent; trials 2026-11-11, being chosen by eye): out, the wall outside (m: how far out the skin is back up);
+// outSlope, that wall at least this many times the depth (0: the same everywhere; a narrow wall where the elastic presses 12 mm deep
+// is a cliff the body's 4-6 mm mesh draws lumpy); rise, how much of the depth the flesh rises just outside it; riseW, the rise's reach
+// (m, its peak at half of it); shade, the contact occlusion's strength. Defaults: the middle of the rear sweep (2-12 mm walls), 6 mm
+// clean in passe and the lunge; the rise and shading as before.
+export const DENT_DEFAULTS = { out: 0.006, outSlope: 0, rise: 0.35, riseW: 0.011, shade: 1.4 };
 
 // A spatial hash of points P (xyz), of the members listed (all of them by default): (x, y, z, r, fn) calls fn(index, distance) for every
 // member within r. Cells keyed by a hashed integer (a collision only merges two cells: the distance test still holds).
@@ -84,8 +91,9 @@ function smooth(f, man, passes, list, dim = 1) {
 // The skin drawn under a soft-body fit: { P, N (positions and normals pressed in), occ (per vertex, 0-1), move }. contacts: per fit
 // point (closest skin point xyz, signed depth: refit.js contacts); X: the fit's points; edges: Map of the fit points on the garment's
 // openings to their inward direction (unit, into the fabric, across the edge: render/fitted.js openingsInward); tris: the fit's
-// triangles (points' indices); Q, N: the skin they stood on.
-export function pressedSkin(man, contacts, X, edges, tris, Q = man.aPos.array, N = man.aNrm.array) {
+// triangles (points' indices); shape: DENT_DEFAULTS' fields; Q, N: the skin they stood on.
+export function pressedSkin(man, contacts, X, edges, tris, shape = DENT_DEFAULTS, Q = man.aPos.array, N = man.aNrm.array) {
+	const { out: OUT, outSlope: OUT_SLOPE, rise: RISE, riseW: RISE_W, shade: OCC } = { ...DENT_DEFAULTS, ...shape };
 	const nv = man.vertices, np = X.length / 3, near = gridOf(Q, nv), bump = (d, r) => (d >= r ? 0 : (1 - (d / r) ** 2) ** 2);
 	const C = (i, k) => contacts[4 * i + k], depthOf = (i) => Math.min(-contacts[4 * i + 3], MAX_DENT); // under the skin (< 0: over)
 	// each fit point's nearest skin vertex (at its contact): which way the skin faces there (the garment's halves wind opposite ways)
@@ -116,10 +124,10 @@ export function pressedSkin(man, contacts, X, edges, tris, Q = man.aPos.array, N
 	}
 	// the groove along each opening: each edge point's cross-section (out: across the edge, < 0 inside), blended with its neighbours'
 	// by how far along the edge they are
-	const grooveS = new Float32Array(nv), grooveW = new Float32Array(nv);
+	const grooveS = new Float32Array(nv), grooveW = new Float32Array(nv), grooveO = new Float32Array(nv);
 	for (const [i, inward] of edges) {
 		const depth = Math.max(depthOf(i), 0), cx = C(i, 0), cy = C(i, 1), cz = C(i, 2);
-		const wIn = Math.max(W_IN, SLOPE * depth), wOut = Math.max(DIP_R, SLOPE * depth), wRise = wOut * BULGE_R / DIP_R;
+		const wIn = Math.max(W_IN, SLOPE * depth), wOut = Math.max(OUT, OUT_SLOPE * depth, 0.0005), wRise = Math.max(RISE_W, 0.0005);
 		near(cx, cy, cz, Math.max(wRise, wIn) + EDGE_W, (v, d) => {
 			const out = -((Q[3 * v] - cx) * inward[0] + (Q[3 * v + 1] - cy) * inward[1] + (Q[3 * v + 2] - cz) * inward[2]);
 			if (out < -wIn) return;
@@ -127,8 +135,8 @@ export function pressedSkin(man, contacts, X, edges, tris, Q = man.aPos.array, N
 			if (!(w > 0)) return;
 			let p;
 			if (out < 0) { const g = -out / wIn; p = 1 - g * g * (3 - 2 * g); }
-			else { const g = Math.min(out / wOut, 1), u = Math.min(out / wRise, 1); p = 1 - g * g * (3 - 2 * g) - BULGE * 16 * u * u * (1 - u) * (1 - u); }
-			grooveS[v] += w * depth * p; grooveW[v] += w; touched[v] = 1;
+			else { const g = Math.min(out / wOut, 1), u = Math.min(out / wRise, 1); p = 1 - g * g * (3 - 2 * g) - RISE * 16 * u * u * (1 - u) * (1 - u); }
+			grooveS[v] += w * depth * p; grooveW[v] += w; grooveO[v] += w * out; touched[v] = 1;
 		});
 	}
 	// the vertices worked on: those reached, and a ring round them for the smoothing
@@ -140,7 +148,8 @@ export function pressedSkin(man, contacts, X, edges, tris, Q = man.aPos.array, N
 	const list = [];
 	for (let v = 0; v < nv; v++) if (inSet[v]) list.push(v);
 	// the fabric's depth smoothed, and how much of the smoothing came from under it (cov): the depth itself (inner / cov) where the
-	// groove is, faded to the groove's alone off the fabric
+	// groove is, the groove's alone outside the edge line (si: by the weighted distance across the edge; the form the 2026-11-11 sweep
+	// was judged on)
 	const inner = new Float32Array(nv), cov = new Float32Array(nv);
 	for (let v = 0; v < nv; v++) if (gap[v] < Infinity) { inner[v] = Math.max(under[v], 0); cov[v] = 1; }
 	smooth(inner, man, SMOOTH, list); smooth(cov, man, SMOOTH, list);
@@ -148,14 +157,13 @@ export function pressedSkin(man, contacts, X, edges, tris, Q = man.aPos.array, N
 	for (let v = 0; v < nv; v++) {
 		if (!(grooveW[v] > 0)) { move[v] = inner[v]; continue; }
 		const g = grooveS[v] / grooveW[v], c = cov[v], m = c > 1e-6 ? inner[v] / c : 0;
-		move[v] = c * Math.max(g, m) + (1 - c) * g; // where the groove's walls end (g 0) this is inner: continuous
+		const t = Math.min(Math.max((grooveO[v] / grooveW[v] + SIDE_W) / (2 * SIDE_W), 0), 1), si = 1 - t * t * (3 - 2 * t);
+		move[v] = si * Math.max(g, m) + (1 - si) * g;
 	}
 	smooth(move, man, 1, list);
 	// never over the fabric (it seldom binds now: a few vertices at give 5000)
 	const hold = smooth(Float32Array.from(under), man, 1, list);
 	for (let v = 0; v < nv; v++) hold[v] = gap[v] < Infinity ? hold[v] - LIFT + HOLD_MARGIN : -Infinity;
-	for (let v = 0; v < nv; v++) if (move[v] < hold[v]) move[v] = hold[v];
-	smooth(move, man, 1, list);
 	for (let v = 0; v < nv; v++) if (move[v] < hold[v]) move[v] = hold[v];
 	// along normals smoothed over the area (a crease's two sides move together)
 	const M = smooth(Float32Array.from(N), man, NORMAL_PASSES, list, 3);

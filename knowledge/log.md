@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-11
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: the pressed skin's recovery width swept (the fabric's depth had been leaking past the elastic and hiding it; fixed), then built into the app as a Pressed skin face on the Settings card, so the owner can tune the softness, recovery width, flesh roll and shading live.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: the pressed skin rebuilt a fourth time after the owner saw jagged artifacts in the normals: the skin follows the fabric's own depth over its triangles (not a bump or disc per fit point), the elastic's groove drawn as a set cross-section that widens with depth, the openings' edge directions smoothed, and the skin kept from crossing into skin across a fold.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: pressed skin redone as smooth blended dips with a rise outside the openings and the skin held under the fabric as drawn (owner: the second version looked jagged and flat, elastic lost at the seat and cleft).
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: soft body on by default (give 2000); the pressed skin rebuilt from the fit's exact contacts (stops at the fabric edge, flesh rises past it, no pinch in creases) and lit by a contact occlusion baked per fit into both skins (shadow map and GTAO cannot see mm grooves); softness map blended wider.
