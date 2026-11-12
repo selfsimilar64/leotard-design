@@ -210,8 +210,8 @@ const triNormal = (P, a, b, c) => {
 };
 
 // The closest point of triangle (a, b, c) (vertex indices into P) to p: its weights, squared distance, and p's height over the
-// triangle's plane along its normal (Ericson, Real-Time Collision Detection 5.1.5). Also render/fitted.js fabricLay's.
-export function closestOnTri(p, P, ia, ib, ic) {
+// triangle's plane along its normal (Ericson, Real-Time Collision Detection 5.1.5).
+function closestOnTri(p, P, ia, ib, ic) {
 	const a = [P[3 * ia], P[3 * ia + 1], P[3 * ia + 2]], b = [P[3 * ib], P[3 * ib + 1], P[3 * ib + 2]], c = [P[3 * ic], P[3 * ic + 1], P[3 * ic + 2]];
 	const sub = (x, y) => [x[0] - y[0], x[1] - y[1], x[2] - y[2]], dot = (x, y) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
 	const ab = sub(b, a), ac = sub(c, a), ap = sub(p, a);

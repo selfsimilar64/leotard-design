@@ -202,16 +202,12 @@ export function buildGeometry(loops, prof) {
 	for (const { frames, scale, pts, length, open } of loops) {
 		const n = frames.length;
 		for (let i = 0; i < n; i++) {
-			const { p, n: fn, d: fd, kap, lay } = frames[i], s = scale[i], along = (i / n) * length;
+			const { p, n: sn, d, kap, h } = frames[i], s = scale[i], along = (i / n) * length;
 			for (let k = 0; k < M; k++) {
 				const o = base + i * M + k, u = prof[k][0] * s;
-				// lay (a fitted garment's band, render/fitted.js fabricLay): per profile point the garment surface under it, its normal and
-				// the way across, the band laid over the fabric; else a plane through p bent by kap
-				let sn = fn, d = fd;
-				if (lay) {
-					sn = new THREE.Vector3().fromArray(lay.up, 3 * k); d = new THREE.Vector3().fromArray(lay.across, 3 * k);
-					v.fromArray(lay.at, 3 * k).addScaledVector(sn, prof[k][1]);
-				} else v.copy(p).addScaledVector(d, u).addScaledVector(sn, prof[k][1] - kap * u * u / 2);
+				// h (a fitted garment's band, render/fitted.js fabricUnder): per profile point, where the fabric under it lies along sn;
+				// else the bend kap estimates it
+				v.copy(p).addScaledVector(d, u).addScaledVector(sn, prof[k][1] + (h && Number.isFinite(h[k]) ? h[k] : -kap * u * u / 2));
 				v.toArray(pos, o * 3);
 				nv.copy(d).multiplyScalar(pn[k][0]).addScaledVector(sn, pn[k][1]).normalize().toArray(nrm, o * 3);
 				pts[i].ref.toArray(ref, o * 3);

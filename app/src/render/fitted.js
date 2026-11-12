@@ -10,7 +10,7 @@ import { fittedOf, fitSizeOf, fittedTrimOf } from '../garment/fitted.js';
 import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
 import { applyFabric, bindScan, texScaleOf, fabricSide } from '../materials/fabric.js';
 import { Refit, DEFAULTS } from '../fit/refit.js';
-import { buildCase, garmentArrays, startOf, skinHosts, carriedStart, closestOnTri } from '../fit/fitted-case.js';
+import { buildCase, garmentArrays, startOf, skinHosts, carriedStart } from '../fit/fitted-case.js';
 import { foldsOf, foldPasses } from '../fit/folds.js';
 import { LineSegments2 } from './lines.js'; // (WebGL or WebGPU lines)
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
@@ -583,7 +583,7 @@ export class FittedView {
 		// normal and flat across, it stood off a convex fabric and sank under a concave one: where the fit pressed the edge in, its
 		// inner half went under the fabric and the skin (owner, 2026-11-11)
 		// (bent by that estimate it still crossed the fabric's flat 7 mm triangles near its tucked-in end, the crossing a sawtooth along
-		// its quads: owner, 2026-11-11. So the band is laid over the fabric point by point: fabricLay)
+		// its quads: owner, 2026-11-11. So each point of its profile is set on the fabric under it: fabricUnder)
 		const own = X && this.data.case ? this.ownNormals(X) : null, ownAt = (i) => new THREE.Vector3(own[3 * i], own[3 * i + 1], own[3 * i + 2]);
 		const built = [];
 		let surface = null;
@@ -621,10 +621,10 @@ export class FittedView {
 			for (let i = 0; i < m; i++) {
 				const nn = Nn[i].normalize(), t = P[near(i + 1)].clone().sub(P[near(i - 1)]).normalize(), d = new THREE.Vector3().crossVectors(nn, t).normalize();
 				if (d.dot(In[i]) < 0) d.negate();
-				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: THREE.MathUtils.clamp(Kp[i], -KAPPA_MAX, KAPPA_MAX), inw: In[i] });
+				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: THREE.MathUtils.clamp(Kp[i], -KAPPA_MAX, KAPPA_MAX) });
 				scale.push(1);
 			}
-			if (solved && own) fabricLay(frames, BAND_PROFILES[o.finish === 'binding' ? 'binding' : 'elastic'].map((q) => q[0]), surface ??= fittedSurface(X, own, this.data.case.tris, this.options.lift));
+			if (solved && own) fabricUnder(frames, BAND_PROFILES[o.finish === 'binding' ? 'binding' : 'elastic'].map((q) => q[0]), surface ??= fittedSurface(X, own, this.data.case.tris, this.options.lift));
 			built.push({ frames, scale, pts, length, open });
 		}
 		const L0 = doc.panels.filter((p) => (p.layer ?? 'L0') === 'L0' && !p.removed);
@@ -647,8 +647,8 @@ export class FittedView {
 	}
 }
 
-// The finishes' profiles (garment/trim.js TRIMS) with a point at least every BAND_STEP across their width: laid on the fitted fabric
-// point by point (fabricLay), the band follows it between them only straight, and the fabric folds 5 mm across the band where an
+// The finishes' profiles (garment/trim.js TRIMS) with a point at least every BAND_STEP across their width: set on the fitted fabric
+// point by point (fabricUnder), the band follows it between them only straight, and the fabric folds 5 mm across the band where an
 // opening lies in the groin's crease (owner's arms-outstretched, 2026-11-11: the fabric came through the band's top between its points
 // 3 and 7.5 mm in). The rolled lip (u going back towards the edge) is kept as it is.
 const BAND_STEP = 0.001;
@@ -664,7 +664,7 @@ const BAND_PROFILES = Object.fromEntries(['elastic', 'binding'].map((kind) => {
 
 // The fitted fabric's surface exactly as drawn: each point lifted `lift` (show()) and the fabric material's own FABRIC_OFFSET
 // (materials/fabric.js uOffset, a panel's 1.2 mm, along the vertex normals show() gives it: its own) along its own normal, flat over
-// each triangle, its normals the points' own (N); its triangles hashed by centroid (1 cm cells) for fabricLay.
+// each triangle; its triangles hashed by centroid (1 cm cells) for fabricUnder.
 const FABRIC_OFFSET = 0.0012;
 function fittedSurface(X, own, tris, lift) {
 	const B = Float32Array.from(X, (x, i) => x + own[i] * (lift + FABRIC_OFFSET)), cell = 0.01, grid = new Map();
@@ -673,58 +673,41 @@ function fittedSurface(X, own, tris, lift) {
 		const k = [0, 1, 2].map((j) => Math.floor((B[a + j] + B[b + j] + B[c + j]) / 3 / cell)).join();
 		(grid.get(k) ?? grid.set(k, []).get(k)).push(t);
 	}
-	return { B, N: own, tris, cell, grid };
+	return { B, tris, cell, grid };
 }
 
-// A re-fitted opening's band laid over its fabric (frame.lay, garment/trim.js buildGeometry): from the edge point's closest point on
-// the fabric as drawn, a walk across the fabric's surface in LAY_STEP steps (each step's end put back on the surface: its closest
-// point), the way across turned with the surface; each profile point at its distance along that walk, on the garment surface under the
-// fabric's offset, with the fabric's normal there and the walk's direction. A strip laid over a fold or a corner of the fabric follows
-// it. The line straight down from a flat band (fabricUnder, its first form) missed the fabric where it turned through more than a right
-// angle across the band, near the crotch on the strappy hybrid (owner, 2026-11-11: "it starts to get wider and then breaks or dips
-// under the fabric as it reaches the crotch"), and those points fell back to the bend's estimate, alternating with the laid ones.
-// A frame whose edge finds no fabric keeps the bend (kap).
-const LAY_STEP = 0.0005;
-function fabricLay(frames, us, S) {
-	const { B, N, tris, cell, grid } = S, M = us.length, uMax = Math.max(...us), steps = Math.ceil(uMax / LAY_STEP) + 1;
-	const closest = (x) => {
-		let best = null, bd = Infinity;
-		const gx = Math.floor(x[0] / cell), gy = Math.floor(x[1] / cell), gz = Math.floor(x[2] / cell);
-		for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) for (const t of grid.get(`${gx + a},${gy + b},${gz + c}`) ?? []) {
-			const ia = tris[3 * t], ib = tris[3 * t + 1], ic = tris[3 * t + 2], r = closestOnTri(x, B, ia, ib, ic);
-			if (r.d2 < bd) { bd = r.d2; best = { r, ia, ib, ic }; }
-		}
-		if (!best || bd > 0.01 * 0.01) return null;
-		const { r, ia, ib, ic } = best, q = [0, 1, 2].map((k) => r.w0 * B[3 * ia + k] + r.w1 * B[3 * ib + k] + r.w2 * B[3 * ic + k]);
-		const n = [0, 1, 2].map((k) => r.w0 * N[3 * ia + k] + r.w1 * N[3 * ib + k] + r.w2 * N[3 * ic + k]), l = Math.hypot(...n) || 1;
-		return { q, n: n.map((x) => x / l) };
-	};
-	const flat = (d, n) => { const t = d[0] * n[0] + d[1] * n[1] + d[2] * n[2], v = d.map((x, k) => x - t * n[k]), l = Math.hypot(...v); return l > 1e-9 ? v.map((x) => x / l) : null; };
-	for (const f of frames) {
-		const c = closest([f.p.x, f.p.y, f.p.z]);
-		if (!c) continue;
-		if (c.n[0] * f.n.x + c.n[1] * f.n.y + c.n[2] * f.n.z < 0) c.n = c.n.map((x) => -x); // the frame's side of the fabric
-		// into the fabric: towards the opening's inner points (inw), on the fabric's own surface; the frame's d, from the normal at the edge,
-		// can point off the fabric where that normal is off (an edge the fit has rolled over)
-		let dir = (f.inw && flat([f.inw.x, f.inw.y, f.inw.z], c.n)) || flat([f.d.x, f.d.y, f.d.z], c.n);
-		if (!dir) continue;
-		const walk = [{ q: c.q, n: c.n, dir }];
-		for (let s = 1; s < steps; s++) {
-			const prev = walk[s - 1], nx = closest(prev.q.map((x, k) => x + prev.dir[k] * LAY_STEP));
-			if (!nx) break;
-			if (nx.n[0] * prev.n[0] + nx.n[1] * prev.n[1] + nx.n[2] * prev.n[2] < 0) nx.n = nx.n.map((x) => -x);
-			const moved = nx.q.map((x, k) => x - prev.q[k]);
-			dir = (Math.hypot(...moved) > LAY_STEP / 4 && flat(moved, nx.n)) || flat(prev.dir, nx.n) || prev.dir;
-			walk.push({ q: nx.q, n: nx.n, dir });
-		}
-		const at = new Float32Array(3 * M), up = new Float32Array(3 * M), across = new Float32Array(3 * M);
+// Per frame of a re-fitted opening's band (garment/trim.js buildGeometry) and per point of its profile (us: metres across), where the
+// fabric's surface lies along the frame's normal from the frame's plane there (frame.h): the band set on the fabric point by point.
+// The fabric is flat 7 mm triangles; the band's tucked-in end clears it by 0.2 mm (garment/trim.js TRIMS: v over the garment surface,
+// the fabric at 1.2 mm), so a bend estimated from the normals (kap) crossed it in places, and so did a surface before the fabric's
+// offset or one smoothed along the opening: the crossing is set exactly here. A point with no fabric within 1 cm along the normal
+// keeps the bend's estimate.
+function fabricUnder(frames, us, S) {
+	const { B, tris, cell, grid } = S, M = us.length, H = frames.map(() => new Float32Array(M).fill(NaN));
+	const q = [0, 0, 0];
+	frames.forEach((f, i) => {
+		const n = f.n, cx = [0, 1, 2];
 		for (let k = 0; k < M; k++) {
-			// (past the walk's end: straight on from its last point)
-			const x = Math.max(us[k], 0) / LAY_STEP, j = Math.min(Math.floor(x), walk.length - 1), w = walk[j], over = (x - j) * LAY_STEP;
-			for (let m = 0; m < 3; m++) { up[3 * k + m] = w.n[m]; across[3 * k + m] = w.dir[m]; at[3 * k + m] = w.q[m] + w.dir[m] * over - w.n[m] * FABRIC_OFFSET; }
+			for (const j of cx) q[j] = f.p.getComponent(j) + f.d.getComponent(j) * us[k];
+			let best = Infinity, hit = NaN;
+			const gx = Math.floor(q[0] / cell), gy = Math.floor(q[1] / cell), gz = Math.floor(q[2] / cell);
+			for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) for (const t of grid.get(`${gx + a},${gy + b},${gz + c}`) ?? []) {
+				// the line q + s n against triangle t (Moller-Trumbore, either way along n)
+				const A = 3 * tris[3 * t], Bv = 3 * tris[3 * t + 1], C = 3 * tris[3 * t + 2];
+				const e1 = [B[Bv] - B[A], B[Bv + 1] - B[A + 1], B[Bv + 2] - B[A + 2]], e2 = [B[C] - B[A], B[C + 1] - B[A + 1], B[C + 2] - B[A + 2]];
+				const px = n.y * e2[2] - n.z * e2[1], py = n.z * e2[0] - n.x * e2[2], pz = n.x * e2[1] - n.y * e2[0], det = e1[0] * px + e1[1] * py + e1[2] * pz;
+				if (Math.abs(det) < 1e-12) continue;
+				const tx = q[0] - B[A], ty = q[1] - B[A + 1], tz = q[2] - B[A + 2], u = (tx * px + ty * py + tz * pz) / det;
+				if (u < -1e-4 || u > 1 + 1e-4) continue;
+				const qx = ty * e1[2] - tz * e1[1], qy = tz * e1[0] - tx * e1[2], qz = tx * e1[1] - ty * e1[0], v = (n.x * qx + n.y * qy + n.z * qz) / det;
+				if (v < -1e-4 || u + v > 1 + 1e-4) continue;
+				const s = (e2[0] * qx + e2[1] * qy + e2[2] * qz) / det;
+				if (Math.abs(s) < best && Math.abs(s) < 0.01) { best = Math.abs(s); hit = s - FABRIC_OFFSET; } // (the profile's v counts from under the fabric's offset)
+			}
+			H[i][k] = hit;
 		}
-		f.lay = { at, up, across };
-	}
+	});
+	frames.forEach((f, i) => { f.h = H[i]; }); // (a miss, NaN: buildGeometry takes the bend's estimate there)
 }
 
 // An open run of edge records (an opening's o.open) at the rims' spacing, its ends kept: garment/trim.js resample and smoothLoop wrap
