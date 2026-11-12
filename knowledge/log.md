@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-11
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): a fitted garment's band is laid over its fabric by walking across the surface (no ragged, widening stretch where the fabric turns sharply near the crotch); found that the fit itself rolls the strappy hybrid's leg edge over in the groin crease.
 * **Decision**: [Soft body dropped](/decisions/2026-11-11-soft-body-dropped.md): the body is rigid again, the pressed skin and its settings removed, with their twins in the pipeline.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): a pose is fitted from the standing fit carried with the skin under each point, which mends the stag jump's broken sleeves (the old carry turned them inside out once the arms swung up).
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md) stage 6: a fitted garment's elastic band is set point by point on the fabric under it (a comb of teeth where it crossed the fabric's flat triangles is gone); reloads now bring back the camera and keep the realistic skin; the pressed skin follows the fabric's lift setting.
