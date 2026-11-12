@@ -39,6 +39,12 @@ AGE_P = lambda a: P9 + 'Shapes/Zev0/Growing Up/Age Presets/%s.duf' % AGE[a]
 _PD = P9 + 'Poses/3D Sugar/Skillful Routine/Feminine/'
 _ED = P9 + 'Expressions/3D Sugar/Skilfull Routine/'
 DAZ_POSE = lambda n: next(_PD + f for f in os.listdir(LIB + _PD) if f.startswith('SR G9 Feminine %02d ' % n) and f.endswith('.duf'))
+# Motionless Mannequin Poses (Daz Originals, bought 2026-11-12): the Feminine set (poses 01-15 retuned
+# for a feminine figure: arms clear of the hips, hip height) by its number in the pack.
+_MD = P9 + 'Poses/Daz Originals/Motionless/Feminine/'
+MOTIONLESS_POSE = lambda n: next(_MD + f for f in os.listdir(LIB + _MD) if f.startswith('Motionless Genesis 9 Base Feminine %02d ' % n) and f.endswith('.duf'))
+# A POSES entry's preset: n = Skillful Routine number, mn = Motionless number (bust_cloth/bake_bust_poses.py uses it too).
+pose_preset = lambda p: MOTIONLESS_POSE(p['mn']) if 'mn' in p else DAZ_POSE(p['n'])
 EXPR = lambda n: next(_ED + f for f in os.listdir(LIB + _ED) if f.startswith('SR Expression %02d ' % n) and f.endswith('.duf'))
 NEUTRAL = P9 + 'Expressions/3D Sugar/0 Expression.duf'
 # The person is Stacy (CaramelDream3D) on every body since 2026-10-21 (owner's choice): her face
@@ -129,6 +135,14 @@ POSES = [
 	dict(key='kneeling-arm-up', label='Kneeling, arm up', n=22),
 	dict(key='arms-open', label='Arms open', n=29),
 	dict(key='one-knee', label='On one knee', n=30),
+	# Motionless Mannequin Poses, picked by the owner 2026-11-12 (mn: Feminine NN in that pack). Keys
+	# start 'mm-' so none collides with the old arm poses of body/pose.js ('hands-on-hips', ...).
+	# Labels kept to about 13 characters: the picker's tiles cut longer ones (07 and 08 both "look to the side").
+	dict(key='mm-standing-on-leg', label='Weight shift', mn=3),
+	dict(key='mm-looking-side', label='Feet apart', mn=7),
+	dict(key='mm-looking-side-2', label='Feet together', mn=8),
+	dict(key='mm-hand-on-hip', label='Hand on hip', mn=11),
+	dict(key='mm-hands-on-hips', label='Hands on hips', mn=14),
 ]
 # Arm poses (the app's 'arms-down', 'hands-on-hips', ...: body/pose.js): each arm separately.
 # Since 2026-10-26 only 'up' on the reference body is baked: the curves' open surface needs it
@@ -164,7 +178,7 @@ def stage1_jobs(bodies, missing=False):
 	if missing:
 		jobs = []
 		for b in bodies:
-			todo = [dict(key=p['key'], preset=DAZ_POSE(p['n']), nodes='all') for p in POSES if not os.path.exists(body_dir(b['key']) + p['key'] + '.pts')]
+			todo = [dict(key=p['key'], preset=pose_preset(p), nodes='all') for p in POSES if not os.path.exists(body_dir(b['key']) + p['key'] + '.pts')]
 			if todo: jobs.append(dict(key=b['key'], out=body_dir(b['key']), presets=[*STACY, *b["presets"], *EIRGRID],
 				morphs={**b['morphs'], **STACY_MORPHS}, poses=todo, materials=False, expressions=[]))
 		return jobs
@@ -172,7 +186,7 @@ def stage1_jobs(bodies, missing=False):
 		poses=[dict(key='zero', nodes='all')], expressions=[])]
 	for b in bodies:
 		poses = [dict(key='a-pose', aim={'l': a_pose_aim(1), 'r': a_pose_aim(-1)}, nodes='all')]
-		poses += [dict(key=p['key'], preset=DAZ_POSE(p['n']), nodes='all') for p in POSES]
+		poses += [dict(key=p['key'], preset=pose_preset(p), nodes='all') for p in POSES]
 		jobs.append(dict(key=b['key'], out=body_dir(b['key']), presets=[*STACY, *b["presets"], *EIRGRID],
 			morphs={**b['morphs'], **STACY_MORPHS}, poses=poses, materials=True,
 			expressions=[dict(key=e['key'], preset=e.get('preset') or EXPR(e['n'])) for e in EXPRESSIONS]))

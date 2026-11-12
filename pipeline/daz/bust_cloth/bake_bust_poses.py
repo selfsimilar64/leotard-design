@@ -11,6 +11,6 @@ for b in Bd.BODIES:
 	m = {**b['morphs'], **Bd.STACY_MORPHS, 'body_ctrl_BreastsFlatten': 0.25, 'body_ctrl_BreastsIn-Out': 1.0}
 	out = os.path.join(Bd.HERE, 'out', 'bust-cloth', b['key'] + '-f25in10').replace(os.sep, '/') + '/'
 	ps = [dict(key='a-pose', aim={'l': Bd.a_pose_aim(1), 'r': Bd.a_pose_aim(-1)}, nodes='cage')]
-	ps += [dict(key=p['key'], preset=Bd.DAZ_POSE(p['n']), nodes='cage') for p in Bd.POSES if p['key'] in poses]
+	ps += [dict(key=p['key'], preset=Bd.pose_preset(p), nodes='cage') for p in Bd.POSES if p['key'] in poses]
 	jobs.append(dict(key=b['key'] + '-f25in10', out=out, presets=[Bd.STACY[0], *b['presets']], morphs=m, poses=ps, expressions=[]))
 Bd.run_daz(jobs, 'bust-cloth-poses')

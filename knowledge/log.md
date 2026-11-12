@@ -1,6 +1,7 @@
 # Bundle update log
 
 ## 2026-11-12
+* **Update**: [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md): five standing poses added from Daz's Motionless Mannequin Poses (owner's picks 03, 07, 08, 11, 14, the Feminine set): weight shift, feet apart, feet together, hand on hip, hands on hips; baked on all six bodies (Daz 311 s), converted, picker thumbnails made.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): the band laid over the fabric by walking its surface is undone (owner: it made the leg elastic into the crotch worse); the band is set point by point on the fabric again.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): direction-aware band stiffness tried in the fit (stiff across the band, soft along it): the crumpled band near the crotch straightens, the edge still turns away where the crotch is squeezed; left off as a trial option.
 
