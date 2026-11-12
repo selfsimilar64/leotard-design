@@ -75,11 +75,83 @@ export function startOf(data, Q) {
 	return out;
 }
 
+// The elastic's width across an opening (m): a leotard's openings are finished with about 1 cm of elastic turned under
+// (garment/trim.js TRIMS.elastic, 10 mm). The file's elastic spans (pipeline/wrap_block.py export) run along the edge row of points
+// only, so the whole band's pull sat on one row: with a soft body that row sank a groove one row wide (4-13 mm deep at give 2000)
+// and the fabric one row in (7 mm) climbed steeply out of it over the drawn band, burying its inner half (owner, 2026-11-11: "the
+// elastic bands disappear"). Real elastic is the firm part of the band and presses in across its width, the fabric rising past it.
+export const ELASTIC_W = 0.01;
+
+// The case's elastic spread over its width (elasticBand): the rows of points within `width` of each opening (row 0 the file's edge
+// spans, row r the points next to row r-1, at the flat distance in of their triangles' height over the row before), each row's spans
+// (mesh edges with both ends in it) taking the elastic's stiffness by the share of the width the row stands for (halfway to the rows
+// either side), its rest length the row's flat length times the elastic's own ratio (rest over flat) where the row came from. The
+// stiffness per length (k x the span's flat length) is the elastic's; the total pull is the file's. width 0: the file's spans as they
+// are. App only: pipeline fits (wrap_block, the race's energy.springs and gpu.Problem) keep the edge-row elastic.
+export function elasticBand(c, width = ELASTIC_W) {
+	if (!(width > 0)) return { si: c.si, sj: c.sj, rest_len: c.rest_len, k: c.k };
+	const n = c.n, T = c.tris, R = c.rest, nt = T.length / 3, key = (a, b) => (a < b ? a * n + b : b * n + a);
+	const flat = new Map(), nbr = Array.from({ length: n }, () => new Set());
+	for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) {
+		const a = T[3 * t + k], b = T[3 * t + (k + 1) % 3];
+		nbr[a].add(b); nbr[b].add(a);
+		const kk = key(a, b);
+		if (!flat.has(kk)) flat.set(kk, Math.hypot(R[6 * t + 2 * ((k + 1) % 3)] - R[6 * t + 2 * k], R[6 * t + 2 * ((k + 1) % 3) + 1] - R[6 * t + 2 * k + 1]));
+	}
+	// per point: its row, flat distance in, and the elastic's ratio and stiffness per length where it came from
+	const row = new Int32Array(n).fill(-1), dist = new Float64Array(n), ratio = new Float64Array(n), kl = new Float64Array(n), cnt = new Float64Array(n);
+	for (let s = 0; s < c.si.length; s++) {
+		const L = flat.get(key(c.si[s], c.sj[s])) ?? c.rest_len[s];
+		for (const p of [c.si[s], c.sj[s]]) { row[p] = 0; ratio[p] += c.rest_len[s] / L; kl[p] += c.k[s] * L; cnt[p]++; }
+	}
+	let members = [];
+	for (let p = 0; p < n; p++) if (row[p] === 0) { ratio[p] /= cnt[p]; kl[p] /= cnt[p]; members.push(p); }
+	const rows = [{ members, d: 0 }];
+	// rows in until one starts (halfway from the row before) past the width: its distance bounds the last row inside
+	for (let r = 1; (rows[r - 1].d + (rows[r - 2]?.d ?? -rows[r - 1].d)) / 2 < width && members.length; r++) {
+		const next = [];
+		for (const q of members) for (const p of nbr[q]) if (row[p] === -1) { row[p] = r; dist[p] = Infinity; next.push(p); }
+		for (const p of next) {
+			let m = 0;
+			for (const q of nbr[p]) if (row[q] === r - 1) { ratio[p] += ratio[q]; kl[p] += kl[q]; m++; }
+			ratio[p] /= m; kl[p] /= m;
+		}
+		// distance in: over each triangle with two corners in the row before, the third's height over their edge, flat
+		for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) {
+			const p = T[3 * t + k], a = T[3 * t + (k + 1) % 3], b = T[3 * t + (k + 2) % 3];
+			if (row[p] !== r || row[a] !== r - 1 || row[b] !== r - 1) continue;
+			const ax = R[6 * t + 2 * ((k + 1) % 3)], ay = R[6 * t + 2 * ((k + 1) % 3) + 1], bx = R[6 * t + 2 * ((k + 2) % 3)], by = R[6 * t + 2 * ((k + 2) % 3) + 1];
+			const h = Math.abs((bx - ax) * (R[6 * t + 2 * k + 1] - ay) - (by - ay) * (R[6 * t + 2 * k] - ax)) / (Math.hypot(bx - ax, by - ay) || 1);
+			dist[p] = Math.min(dist[p], (dist[a] + dist[b]) / 2 + h);
+		}
+		const known = next.filter((p) => dist[p] < Infinity), d = known.reduce((s, p) => s + dist[p], 0) / (known.length || 1);
+		for (const p of next) if (!(dist[p] < Infinity)) dist[p] = d;
+		members = next;
+		rows.push({ members, d });
+	}
+	// each row's share of the width: halfway to its neighbours, within [0, width]
+	const si = [], sj = [], rest = [], kk = [];
+	for (let r = 0; r < rows.length; r++) {
+		const lo = r === 0 ? 0 : (rows[r - 1].d + rows[r].d) / 2, hi = r + 1 < rows.length ? (rows[r].d + rows[r + 1].d) / 2 : width;
+		const w = Math.max(0, Math.min(hi, width) - lo) / width;
+		if (!(w > 0)) continue;
+		if (r === 0) { for (let s = 0; s < c.si.length; s++) { si.push(c.si[s]); sj.push(c.sj[s]); rest.push(c.rest_len[s]); kk.push(c.k[s] * w); } continue; }
+		const inRow = new Set(rows[r].members);
+		for (const a of rows[r].members) for (const b of nbr[a]) {
+			if (b <= a || !inRow.has(b)) continue;
+			const L = flat.get(key(a, b));
+			si.push(a); sj.push(b); rest.push(L * (ratio[a] + ratio[b]) / 2); kk.push((kl[a] + kl[b]) / 2 / L * w);
+		}
+	}
+	return { si: Int32Array.from(si), sj: Int32Array.from(sj), rest_len: Float32Array.from(rest), k: Float32Array.from(kk) };
+}
+
 // The garment's part of a case: depends only on the fitted file and its size, so it is made once per garment and size.
 // size (meta.fitSize): the pattern made wider (x, across the grain) and longer (y, along it) by these factors before the re-fit, as
 // a pattern maker grades a block: every piece's flat rest shape, and each elastic span's rest length by its own direction.
-export function garmentArrays(data, size = { width: 1, length: 1 }) {
-	const c = data.case, nt = c.tris.length / 3, sx = size.width ?? 1, sy = size.length ?? 1;
+// band: the elastic's width (elasticBand; 0: the file's edge-row spans, as the pipeline's fits).
+export function garmentArrays(data, size = { width: 1, length: 1 }, band = ELASTIC_W) {
+	const c = { ...data.case, ...elasticBand(data.case, band) }, nt = c.tris.length / 3, sx = size.width ?? 1, sy = size.length ?? 1;
 	const R = sx === 1 && sy === 1 ? c.rest : Float64Array.from(c.rest, (v, i) => v * (i % 2 ? sy : sx));
 	const Dinv = new Float32Array(nt * 4), area = new Float32Array(nt);
 	for (let t = 0; t < nt; t++) {
@@ -140,7 +212,7 @@ export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {})
 		arrays[label + '_tris'] = ti; arrays[label + '_fn'] = g.fn; arrays[label + '_en'] = g.en; arrays[label + '_eb'] = g.eb; arrays[label + '_vn'] = g.vn; arrays[label + '_vb'] = g.vb;
 		parts.push(ti.length / 3);
 	}
-	const head = { n: c.n, nt: c.tris.length / 3, ns: c.si.length, body_points: Q.length / 3, part_faces: parts, plane: c.plane, gather: c.gather, hold: HOLD, turn: TURN,
+	const head = { n: c.n, nt: c.tris.length / 3, ns: garment.si.length, body_points: Q.length / 3, part_faces: parts, plane: c.plane, gather: c.gather, hold: HOLD, turn: TURN,
 		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1, snug: physics.snug ?? 1, give };
 	return { head, arrays, cache };
 }

@@ -43,6 +43,15 @@ const ROOM = 0.5;        // the skin moved at most this share of the way to skin
 const OCC_PASSES = 4;    // smoothing of the contact occlusion (a per-vertex estimate from point samples is noisy)
 const REACH = 0.015;     // m, the occlusion's reach
 const LIFT = 0.0024;     // m, the fabric drawn off its fit (render/fitted.js options.lift and the fabric material's own)
+// The finished edge drawn over each opening (render/fitted.js finish: garment/trim.js TRIMS.elastic swept along the opening's points,
+// lifted render/fitted.js options.lift; the rims' material adds none): BAND_W across, into the fabric (its profile's widest, 11.2 mm),
+// its lowest at RIM_CLEAR over the edge points' fit (the lift and the rolled lip's 0.2 mm). The skin is kept under it too: the fabric's
+// own depth climbs inward under the band where the fit's next row sits shallower, and the skin following it covered the band's half
+// (owner, 2026-11-11: "the elastic bands disappear").
+const BAND_W = 0.0112;
+const RIM_CLEAR = 0.0012 + 0.0002;
+const BAND_MARGIN = 0.0015; // m, the skin kept that much under the band (hidden by it; only its outer lip meets the skin)
+const COS_MIN = 0.7;     // the skin moves along smoothed normals: its move is lengthened by 1 / (smoothed . own normal), to this at most
 const OCC_MIN = 0.35;
 // The groove's shape outside an opening and the shading, set by the designer (Settings, Pressed skin: render/display.js dent*, passed as
 // render/fitted.js options.dent; trials 2026-11-11, being chosen by eye): out, the wall outside (m: how far out the skin is back up);
@@ -51,6 +60,10 @@ const OCC_MIN = 0.35;
 // (m, its peak at half of it); shade, the contact occlusion's strength. Defaults: the middle of the rear sweep (2-12 mm walls), 6 mm
 // clean in passe and the lunge; the rise and shading as before.
 export const DENT_DEFAULTS = { out: 0.006, outSlope: 0, rise: 0.35, riseW: 0.011, shade: 1.4 };
+// The narrowest wall outside drawn (m): the body's mesh is 4-6 mm between vertices at the leg line, so a narrower wall cannot be drawn
+// and the smoothing that keeps it from facetting lifted the skin at the edge over the band and the fabric (owner's 1 mm, 2026-11-11:
+// the skin at the edge pressed 1-4 mm where the fit sank the fabric 6-8 mm). The Settings bar starts here (ui/Studio.jsx PressedSkin).
+export const MIN_WALL = 0.004;
 
 // A spatial hash of points P (xyz), of the members listed (all of them by default): (x, y, z, r, fn) calls fn(index, distance) for every
 // member within r. Cells keyed by a hashed integer (a collision only merges two cells: the distance test still holds).
@@ -125,14 +138,17 @@ export function pressedSkin(man, contacts, X, edges, tris, shape = DENT_DEFAULTS
 	// the groove along each opening: each edge point's cross-section (out: across the edge, < 0 inside), blended with its neighbours'
 	// by how far along the edge they are
 	const grooveS = new Float32Array(nv), grooveW = new Float32Array(nv), grooveO = new Float32Array(nv);
+	const bandS = new Float32Array(nv), bandW = new Float32Array(nv); // the edge's depth under the drawn band, blended the same way
 	for (const [i, inward] of edges) {
 		const depth = Math.max(depthOf(i), 0), cx = C(i, 0), cy = C(i, 1), cz = C(i, 2);
-		const wIn = Math.max(W_IN, SLOPE * depth), wOut = Math.max(OUT, OUT_SLOPE * depth, 0.0005), wRise = Math.max(RISE_W, 0.0005);
-		near(cx, cy, cz, Math.max(wRise, wIn) + EDGE_W, (v, d) => {
+		const wIn = Math.max(W_IN, SLOPE * depth), wOut = Math.max(OUT, OUT_SLOPE * depth, MIN_WALL), wRise = Math.max(RISE_W, 0.0005);
+		near(cx, cy, cz, Math.max(wRise, wIn, BAND_W + MIN_WALL) + EDGE_W, (v, d) => {
 			const out = -((Q[3 * v] - cx) * inward[0] + (Q[3 * v + 1] - cy) * inward[1] + (Q[3 * v + 2] - cz) * inward[2]);
-			if (out < -wIn) return;
 			const w = bump(Math.sqrt(Math.max(d * d - out * out, 0)), EDGE_W);
 			if (!(w > 0)) return;
+			// (one skin vertex, 4 mm, past the band's inner end: the skin's triangle reaching under it is straight between its vertices)
+			if (out >= -BAND_W - MIN_WALL && out <= SIDE_W) { bandS[v] += w * depth; bandW[v] += w; touched[v] = 1; }
+			if (out < -wIn) return;
 			let p;
 			if (out < 0) { const g = -out / wIn; p = 1 - g * g * (3 - 2 * g); }
 			else { const g = Math.min(out / wOut, 1), u = Math.min(out / wRise, 1); p = 1 - g * g * (3 - 2 * g) - RISE * 16 * u * u * (1 - u) * (1 - u); }
@@ -161,13 +177,20 @@ export function pressedSkin(man, contacts, X, edges, tris, shape = DENT_DEFAULTS
 		move[v] = si * Math.max(g, m) + (1 - si) * g;
 	}
 	smooth(move, man, 1, list);
-	// never over the fabric (it seldom binds now: a few vertices at give 5000)
+	// never over the fabric, nor over the band drawn on the opening
 	const hold = smooth(Float32Array.from(under), man, 1, list);
 	for (let v = 0; v < nv; v++) hold[v] = gap[v] < Infinity ? hold[v] - LIFT + HOLD_MARGIN : -Infinity;
+	// under the band: from the deeper of the edge's depth and the fabric's own there (the band bends with the fabric across: a concave
+	// fabric takes it below the edge's level), with BAND_MARGIN (at 0.8 mm the skin still showed through it in a few places)
+	for (let v = 0; v < nv; v++) if (bandW[v] > 0) hold[v] = Math.max(hold[v], Math.max(bandS[v] / bandW[v], gap[v] < Infinity ? under[v] : 0) - RIM_CLEAR + BAND_MARGIN);
 	for (let v = 0; v < nv; v++) if (move[v] < hold[v]) move[v] = hold[v];
-	// along normals smoothed over the area (a crease's two sides move together)
+	// along normals smoothed over the area (a crease's two sides move together), as far as reaches the depth along the skin's own normal
 	const M = smooth(Float32Array.from(N), man, NORMAL_PASSES, list, 3);
-	for (const v of list) { const l = Math.hypot(M[3 * v], M[3 * v + 1], M[3 * v + 2]) || 1; for (let k = 0; k < 3; k++) M[3 * v + k] /= l; }
+	for (const v of list) {
+		const l = Math.hypot(M[3 * v], M[3 * v + 1], M[3 * v + 2]) || 1;
+		for (let k = 0; k < 3; k++) M[3 * v + k] /= l;
+		move[v] /= Math.max(M[3 * v] * N[3 * v] + M[3 * v + 1] * N[3 * v + 1] + M[3 * v + 2] * N[3 * v + 2], COS_MIN);
+	}
 	// room in a fold: no more than ROOM of the way to skin facing it (its normal against this one's) ahead of where it moves; the
 	// limit as a factor, smoothed so it leaves no edge
 	const fac = new Float32Array(nv).fill(1);

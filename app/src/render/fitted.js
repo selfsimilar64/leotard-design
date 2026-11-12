@@ -5,7 +5,7 @@
 // panels lend their materials by name; the app's own pieces and edge finishes stay in the document, hidden.
 // Grew out of the dev viewer, dev/wrap-eval.js (show, cover, finish): change one, look at the other.
 import * as THREE from 'three';
-import { TRIMS, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
+import { TRIMS, KAPPA_MAX, resample, smoothLoop, buildGeometry } from '../garment/trim.js';
 import { fittedOf, fitSizeOf, fittedTrimOf } from '../garment/fitted.js';
 import { addFabricAttributes, setFabricSlot } from '../materials/fabric-attributes.js';
 import { applyFabric, bindScan, texScaleOf, fabricSide } from '../materials/fabric.js';
@@ -69,7 +69,8 @@ export const FIT_DEFAULTS = {
 	mu: DEFAULTS.mu,          // friction against the skin
 	lift: 0.0012,             // m the fabric is drawn off the surface it was fitted to (the dev viewer's 1.2 mm), on top of the
 	// fabric material's own 1.2 mm: a fitted mesh's flat 7 mm triangles dip under a curved body between their points
-	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look)
+	// (knowledge/engineering/app/refit-in-the-app.md, owner's first look). render/skin-dent.js LIFT and RIM_CLEAR take it as 1.2 mm
+	// (a Settings bar can change it: the pressed skin then keeps its margins for 1.2)
 	body: 'skin',             // what the re-fit stands on: 'skin', the bare skin, settled FREE_STEPS without friction before `steps`
 	// with it (owner chose this look, 2026-11-10: knowledge/engineering/app/hollows-on-bare-skin-diagnosis.md); 'bridged', the older
 	// fit, on the drawn garment's surface (the skin plus the membrane's lift and the seat sheet), kept to go back to. No control
@@ -631,35 +632,47 @@ export class FittedView {
 		const at = (I, W, i, out) => { out.set(0, 0, 0); for (let j = 0; j < 3; j++) { const v = I[i * 3 + j] * 3, w = W[i * 3 + j]; out.x += w * G[v]; out.y += w * G[v + 1]; out.z += w * G[v + 2]; } return out; };
 		const nrm = (I, W, i) => { const o = new THREE.Vector3(); for (let j = 0; j < 3; j++) { const v = I[i * 3 + j] * 3, w = W[i * 3 + j]; o.x += w * GN[v]; o.y += w * GN[v + 1]; o.z += w * GN[v + 2]; } return o.normalize(); };
 		const pt = (i) => new THREE.Vector3(X[3 * i], X[3 * i + 1], X[3 * i + 2]);
+		// a re-fitted garment's band lies on its fabric as drawn: in the fabric's own surface at the edge (its normal, ownNormals), bent
+		// across it as the fabric bends to the point one row in (kappa, as render/rims.js bends a cut garment's rims). On the body's
+		// normal and flat across, it stood off a convex fabric and sank under a concave one: where a soft body pressed the edge in, its
+		// inner half went under the fabric and the skin (owner, 2026-11-11)
+		const own = X && this.data.case ? this.ownNormals(X) : null, ownAt = (i) => new THREE.Vector3(own[3 * i], own[3 * i + 1], own[3 * i + 2]);
 		const built = [];
 		for (const o of this.data.openings) {
 			if (o.finish === 'none') { built.push(null); continue; } // an opening with no finish of its own (a strap's edge: the strap is the binding)
 			const n = o.hostW.length / 3, recs = [], solved = X && o.ids && this.near;
 			for (let i = 0; i < n; i++) {
-				const nn = nrm(o.hostI, o.hostW, i);
-				let p, inside;
+				let nn = nrm(o.hostI, o.hostW, i), p, inside, kappa = 0;
 				if (solved) {
-					p = pt(o.ids[i]);
+					const id = o.ids[i], fn = ownAt(id);
+					if (fn.lengthSq() > 0.5) nn = fn.dot(nn) < 0 ? fn.negate() : fn;
+					p = pt(id);
 					inside = new THREE.Vector3();
-					for (const j of this.near[o.ids[i]]) inside.add(pt(j));
-					inside.divideScalar(this.near[o.ids[i]].length).sub(p);
+					for (const j of this.near[id]) inside.add(pt(j));
+					inside.divideScalar(this.near[id].length).sub(p);
+					inside.addScaledVector(nn, -inside.dot(nn)).normalize();
+					// the neighbour furthest in (the next row): how the fabric's normal turns across to it
+					let best = 0, q = -1;
+					for (const j of this.near[id]) { const s = pt(j).sub(p).dot(inside); if (s > best) { best = s; q = j; } }
+					if (q >= 0 && best > 1e-3) { const nq = ownAt(q); if (nq.lengthSq() > 0.5) { if (nq.dot(nn) < 0) nq.negate(); kappa = nq.sub(nn).dot(inside) / best; } }
 				} else {
 					p = at(o.hostI, o.hostW, i, new THREE.Vector3());
 					inside = at(o.inI, o.inW, i, new THREE.Vector3()).sub(p);
+					inside.addScaledVector(nn, -inside.dot(nn)).normalize();
 				}
-				inside.addScaledVector(nn, -inside.dot(nn)).normalize();
-				recs.push({ p, n: nn, inside, kappa: 0, ref: p.clone(), keep: 1, sleeve: 0 });
+				recs.push({ p, n: nn, inside, kappa, ref: p.clone(), keep: 1, sleeve: 0 });
 			}
 			// an open run (o.open: a binding from strap to strap, pipeline/wrap_block.py export) is resampled and smoothed without wrapping
 			const open = !!o.open, sm = open ? smoothOpen : smoothLoop;
-			const { pts, length } = open ? resampleOpen(recs) : resample(recs), m = pts.length, P = pts.map((a) => a.p), Nn = pts.map((a) => a.n), In = pts.map((a) => a.inside);
+			const { pts, length } = open ? resampleOpen(recs) : resample(recs), m = pts.length, P = pts.map((a) => a.p), Nn = pts.map((a) => a.n), In = pts.map((a) => a.inside), Kp = pts.map((a) => a.kappa ?? 0);
 			sm(P, 3, 2, true); sm(Nn, 4, 2, true); sm(In, 4, 1, true);
+			if (!open) smoothLoop(Kp, 8, 2, false); // (resampleOpen keeps no bend: an open run lies flat across, as before)
 			const frames = [], scale = [];
 			const near = (i) => (open ? Math.min(Math.max(i, 0), m - 1) : (i + m) % m);
 			for (let i = 0; i < m; i++) {
 				const nn = Nn[i].normalize(), t = P[near(i + 1)].clone().sub(P[near(i - 1)]).normalize(), d = new THREE.Vector3().crossVectors(nn, t).normalize();
 				if (d.dot(In[i]) < 0) d.negate();
-				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: 0 });
+				frames.push({ p: P[i].addScaledVector(nn, this.options.lift), n: nn, d, kap: THREE.MathUtils.clamp(Kp[i], -KAPPA_MAX, KAPPA_MAX) });
 				scale.push(1);
 			}
 			built.push({ frames, scale, pts, length, open });

@@ -168,7 +168,7 @@ export class Refit {
 		this.settings = { ...DEFAULTS, ...settings };
 		const A = data.arrays, h = data.head, cache = data.cache ?? {};
 		// the spans: the case's elastic (head.ns of them) and stage 3's kink spans (elasticSprings; kink 0 and firm 1: as before)
-		const kink = h.kink ?? 0, firm = h.firm ?? 1, snug = h.snug ?? 1, key = `${h.bend ?? 0}|${kink}|${firm}|${snug}`;
+		const kink = h.kink ?? 0, firm = h.firm ?? 1, snug = h.snug ?? 1, key = `${h.bend ?? 0}|${kink}|${firm}|${snug}|${A.si.length}`; // (the spans' count: fitted-case.js elasticBand's width)
 		if (cache.springKey !== key) { delete cache.matrix; delete cache.vs; cache.springKey = key; }
 		const SP = this.springs = elasticSprings(A.si, A.sj, A.rest_len, A.k, kink, firm, snug);
 		const n = this.n = h.n, nt = h.nt, ns = this.ns = SP.si.length;
