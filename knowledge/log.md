@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-11-12
+* **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): direction-aware band stiffness tried in the fit (stiff across the band, soft along it): the crumpled band near the crotch straightens, the edge still turns away where the crotch is squeezed; left off as a trial option.
+
 ## 2026-11-11
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): explored the fit's robustness: the leg edge's roll and bridging come from the app's one-sided contact wedging the crotch between the inner thighs in standing, carried into every pose; elastic settings, band stiffness, steps and dressing pose do not change it.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): a fitted garment's band is laid over its fabric by walking across the surface (no ragged, widening stretch where the fabric turns sharply near the crotch); found that the fit itself rolls the strappy hybrid's leg edge over in the groin crease.

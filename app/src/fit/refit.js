@@ -108,7 +108,12 @@ export function elasticSprings(si, sj, rest0, k, kink = 0, firm = 1, snug = 1) {
 
 // The constant part of the global matrix (solvers.pd_tri_matrix_k, pd_spring_k, gpu.Problem's bending blocks), as scalar rows: per
 // triangle area * b_a . b_b, per span k on the ends and -k across, per hinge bend * c * K_a K_b. Summed in float64 from the float32 inputs.
-function constantMatrix(n, tris, Dinv, area, si, sj, k, bend = 0) {
+// bandBend, bandRow: the elastic band stiff across its width and as easy as the fabric along it (owner, 2026-11-12: "if the elastic is
+// thicker, it would be significantly less malleable along its short side, which would prevent any flipping"). A hinge whose edge runs
+// along the band (both its ends in the same row of the band past the edge row, fitted-case.js elasticBand's bandRow) bends the band
+// across its width: that much stiffer. Hinges across the band (ends in different rows) wrap it round the body: as the fabric's. Without
+// it the strappy hybrid's leg edge rolled over near the crotch (2026-11-11). App only: the pipeline's twins have one bend for all.
+function constantMatrix(n, tris, Dinv, area, si, sj, k, bend = 0, bandBend = 0, bandRow = null) {
 	const rows = Array.from({ length: n }, () => new Map());
 	const add = (i, j, w) => rows[i].set(j, (rows[i].get(j) || 0) + w);
 	const nt = area.length;
@@ -119,10 +124,12 @@ function constantMatrix(n, tris, Dinv, area, si, sj, k, bend = 0) {
 	for (let s = 0; s < si.length; s++) {
 		add(si[s], si[s], k[s]); add(sj[s], sj[s], k[s]); add(si[s], sj[s], -k[s]); add(sj[s], si[s], -k[s]);
 	}
-	if (bend) {
+	if (bend || (bandBend && bandRow)) {
 		const H = hingesOf(tris, Dinv, area);
-		for (let h = 0; h < H.c.length; h++) for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
-			add(H.ids[4 * h + a], H.ids[4 * h + b], bend * H.c[h] * H.K[4 * h + a] * H.K[4 * h + b]);
+		for (let h = 0; h < H.c.length; h++) {
+			const i = H.ids[4 * h], j = H.ids[4 * h + 1], along = bandBend && bandRow && bandRow[i] >= 1 && bandRow[i] === bandRow[j];
+			const w = bend + (along ? bandBend : 0);
+			if (w) for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) add(H.ids[4 * h + a], H.ids[4 * h + b], w * H.c[h] * H.K[4 * h + a] * H.K[4 * h + b]);
 		}
 	}
 	const ptr = new Int32Array(n + 1), cols = [], vals = [], lii = new Float32Array(n);
@@ -168,7 +175,7 @@ export class Refit {
 		this.settings = { ...DEFAULTS, ...settings };
 		const A = data.arrays, h = data.head, cache = data.cache ?? {};
 		// the spans: the case's elastic (head.ns of them) and stage 3's kink spans (elasticSprings; kink 0 and firm 1: as before)
-		const kink = h.kink ?? 0, firm = h.firm ?? 1, snug = h.snug ?? 1, key = `${h.bend ?? 0}|${kink}|${firm}|${snug}|${A.si.length}`; // (the spans' count: fitted-case.js elasticBand's width)
+		const kink = h.kink ?? 0, firm = h.firm ?? 1, snug = h.snug ?? 1, key = `${h.bend ?? 0}|${h.bandBend ?? 0}|${kink}|${firm}|${snug}|${A.si.length}`; // (the spans' count: fitted-case.js elasticBand's width)
 		if (cache.springKey !== key) { delete cache.matrix; delete cache.vs; cache.springKey = key; }
 		const SP = this.springs = elasticSprings(A.si, A.sj, A.rest_len, A.k, kink, firm, snug);
 		const n = this.n = h.n, nt = h.nt, ns = this.ns = SP.si.length;
@@ -182,7 +189,7 @@ export class Refit {
 		const vsSrc = Int32Array.from(vs.order, (o) => signed[o]);
 		// the matrix holds bending (head.bend) and the spans: kept between runs only while those are the same (springKey above)
 		const bend = h.bend ?? 0;
-		const M = this.matrix = cache.matrix ??= constantMatrix(n, A.tris, A.Dinv, A.area, SP.si, SP.sj, SP.k, bend);
+		const M = this.matrix = cache.matrix ??= constantMatrix(n, A.tris, A.Dinv, A.area, SP.si, SP.sj, SP.k, bend, h.bandBend ?? 0, A.bandRow);
 		const topo = concat(Int32Array, [['tri', A.tris], ['sleeve', A.sleeve], ['vts', vt.start], ['vtc', vt.order], ['vss', vs.start], ['vsc', vsSrc],
 			['si', SP.si], ['sj', SP.sj], ['cp', M.ptr], ['cc', M.cols]]);
 		const kon = concat(Float32Array, [['dinv', A.Dinv], ['area', A.area], ['facing', A.facing], ['rest', SP.rest], ['k', SP.k], ['cv', M.vals], ['lii', M.lii]]);

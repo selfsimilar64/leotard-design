@@ -89,7 +89,7 @@ export const ELASTIC_W = 0.01;
 // stiffness per length (k x the span's flat length) is the elastic's; the total pull is the file's. width 0: the file's spans as they
 // are. App only: pipeline fits (wrap_block, the race's energy.springs and gpu.Problem) keep the edge-row elastic.
 export function elasticBand(c, width = ELASTIC_W) {
-	if (!(width > 0)) return { si: c.si, sj: c.sj, rest_len: c.rest_len, k: c.k };
+	if (!(width > 0)) return { si: c.si, sj: c.sj, rest_len: c.rest_len, k: c.k, bandRow: null };
 	const n = c.n, T = c.tris, R = c.rest, nt = T.length / 3, key = (a, b) => (a < b ? a * n + b : b * n + a);
 	const flat = new Map(), nbr = Array.from({ length: n }, () => new Set());
 	for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) {
@@ -130,11 +130,13 @@ export function elasticBand(c, width = ELASTIC_W) {
 		rows.push({ members, d });
 	}
 	// each row's share of the width: halfway to its neighbours, within [0, width]
-	const si = [], sj = [], rest = [], kk = [];
+	// bandRow: per point its row in the band (0 the edge), -1 off it: the band's own bending across its width (refit.js constantMatrix)
+	const si = [], sj = [], rest = [], kk = [], bandRow = new Int8Array(n).fill(-1);
 	for (let r = 0; r < rows.length; r++) {
 		const lo = r === 0 ? 0 : (rows[r - 1].d + rows[r].d) / 2, hi = r + 1 < rows.length ? (rows[r].d + rows[r + 1].d) / 2 : width;
 		const w = Math.max(0, Math.min(hi, width) - lo) / width;
 		if (!(w > 0)) continue;
+		for (const p of rows[r].members) bandRow[p] = r;
 		if (r === 0) { for (let s = 0; s < c.si.length; s++) { si.push(c.si[s]); sj.push(c.sj[s]); rest.push(c.rest_len[s]); kk.push(c.k[s] * w); } continue; }
 		const inRow = new Set(rows[r].members);
 		for (const a of rows[r].members) for (const b of nbr[a]) {
@@ -143,7 +145,7 @@ export function elasticBand(c, width = ELASTIC_W) {
 			si.push(a); sj.push(b); rest.push(L * (ratio[a] + ratio[b]) / 2); kk.push((kl[a] + kl[b]) / 2 / L * w);
 		}
 	}
-	return { si: Int32Array.from(si), sj: Int32Array.from(sj), rest_len: Float32Array.from(rest), k: Float32Array.from(kk) };
+	return { si: Int32Array.from(si), sj: Int32Array.from(sj), rest_len: Float32Array.from(rest), k: Float32Array.from(kk), bandRow };
 }
 
 // A fit made on body points Qs (D: its points) anchored to the skin right under it, to be carried by the body's motion (carriedStart):
@@ -245,6 +247,7 @@ export function garmentArrays(data, size = { width: 1, length: 1 }, band = ELAST
 	return {
 		tris: Int32Array.from(c.tris), Dinv, area, facing: Float32Array.from(c.facing), si: Int32Array.from(c.si), sj: Int32Array.from(c.sj),
 		rest_len: sx === 1 && sy === 1 ? Float32Array.from(c.rest_len) : spanLengths(c, sx, sy), k: Float32Array.from(c.k), sleeve: Int32Array.from(c.sleeve),
+		bandRow: c.bandRow, // per point its row in the elastic band, -1 off it (elasticBand): refit.js constantMatrix bandBend
 		// points put in place by hand when dressing (a strap: pipeline/wrap_block.py export, case.placed), which keep their friction
 		// through a frictionless phase (fit/refit.js reset); null for a garment without
 		placed: c.placed ? Uint8Array.from(c.placed) : null,
@@ -289,6 +292,6 @@ export function buildCase(data, garment, Q, idx, wArm, cache = {}, physics = {})
 		parts.push(ti.length / 3);
 	}
 	const head = { n: c.n, nt: c.tris.length / 3, ns: garment.si.length, body_points: Q.length / 3, part_faces: parts, plane: c.plane, gather: c.gather, hold: HOLD, turn: TURN,
-		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1, snug: physics.snug ?? 1 };
+		press: physics.press ?? 0, bend: physics.bend ?? 0, jam: physics.jam ?? 1, kink: physics.kink ?? 0, firm: physics.firm ?? 1, snug: physics.snug ?? 1, bandBend: physics.bandBend ?? 0 };
 	return { head, arrays, cache };
 }
