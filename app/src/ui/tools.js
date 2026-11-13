@@ -217,10 +217,10 @@ export class ToolController {
 		if (gen) this.engine.gizmo.hold(d.knob.key, d.knob.read?.(patternParams(gen, d.piece)) ?? '');
 	}
 
-	// as: what it is made as (prints/designs.js madeAs); none: a layout of lines and dots as crystals, and a design of colour
+	// as: what it is made as (prints/designs.js madeAs), unless the preset is made a way of its own; none: a layout of lines and dots as crystals, and a design of colour
 	// as both, print and crystals on it, since it is laid with the crystals' tool (a piece's own Print face lays it as print).
 	placePattern(h, as = null) {
-		const item = GALLERY_ITEMS.get(toolOptions.value.pattern) ?? GALLERY_ITEMS.get('fade-linear'), st = toolOptions.value.stone, made = as ?? (isDesign(item.layout) ? 'both' : null);
+		const item = GALLERY_ITEMS.get(toolOptions.value.pattern) ?? GALLERY_ITEMS.get('fade-linear'), st = toolOptions.value.stone, made = item.params?.as ?? as ?? (isDesign(item.layout) ? 'both' : null);
 		const id = this.run({ op: 'stones.add', kind: 'pattern', on: { panel: h.panel }, stone: st.stone, shape: st.shape, ...this.pieceSymmetry(h), ...(h.layer && h.layer !== 'L0' ? { layer: h.layer } : {}), name: item.label, params: { ...this.patternAt(h, item), ...(made ? { as: made } : {}) } });
 		if (id) { selection.value = { kind: 'stones', id }; tool.value = 'move'; }
 		return id;

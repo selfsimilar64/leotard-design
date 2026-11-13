@@ -32,6 +32,9 @@ uniform vec4 uStops[${MAX_STOPS}];       // each: OKLab L, a, b and how much of 
 uniform vec4 uInk;            // soft (0 hard edges .. 1 one smooth blend), repeats, slide, balance (a power)
 uniform vec4 uInk2;           // wrap (0 once, 1 round again, 2 there and back), spread, strength, 1 = tints the cloth
 uniform vec3 uBase;           // the cloth's own colour, linear (what a tint multiplies)
+uniform vec4 uOutline;        // a line drawn where two colours meet: OKLab L, a, b and its width on the cloth (metres; 0: none)
+uniform vec2 uWob;            // the design's value wobbled, so its edges wander: how much, and the size of the wander (metres)
+uniform float uTexel;         // metres of cloth one texel spans
 uniform int uOut;             // 0: colour; 1: the band coordinate (crystals follow it: prints/field-stones.js)
 uniform int uModN;
 uniform vec4 uModA[${MAX_MODS}];         // x, y, cos, sin of its turn
@@ -165,6 +168,9 @@ vec4 inkOf(float t, float dt, out float e) {
 	return mix(uStops[i0], uStops[i1], w);
 }
 
+// the wander of a design's edges: a little noise added to its value
+float wobble(vec2 p) { return uWob.x > 0. ? uWob.x * fbm(p / uWob.y + uSeed.yx, 3) : 0.; }
+
 // --- how much ink where: the pattern's density modifiers (stones/modifiers.js fieldOf, compileMods) ------------
 float gIn;
 float modField(int k, vec2 L) {
@@ -213,6 +219,11 @@ void main() {
 	float t = fieldAt(cloth), e;
 	vec4 c = inkOf(t, fwidth(t), e);
 	if (uOut == 1) { fragColor = vec4(e, t, gAlpha, 1.); return; }
+	if (uOutline.w > 0. && uN > 1 && (int(uInk2.x + .5) == 1 || (e > 0. && e < float(uN) - 1.))) {
+		// metres to where two colours meet: how far the band coordinate is from a whole number and a half, over how fast it runs
+		float dist = abs(fract(e) - .5) / max(fwidth(e), 1e-6) * uTexel;
+		c = mix(c, vec4(uOutline.xyz, 1.), 1. - smoothstep(uOutline.w * .5 - uTexel, uOutline.w * .5 + uTexel, dist));
+	}
 	float a = c.a * uInk2.z * gAlpha * coverage();
 	vec3 rgb = max(oklabToLinear(c.xyz), 0.);
 	if (uInk2.w > .5) rgb *= uBase;
@@ -220,13 +231,13 @@ void main() {
 }
 `;
 
-// A design's program: its field read in its own space, bent by the pattern's distortions.
-export const fieldFragment = (body, defines = '') => `${HEAD}${defines}\n${body}\nfloat fieldAt(vec2 cloth) { return field(unbend((uClothToDesign * vec3(cloth, 1.)).xy)); }\n${MAIN}`;
+// A design's program: its field read in its own space, bent by the pattern's distortions, its edges made to wander.
+export const fieldFragment = (body, defines = '') => `${HEAD}${defines}\n${body}\nfloat fieldAt(vec2 cloth) { vec2 p = unbend((uClothToDesign * vec3(cloth, 1.)).xy); return field(p) + wobble(p); }\n${MAIN}`;
 
 // A drawn arrangement (a crystal pattern's lines and dots, prints/strokes.js) as ink: the distance to it along the colours,
 // the first of them as wide as the line.
 export const STROKE_FRAGMENT = `${HEAD}
-float fieldAt(vec2 cloth) { return texture(uDist, (uClothToTex * vec3(cloth, 1.)).xy).r / uReach; }
+float fieldAt(vec2 cloth) { return texture(uDist, (uClothToTex * vec3(cloth, 1.)).xy).r / uReach + wobble(cloth); }
 ${MAIN}`;
 
 // --- the distance to an arrangement's lines and dots: each a capsule drawn as far out as the print reaches, the nearest

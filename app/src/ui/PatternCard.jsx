@@ -1,8 +1,11 @@
-// A stone pattern's card, and the gallery of presets it is picked from (every picture drawn by the pattern's own
-// code). Its faces, what matters most first: Preset (the gallery), Arrange (how dense, how spaced, and the
-// arrangement's own settings), Crystal, Place (the whole pattern on the piece, or the crystals under it), Modify (its
-// modifiers: one opened is a card of its own, back to the pattern), Distort. Everything here is live: a slider sends
-// a gesture per drag and the stones follow in the same frame (stones/pattern.js, Engine.syncStones); the handles on
+// A pattern's card, and the gallery of presets it is picked from (every picture drawn by the pattern's own code). A
+// pattern is made as crystals, as print on the fabric, or as both (the switch under its name: prints/designs.js madeAs);
+// its Colours face is the print's ink (prints/ink.js), and a printed design's crystals follow it (prints/field-stones.js).
+// Its faces, what matters most first: Preset (the gallery), Arrange or Design (how dense, how spaced, and the
+// arrangement's own settings), Colours (a print's), Crystal, Place (the whole pattern on the piece, what is under it, or
+// its distortions), Modify (its modifiers: one opened is a card of its own, back to the pattern). Everything here is live:
+// a slider sends a gesture per drag and the stones and the print follow in the same frame (stones/pattern.js,
+// Engine.syncStones, render/prints.js); the handles on
 // the body do the same (stones/handles.js, render/gizmo.js, ui/tools.js), and they work on what the card is on: the
 // pattern's frame, the crystals' plane (Place, crystals under it) or the open modifier (ui/state.js patternFocus).
 import { useEffect, useState } from 'preact/hooks';
@@ -35,18 +38,21 @@ function thumbOf(item) {
 	const cv = document.createElement('canvas'), x = cv.getContext('2d'), h = WINDOW / 2, k = THUMB_PX / WINDOW;
 	cv.width = cv.height = THUMB_PX;
 	try {
-		if (isDesign(item.layout)) {
-			const img = printPicture(itemGen(item, h), THUMB_PX, { window: WINDOW });
+		const as = madeAs({ layout: item.layout, ...item.params });
+		if (as !== 'stones') {
+			const img = printPicture(itemGen(item, h, { size: THUMB_STONE, gap: 1.15 }), THUMB_PX, { window: WINDOW });
 			if (img) x.putImageData(img, 0, 0);
-		} else {
-			x.fillStyle = '#1f1c18';
-			const piece = flatSquare(h), gen = itemGen(item, h, { size: THUMB_STONE, gap: 1.15 });
+		}
+		if (as !== 'print') {
+			// (on a print, crystals as light dots with a dark rim; alone, dark on the tile)
+			const piece = flatSquare(h), gen = itemGen(item, h, { size: THUMB_STONE, gap: 1.15, as: 'stones' });
 			x.beginPath();
 			for (const s of patternStones(gen, piece)) {
 				const r = Math.max(0.7, (s.size / 2) * k * 0.95), px = (s.sp.u + h) * k, py = (h - s.sp.v) * k;
 				x.moveTo(px + r, py);
 				x.arc(px, py, r, 0, Math.PI * 2);
 			}
+			if (as === 'both') { x.fillStyle = '#ffffff'; x.strokeStyle = 'rgba(20, 16, 12, 0.55)'; x.lineWidth = 1; x.stroke(); } else x.fillStyle = '#1f1c18';
 			x.fill();
 		}
 	} catch (err) { console.warn('pattern picture', item.key, err); }
@@ -107,6 +113,9 @@ export function PatternCard({ id }) {
 	// the handles work on the crystals' plane only while that is what the card is on
 	useEffect(() => { if (face !== 'place' && patternFocus.value === 'plane') patternFocus.value = 'frame'; }, [face]);
 	const [bend, setBend] = useState(false); // Place: the distortions on show
+	// the kind of work it belongs to: a pattern that is only print is its piece's fabric, one with crystals is Sparkle
+	const printOnly = !!g && !laysStones(g.params);
+	useEffect(() => { if (g && tab.value !== (printOnly ? 'fabric' : 'sparkle')) tab.value = printOnly ? 'fabric' : 'sparkle'; }, [printOnly, id]);
 	if (!g) return <Card kind="gone" title="This pattern no longer exists" onBack={toSparkle} backLabel="Sparkle">{() => null}</Card>;
 	const piece = app.engine?.clothOf(g.on?.panel)?.piece, P = patternParams(g, piece), layout = LAYOUTS[P.layout], design = isDesign(P.layout), as = madeAs(P), gems = laysStones(P), prints = printsInk(P);
 	if (!piece) stonesRun.value; // (shown again when its flat shape arrives)
@@ -198,7 +207,7 @@ function Ink({ g, P, layout, param, cloth }) {
 		<>
 			<span class="ramp-bar" style={{ background: rampCss(ink, cloth) }} />
 			{soft}
-			{design ? <Segmented value={what} options={[['colours', 'Colours'], ['run', 'How they run']]} onPick={setWhat} /> : null}
+			{design ? <Segmented cols={3} value={what} options={[['colours', 'Colours'], ['edges', 'Edges', null, 'A line where two colours meet; edges that wander'], ['run', 'How they run']]} onPick={setWhat} /> : null}
 			{what === 'colours' || !design ? <>
 				<Field label={design ? 'Colours along the design' : 'Colours out from the line'} aside={<button class="link" title="The colours in the other order" onClick={() => { put({ stops: [...stops].reverse() }); setAt(stops.length - 1 - i); }}>Swap ends</button>}>
 					<div class="stops">
@@ -215,6 +224,11 @@ function Ink({ g, P, layout, param, cloth }) {
 					<Slider label="Dots under the crystals" value={ink.dot} min={0} max={5} step={0.05} def={base.dot} format={(v) => (v ? FORMAT.x(v) : 'None')} onChange={(v, gs) => put({ dot: v }, gs)} />
 					<Slider label="Ink strength" value={ink.strength} min={0} max={1} step={0.01} def={1} format={FORMAT.pct} onChange={(v, gs) => put({ strength: v }, gs)} />
 				</>}
+			</> : what === 'edges' ? <>
+				<Slider label="Outline" hint="A line drawn wherever two colours meet" value={ink.outline} min={0} max={0.008} step={0.0001} def={0} format={(v) => (v ? FORMAT.mm(v) : 'None')} onChange={(v, gs) => put({ outline: v }, gs)} />
+				{ink.outline > 0 ? <Field label="Outline colour"><Swatches value={ink.outlineColour} colours={PALETTE} onPick={(c, gs) => put({ outlineColour: c }, gs)} /></Field> : null}
+				<Slider label="Wandering edges" hint="The edges between colours stray, as if drawn by hand or bled into the cloth" value={ink.wobble} min={0} max={2} step={0.01} def={0} format={(v) => (v ? FORMAT.pct(v) : 'None')} parse={(n) => n / 100} onChange={(v, gs) => put({ wobble: v }, gs)} />
+				{ink.wobble > 0 ? <Slider label="Wander size" value={ink.wobbleL} min={0.003} max={0.3} step={0.0005} def={0.03} log format={FORMAT.mm} onChange={(v, gs) => put({ wobbleL: v }, gs)} /> : null}
 			</> : <>
 				<Field label="The colours run"><Segmented cols={3} value={ink.wrap} options={WRAP} onPick={(v) => put({ wrap: v })} /></Field>
 				<Slider label="Times over" value={ink.repeat} min={layout.angular ? 1 : 0.25} max={layout.angular ? 24 : 16} step={layout.angular ? 1 : 0.01} def={base.repeat} log={!layout.angular} format={FORMAT.x} onChange={(v, gs) => put({ repeat: v }, gs)} />

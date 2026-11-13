@@ -1,5 +1,9 @@
 # Bundle update log
 
+## 2026-11-13
+* **Decision**: [Printed patterns and crystal patterns are one feature](/decisions/2026-11-13-printed-patterns-one-feature-with-crystals.md): a pattern is made as crystals, print or both; crystals are read from the print; Softness runs from hard edges to a smooth blend; the fabric shader is left alone.
+* **Creation**: [Printed patterns](/engineering/architecture/printed-patterns.md): 45 shader designs in seven families (159 presets, 16 more that start as print with crystals), every crystal layout printable as line art, the ink (colours, softness, how they run, outline, wandering edges, coverage by the density modifiers), a print engine in a WebGL context of its own feeding the fabric's print slot on both renderers, timings and limits. [Glass studio interface](/engineering/app/glass-studio-interface.md) and [procedural stone patterns](/engineering/architecture/procedural-stone-patterns.md) updated.
+
 ## 2026-11-12
 * **Update**: [Genesis 9 bodies](/engineering/pipeline/g9-bodies.md): five standing poses added from Daz's Motionless Mannequin Poses (owner's picks 03, 07, 08, 11, 14, the Feminine set): weight shift, feet apart, feet together, hand on hip, hands on hips; baked on all six bodies (Daz 311 s), converted, picker thumbnails made.
 * **Update**: [Fit realism plan](/engineering/app/fit-realism-plan.md): the band laid over the fabric by walking its surface is undone (owner: it made the leg elastic into the crotch worse); the band is set point by point on the fabric again.

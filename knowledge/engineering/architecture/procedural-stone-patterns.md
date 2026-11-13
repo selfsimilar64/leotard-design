@@ -43,6 +43,10 @@ sources:
 
 # Takeaway
 
+**Since 2026-11-13 a pattern is made as crystals, as print on the fabric, or as both** (`params.as`, `params.ink`,
+`params.gems`), and the printed designs are layouts beside the ones here: see
+[printed patterns](/engineering/architecture/printed-patterns.md). What follows is the crystal side, unchanged.
+
 A stone group of kind `pattern` is a procedure, not a pile of stones. It lies on the **flat cloth** of
 one piece, is re-run from its record whenever anything about it changes, and costs a few milliseconds:
 dragging a handle or a slider moves the stones in the same frame, on the group's own undo step.[^owner]

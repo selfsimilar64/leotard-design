@@ -239,7 +239,7 @@ export function rigidOf(P, flat) {
 const RIGID = new Set(['x', 'y', 'rotate', 'flip', 'density', 'margin', 'keepOut', 'stoneTurn', 'turn']);
 // (what it is made as and its ink draw nothing of the crystals; except, where the crystals follow a printed design, how the
 // ink's colours fall on it: prints/field-stones.js)
-const INK_BANDS = ['soft', 'repeat', 'wrap', 'shift', 'balance', 'reverse', 'spread'];
+const INK_BANDS = ['soft', 'repeat', 'wrap', 'shift', 'balance', 'reverse', 'spread', 'wobble', 'wobbleL'];
 function candidateKey(P, isRound, seed) {
 	const sizeMods = (P.mods ?? []).filter((m) => !m.off && m.on === 'size'), byEdge = sizeMods.some((m) => m.shape === 'edge');
 	const kept = {};

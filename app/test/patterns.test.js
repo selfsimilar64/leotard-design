@@ -87,7 +87,7 @@ describe('arrangements', () => {
 	}
 
 	it('every gallery entry names a real arrangement, with parameters it knows', () => {
-		const known = new Set(['size']);
+		const known = new Set(['size', 'as', 'ink']); // (what a pattern is made as and its print's ink: prints/ink.js)
 		for (const g of GALLERY) for (const it of g.items) {
 			expect(LAYOUTS[it.layout], it.key).toBeDefined();
 			const own = new Set(LAYOUTS[it.layout].params.map((p) => p.k));

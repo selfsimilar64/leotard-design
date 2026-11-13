@@ -166,7 +166,8 @@ export class PrintEngine {
 		const i = (n, v) => { const l = u.get(n); if (l) gl.uniform1i(l, v); };
 		m3('uPixToCloth', pixToCloth); m3('uClothToDesign', L.clothToDesign ?? IDENT); m3('uClothToFrame', L.clothToFrame ?? IDENT);
 		// metres of the design's space a texel spans: the cloth's a texel, over the pattern's own scale
-		f('uPx', Math.hypot(pixToCloth[0], pixToCloth[1]) / (L.sc || 1));
+		f('uPx', Math.hypot(pixToCloth[0], pixToCloth[1]) / (L.sc || 1)); f('uTexel', Math.hypot(pixToCloth[0], pixToCloth[1]));
+		fv('uOutline', 4, L.outline ?? [0, 0, 0, 0]); fv('uWob', 2, L.wob ?? [0, 1]);
 		fv('uBend0', 4, L.bend0 ?? [0, 0, 1, 0]); fv('uBend1', 4, L.bend1 ?? [1, 0, 1, 0]); fv('uSym', 3, L.sym ?? [0, 0, 1]);
 		if (L.D) fv('uD', 1, L.D);
 		if (L.V) fv('uV', 4, L.V);

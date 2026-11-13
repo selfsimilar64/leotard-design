@@ -21,8 +21,10 @@ const PAL = {
 	camo: ['#1f2a18', '#3d4f2a', '#6b7a45', '#a3a875'],
 };
 const GOLD = '#e6bf58', WHITE = '#f4f4f2', BLACK = '#0c0c10';
-// an item: a design, its settings, its ink
-const it = (key, label, design, params = {}, ink = null) => ({ key: 'p-' + key, label, layout: PREFIX + design, params: ink ? { ...params, ink } : params });
+// an item: a design, its settings, its ink; more: what else the pattern starts with (made as both, how its crystals follow)
+const it = (key, label, design, params = {}, ink = null, more = null) => ({ key: 'p-' + key, label, layout: PREFIX + design, params: { ...params, ...(ink ? { ink } : {}), ...(more ?? {}) } });
+// print with crystals on it: along the edges of the colours, over some of them, or as a halftone of the design
+const edges = (every = 1) => ({ as: 'both', gems: { mode: 'edges', every } }), fill = (...on) => ({ as: 'both', gems: { mode: 'fill', on } }), tone = (more = {}) => ({ as: 'both', gems: { mode: 'tone', ...more } });
 
 export const PRINT_GALLERY = [
 	{
@@ -194,6 +196,27 @@ export const PRINT_GALLERY = [
 			it('lace', 'Lace', 'lace', {}, { stops: [WHITE, null] }),
 			it('lace-fine', 'Fine lace', 'lace', { tight: 1.35, depth: 8, line: 0.001 }, { stops: [GOLD, null] }),
 			it('lace-glow', 'Glowing lace', 'lace', { tight: 1.12, cell: 0.1, line: 0.004 }, { stops: [WHITE, '#ff4f8b', '#5b2a86', null], soft: 1 }),
+		],
+	},
+	{
+		// print and crystals at once: the crystals lie on the print because they are read from it (prints/field-stones.js)
+		title: 'Jewelled', items: [
+			it('j-mandala', 'Jewelled mandala', 'mandala', { rings: 5, ring: 0.014 }, { stops: PAL.berry, soft: 0.25, repeat: 5 }, edges(2)),
+			it('j-lotus', 'Crystal lotus', 'lotus', {}, { stops: [...PAL.rose].reverse(), soft: 0.4 }, edges()),
+			it('j-fade', 'Crystal fade', 'blend', { length: 0.2 }, { stops: PAL.ocean, soft: 1 }, tone({ cut: 0.2 })),
+			it('j-flames', 'Sparkling flames', 'flames', {}, null, tone({ cut: 0.45, dots: 0.006 })),
+			it('j-galaxy', 'Starry galaxy', 'galaxy', {}, null, tone({ cut: 0.3, dots: 0.006, small: 0.3, big: 1.5 })),
+			it('j-burst', 'Halo of crystals', 'burst', { dsize: 0.09 }, { stops: PAL.gold, soft: 0.6, wrap: 'mirror', repeat: 2 }, edges()),
+			it('j-stripes', 'Beaded stripes', 'stripes', { period: 0.04 }, { stops: ['#16205c', '#1b3fb5'], soft: 0.2 }, edges()),
+			it('j-waves', 'Crested waves', 'dunes', {}, { stops: PAL.teal, soft: 0.8 }, edges(4)),
+			it('j-scales', 'Jewelled scales', 'scales', { dsize: 0.05 }, { stops: ['#0b7d7a', '#8cc6ec'], soft: 0.9 }, edges(2)),
+			it('j-hearts', 'Studded hearts', 'motifs', { motif: 'heart', dsize: 0.034, spacing: 0.06 }, { stops: ['#ff4f8b', null] }, fill(true, false)),
+			it('j-stars', 'Starlit', 'motifs', { toss: 1, dsize: 0.03, spacing: 0.055 }, { stops: [GOLD, null] }, edges()),
+			it('j-crackle', 'Crackle crystals', 'voronoi', { shade: 'depth', cell: 0.035 }, { stops: [null, '#5b2a86'], soft: 0.3 }, edges()),
+			it('j-kaleido', 'Jewelled kaleidoscope', 'kaleido', { zoom: 0.07 }, { stops: PAL.peacock.slice(0, 3), soft: 0.1 }, edges()),
+			it('j-sunburst', 'Crystal rays', 'sunburst', { rays: 12 }, { stops: [GOLD, null] }, edges()),
+			it('j-spiral', 'Crystal spiral', 'spiral', { arms: 3, pitch: 0.05 }, { stops: PAL.violet.slice(0, 3), soft: 0.5 }, edges()),
+			it('j-leopard', 'Jewelled leopard', 'leopard', {}, null, fill(false, false, true)),
 		],
 	},
 ];

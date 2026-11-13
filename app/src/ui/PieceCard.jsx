@@ -220,7 +220,7 @@ function Prints({ p, doc }) {
 	};
 	if (!on.length || adding) return (
 		<>
-			{on.length ? null : <Hint>Pick a design to print on this piece. It stays live: its colours, how soft their edges are, its size and its place can all be changed, and crystals can follow it.</Hint>}
+			{on.length ? null : <Hint>Pick a design to print on this piece. It stays live, and crystals can follow it.</Hint>}
 			<PatternGallery value={null} kind="print" onPick={lay} />
 		</>
 	);

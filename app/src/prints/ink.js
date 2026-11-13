@@ -6,14 +6,16 @@
 //                  soft: 0 (hard edges) .. 1 (one smooth blend), repeat: times the colours go round, wrap: once | repeat |
 //                  mirror (there and back), shift: the colours slid along, balance: -1..1 (more of the first or the last),
 //                  reverse, strength: 0..1 how much ink, tint: the ink dyes the cloth's colour instead of covering it,
-//                  width: a drawn arrangement's line (metres), dot: its dots, as a factor of the crystal they sit under }
+//                  width: a drawn arrangement's line (metres), dot: its dots, as a factor of the crystal they sit under,
+//                  outline: a line where two colours meet (metres wide; outlineColour), wobble, wobbleL: the design's edges
+//                  made to wander (how much, 0..1 of a colour's band, and the size of the wander in metres) }
 // Spec: knowledge/engineering/architecture/printed-patterns.md.
 import { frameOf, patternMap } from '../stones/pattern.js';
 import { designFloats, designOf, isDesign, AS, madeAs, printsInk, laysStones, PREFIX } from './designs.js';
 export { isDesign, AS, madeAs, printsInk, laysStones };
 import { MAX_STOPS, MAX_MODS } from './glsl.js';
 
-export const INK_DEFAULTS = { stops: ['#16205c', '#1b3fb5', '#8cc6ec', '#f4f4f2'], soft: 0, repeat: 1, wrap: 'once', shift: 0, balance: 0, reverse: false, strength: 1, tint: false, width: 0.002, dot: 1.5 };
+export const INK_DEFAULTS = { stops: ['#16205c', '#1b3fb5', '#8cc6ec', '#f4f4f2'], soft: 0, repeat: 1, wrap: 'once', shift: 0, balance: 0, reverse: false, strength: 1, tint: false, width: 0.002, dot: 1.5, outline: 0, outlineColour: '#0c0c10', wobble: 0, wobbleL: 0.03 };
 // a drawn arrangement prints as a line of one colour on the cloth's own
 const LINE_INK = { stops: ['#e6bf58', null], soft: 0.25 };
 export const WRAPS = { once: 0, repeat: 1, mirror: 2 };
@@ -120,6 +122,9 @@ export function inkUniforms(P, { local = false, base = [0.5, 0.5, 0.5], sym = nu
 		ink: [ink.soft, Math.max(ink.repeat ?? 1, 0.01), ink.shift ?? 0, gammaOf(ink.balance)],
 		ink2: [WRAPS[ink.wrap] ?? 0, ink.spread ?? 1, Math.max(0, Math.min(1, ink.strength ?? 1)), ink.tint ? 1 : 0],
 		base, sym: sym ?? [0, 0, 1], clothToFrame: clothToFrame(f), mods,
+		outline: [...linearToOklab(hexToLinear(ink.outlineColour)), Math.max(ink.outline ?? 0, 0)],
+		// (the wander as a share of one colour's band, whatever the number of colours and times over)
+		wob: [Math.max(ink.wobble ?? 0, 0) / (stops.n * Math.max(ink.repeat ?? 1, 0.01)), Math.max(ink.wobbleL ?? 0.03, 1e-4)],
 	};
 }
 
@@ -141,5 +146,6 @@ export function designLayer(gen, P, opts = {}) {
 export function strokeLayer(gen, P, strokes, opts = {}) {
 	const u = inkUniforms(P, opts), ink = inkOf(P), w = Math.max(ink.width ?? 0.002, 0.0002);
 	// each colour a band half the line's width, out from the line's middle; the last goes on for ever
-	return { kind: 'strokes', strokes, width: w, reach: (u.n * w) / 2, ...u, ink2: [u.ink2[0], 0, u.ink2[2], u.ink2[3]] };
+	// (a layout of dots alone: its density modifiers have thinned the dots already, so they do not fade the ink as well)
+	return { kind: 'strokes', strokes, width: w, reach: (u.n * w) / 2, ...u, ink2: [u.ink2[0], 0, u.ink2[2], u.ink2[3]], ...(strokes.nSegs ? {} : { mods: { n: 0 } }) };
 }

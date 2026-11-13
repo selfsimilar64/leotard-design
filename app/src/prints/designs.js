@@ -197,7 +197,7 @@ float field(vec2 p) {
 	// --- mandalas -------------------------------------------------------------------------------------------
 	kaleido: {
 		label: 'Kaleidoscope', own: true, random: true, ink: { soft: 0.35 }, reach: () => 0.075,
-		params: [num('folds', 'Mirrors', 6, 2, 24), lmm('zoom', 'Detail size', 0.05, 0.008, 0.3), opt('source', 'Looks at', 'clouds', [['clouds', 'Clouds'], ['waves', 'Waves'], ['cells', 'Crystals'], ['ribbons', 'Ribbons']]), mm('slideX', 'Slide across', 0.03, -0.3, 0.3, 0.0005), mm('slideY', 'Slide up', 0.02, -0.3, 0.3, 0.0005), deg('spin', 'Spin')],
+		params: [num('folds', 'Mirrors', 6, 2, 24), lmm('zoom', 'Detail size', 0.05, 0.008, 0.3), opt('source', 'Looks at', 'clouds', [['clouds', 'Clouds'], ['waves', 'Waves'], ['cells', 'Crystals'], ['ribbons', 'Ribbons']]), mm('slideX', 'Slide across', 0.03, -0.3, 0.3, 0.0005), mm('slideY', 'Slide up', 0.02, -0.3, 0.3, 0.0005), deg('spin', 'Spin', 0)],
 		glsl: /* glsl */`
 float field(vec2 p) {
 	vec2 q = rot(radians(P_spin)) * foldN(p, P_folds) + vec2(P_slideX, P_slideY), g = q / P_zoom + uSeed; int s = int(P_source + .5);
@@ -209,7 +209,7 @@ float field(vec2 p) {
 	},
 	mandala: {
 		label: 'Mandala', own: true, ink: { wrap: 'repeat', repeat: 6, soft: 0.5 }, reach: (P) => P.ring * P.rings,
-		params: [lmm('ring', 'Ring width', 0.012, 0.003, 0.1), num('rings', 'Rings', 6, 1, 24), num('petals', 'Petals', 8, 2, 48), num('more', 'More each ring', 0, 0, 8), ratio('depth', 'Petal depth', 0.7, -1.2, 1.2), { ...ratio('sharp', 'Pointedness', 1, 0.3, 4), log: true }, deg('ringTurn', 'Turn each ring', 0, -45, 45)],
+		params: [lmm('ring', 'Ring width', 0.012, 0.003, 0.1), num('rings', 'Rings', 6, 1, 24), num('petals', 'Petals', 12, 2, 48), num('more', 'More each ring', 0, 0, 8), ratio('depth', 'Petal depth', -0.7, -1.2, 1.2), { ...ratio('sharp', 'Pointedness', 0.7, 0.3, 4), log: true }, deg('ringTurn', 'Turn each ring', 0, -45, 45)],
 		grips: [along('ring', [1, 0], 'Ring width')],
 		glsl: /* glsl */`
 float field(vec2 p) {
@@ -460,7 +460,7 @@ float field(vec2 p) {
 	},
 	motifs: {
 		label: 'Motifs', random: (P) => !!P.toss, ink: { stops: ['#f4f4f2', null] },
-		params: [lmm('spacing', 'Between motifs', 0.05, 0.008, 0.4), lmm('dsize', 'Motif size', 0.03, 0.004, 0.3), opt('motif', 'Motif', 'star', [['star', 'Star'], ['heart', 'Heart'], ['flower', 'Flower'], ['moon', 'Moon'], ['diamond', 'Diamond'], ['cross', 'Cross']]), when(num('points', 'Points', 5, 3, 12), (P) => P.motif === 'star' || P.motif === 'flower'), opt('lattice', 'Lattice', 'hex', LATTICE), deg('tilt', 'Turn'), pct('toss', 'Tossed', 0)],
+		params: [lmm('spacing', 'Between motifs', 0.05, 0.008, 0.4), lmm('dsize', 'Motif size', 0.03, 0.004, 0.3), opt('motif', 'Motif', 'star', [['star', 'Star'], ['heart', 'Heart'], ['flower', 'Flower'], ['moon', 'Moon'], ['diamond', 'Diamond'], ['cross', 'Cross']]), when(num('points', 'Points', 5, 3, 12), (P) => P.motif === 'star' || P.motif === 'flower'), opt('lattice', 'Lattice', 'hex', LATTICE), deg('tilt', 'Turn', 0), pct('toss', 'Tossed', 0)],
 		grips: [along('spacing', [1, 0], 'Between motifs')],
 		glsl: HEX + /* glsl */`
 float sdHeart(vec2 p) {

@@ -76,17 +76,19 @@ to Shape, a pattern back to Sparkle, a modifier back to its pattern, a piece bac
 | A piece | Colour | the material it is cut from (chips, shared by how many, Separate, New, name, Tidy unused); colour; second colour or foil / glitter / shift colour |
 | | Fabric | swatch book of every fabric and scan (six across, names on hover and above); sheerness for mesh; the satin's four |
 | | Fade | one colour or a fade; far colour; down, across, diagonal or out from a line (flyout); starts at, full colour at |
+| | Print | the piece's printed patterns (list, add another), or with none the pattern gallery opened on Colour designs: a pick lays it on this piece as print ([printed patterns](/engineering/architecture/printed-patterns.md), 2026-11-13) |
 | | Details | texture size, grain, effect strength, rainbow speed, print image and repeat |
 | Sparkle | tool strip | Pattern, Rows / fill, Single, Eraser, Lettering |
 | | (the tool's) | the pattern gallery; rows, distance, spacing, fill; eraser size |
 | | Crystal | colour gems with AB, size ladder, cut |
 | | On design, Counts | crystal groups and lettering (list); counts by size and colour |
-| A pattern | Preset | gallery: ten families as a block of words, twelve pictures a page |
-| | Arrange | density, spacing, the arrangement's own settings, reshuffle, reset |
-| | Crystal | as above |
-| | Place | the whole pattern (across, up, turn, scale, flip, mirror, clear of edges) or the crystals under it (shift, turn, scale, stretch, which way they point); the choice also sets what the handles work on (`patternFocus`) |
-| | Modify | the modifiers (open, switch off, remove); add one of density, size, colour |
-| | Distort | twist, bulge, ripple, warp, jitter |
+| A pattern | (under its name) | what it is made as: Crystals, Print, Print + crystals |
+| | Preset | gallery: Colour designs or Lines & dots, then the families as a block of words, twelve pictures a page |
+| | Arrange (a design: Design) | density, spacing, the arrangement's own settings, reshuffle, reset |
+| | Colours (when printed) | the ramp, Softness; Colours (stops, the fabric's own, swap ends; a layout's line width and dots), Edges (outline, wandering edges), How they run (once, round again, there and back; times, slide, balance, strength, dyes the fabric) |
+| | Crystal (when crystals) | as above; for a design also Where they go: along the edges, filling colours, sized by tone |
+| | Place | the whole pattern (across, up, turn, scale, flip, mirror, clear of edges), what is under it (shift, turn, scale, stretch, which way crystals point) or Bend it (twist, bulge, ripple, warp, jitter: the Distort face until 2026-11-13); the choice also sets what the handles work on (`patternFocus`) |
+| | Modify | the modifiers (open, switch off, remove); add one of density, size, colour (a pattern that is only print: ink coverage) |
 | A modifier | Effect, Shape | from / to or colour stops, fall-off, mingling, swap, blend; eighteen shapes, bounds, soft edge, place and size |
 | Rows or a fill | Crystal, Layout | crystal; rows, distance, spacing, fill, reshuffle, other parameters |
 | Lettering | Text, Look, Size | text, font, bold; material, colour; width, turn, image, move |

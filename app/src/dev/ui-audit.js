@@ -22,7 +22,14 @@ export async function audit() {
 	const faces = async (label, each) => {
 		const names = qa('.inspector .faces .face').map((f) => f.textContent);
 		if (!names.length) { measure(label); return; }
-		for (const name of names) { await face(name); measure(`${label} / ${name}`); if (each) await each(`${label} / ${name}`, name); }
+		for (const name of names) {
+			await face(name); measure(`${label} / ${name}`);
+			// a face split by a switch at its top (a pattern's Colours, Crystal and Place; the gallery's two kinds): each part of it
+			const parts = qa('.inspector .card-body > .seg:first-child .seg-opt').map((o) => o.textContent);
+			for (const part of parts.length > 1 ? parts : []) { qa('.inspector .card-body > .seg:first-child .seg-opt').find((o) => o.textContent === part)?.click(); await sleep(180); measure(`${label} / ${name} / ${part}`); }
+			if (parts.length > 1) { qa('.inspector .card-body > .seg:first-child .seg-opt')[0]?.click(); await sleep(120); }
+			if (each) await each(`${label} / ${name}`, name);
+		}
 	};
 	const spine = async (i) => { const b = qa('.spine-btn')[i]; if (!b.classList.contains('on')) b.click(); await sleep(250); };
 	const escape = async () => { dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await sleep(120); };
