@@ -2,12 +2,12 @@
 // render/warmup.js), and three things asked of it:
 //   render(job)   a piece's layers of print, one over the other, as pixels for the fabric's print texture
 //                 (render/prints.js hands them to either renderer: the fabric shader is not touched)
-//   raster(...)   a design's band coordinate over a box, read back, for the crystals that follow it (prints/field-stones.js)
+//   raster(...)   a design's sections over a box, read back, for the crystals that follow it (prints/field-stones.js)
 //   picture(...)  the same as a small picture (the gallery's tiles, the pattern view)
 // A context of its own because the app draws on WebGL or WebGPU (render/webgpu.js RENDERER) and a design is written once.
 // Spec: knowledge/engineering/architecture/printed-patterns.md.
 import { DESIGNS, definesOf } from './designs.js';
-import { VERT, fieldFragment, STROKE_FRAGMENT, CAPSULE_VERT, CAPSULE_FRAG, RESOLVE_FRAG, MAX_STOPS, MAX_MODS } from './glsl.js';
+import { VERT, fieldFragment, STROKE_FRAGMENT, CAPSULE_VERT, CAPSULE_FRAG, RESOLVE_FRAG, MAX_MODS } from './glsl.js';
 
 const IDENT = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 // the inverse of an affine 3 x 3 (columns first), and two of them one after the other (b after a)
@@ -166,13 +166,13 @@ export class PrintEngine {
 		const i = (n, v) => { const l = u.get(n); if (l) gl.uniform1i(l, v); };
 		m3('uPixToCloth', pixToCloth); m3('uClothToDesign', L.clothToDesign ?? IDENT); m3('uClothToFrame', L.clothToFrame ?? IDENT);
 		// metres of the design's space a texel spans: the cloth's a texel, over the pattern's own scale
-		f('uPx', Math.hypot(pixToCloth[0], pixToCloth[1]) / (L.sc || 1)); f('uTexel', Math.hypot(pixToCloth[0], pixToCloth[1]));
-		fv('uOutline', 4, L.outline ?? [0, 0, 0, 0]); fv('uWob', 2, L.wob ?? [0, 1]);
+		f('uPx', Math.hypot(pixToCloth[0], pixToCloth[1]) / (L.sc || 1));
+		fv('uWob', 2, L.wob ?? [0, 1]); f('uWidth', L.width ?? 0);
 		fv('uBend0', 4, L.bend0 ?? [0, 0, 1, 0]); fv('uBend1', 4, L.bend1 ?? [1, 0, 1, 0]); fv('uSym', 3, L.sym ?? [0, 0, 1]);
 		if (L.D) fv('uD', 1, L.D);
 		if (L.V) fv('uV', 4, L.V);
 		fv('uSeed', 2, L.seed ?? [0, 0]);
-		i('uN', L.n); fv('uStops', 4, L.stops); fv('uInk', 4, L.ink); fv('uInk2', 4, L.ink2); fv('uBase', 3, L.base ?? [0.5, 0.5, 0.5]);
+		fv('uCols', 4, L.cols);
 		i('uOut', out);
 		const M = L.mods;
 		i('uModN', out ? 0 : M?.n ?? 0);
@@ -198,7 +198,6 @@ export class PrintEngine {
 			// the cloth -> that picture: its texels, over the size it was made at
 			const s = new Float32Array([1 / dist.w, 0, 0, 0, 1 / dist.h, 0, 0, 0, 1]);
 			gl.uniformMatrix3fv(p.u.get('uClothToTex'), false, mul3(s, clothToPix));
-			gl.uniform1f(p.u.get('uReach'), L.reach);
 			this.drawQuad();
 			return;
 		}
@@ -255,7 +254,7 @@ export class PrintEngine {
 		gl.bindFramebuffer(gl.FRAMEBUFFER, acc.fbo); gl.viewport(0, 0, W, H);
 		gl.disable(gl.DEPTH_TEST); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
 		for (const L of layers) {
-			if (!L.any || !L.n) continue;
+			if (!L.any) continue;
 			gl.bindFramebuffer(gl.FRAMEBUFFER, acc.fbo); gl.viewport(0, 0, W, H);
 			this.layer(L, W, H, pixToCloth, clothToPix, room, acc);
 		}
@@ -272,9 +271,9 @@ export class PrintEngine {
 		return out;
 	}
 
-	// A design's band coordinate over a box of the frame's own space, for what follows it: Float32Array(W * H * 4), a node
-	// (i, j) at 4 (j W + i): the band coordinate (colours meet at its whole numbers and a half), the design's value, and 1
-	// where the design is (0 past the end of a design of its own size). L: a designLayer made local.
+	// A design's sections over a box of the frame's own space, for what follows them: Float32Array(W * H * 4), a node
+	// (i, j) at 4 (j W + i): metres to the edge of what is printed in an accent (negative inside), metres to the edge of the
+	// second accent, and 1 where the design is (0 past the end of a design of its own size). L: a designLayer made local.
 	raster(L, W, H, pixToLocal, room = null) {
 		const gl = this.gl;
 		if (this.lost || !this.float) return null;
@@ -308,4 +307,4 @@ export function printEngine() {
 	try { shared = typeof document === 'undefined' && typeof OffscreenCanvas === 'undefined' ? null : new PrintEngine(); } catch (e) { console.warn(e.message); shared = null; }
 	return shared;
 }
-export { MAX_STOPS, MAX_MODS };
+export { MAX_MODS };

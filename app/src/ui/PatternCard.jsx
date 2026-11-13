@@ -1,6 +1,7 @@
 // A pattern's card, and the gallery of presets it is picked from (every picture drawn by the pattern's own code). A
 // pattern is made as crystals, as print on the fabric, or as both (the switch under its name: prints/designs.js madeAs);
-// its Colours face is the print's ink (prints/ink.js), and a printed design's crystals follow it (prints/field-stones.js).
+// its Colours face is the print's ink (prints/ink.js: three flat sections), and a printed design's crystals follow it
+// (prints/field-stones.js).
 // Its faces, what matters most first: Preset (the gallery), Arrange or Design (how dense, how spaced, and the
 // arrangement's own settings), Colours (a print's), Crystal, Place (the whole pattern on the piece, what is under it, or
 // its distortions), Modify (its modifiers: one opened is a card of its own, back to the pattern). Everything here is live:
@@ -12,15 +13,15 @@ import { useEffect, useState } from 'preact/hooks';
 import { app } from '../instance.js';
 import { patternFocus, rev, stonesRun, selection, tool, tab, facets } from './state.js';
 import { toolOptions } from './tools.js';
-import { run, Card, Field, Segmented, Swatches, Slider, Switch, Stepper, Tiles, Paged, Button, IconButton, Hint, showFacet } from './kit.jsx';
+import { run, Card, Field, Segmented, Swatches, Slider, Switch, Tiles, Paged, Button, IconButton, Hint, showFacet } from './kit.jsx';
 import { I } from './icons.jsx';
 import { StonePicker, CrystalPicker, parseStoneName } from './SparkleCard.jsx';
 import { GALLERY, GALLERY_ITEMS, LAYOUTS, layoutDefaults } from '../stones/layouts.js';
 import { MOD_SHAPES, MOD_TARGETS, modGeometry, newModifier, nextModId, isSpatial } from '../stones/modifiers.js';
 import { patternParams, patternStones, presetPatch, minScale, PLANE_DEFAULTS, pieceMiddle } from '../stones/pattern.js';
-import { isDesign, madeAs, laysStones, printsInk, inkOf, inkBase, rampCss } from '../prints/ink.js';
+import { isDesign, madeAs, laysStones, printsInk, inkOf, inkBase, hasTwo, sectionCss, autoShade, linearToOklab, hexToLinear, SECTIONS } from '../prints/ink.js';
 import { printPicture, itemGen, flatSquare } from '../prints/picture.js';
-import { GEM_MODES, gemsOf, fillsOn } from '../prints/field-stones.js';
+import { GEM_MODES, GEM_EDGES, gemsOf, fillsOn } from '../prints/field-stones.js';
 import { PALETTE, pieceName } from './PieceCard.jsx';
 import { FORMAT } from '../stones/handles.js';
 import { realSize } from '../stones/candidates.js';
@@ -61,19 +62,17 @@ function thumbOf(item) {
 	return url;
 }
 
-// The presets: first what they are to begin with (designs of colour, printed; layouts of lines and dots, laid as crystals:
-// either can be made as the other, or as both, on the pattern's own card), then the families as a block of words, then the
-// family's presets as pictures, twelve to a page.
-const KINDS = [['print', 'Colour designs', null, 'Designs of colour, printed on the fabric; crystals can follow them'], ['stones', 'Lines & dots', null, 'Layouts of lines and dots, laid as crystals; they can be printed too']];
+// The presets: the families as a block of words, then the family's presets as pictures, twelve to a page. Every one can be
+// made as crystals, as print or as both (on the pattern's own card). kind: the families to open on ('print': the designs of
+// flat shapes, for a piece's Print face).
 const groupOf = (key) => GALLERY.find((g) => g.items.some((it) => it.key === key));
-export function PatternGallery({ value, onPick, kind: kind0 = null }) {
-	const g0 = groupOf(value) ?? GALLERY.find((g) => !kind0 || g.kind === kind0), [kind, setKind] = useState(g0.kind), [cat, setCat] = useState(g0.title);
-	const groups = GALLERY.filter((g) => g.kind === kind), group = groups.find((g) => g.title === cat) ?? groups[0];
+export function PatternGallery({ value, onPick, kind = null }) {
+	const g0 = groupOf(value) ?? GALLERY.find((g) => !kind || g.kind === kind), [cat, setCat] = useState(g0.title);
+	const group = GALLERY.find((g) => g.title === cat) ?? GALLERY[0];
 	return (
 		<>
-			<Segmented value={kind} options={KINDS} onPick={(k) => { setKind(k); setCat(groupOf(value)?.kind === k ? groupOf(value).title : GALLERY.find((g) => g.kind === k).title); }} />
-			<Segmented cols={kind === 'print' ? 4 : 5} value={group.title} options={groups.map((g) => [g.title, g.title])} onPick={setCat} />
-			<Paged key={kind + group.title} items={group.items} per={12} value={value}>
+			<Segmented cols={5} value={group.title} options={GALLERY.map((g) => [g.title, g.title])} onPick={setCat} />
+			<Paged key={group.title} items={group.items} per={12} value={value}>
 				{(items) => <Tiles cols={4} value={value} items={items.map((it) => ({ key: it.key, label: it.label, img: thumbOf(it), hint: it.hint ?? it.label }))} onPick={onPick} />}
 			</Paged>
 		</>
@@ -113,6 +112,7 @@ export function PatternCard({ id }) {
 	// the handles work on the crystals' plane only while that is what the card is on
 	useEffect(() => { if (face !== 'place' && patternFocus.value === 'plane') patternFocus.value = 'frame'; }, [face]);
 	const [bend, setBend] = useState(false); // Place: the distortions on show
+	const [part, setPart] = useState(null);  // Design: which part of a design with many settings is on show (layout.parts)
 	// the kind of work it belongs to: a pattern that is only print is its piece's fabric, one with crystals is Sparkle
 	const printOnly = !!g && !laysStones(g.params);
 	useEffect(() => { if (g && tab.value !== (printOnly ? 'fabric' : 'sparkle')) tab.value = printOnly ? 'fabric' : 'sparkle'; }, [printOnly, id]);
@@ -129,6 +129,8 @@ export function PatternCard({ id }) {
 		set({ params: presetPatch({ ...g.params, mods: P.mods }, key, toolOptions.value.stone.size), ...(renamed ? {} : { name: it.label }) });
 		patternFocus.value = 'frame';
 	};
+	// (a design with many settings shows them in parts: each setting names its own, or belongs to the first)
+	const shown = layout.parts?.some((x) => x[0] === part) ? part : layout.parts?.[0][0], first = !layout.parts || shown === layout.parts[0][0];
 	const random = typeof layout.random === 'function' ? layout.random(P) : layout.random, points = typeof layout.points === 'function' ? layout.points(P) : layout.points;
 	const margin = gems ? <Slider label="Clear of the piece's edges" value={P.margin ?? 0} min={0} max={0.05} step={0.0005} def={0} format={FORMAT.mm} onChange={(v, gs) => param('margin', v, gs)} /> : null;
 	// a pattern that is only print belongs to its piece's fabric; one with crystals, to Sparkle
@@ -144,16 +146,17 @@ export function PatternCard({ id }) {
 			faces={[['preset', 'Preset'], ['arrange', design ? 'Design' : 'Arrange'], ...(prints ? [['ink', 'Colours']] : []), ...(gems ? [['crystal', 'Crystal']] : []), ...(layout.flat ? [] : [['place', 'Place']]), ['mods', 'Modify']]}>
 			{(f) => <>{f === 'preset' ? <PatternGallery value={P.preset} onPick={pickPreset} />
 				: f === 'arrange' ? <>
-					{gems ? <Slider label="Density" value={P.density ?? 1} min={0} max={1} step={0.01} def={1} format={FORMAT.pct} onChange={(v, gs) => param('density', v, gs)} /> : null}
-					{points || !gems ? null : <Slider label="Spacing between crystals" value={P.gap ?? 1.2} min={1} max={4} step={0.01} def={1.15} format={FORMAT.x} onChange={(v, gs) => param('gap', v, gs)} />}
-					{layout.params.map((spec) => <ParamControl key={spec.k} spec={spec} P={P} set={param} piece={piece} />)}
+					{layout.parts ? <Segmented value={shown} options={layout.parts} onPick={setPart} /> : null}
+					{gems && first ? <Slider label="Density" value={P.density ?? 1} min={0} max={1} step={0.01} def={1} format={FORMAT.pct} onChange={(v, gs) => param('density', v, gs)} /> : null}
+					{points || !gems || !first ? null : <Slider label="Spacing between crystals" value={P.gap ?? 1.2} min={1} max={4} step={0.01} def={1.15} format={FORMAT.x} onChange={(v, gs) => param('gap', v, gs)} />}
+					{layout.params.filter((spec) => !layout.parts || (spec.part ?? layout.parts[0][0]) === shown).map((spec) => <ParamControl key={spec.k} spec={spec} P={P} set={param} piece={piece} />)}
 					{layout.flat ? margin : null}
 					<div class="btn-row">
 						{random ? <Button icon={<I.shuffle size={18} />} title="A new variation of what is random in this pattern" onClick={() => set({ seed: Math.floor(Math.random() * 1e6) })}>Reshuffle</Button> : null}
 						<Button kind="quiet" title="Every setting of the arrangement back to this preset's" onClick={() => pickPreset(P.preset ?? 'scatter')}>Reset to the preset</Button>
 					</div>
-				</> : f === 'ink' ? <Ink g={g} P={P} layout={layout} param={param} cloth={panel?.stack?.[0]?.colour ?? '#888888'} />
-					: f === 'crystal' ? <Crystal g={g} P={P} set={set} param={param} />
+				</> : f === 'ink' ? <Ink P={P} param={param} cloth={panel?.stack?.[0]?.colour ?? '#888888'} />
+					: f === 'crystal' ? <Crystal g={g} P={P} set={set} param={param} cloth={panel?.stack?.[0]?.colour ?? '#888888'} />
 						: f === 'place' ? <Place g={g} P={P} piece={piece} param={param} params={params} margin={margin} focus={focus} bend={bend} setBend={setBend} design={design} />
 							: <Modifiers mods={mods} setMods={setMods} P={P} piece={piece} gems={gems} />}
 				{piece ? null : <Hint>The piece is still being laid flat; the pattern follows in a moment.</Hint>}</>}
@@ -161,81 +164,56 @@ export function PatternCard({ id }) {
 	);
 }
 
-// The crystal, and for a printed design where its crystals go: along the edges of its colours, over some of them, or as
-// a halftone of it (prints/field-stones.js).
-function Crystal({ g, P, set, param }) {
+// The crystal, and for a printed design where its crystals go: along the edges of its shapes, or over some of its
+// sections (prints/field-stones.js).
+const SECTION_NAMES = ['Background', 'Accent', 'Second accent'];
+function Crystal({ g, P, set, param, cloth }) {
 	rev.value;
 	const design = isDesign(P.layout), [what, setWhat] = useState(design ? 'where' : 'crystal');
 	const picker = <CrystalPicker stone={g.stone ?? 'Crystal AB'} size={P.size ?? 'ss12'} shape={g.shape ?? 'round'} onStone={(v) => set({ stone: v, palette: null })} onSize={(v) => param('size', v)} onShape={(v) => set({ shape: v })} />;
 	if (!design) return picker;
-	const gm = gemsOf(P), ink = inkOf(P), on = fillsOn(P), put = (patch, gs) => param('gems', { ...(P.gems ?? {}), ...patch }, gs);
+	const gm = gemsOf(P), ink = inkOf(P), on = fillsOn(P), two = hasTwo(P), put = (patch, gs) => param('gems', { ...(P.gems ?? {}), ...patch }, gs);
 	return (
 		<>
 			<Segmented value={what} options={[['where', 'Where they go'], ['crystal', 'The crystal']]} onPick={setWhat} />
 			{what === 'crystal' ? picker : <>
-				<Segmented cols={3} value={gm.mode} options={GEM_MODES.map(([k, l, h]) => [k, l, null, h])} onPick={(v) => put({ mode: v })} />
+				<Segmented cols={2} value={gm.mode} options={GEM_MODES.map(([k, l, h]) => [k, l, null, h])} onPick={(v) => put({ mode: v })} />
 				{gm.mode === 'edges' ? <>
-					<Stepper label="Which edges" value={gm.every} min={1} max={6} format={(v) => (v === 1 ? 'Every one' : `Every ${v}${v === 2 ? 'nd' : v === 3 ? 'rd' : 'th'}`)} onChange={(v) => put({ every: v })} />
-					<Hint>A row of crystals wherever two of the print's colours meet. Soften the print, change its colours or move it, and the rows follow.</Hint>
-				</> : gm.mode === 'fill' ? <Field label="Over which colours">
+					{two ? <Field label="Which edges"><Segmented cols={3} value={gm.edges} options={GEM_EDGES} onPick={(v) => put({ edges: v })} /></Field> : null}
+					<Hint>A row of crystals along the edges of the print's shapes. Change the design or move it, and the rows follow.</Hint>
+				</> : <Field label="Over which sections">
 					<div class="stops">
-						{ink.stops.map((c, k) => <button key={k} class={`gem ink-stop ${on[k] ? 'on' : ''} ${c === null ? 'own' : ''}`} style={{ '--c': c ?? 'transparent' }} title={on[k] ? 'Crystals here: tap to leave it bare' : 'Bare: tap to lay crystals here'} aria-pressed={on[k]} onClick={() => put({ on: on.map((x, q) => (q === k ? !x : x)) })} />)}
+						{SECTIONS.slice(0, two ? 3 : 2).map((key, k) => { const c = sectionCss(ink[key], k, cloth); return <button key={key} class={`gem ink-stop ${on[k] ? 'on' : ''} ${c === null ? 'own' : ''}`} style={{ '--c': c ?? 'transparent' }} title={`${SECTION_NAMES[k]}: ${on[k] ? 'crystals here; tap to leave it bare' : 'bare; tap to lay crystals here'}`} aria-label={SECTION_NAMES[k]} aria-pressed={on[k]} onClick={() => put({ on: on.map((x, q) => (q === k ? !x : x)) })} />; })}
 					</div>
-				</Field> : <>
-					<Slider label="Between crystals" value={gm.dots} min={0.003} max={0.03} step={0.0001} def={0.007} log format={FORMAT.mm} onChange={(v, gs) => put({ dots: v }, gs)} />
-					<Slider label="Smallest" value={gm.small} min={0.2} max={2} step={0.01} def={0.35} log format={FORMAT.x} onChange={(v, gs) => put({ small: v }, gs)} />
-					<Slider label="Biggest" value={gm.big} min={0.5} max={4} step={0.01} def={1.7} log format={FORMAT.x} onChange={(v, gs) => put({ big: v }, gs)} />
-					<Slider label="Leave out below" value={gm.cut} min={0} max={0.9} step={0.01} def={0} format={FORMAT.pct} onChange={(v, gs) => put({ cut: v }, gs)} />
-				</>}
+				</Field>}
 			</>}
 		</>
 	);
 }
 
-// The print's ink: its colours along the design, how soft the edges between them (from hard edges to one smooth blend),
-// and how they run (prints/ink.js). A stop can be the fabric's own colour: nothing is printed there.
-const WRAP = [['once', 'Once', null, 'From the first colour to the last'], ['repeat', 'Round again', null, 'After the last colour, the first again'], ['mirror', 'There and back', null, 'To the last colour and back to the first']];
-function Ink({ g, P, layout, param, cloth }) {
+// The print's ink (prints/ink.js): three flat sections, the background and two accents, each the fabric's own (nothing
+// printed), a shade of the fabric's colour, or a colour. Nothing blends: every edge is hard.
+const SECTION_MODES = [['none', 'Clear', null, "Nothing printed here: the fabric's own colour shows"], ['shade', 'Fabric shade', null, "The fabric's own colour, lighter or darker: it follows the fabric if that changes"], ['colour', 'Colour', null, 'A colour of its own']];
+function Ink({ P, param, cloth }) {
 	rev.value;
-	const ink = inkOf(P), base = inkBase(P.layout), design = isDesign(P.layout), stops = ink.stops, [at, setAt] = useState(0), i = Math.min(at, stops.length - 1), [what, setWhat] = useState('colours');
+	const ink = inkOf(P), base = inkBase(P.layout), design = isDesign(P.layout), n = hasTwo(P) ? 3 : 2, [at, setAt] = useState(1), k = Math.min(at, n - 1), key = SECTIONS[k], v = ink[key];
 	const put = (patch, gs) => param('ink', { ...(P.ink ?? {}), ...patch }, gs);
-	const setStop = (c, gs) => put({ stops: stops.map((s, k) => (k === i ? c : s)) }, gs);
-	const add = () => { put({ stops: [...stops.slice(0, i + 1), stops[i] ?? '#f4f4f2', ...stops.slice(i + 1)] }); setAt(i + 1); };
-	const removeStop = () => { if (stops.length > 1) { put({ stops: stops.filter((_, k) => k !== i) }); setAt(Math.max(0, i - 1)); } };
-	const soft = <Slider label="Softness" hint="From hard edges between the colours to one smooth blend" value={ink.soft} min={0} max={1} step={0.01} def={base.soft} format={(v) => (v < 0.005 ? 'Hard edges' : v > 0.995 ? 'Smooth' : FORMAT.pct(v))} parse={(n) => n / 100} onChange={(v, gs) => put({ soft: v }, gs)} />;
+	const mode = v === null || v === undefined ? 'none' : typeof v === 'string' && v !== 'auto' ? 'colour' : 'shade', L = linearToOklab(hexToLinear(cloth))[0], auto = autoShade(L, k), shade = typeof v === 'number' ? v : auto;
+	const css = (q) => sectionCss(ink[SECTIONS[q]], q, cloth);
+	const pick = (m) => put({ [key]: m === 'none' ? null : m === 'shade' ? 'auto' : css(k) ?? sectionCss('auto', k || 1, cloth) });
 	return (
 		<>
-			<span class="ramp-bar" style={{ background: rampCss(ink, cloth) }} />
-			{soft}
-			{design ? <Segmented cols={3} value={what} options={[['colours', 'Colours'], ['edges', 'Edges', null, 'A line where two colours meet; edges that wander'], ['run', 'How they run']]} onPick={setWhat} /> : null}
-			{what === 'colours' || !design ? <>
-				<Field label={design ? 'Colours along the design' : 'Colours out from the line'} aside={<button class="link" title="The colours in the other order" onClick={() => { put({ stops: [...stops].reverse() }); setAt(stops.length - 1 - i); }}>Swap ends</button>}>
-					<div class="stops">
-						{stops.map((c, k) => <button key={k} class={`gem ink-stop ${k === i ? 'on' : ''} ${c === null ? 'own' : ''}`} style={{ '--c': c ?? cloth }} title={c ?? "The fabric's own colour: nothing printed"} aria-label={c ?? "The fabric's own colour"} onClick={() => setAt(k)} />)}
-						{stops.length < 8 ? <button class="stop-btn" title="Add a colour after this one" aria-label="Add a colour" onClick={add}><I.plus size={15} /></button> : null}
-						{stops.length > 1 ? <button class="stop-btn" title="Remove this colour" aria-label="Remove this colour" onClick={removeStop}><I.close size={13} /></button> : null}
-					</div>
-				</Field>
-				<Field label="This colour" aside={stops[i] !== null ? <button class="link" title="Print nothing here: the fabric shows" onClick={() => setStop(null)}>Leave the fabric's own</button> : "The fabric's own"}>
-					<Swatches value={stops[i]} colours={PALETTE} onPick={setStop} />
-				</Field>
-				{design ? null : <>
-					<Slider label="Line width" value={ink.width} min={0.0004} max={0.03} step={0.0001} def={base.width} log format={FORMAT.mm} onChange={(v, gs) => put({ width: v }, gs)} />
-					<Slider label="Dots under the crystals" value={ink.dot} min={0} max={5} step={0.05} def={base.dot} format={(v) => (v ? FORMAT.x(v) : 'None')} onChange={(v, gs) => put({ dot: v }, gs)} />
-					<Slider label="Ink strength" value={ink.strength} min={0} max={1} step={0.01} def={1} format={FORMAT.pct} onChange={(v, gs) => put({ strength: v }, gs)} />
-				</>}
-			</> : what === 'edges' ? <>
-				<Slider label="Outline" hint="A line drawn wherever two colours meet" value={ink.outline} min={0} max={0.008} step={0.0001} def={0} format={(v) => (v ? FORMAT.mm(v) : 'None')} onChange={(v, gs) => put({ outline: v }, gs)} />
-				{ink.outline > 0 ? <Field label="Outline colour"><Swatches value={ink.outlineColour} colours={PALETTE} onPick={(c, gs) => put({ outlineColour: c }, gs)} /></Field> : null}
-				<Slider label="Wandering edges" hint="The edges between colours stray, as if drawn by hand or bled into the cloth" value={ink.wobble} min={0} max={2} step={0.01} def={0} format={(v) => (v ? FORMAT.pct(v) : 'None')} parse={(n) => n / 100} onChange={(v, gs) => put({ wobble: v }, gs)} />
-				{ink.wobble > 0 ? <Slider label="Wander size" value={ink.wobbleL} min={0.003} max={0.3} step={0.0005} def={0.03} log format={FORMAT.mm} onChange={(v, gs) => put({ wobbleL: v }, gs)} /> : null}
+			<Segmented cols={n} value={key} options={SECTIONS.slice(0, n).map((s, q) => [s, SECTION_NAMES[q], <span class={`ink-chip ${css(q) === null ? 'own' : ''}`} style={{ '--c': css(q) ?? cloth }} />])} onPick={(s) => setAt(SECTIONS.indexOf(s))} />
+			<Segmented cols={3} value={mode} options={SECTION_MODES} onPick={pick} />
+			{mode === 'shade' ? <Slider label="Lighter or darker than the fabric" value={shade} min={-0.6} max={0.6} step={0.01} def={auto} format={(x) => (Math.abs(x) < 0.005 ? 'The same' : (x > 0 ? 'Lighter ' : 'Darker ') + Math.round(Math.abs(x) * 100))} parse={(x) => x / 100} onChange={(x, gs) => put({ [key]: Math.abs(x - auto) < 0.005 ? 'auto' : x }, gs)} />
+				: mode === 'colour' ? <Field label="Colour"><Swatches value={v} colours={PALETTE} onPick={(c, gs) => put({ [key]: c }, gs)} /></Field>
+					: <Hint>{k === 0 ? "The background is the fabric itself: only the accents are printed." : "Nothing is printed in this section: the fabric shows through it."}</Hint>}
+			{design ? <>
+				<Slider label="Wandering edges" hint="The edges of the shapes stray, as if cut or drawn by hand" value={ink.wobble} min={0} max={0.006} step={0.0001} def={0} format={(x) => (x ? FORMAT.mm(x) : 'None')} onChange={(x, gs) => put({ wobble: x }, gs)} />
+				{ink.wobble > 0 ? <Slider label="Wander size" value={ink.wobbleL} min={0.003} max={0.3} step={0.0005} def={0.03} log format={FORMAT.mm} onChange={(x, gs) => put({ wobbleL: x }, gs)} /> : null}
 			</> : <>
-				<Field label="The colours run"><Segmented cols={3} value={ink.wrap} options={WRAP} onPick={(v) => put({ wrap: v })} /></Field>
-				<Slider label="Times over" value={ink.repeat} min={layout.angular ? 1 : 0.25} max={layout.angular ? 24 : 16} step={layout.angular ? 1 : 0.01} def={base.repeat} log={!layout.angular} format={FORMAT.x} onChange={(v, gs) => put({ repeat: v }, gs)} />
-				<Slider label="Slide the colours along" value={ink.shift} min={-1} max={1} step={0.005} def={0} format={FORMAT.pct} onChange={(v, gs) => put({ shift: v }, gs)} />
-				<Slider label="Balance" hint="More of the first colours, or of the last" value={ink.balance} min={-1} max={1} step={0.01} def={0} format={(v) => (Math.abs(v) < 0.005 ? 'Even' : (v > 0 ? 'Last +' : 'First +') + Math.round(Math.abs(v) * 100))} parse={(n) => n / 100} onChange={(v, gs) => put({ balance: v }, gs)} />
-				<Slider label="Ink strength" value={ink.strength} min={0} max={1} step={0.01} def={1} format={FORMAT.pct} onChange={(v, gs) => put({ strength: v }, gs)} />
-				<Switch label="Dyes the fabric" hint="The ink tints the fabric's own colour, as dye on a coloured cloth, instead of covering it" value={!!ink.tint} onChange={(v) => put({ tint: v })} />
+				<Slider label="Line width" value={ink.width} min={0.0004} max={0.03} step={0.0001} def={base.width} log format={FORMAT.mm} onChange={(x, gs) => put({ width: x }, gs)} />
+				<Slider label="Dots under the crystals" value={ink.dot} min={0} max={5} step={0.05} def={base.dot} format={(x) => (x ? FORMAT.x(x) : 'None')} onChange={(x, gs) => put({ dot: x }, gs)} />
 			</>}
 		</>
 	);

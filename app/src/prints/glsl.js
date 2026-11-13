@@ -1,11 +1,11 @@
 // The shader code every printed pattern shares (prints/engine.js compiles one program a design): where a texel lies on
 // the flat cloth and in the design's own space, the tools designs are written with (hashes, noise, folds, distances),
-// the colours along a design's value (the ramp, from hard edges to a smooth blend), and how much ink where (a
-// pattern's density modifiers). A design supplies `float field(vec2 p)`: its value at a place of its own space, in
-// metres, 0..1 across its colours (prints/designs.js).
+// the three flat sections a print is made of (the ground, an accent, a second accent: paint, bands), and how much ink
+// where (a pattern's density modifiers). A design supplies `void design(vec2 p)`: it paints its shapes at a place of
+// its own space, in metres (prints/designs.js). Nothing here blends one colour into another: an edge is one texel soft.
 // Spec: knowledge/engineering/architecture/printed-patterns.md.
 
-export const MAX_STOPS = 8, MAX_MODS = 4, D_FLOATS = 16, V_VECS = 40;
+export const MAX_MODS = 4, D_FLOATS = 16, V_VECS = 40;
 
 export const VERT = /* glsl */`#version 300 es
 in vec2 aPos;
@@ -27,15 +27,10 @@ uniform vec3 uSym;            // x: 1 = mirrored about the cloth's line u = y, t
 uniform float uD[${D_FLOATS}];           // the design's own settings, in the order of its params
 uniform vec4 uV[${V_VECS}];             // and what it packs for itself (a wallpaper group's operations)
 uniform vec2 uSeed;           // what is random in it
-uniform int uN;               // colours
-uniform vec4 uStops[${MAX_STOPS}];       // each: OKLab L, a, b and how much of it covers the cloth (0: the cloth's own)
-uniform vec4 uInk;            // soft (0 hard edges .. 1 one smooth blend), repeats, slide, balance (a power)
-uniform vec4 uInk2;           // wrap (0 once, 1 round again, 2 there and back), spread, strength, 1 = tints the cloth
-uniform vec3 uBase;           // the cloth's own colour, linear (what a tint multiplies)
-uniform vec4 uOutline;        // a line drawn where two colours meet: OKLab L, a, b and its width on the cloth (metres; 0: none)
-uniform vec2 uWob;            // the design's value wobbled, so its edges wander: how much, and the size of the wander (metres)
-uniform float uTexel;         // metres of cloth one texel spans
-uniform int uOut;             // 0: colour; 1: the band coordinate (crystals follow it: prints/field-stones.js)
+uniform vec4 uCols[3];        // the ground, the accent, the second accent: linear colour times its cover, and its cover (0: the cloth's own)
+uniform vec2 uWob;            // the design's edges made to wander: how far (metres), and the size of the wander (metres)
+uniform float uWidth;         // a drawn arrangement's line (metres)
+uniform int uOut;             // 0: colour; 1: the distances to the sections' edges (crystals follow them: prints/field-stones.js)
 uniform int uModN;
 uniform vec4 uModA[${MAX_MODS}];         // x, y, cos, sin of its turn
 uniform vec4 uModB[${MAX_MODS}];         // w, h, from, to
@@ -45,12 +40,12 @@ uniform sampler2D uEdge;      // the piece: metres to its nearest edge (stones/p
 uniform vec4 uEdgeBox;        // its raster: x0, y0, 1 / width, 1 / height
 uniform sampler2D uDist;      // a drawn arrangement: metres to its nearest line or dot (prints/engine.js strokes)
 uniform mat3 uClothToTex;     // the flat cloth -> that picture
-uniform float uReach;         // how far that picture knows distances (metres)
 
 const float PI = 3.14159265358979, TAU = 6.28318530717959;
 vec2 gCloth;                  // where on the flat cloth this texel is
-float gSoft;                  // the print's softness, for designs whose edges are their own (cells, tiles)
 float gAlpha = 1.;            // a design of its own size: 0 past where it ends
+float gInk = 1e9;             // metres to the edge of what is printed in an accent (negative inside it)
+float gTwo = 1e9;             // metres to the edge of the second accent (negative inside it)
 
 // --- tools ---------------------------------------------------------------------------------------------
 float sat(float x) { return clamp(x, 0., 1.); }
@@ -108,9 +103,8 @@ float starR(float a, float n, float inset) {
 	return (A.x * e.y - A.y * e.x) / (d.x * e.y - d.y * e.x);
 }
 float smin(float a, float b, float k) { float h = sat(.5 + .5 * (b - a) / k); return mix(b, a, h) - k * h * (1. - h); }
-// an edge one texel soft: 0 inside (d < 0), 1 outside; wide: softer by the print's softness times this many metres
+// an edge one texel soft: 0 inside (d < 0), 1 outside
 float edge(float d) { return smoothstep(-uPx, uPx, d); }
-float edge(float d, float wide) { float w = uPx + gSoft * wide; return smoothstep(-w, w, d); }
 float edgeDist() { return texture(uEdge, (gCloth - uEdgeBox.xy) * uEdgeBox.zw).r; }
 
 // --- the stones' own noise (stones/fields.js hash2, noise2, fbm), so a clouds modifier masks ink where it thins crystals
@@ -142,34 +136,28 @@ vec2 unbend(vec2 p) {
 	return p;
 }
 
-// --- colour -------------------------------------------------------------------------------------------
-vec3 oklabToLinear(vec3 c) {
-	float l = c.x + .3963377774 * c.y + .2158037573 * c.z, m = c.x - .1055613458 * c.y - .0638541728 * c.z, s = c.x - .0894841775 * c.y - 1.2914855480 * c.z;
-	l = l * l * l; m = m * m * m; s = s * s * s;
-	return vec3(4.0767416621 * l - 3.3077115913 * m + .2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s, -.0041960863 * l - .7034186147 * m + 1.7076147010 * s);
+// --- the three sections: 0 the ground, 1 the accent, 2 the second accent ---------------------------------
+// A shape painted over what is there. sd: metres to its edge, negative inside. Later shapes lie on top.
+void paint(float sd, int c) {
+	gInk = c > 0 ? min(gInk, sd) : max(gInk, -sd);
+	gTwo = c == 2 ? min(gTwo, sd) : max(gTwo, -sd);
 }
-// A value along the design, and how fast it changes a texel, as a colour and a band coordinate (colours meet at its
-// whole numbers and a half). Soft 0: each colour a flat band, hard edged. Soft 1: one blend through them all.
-vec4 inkOf(float t, float dt, out float e) {
-	float soft = uInk.x, N = float(uN);
-	int wrap = int(uInk2.x + .5); bool cyc = wrap == 1;
-	float y = t * uInk.y + uInk.z; dt *= uInk.y;
-	if (wrap == 2) y = 1. - abs(1. - 2. * fract(y));
-	else if (wrap == 0) y = sat(y);
-	if (uInk.w != 1.) y = cyc ? floor(y) + pow(fract(y), uInk.w) : pow(y, uInk.w);
-	if (uN < 2) { e = 0.; return uStops[0]; }
-	float sp = soft * uInk2.y;
-	float a = cyc ? .5 / N : mix(.5 / N, 0., sp), d = cyc ? 1. / N : mix(1. / N, 1. / (N - 1.), sp);
-	float u = (y - a) / d, i = floor(u);
-	if (!cyc) i = clamp(i, 0., N - 2.);
-	float f = u - i, s = max(soft, min(dt / d, .5)), w = sat((f - .5) / max(s, 1e-4) + .5);
-	int i0 = cyc ? int(mod(i, N)) : int(i), i1 = cyc ? int(mod(i + 1., N)) : int(i) + 1;
-	e = u;
-	return mix(uStops[i0], uStops[i1], w);
+// Bands in turn along u, one a whole number: the ground, the accent (n 2), then the second accent (n 3), and round
+// again. m: metres a unit of u.
+void bands(float u, float m, float n) {
+	float w = mod(u, n);
+	if (n < 2.5) { gInk = (w < 1. ? min(w, 1. - w) : -min(w - 1., 2. - w)) * m; gTwo = 1e9; }
+	else { gInk = (w < 1. ? min(w, 1. - w) : -min(w - 1., 3. - w)) * m; gTwo = (w < 2. ? min(2. - w, w) : -min(w - 2., 3. - w)) * m; }
+}
+// The same from u = 1 on, for a thing that lies over others (a scale, a petal, a wave): its rim at u = 1 is an edge only
+// against what it covers there, so no distance is counted to it.
+void rimBands(float u, float m, float n) {
+	bands(u, m, n);
+	if (u < 1.5) { if (n < 2.5) gInk = -(2. - u) * m; else { gInk = -(3. - u) * m; gTwo = (2. - u) * m; } }
 }
 
-// the wander of a design's edges: a little noise added to its value
-float wobble(vec2 p) { return uWob.x > 0. ? uWob.x * fbm(p / uWob.y + uSeed.yx, 3) : 0.; }
+// the wander of a design's edges: its space pushed about a little
+vec2 wobble(vec2 p) { return uWob.x > 0. ? uWob.x * vec2(fbm(p / uWob.y + uSeed.yx, 3), fbm(p / uWob.y + uSeed.yx + 31.7, 3)) : vec2(0.); }
 
 // --- how much ink where: the pattern's density modifiers (stones/modifiers.js fieldOf, compileMods) ------------
 float gIn;
@@ -215,29 +203,22 @@ const MAIN = /* glsl */`
 void main() {
 	vec2 cloth = (uPixToCloth * vec3(gl_FragCoord.xy, 1.)).xy;
 	if (uSym.x > .5) cloth.x = uSym.y + uSym.z * abs(cloth.x - uSym.y);
-	gCloth = cloth; gSoft = uInk.x;
-	float t = fieldAt(cloth), e;
-	vec4 c = inkOf(t, fwidth(t), e);
-	if (uOut == 1) { fragColor = vec4(e, t, gAlpha, 1.); return; }
-	if (uOutline.w > 0. && uN > 1 && (int(uInk2.x + .5) == 1 || (e > 0. && e < float(uN) - 1.))) {
-		// metres to where two colours meet: how far the band coordinate is from a whole number and a half, over how fast it runs
-		float dist = abs(fract(e) - .5) / max(fwidth(e), 1e-6) * uTexel;
-		c = mix(c, vec4(uOutline.xyz, 1.), 1. - smoothstep(uOutline.w * .5 - uTexel, uOutline.w * .5 + uTexel, dist));
-	}
-	float a = c.a * uInk2.z * gAlpha * coverage();
-	vec3 rgb = max(oklabToLinear(c.xyz), 0.);
-	if (uInk2.w > .5) rgb *= uBase;
-	fragColor = vec4(rgb * a, a);
+	gCloth = cloth;
+	drawAt(cloth);
+	if (uOut == 1) { fragColor = vec4(clamp(gInk, -1., 1.), clamp(gTwo, -1., 1.), gAlpha, 1.); return; }
+	fragColor = mix(uCols[0], mix(uCols[1], uCols[2], 1. - edge(gTwo)), 1. - edge(gInk)) * (gAlpha * coverage());
 }
 `;
 
-// A design's program: its field read in its own space, bent by the pattern's distortions, its edges made to wander.
-export const fieldFragment = (body, defines = '') => `${HEAD}${defines}\n${body}\nfloat fieldAt(vec2 cloth) { vec2 p = unbend((uClothToDesign * vec3(cloth, 1.)).xy); return field(p) + wobble(p); }\n${MAIN}`;
+// A design's program: its shapes painted in its own space, bent by the pattern's distortions, its edges made to wander.
+export const fieldFragment = (body, defines = '') => `${HEAD}${defines}
+${body}
+void drawAt(vec2 cloth) { vec2 p = unbend((uClothToDesign * vec3(cloth, 1.)).xy); design(p + wobble(p)); }
+${MAIN}`;
 
-// A drawn arrangement (a crystal pattern's lines and dots, prints/strokes.js) as ink: the distance to it along the colours,
-// the first of them as wide as the line.
+// A drawn arrangement (a crystal pattern's lines and dots, prints/strokes.js) as ink: the accent, as wide as the line.
 export const STROKE_FRAGMENT = `${HEAD}
-float fieldAt(vec2 cloth) { return texture(uDist, (uClothToTex * vec3(cloth, 1.)).xy).r / uReach + wobble(cloth); }
+void drawAt(vec2 cloth) { gInk = texture(uDist, (uClothToTex * vec3(cloth, 1.)).xy).r - uWidth * .5; }
 ${MAIN}`;
 
 // --- the distance to an arrangement's lines and dots: each a capsule drawn as far out as the print reaches, the nearest

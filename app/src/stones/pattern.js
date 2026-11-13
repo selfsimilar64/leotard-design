@@ -25,7 +25,7 @@ import { compileMods, modsFromOld, modWithGeometry, presetMods, sizeRange } from
 import { sizeOf, SHAPES } from './library.js';
 import { conflictsOf, aliveOf, resolvePeaks, blocked, FLAT_CLEAR } from './peaks.js';
 import { laysStones, isDesign } from '../prints/designs.js';
-import { inkBase, inkOf } from '../prints/ink.js';
+import { inkBase, inkOf, SECTIONS } from '../prints/ink.js';
 import { strokesOf } from '../prints/strokes.js';
 
 // how far from an opening edge a stone can be and still need the elastic's keep-out checked
@@ -47,10 +47,12 @@ export function frameOf(P) {
 export const frameToCloth = (f, lx, ly) => { const x = lx * f.S * f.F, y = ly * f.S; return [f.x + f.c * x - f.s * y, f.y + f.s * x + f.c * y]; };
 export const clothToFrame = (f, u, v) => { const du = u - f.x, dv = v - f.y; return [((f.c * du + f.s * dv) / f.S) * f.F, (f.c * dv - f.s * du) / f.S]; };
 
+// (designs of the first prints that go on under another name)
+const RENAMED = { 'print-blend': 'print-steps', 'print-tiles': 'print-cubes' };
 // The record's parameters over its layout's defaults, the frame on the piece's middle unless placed, and its
 // modifiers (a record from before modifiers: its one gradient as modifiers).
 export function patternParams(gen, piece = null) {
-	const P0 = gen.params ?? {}, name = LAYOUTS[P0.layout] ? P0.layout : 'scatter', [cx, cy] = pieceMiddle(piece);
+	const P0 = gen.params ?? {}, name = LAYOUTS[P0.layout] ? P0.layout : RENAMED[P0.layout] ?? 'scatter', [cx, cy] = pieceMiddle(piece);
 	const out = { ...layoutDefaults(name), ...FRAME_DEFAULTS, ...PLANE_DEFAULTS, ...P0, layout: name };
 	out.x ??= cx; out.y ??= cy;
 	if (!out.mods) {
@@ -72,10 +74,10 @@ export function presetPatch(params, key, ownSize = 'ss12') {
 	for (const k of KEPT_BY_PRESET) if (params?.[k] !== undefined) patch[k] = params[k];
 	if (last?.params?.size && last.params.size === params?.size) patch.size = ownSize;
 	const own = (params?.mods ?? []).filter((m) => !m.preset);
-	// the print's colours stay when they were chosen by hand (they are not the last preset's own); how they run is the new preset's
-	const lastStops = last ? last.params?.ink?.stops ?? inkBase(last.layout).stops : null, mine = params?.ink?.stops;
-	const ownStops = mine && JSON.stringify(mine) !== JSON.stringify(lastStops) ? mine : null;
-	const ink = it.params?.ink || ownStops ? { ...(it.params?.ink ?? {}), ...(ownStops ? { stops: ownStops } : {}) } : undefined;
+	// a section's colour stays when it was chosen by hand (it is not the last preset's own); the rest of the ink is the new preset's
+	const lastInk = last ? { ...inkBase(last.layout), ...(last.params?.ink ?? {}) } : null, mine = {};
+	for (const k of SECTIONS) if (params?.ink && k in params.ink && (!lastInk || params.ink[k] !== lastInk[k])) mine[k] = params.ink[k];
+	const ink = it.params?.ink || Object.keys(mine).length ? { ...(it.params?.ink ?? {}), ...mine } : undefined;
 	return Object.assign(patch, { layout: it.layout, preset: key, ...layoutDefaults(it.layout), ...it.params, ink, mods: [...presetMods(it, own), ...own] });
 }
 
@@ -237,15 +239,15 @@ export function rigidOf(P, flat) {
 }
 // What a rigid move leaves alone in a pattern's parameters: the key of its drawn candidates.
 const RIGID = new Set(['x', 'y', 'rotate', 'flip', 'density', 'margin', 'keepOut', 'stoneTurn', 'turn']);
-// (what it is made as and its ink draw nothing of the crystals; except, where the crystals follow a printed design, how the
-// ink's colours fall on it: prints/field-stones.js)
-const INK_BANDS = ['soft', 'repeat', 'wrap', 'shift', 'balance', 'reverse', 'spread', 'wobble', 'wobbleL'];
+// (what it is made as and its ink draw nothing of the crystals; except, where the crystals follow a printed design, what
+// moves its edges: prints/field-stones.js)
+const INK_SHAPE = ['wobble', 'wobbleL'];
 function candidateKey(P, isRound, seed) {
 	const sizeMods = (P.mods ?? []).filter((m) => !m.off && m.on === 'size'), byEdge = sizeMods.some((m) => m.shape === 'edge');
 	const kept = {};
 	for (const k of Object.keys(P)) if (k !== 'mods' && k !== 'ink' && k !== 'as' && (byEdge || !RIGID.has(k))) kept[k] = P[k];
 	let bands = null;
-	if (isDesign(P.layout)) { const ink = inkOf(P); bands = [ink.stops.map((c) => !!c), ...INK_BANDS.map((k) => ink[k])]; }
+	if (isDesign(P.layout)) { const ink = inkOf(P); bands = INK_SHAPE.map((k) => ink[k]); }
 	return JSON.stringify([kept, sizeMods, isRound, seed, bands]);
 }
 

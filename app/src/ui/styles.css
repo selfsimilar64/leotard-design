@@ -365,7 +365,8 @@ input.card-title:focus { outline: none; background: var(--raised); box-shadow: 0
 .garment.on small { color: var(--on-ink); opacity: 0.7; }
 
 /* the gradient preview */
-.ramp-bar { display: block; height: 22px; border-radius: 9px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); }
+.ink-chip { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(30, 25, 20, 0.22); flex: none; }
+.ink-chip.own { background: repeating-conic-gradient(rgba(30, 25, 20, 0.16) 0 25%, transparent 0 50%) 0 0 / 6px 6px, var(--c); }
 .gem.ink-stop { background: var(--c); box-shadow: inset 0 0 0 1px rgba(30, 25, 20, 0.16); }
 .gem.ink-stop.own { background: repeating-conic-gradient(rgba(30, 25, 20, 0.14) 0 25%, transparent 0 50%) 0 0 / 8px 8px, var(--c); }
 .grad-bar { height: 12px; border-radius: 999px; background: linear-gradient(to right, var(--a), var(--b)); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); }

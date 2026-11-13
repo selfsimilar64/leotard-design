@@ -1,80 +1,68 @@
-// A pattern's print: what it is made as (crystals, print, or both), the colours of its ink and how they run along the
-// design, and all of it as what the print shaders read (prints/glsl.js, prints/engine.js). Pure: nothing here needs the
-// GPU, so it is what the tests and the card's own pictures read too.
+// A pattern's print: what it is made as (crystals, print, or both), the colours of its three flat sections, and all of
+// it as what the print shaders read (prints/glsl.js, prints/engine.js). Pure: nothing here needs the GPU, so it is what
+// the tests and the card's own pictures read too.
 //   params.as    'stones' | 'print' | 'both': a crystal arrangement starts as crystals, a printed design as print
-//   params.ink   { stops: colours along the design ('#rrggbb', or null: the cloth's own, nothing printed there),
-//                  soft: 0 (hard edges) .. 1 (one smooth blend), repeat: times the colours go round, wrap: once | repeat |
-//                  mirror (there and back), shift: the colours slid along, balance: -1..1 (more of the first or the last),
-//                  reverse, strength: 0..1 how much ink, tint: the ink dyes the cloth's colour instead of covering it,
+//   params.ink   { ground, accent, accent2: each section's colour, one of
+//                    null       the fabric's own: nothing printed there
+//                    'auto'     a shade of the fabric's colour that stands out from it (autoShade)
+//                    a number   a shade of the fabric's colour: that much lighter (+) or darker (-), in OKLab lightness
+//                    '#rrggbb'  a colour
 //                  width: a drawn arrangement's line (metres), dot: its dots, as a factor of the crystal they sit under,
-//                  outline: a line where two colours meet (metres wide; outlineColour), wobble, wobbleL: the design's edges
-//                  made to wander (how much, 0..1 of a colour's band, and the size of the wander in metres) }
+//                  wobble, wobbleL: the design's edges made to wander (how far, and the size of the wander, metres) }
+// The ground starts as the fabric's own and the accents as shades of it; nothing blends into anything.
 // Spec: knowledge/engineering/architecture/printed-patterns.md.
 import { frameOf, patternMap } from '../stones/pattern.js';
 import { designFloats, designOf, isDesign, AS, madeAs, printsInk, laysStones, PREFIX } from './designs.js';
 export { isDesign, AS, madeAs, printsInk, laysStones };
-import { MAX_STOPS, MAX_MODS } from './glsl.js';
+import { MAX_MODS } from './glsl.js';
 
-export const INK_DEFAULTS = { stops: ['#16205c', '#1b3fb5', '#8cc6ec', '#f4f4f2'], soft: 0, repeat: 1, wrap: 'once', shift: 0, balance: 0, reverse: false, strength: 1, tint: false, width: 0.002, dot: 1.5, outline: 0, outlineColour: '#0c0c10', wobble: 0, wobbleL: 0.03 };
-// a drawn arrangement prints as a line of one colour on the cloth's own
-const LINE_INK = { stops: ['#e6bf58', null], soft: 0.25 };
-export const WRAPS = { once: 0, repeat: 1, mirror: 2 };
+export const SECTIONS = ['ground', 'accent', 'accent2'];
+export const INK_DEFAULTS = { ground: null, accent: 'auto', accent2: 'auto', width: 0.002, dot: 1.5, wobble: 0, wobbleL: 0.03 };
 
-// The ink a pattern starts with, before its own settings: the design's, or a line's.
-export const inkBase = (layout) => ({ ...INK_DEFAULTS, ...(isDesign(layout) ? designOf(layout).ink : LINE_INK) });
+// The ink a pattern starts with, before its own settings: the design's over the defaults.
+export const inkBase = (layout) => ({ ...INK_DEFAULTS, ...(designOf(layout)?.ink ?? {}) });
 export function inkOf(P) {
-	const ink = { ...inkBase(P.layout), ...(P.ink ?? {}) };
-	ink.stops = (ink.stops?.length ? ink.stops : INK_DEFAULTS.stops).slice(0, MAX_STOPS);
+	const own = P.ink ?? {}, ink = { ...inkBase(P.layout), ...own };
+	// (a record of the first prints, colours along a ramp: its first two printed colours are the accents)
+	if (Array.isArray(own.stops) && own.accent === undefined) { const c = own.stops.filter(Boolean); if (c[0]) ink.accent = c[0]; if (c[1]) ink.accent2 = c[1]; }
 	return ink;
 }
+// Whether the pattern has a second accent to colour (a drawn arrangement prints in one).
+export const hasTwo = (P) => !!designOf(P.layout)?.two?.(P);
 
 // --- colour ---------------------------------------------------------------------------------------------
-const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4), toSrgb = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 export function hexToLinear(hex) {
 	const h = /^#?([0-9a-f]{6})$/i.exec(hex ?? '')?.[1] ?? '888888';
 	return [0, 2, 4].map((i) => toLinear(parseInt(h.slice(i, i + 2), 16) / 255));
 }
+export const linearToHex = (c) => '#' + c.map((v) => Math.round(toSrgb(Math.max(0, Math.min(1, v))) * 255).toString(16).padStart(2, '0')).join('');
 export function linearToOklab([r, g, b]) {
 	const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b), m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b), s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
 	return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
 }
-// The colours as the shader blends them: OKLab (an even blend, no muddy middle) and how much each covers. A stop that
-// is the cloth's own takes its neighbour's colour at no cover, so the ink fades out without changing hue.
-export function packStops(ink) {
-	const stops = ink.reverse ? [...ink.stops].reverse() : ink.stops, n = stops.length, data = new Float32Array(MAX_STOPS * 4);
-	for (let i = 0; i < n; i++) {
-		let hex = stops[i];
-		for (let d = 1; !hex && d < n; d++) hex = stops[i - d] ?? stops[i + d] ?? null;
-		data.set([...linearToOklab(hexToLinear(hex ?? '#888888')), stops[i] ? 1 : 0], i * 4);
-	}
-	return { data, n, any: stops.some(Boolean) };
+export function oklabToLinear([L, a, b]) {
+	const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+	return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s];
 }
-export const gammaOf = (balance) => 2 ** (-2 * Math.max(-1, Math.min(1, balance ?? 0)));
-
-// How a value along the design falls on the colours: the twin of prints/glsl.js inkOf, for what follows a print without
-// drawing it. -> { a, d }: stop i sits at a + i d (colours meet halfway between); cyc: the colours go round.
-export function bandsOf(ink) {
-	const N = ink.stops.length, cyc = ink.wrap === 'repeat', sp = ink.soft * (ink.spread ?? 1);
-	return { N, cyc, a: cyc ? 0.5 / N : 0.5 / N + (0 - 0.5 / N) * sp, d: cyc ? 1 / N : 1 / N + (1 / Math.max(N - 1, 1) - 1 / N) * sp };
+// The shade a section takes of itself: lighter on a dark fabric, darker on a light one, the second accent further than the
+// first. L: the fabric's OKLab lightness; k: the section (0 the ground, 1, 2 the accents).
+export const autoShade = (L, k) => (L < 0.6 ? 1 : -1) * (k === 2 ? 0.36 : k === 1 ? 0.2 : 0.1);
+// A section's colour on a fabric of the colour base (linear), linear; null: the fabric's own.
+export function sectionColour(v, k, base) {
+	if (v === null || v === undefined) return null;
+	if (typeof v === 'string' && v !== 'auto') return hexToLinear(v);
+	const lab = linearToOklab(base), d = typeof v === 'number' ? v : autoShade(lab[0], k);
+	return oklabToLinear([Math.max(0.04, Math.min(0.985, lab[0] + d)), lab[1], lab[2]]).map((c) => Math.max(0, Math.min(1, c)));
 }
-// The colour at band coordinate e (prints/glsl.js: the shader's `u`), as the index of the stop that owns it.
-export function stopAt(e, N, cyc, reverse = false) {
-	let i = Math.round(e);
-	i = cyc ? ((i % N) + N) % N : Math.max(0, Math.min(N - 1, i));
-	return reverse ? N - 1 - i : i;
-}
-
-// The colours as a CSS picture of the ramp, soft or hard as the print is (the card's bar).
-export function rampCss(ink, cloth = '#8a8a8a') {
-	const stops = ink.reverse ? [...ink.stops].reverse() : ink.stops, n = stops.length, col = (s) => s ?? cloth, parts = [];
-	if (n < 2) return col(stops[0]);
-	const { a, d, cyc } = bandsOf(ink), s = Math.max(ink.soft, 0.001), pc = (t) => (Math.max(0, Math.min(1, t)) * 100).toFixed(2) + '%';
-	// stop i holds from the end of the blend before it to the start of the blend after it
-	for (let i = cyc ? -1 : 0; i < (cyc ? n + 1 : n); i++) {
-		const c = col(stops[((i % n) + n) % n]), mid = a + i * d, from = mid - d / 2 + (s * d) / 2, to = mid + d / 2 - (s * d) / 2;
-		parts.push(`${c} ${pc(i === 0 && !cyc ? 0 : from)}`, `${c} ${pc(i === n - 1 && !cyc ? 1 : to)}`);
-	}
-	return `linear-gradient(90deg, ${parts.join(', ')})`;
+// The same as a CSS colour for the card (cloth: the fabric's, '#rrggbb'); null: the fabric's own.
+export const sectionCss = (v, k, cloth) => { const c = sectionColour(v, k, hexToLinear(cloth)); return c ? linearToHex(c) : null; };
+// The three sections as the shader mixes them: linear colour times cover, and cover. any: something is printed.
+export function packCols(ink, base) {
+	const data = new Float32Array(12);
+	let any = false;
+	SECTIONS.forEach((key, k) => { const c = sectionColour(ink[key], k, base); if (c) { data.set([c[0], c[1], c[2], 1], k * 4); any = true; } });
+	return { data, any };
 }
 
 // --- a pattern as a layer of print ----------------------------------------------------------------------------
@@ -111,21 +99,13 @@ export function clothToFrame(f) {
 
 const seedPair = (seed) => [((seed * 0.6180339887) % 1) * 97 + 1.3, ((seed * 0.7548776662) % 1) * 89 + 2.7];
 
-// What the print shaders need of a pattern, whatever draws its value (a design's field, or the distance to a drawn
-// arrangement): its colours, how they run, how much ink where. P: stones/pattern.js patternParams. local: in the frame's
-// own space (the crystals that follow a design are laid there: stones/pattern.js rigidOf), as if the pattern lay unturned
-// on the origin.
+// What the print shaders need of a pattern, whatever paints it (a design's shader, or the distance to a drawn
+// arrangement): its sections' colours, how much ink where. P: stones/pattern.js patternParams. local: in the frame's own
+// space (the crystals that follow a design are laid there: stones/pattern.js rigidOf), as if the pattern lay unturned on
+// the origin. base: the fabric's colour, linear (what a shade is a shade of).
 export function inkUniforms(P, { local = false, base = [0.5, 0.5, 0.5], sym = null } = {}) {
-	const ink = inkOf(P), stops = packStops(ink), Pl = local ? { ...P, x: 0, y: 0, rotate: 0, flip: false } : P, f = frameOf(Pl), mods = packMods(P.mods);
-	return {
-		stops: stops.data, n: stops.n, any: stops.any,
-		ink: [ink.soft, Math.max(ink.repeat ?? 1, 0.01), ink.shift ?? 0, gammaOf(ink.balance)],
-		ink2: [WRAPS[ink.wrap] ?? 0, ink.spread ?? 1, Math.max(0, Math.min(1, ink.strength ?? 1)), ink.tint ? 1 : 0],
-		base, sym: sym ?? [0, 0, 1], clothToFrame: clothToFrame(f), mods,
-		outline: [...linearToOklab(hexToLinear(ink.outlineColour)), Math.max(ink.outline ?? 0, 0)],
-		// (the wander as a share of one colour's band, whatever the number of colours and times over)
-		wob: [Math.max(ink.wobble ?? 0, 0) / (stops.n * Math.max(ink.repeat ?? 1, 0.01)), Math.max(ink.wobbleL ?? 0.03, 1e-4)],
-	};
+	const ink = inkOf(P), cols = packCols(ink, base), Pl = local ? { ...P, x: 0, y: 0, rotate: 0, flip: false } : P, f = frameOf(Pl), mods = packMods(P.mods);
+	return { cols: cols.data, any: cols.any, base, sym: sym ?? [0, 0, 1], clothToFrame: clothToFrame(f), mods, wob: [Math.max(ink.wobble ?? 0, 0), Math.max(ink.wobbleL ?? 0.03, 1e-4)] };
 }
 
 // A printed design as a layer: its shader's settings and where its own space lies on the cloth.
@@ -141,11 +121,10 @@ export function designLayer(gen, P, opts = {}) {
 		...inkUniforms(P, opts),
 	};
 }
-// A drawn arrangement as a layer: the distance to its lines and dots (prints/strokes.js, prints/engine.js), along the
-// colours with the first as wide as the line. strokes: { segs, dots, toCloth } of prints/strokes.js.
+// A drawn arrangement as a layer: the distance to its lines and dots (prints/strokes.js, prints/engine.js), in the
+// accent as wide as the line. strokes: { segs, dots, toCloth } of prints/strokes.js.
 export function strokeLayer(gen, P, strokes, opts = {}) {
-	const u = inkUniforms(P, opts), ink = inkOf(P), w = Math.max(ink.width ?? 0.002, 0.0002);
-	// each colour a band half the line's width, out from the line's middle; the last goes on for ever
+	const u = inkUniforms(P, opts), w = Math.max(inkOf(P).width ?? 0.002, 0.0002);
 	// (a layout of dots alone: its density modifiers have thinned the dots already, so they do not fade the ink as well)
-	return { kind: 'strokes', strokes, width: w, reach: (u.n * w) / 2, ...u, ink2: [u.ink2[0], 0, u.ink2[2], u.ink2[3]], ...(strokes.nSegs ? {} : { mods: { n: 0 } }) };
+	return { kind: 'strokes', strokes, width: w, reach: w / 2, ...u, wob: [0, 1], ...(strokes.nSegs ? {} : { mods: { n: 0 } }) };
 }

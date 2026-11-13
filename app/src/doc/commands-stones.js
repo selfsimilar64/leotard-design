@@ -31,15 +31,15 @@ function checkStones(a) {
 		}
 		// what it is made as, and its print's ink (prints/ink.js)
 		if (p.as !== undefined && !AS.includes(p.as)) throw new Error('A pattern is made as one of ' + AS.join(', ') + ', not ' + p.as);
-		if (p.ink?.stops) {
-			if (!Array.isArray(p.ink.stops) || !p.ink.stops.length || p.ink.stops.length > 8) throw new Error('ink.stops: one to eight colours (#rrggbb), or null for the fabric\'s own');
-			for (const c of p.ink.stops) if (c !== null && !(typeof c === 'string' && parseHex(c))) throw new Error('ink.stops: ' + c + ' is not a colour (#rrggbb, or null for the fabric\'s own)');
+		for (const k of ['ground', 'accent', 'accent2']) {
+			const c = p.ink?.[k];
+			if (c !== undefined && c !== null && c !== 'auto' && !(typeof c === 'number' && Math.abs(c) <= 1) && !(typeof c === 'string' && parseHex(c))) throw new Error(`ink.${k}: ${c} is not a colour (#rrggbb), a shade of the fabric (auto, or -1..1), or null for the fabric's own`);
 		}
 	}
 }
 
 defineCommand('stones.add', {
-	label: 'Add stones', args: '{ kind: pattern|row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...; a pattern: layout, preset, as?: stones|print|both, ink?: { stops: [#rrggbb | null], soft: 0..1, repeat, wrap: once|repeat|mirror, shift, balance, strength, tint, width, dot }, gems?: { mode: edges|fill|tone } }, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, side?: left|right (one side of a paired line or piece), seed?, name? }',
+	label: 'Add stones', args: '{ kind: pattern|row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...; a pattern: layout, preset, as?: stones|print|both, ink?: { ground, accent, accent2: null (nothing printed) | auto | -1..1 (a shade of the fabric) | #rrggbb; width, dot, wobble, wobbleL }, gems?: { mode: edges|fill, edges: all|outer|inner, on: [ground, accent, accent2] } }, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, side?: left|right (one side of a paired line or piece), seed?, name? }',
 	run(tx, a) {
 		if (!GENERATOR_KINDS.includes(a.kind)) throw new Error('kind must be one of: ' + GENERATOR_KINDS.join(', '));
 		checkStones(a);

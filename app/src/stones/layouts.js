@@ -9,11 +9,12 @@ import { DESIGNS, PREFIX } from '../prints/designs.js';
 import { PRINT_GALLERY } from '../prints/gallery.js';
 import { fieldStones, gemsOf } from '../prints/field-stones.js';
 
-// The printed designs (prints/designs.js) as arrangements, named 'print-<key>': made as crystals, they follow the print's
-// colours (prints/field-stones.js), drawn in the frame's own space (local: stones/pattern.js patternCandidates).
+// The printed designs (prints/designs.js) as arrangements, named 'print-<key>': made as crystals, they follow the edges
+// of the print's sections or fill them (prints/field-stones.js), drawn in the frame's own space (local: stones/pattern.js
+// patternCandidates).
 const DESIGN_LAYOUTS = Object.fromEntries(Object.entries(DESIGNS).map(([k, D]) => [PREFIX + k, {
-	label: D.label, params: D.params, grips: D.grips, own: D.own, random: D.random, flat: D.flat, angular: D.angular, design: true, local: true,
-	points: (P) => gemsOf(P).mode !== 'edges', fine: (P) => (gemsOf(P).mode === 'tone' ? Math.min(1, gemsOf(P).small) : 1),
+	label: D.label, params: D.params, grips: D.grips, own: D.own, random: D.random, flat: D.flat, parts: D.parts, design: true, local: true,
+	points: (P) => gemsOf(P).mode !== 'edges',
 	make: (P, G) => fieldStones(P, G),
 }]));
 
@@ -58,7 +59,7 @@ const STONE_GALLERY = [
 			{ key: 'scatter', label: 'Pavé', layout: 'scatter' },
 			{ key: 'scatter-mixed', label: 'Mixed sizes', layout: 'scatter', params: { variety: 0.65 } },
 			{ key: 'scatter-pebbles', label: 'Pebbles', layout: 'scatter', params: { variety: 1, size: 'ss16' } },
-			{ key: 'scatter-halo', label: 'Haloed pavé', layout: 'scatter', params: { variety: 0.5, as: 'both', ink: { stops: ['#f4f4f2', '#8cc6ec', null], width: 0.0016, soft: 1, dot: 2.4 } }, hint: 'Pavé, each crystal on a soft printed dot' },
+			{ key: 'scatter-halo', label: 'Haloed pavé', layout: 'scatter', params: { variety: 0.5, as: 'both', ink: { width: 0.0016, dot: 2.4 } }, hint: 'Pavé, each crystal on a printed dot' },
 			{ key: 'scatter-sparse', label: 'Starry', layout: 'scatter', params: { variety: 0.5 }, mods: [{ on: 'density', shape: 'clouds', from: 0.5, to: 0.04 }] },
 			{ key: 'clusters', label: 'Clusters', layout: 'clusters' },
 			{ key: 'meteors', label: 'Meteor shower', layout: 'meteors' },
@@ -75,7 +76,7 @@ const STONE_GALLERY = [
 			{ key: 'brick', label: 'Brick', layout: 'brick' },
 			{ key: 'diamonds', label: 'Diamond grid', layout: 'diamonds' },
 			{ key: 'trellis', label: 'Trellis', layout: 'trellis' },
-			{ key: 'trellis-print', label: 'Printed trellis', layout: 'trellis', params: { as: 'both', ink: { stops: ['#f4f4f2', null], width: 0.0016, soft: 0.2, dot: 2.2 } }, hint: 'Trellis, printed, with a crystal on a dot at each crossing' },
+			{ key: 'trellis-print', label: 'Printed trellis', layout: 'trellis', params: { as: 'both', ink: { width: 0.0016, dot: 2.2 } }, hint: 'Trellis, printed, with a crystal on a dot at each crossing' },
 			{ key: 'trellis-3', label: 'Triple trellis', layout: 'trellis', params: { families: 3, skew: 30 } },
 			{ key: 'polka-heart', label: 'Hearts', layout: 'motifs', params: { motif: 'heart' } },
 			{ key: 'polka-star', label: 'Stars', layout: 'motifs', params: { motif: 'star', nodeSize: 1.5 } },
@@ -142,7 +143,7 @@ const STONE_GALLERY = [
 			{ key: 'rings-grow', label: 'Growing rings', layout: 'rings', params: { spacing: 0.009, grow: 1, size: 'ss8' } },
 			{ key: 'sunburst', label: 'Sunburst', layout: 'sunburst' },
 			{ key: 'mandala', label: 'Rosette', layout: 'mandala' },
-			{ key: 'mandala-gilt', label: 'Gilded rosette', layout: 'mandala', params: { as: 'both', ink: { stops: ['#e6bf58', '#7a5c12', null], width: 0.003, soft: 0.5 } }, hint: 'Rosette, printed in gold with crystals on the lines' },
+			{ key: 'mandala-gilt', label: 'Gilded rosette', layout: 'mandala', params: { as: 'both', ink: { accent: '#e6bf58', width: 0.003 } }, hint: 'Rosette, printed in gold with crystals on the lines' },
 			{ key: 'rose', label: 'Rose', layout: 'rose' },
 			{ key: 'rose-woven', label: 'Woven rose', layout: 'rose', params: { petalsN: 7, petalsD: 3 } },
 			{ key: 'guilloche', label: 'Guilloché', layout: 'guilloche' },
@@ -166,7 +167,8 @@ const STONE_GALLERY = [
 		],
 	},
 ];
-// kind: what a family's presets are to begin with, crystals ('stones': a layout of lines and dots) or print (a design of
-// colours); either can be made as the other, or as both (prints/designs.js madeAs).
+// One gallery: every preset can be made as crystals, as print, or as both (prints/designs.js madeAs). kind: what a
+// family's presets are to begin with, crystals ('stones': a layout of lines and dots) or print (a design of flat shapes,
+// its crystals along their edges).
 export const GALLERY = [...STONE_GALLERY.map((g) => ({ ...g, kind: 'stones' })), ...PRINT_GALLERY.map((g) => ({ ...g, kind: 'print' }))];
 export const GALLERY_ITEMS = new Map(GALLERY.flatMap((g) => g.items.map((it) => [it.key, it])));

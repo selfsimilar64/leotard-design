@@ -20,6 +20,10 @@ sources:
 
 # Decision
 
+**Narrowed the same day**: gradients, the Softness slider, halftones and all but eighteen presets were withdrawn by
+[Prints are flat sections of at most three colours, each paired with a crystal pattern](/decisions/2026-11-13-prints-are-flat-sections-paired-with-crystals.md).
+Points 1, 3, 5 and 6 below stand.
+
 The owner asked that "the same way we use shaders to generate gemstone patterns, we should allow shaders to be used for
 color designs directly on the fabric as well", and that "for applicable patterns, we should offer the same as
 gemstones, as sometimes gemstones are placed to accentuate a printed pattern". Further: "parameters that control how

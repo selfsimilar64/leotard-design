@@ -1,11 +1,11 @@
 // The design sheet (prints.html): every printed preset drawn by its own shader on a square of cloth, without the app
-// round it, for writing and checking designs. ?family=Mandalas shows one family, ?px=320 bigger pictures, ?soft=0..1 or
-// ?as=lines (the crystal layouts as line art) other views. window.printReport: { compiled, failed: [{ key, log }], ms }.
+// round it, for writing and checking designs. ?family=Mandalas shows one family, ?px=320 bigger pictures, ?cloth=rrggbb
+// another fabric, ?as=lines the crystal layouts as line art. window.printReport: { compiled, failed: [{ key, log }], ms }.
 import { printEngine } from '../prints/engine.js';
 import { printPicture, itemGen } from '../prints/picture.js';
 import { GALLERY } from '../stones/layouts.js';
 
-const q = new URLSearchParams(location.search), px = +(q.get('px') ?? 200), family = q.get('family'), soft = q.get('soft'), lines = q.get('as') === 'lines';
+const q = new URLSearchParams(location.search), px = +(q.get('px') ?? 200), family = q.get('family'), cloth = '#' + (q.get('cloth') ?? '26221e'), lines = q.get('as') === 'lines';
 const eng = printEngine(), root = document.getElementById('sheet');
 const t0 = performance.now();
 const failed = await eng.prepare();
@@ -26,8 +26,8 @@ for (const g of GALLERY) {
 		cell.append(cv, cap);
 		row.append(cell);
 		try {
-			const more = { ...(lines ? { as: 'print' } : {}), ...(soft !== null ? { ink: { ...(item.params?.ink ?? {}), soft: +soft } } : {}) };
-			const t = performance.now(), img = printPicture(itemGen(item, undefined, more), px);
+			const more = lines ? { as: 'print' } : {};
+			const t = performance.now(), img = printPicture(itemGen(item, undefined, more), px, { cloth });
 			eng.gl.finish();
 			times.push([item.key, +(performance.now() - t).toFixed(1)]);
 			if (img) cv.getContext('2d').putImageData(img, 0, 0); else cap.textContent += ' (no picture)';
