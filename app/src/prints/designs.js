@@ -632,7 +632,7 @@ float field(vec2 p) {
 	},
 	lace: {
 		label: 'Lace', ink: { stops: ['#f4f4f2', null] },
-		params: [lmm('cell', 'Repeat', 0.08, 0.02, 0.5), { ...ratio('tight', 'Tightness', 1.2, 1.02, 1.7), log: true }, num('depth', 'Depth', 6, 2, 9), line(0.0014)],
+		params: [lmm('cell', 'Repeat', 0.05, 0.02, 0.5), { ...ratio('tight', 'Tightness', 1.2, 1.02, 1.7), log: true }, num('depth', 'Depth', 6, 2, 9), line(0.001)],
 		grips: [along('cell', [1, 0], 'Repeat')],
 		glsl: /* glsl */`
 float field(vec2 p) {
@@ -690,7 +690,8 @@ function packWallpaper(P, seed) {
 		if (!n && !m) { n = 1 + (k % fine); m = k % 2 ? -1 : 1; }
 		taken.add(n + ',' + m);
 		const amp = 1 / Math.sqrt(Math.abs(n) + Math.abs(m));
-		V.set([n, m, amp, hash2(seed, k * 3 + 2, 13) * Math.PI * 2], (26 + k) * 4);
+		// (in step with the cell's origin, or exactly against it: any other phase and a group's mirrors cancel most of the wave)
+		V.set([n, m, amp, hash2(seed, k * 3 + 2, 13) < 0.5 ? 0 : Math.PI], (26 + k) * 4);
 		sum += amp * amp;
 	}
 	V[0] = G.ops.length; V[1] = nW; V[2] = 1.6 / (Math.sqrt(sum) * Math.sqrt(G.ops.length));

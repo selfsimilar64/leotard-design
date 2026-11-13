@@ -36,3 +36,28 @@ for (const g of GALLERY) {
 }
 window.printReport = { compiled: +compiled.toFixed(0), failed: eng.failed.map((f) => ({ key: f.key, log: f.log.slice(0, 600) })), slowest: times.sort((a, b) => b[1] - a[1]).slice(0, 8), count: times.length, failedCount: failed };
 document.title = `Prints: ${times.length} drawn, ${eng.failed.length} failed`;
+
+// The whole sheet as one picture: captures/<name>.png (the dev server's file bridge, vite.config.js). cols: tiles a row.
+window.saveSheet = async (name = 'print-designs', cols = 12) => {
+	const tiles = [...root.querySelectorAll('figure')].map((f) => ({ cv: f.querySelector('canvas'), label: f.querySelector('figcaption').textContent, family: f.parentNode.previousElementSibling?.textContent }));
+	const gap = 10, cap = 16, head = 30, w = px + gap, out = document.createElement('canvas'), rowsOf = new Map();
+	for (const t of tiles) rowsOf.set(t.family, [...(rowsOf.get(t.family) ?? []), t]);
+	let H = gap;
+	for (const list of rowsOf.values()) H += head + Math.ceil(list.length / cols) * (px + cap + gap);
+	out.width = gap + cols * w; out.height = H;
+	const x = out.getContext('2d');
+	x.fillStyle = '#171513'; x.fillRect(0, 0, out.width, out.height);
+	let y = gap;
+	for (const [family, list] of rowsOf) {
+		x.fillStyle = '#e9e4dc'; x.font = '600 15px system-ui, sans-serif'; x.fillText(family, gap, y + 18);
+		y += head;
+		list.forEach((t, i) => {
+			const cx = gap + (i % cols) * w, cy = y + Math.floor(i / cols) * (px + cap + gap);
+			x.drawImage(t.cv, cx, cy);
+			x.fillStyle = '#b5ada1'; x.font = '11px system-ui, sans-serif'; x.fillText(t.label.slice(0, Math.floor(px / 6.2)), cx, cy + px + 12);
+		});
+		y += Math.ceil(list.length / cols) * (px + cap + gap);
+	}
+	const blob = await new Promise((r) => out.toBlob(r, 'image/png')), res = await fetch('/__fs/captures/' + name + '.png', { method: 'POST', body: blob });
+	return res.ok ? 'captures/' + name + '.png' : 'failed';
+};
