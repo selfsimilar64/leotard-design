@@ -60,6 +60,7 @@ export class Geometry {
 		this.items = 0; this.np = 0; this.nk = 0; this.nv = 0; this.nl = 0; this.nr = 0; this.ns = 0; this.nsr = 0; this.templates.length = 0;
 		this.box = box; this.pitch = Math.max(pitch, 1e-4); this.seed = seed; this.edgeAt = edgeAt; this.truncated = false;
 		this.gap = o.gap ?? 1; this.d0 = o.d0 ?? this.pitch / this.gap; this.fine = o.fine ?? 1; this.angles = !!o.angles;
+		this.piece = o.piece ?? null; // (what follows a printed design reads the piece's own edge: prints/field-stones.js)
 		this.t = 0; this.k = 1; this.cat = 0; this.jk = 1; this.jpri = 0; this.unit = -1;
 		this.inRun = false; this.inLine = false;
 		return this;

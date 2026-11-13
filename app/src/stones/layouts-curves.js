@@ -7,9 +7,10 @@ import { TAU, hash2, rankOf1, rankOf2, clamp01 } from './fields.js';
 import { mm, num, ratio, deg, pct, opt, along, radius, point, lattice } from './layouts-lattice.js';
 
 // Lines of equal value of f over the box (marching squares), chained and laid out with the pen.
-// levels: the values; step: grid size (metres); kOfLevel: each line's own size.
+// levels: the values; step: grid size (metres); kOfLevel: each line's own size. keep(x, y): only the stretches of a line where
+// it holds are laid (the crystals that follow a printed design of its own size: prints/field-stones.js).
 const scratch = { val: new Float32Array(0), link: new Int32Array(0), px: new Float32Array(0), py: new Float32Array(0), mark: new Uint8Array(0) };
-function isolines(E, f, levels, step, kOfLevel = null) {
+export function isolines(E, f, levels, step, kOfLevel = null, keep = null) {
 	// (no finer than a 300 x 300 grid over the box, the floor on powers of two: a box a little bigger, as a moved pattern's
 	// is, draws the same lines: stones/pattern.js patternCandidates)
 	const least = Math.sqrt(((E.box.x1 - E.box.x0) * (E.box.y1 - E.box.y0)) / 90000);
@@ -69,7 +70,13 @@ function isolines(E, f, levels, step, kOfLevel = null) {
 				mark[nxt] = 2;
 				cur = nxt;
 			}
-			layLine(E, line, closed, anchorReach);
+			if (!keep) { layLine(E, line, closed, anchorReach); return; }
+			let run = [], all = true;
+			for (let i = 0; i < line.length; i += 2) {
+				if (keep(line[i], line[i + 1])) run.push(line[i], line[i + 1]);
+				else { all = false; if (run.length >= 4) layLine(E, run, false, anchorReach); run = []; }
+			}
+			if (run.length >= 4) layLine(E, run, closed && all, anchorReach);
 		};
 		for (const id of touched) if (mark[id] === 1 && link[id * 2 + 1] < 0) walk(id, false);
 		for (const id of touched) if (mark[id] === 1) walk(id, true);

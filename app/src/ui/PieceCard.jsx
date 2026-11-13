@@ -5,13 +5,15 @@
 // finishes (ui/ShapeCard.jsx), there as two wells that open beside the card (LookWells).
 import { useEffect, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { rev, selection, tool, tab } from './state.js';
+import { rev, selection, tool, tab, notify } from './state.js';
 import { toolOptions } from './tools.js';
 import { run, Card, Field, Tiles, Segmented, Swatches, ColourWell, HexField, Slider, Well, Button, IconButton, PartRow, Hint, thumbName } from './kit.jsx';
 import { I } from './icons.jsx';
 import { FABRICS, SECOND, SATIN_DEFAULTS, RETIRED_SCANS, texScaleOf, hasSecondColour } from '../materials/fabric.js';
 import { baseFabricFor } from '../materials/textures.js';
 import { usage } from '../doc/materials.js';
+import { PatternGallery, patternLabel } from './PatternCard.jsx';
+import { printsInk, madeAs } from '../prints/designs.js';
 
 // The materials in the order the moodboard uses them (knowledge/domain/moodboard/common-patterns.md:
 // mesh in 83% of garments, matte 45%, wet look and foil 33%, shiny 28%, mystique 28%, then the
@@ -83,11 +85,12 @@ export function PieceCard({ id }) {
 					? <IconButton icon={<I.trash size={18} />} kind="danger" label="Delete this overlay piece" onClick={() => { run({ op: 'overlay.remove', id: p.id }); selection.value = null; }} />
 					: <IconButton icon={<I.scissors size={18} />} label="Cut it out: make this piece an opening (a keyhole, a cut-out)" onClick={() => run({ op: 'panel.cut', id: p.id })} />}
 			</>}
-			faces={[['colour', 'Colour'], ['fabric', 'Fabric'], ['fade', 'Fade'], ['details', 'Details']]}>
+			faces={[['colour', 'Colour'], ['fabric', 'Fabric'], ['print', 'Print'], ['fade', 'Fade'], ['details', 'Details']]}>
 			{(face) => face === 'colour' ? <>
 				<MaterialChoice value={s.material} doc={doc} kind="piece" onPick={(m) => run({ op: 'panel.material', id: p.id, material: m })} onSeparate={() => run({ op: 'panel.separate', id: p.id })} />
 				<Field label="Colour"><ColourFields look={look} set={set} /></Field>
 			</> : face === 'fabric' ? <FabricFace look={look} s={s} f={f} set={set} />
+				: face === 'print' ? <Prints p={p} doc={doc} />
 				: face === 'fade' ? <Fade p={p} s={s} doc={doc} />
 					: <Details s={s} f={f} set={set} />}
 		</Card>
@@ -200,6 +203,34 @@ function SatinControls({ s, set }) {
 			<Slider label="Milkiness" value={v.kd} min={0} max={1} step={0.01} format={(x) => Math.round(x * 100) + '%'} onChange={(x, g) => put('kd', x, g)} />
 			<Slider label="Sheen strength" value={v.eta} min={1.2} max={2.2} step={0.005} format={(x) => (refl(x) * 100).toFixed(1) + '%'} onChange={(x, g) => put('eta', x, g)} />
 		</Field>
+	);
+}
+
+// The piece's printed patterns: designs of colour drawn on its flat cloth (and crystal layouts made as print), each a
+// live pattern with a card of its own (ui/PatternCard.jsx): the same thing as a crystal pattern, made as print. With none
+// yet, the gallery itself; a pick lays it on this piece and opens it.
+function Prints({ p, doc }) {
+	rev.value;
+	const on = doc.stones.filter((g) => g.kind === 'pattern' && g.on?.panel === p.id && printsInk(g.params)), [adding, setAdding] = useState(false);
+	const lay = (key) => {
+		const piece = app.engine?.clothOf(p.id)?.piece, sp = piece?.spOnPiece((piece.x0 + piece.x1) / 2, (piece.y0 + piece.y1) / 2);
+		if (!sp) { notify('This piece is still being laid flat: try again in a moment'); return; }
+		toolOptions.value = { ...toolOptions.value, pattern: key };
+		app.tools.placePattern({ panel: p.id, sp, layer: p.layer }, 'print');
+	};
+	if (!on.length || adding) return (
+		<>
+			{on.length ? null : <Hint>Pick a design to print on this piece. It stays live: its colours, how soft their edges are, its size and its place can all be changed, and crystals can follow it.</Hint>}
+			<PatternGallery value={null} kind="print" onPick={lay} />
+		</>
+	);
+	return (
+		<>
+			<div class="part-list tall">
+				{on.map((g) => <PartRow key={g.id} icon={<I.fill size={18} />} label={g.name || patternLabel(g)} meta={madeAs(g.params) === 'both' ? 'Print and crystals' : 'Print'} onClick={() => { selection.value = { kind: 'stones', id: g.id }; }} />)}
+			</div>
+			<div class="btn-row"><Button icon={<I.plus size={18} />} title="Another printed pattern on this piece, over these" onClick={() => setAdding(true)}>Add a printed pattern</Button></div>
+		</>
 	);
 }
 

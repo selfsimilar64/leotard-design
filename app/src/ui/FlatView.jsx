@@ -5,11 +5,11 @@
 // With a fitted garment on (garment/fitted.js) the pieces are its own, as drafted.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { app } from '../instance.js';
-import { rev, selection, layout, prefs, setPref, stonesRun } from './state.js';
+import { rev, selection, layout, prefs, setPref, stonesRun, printsRun } from './state.js';
 import { patternPieces, layoutPieces } from '../garment/pattern.js';
 import { fittedPieces } from '../garment/fitted.js';
 import { thumb, thumbName, Segmented } from './kit.jsx';
-import { PatternHandlesOn, OpeningBands, paintStones, pickStone } from './FlatStones.jsx';
+import { PatternHandlesOn, OpeningBands, paintStones, pickStone, frameOf } from './FlatStones.jsx';
 import { keptHooks } from '../stones/gpu-view.js';
 
 const piecesNow = () => {
@@ -147,13 +147,40 @@ function lookOf(p) {
 	return { fabric: s.fabric, colour: s.colour ?? p.colour, ombre: s.ombre?.colour ? s.ombre : null };
 }
 
-// The piece as it will look: its colour (or fade), a faint tile of its fabric, its outline; the name small.
+// A piece's printed patterns in the pattern view: the picture the 3D view shows on it (render/prints.js), laid on the piece's
+// flat shape and cut to its outline (cut in the picture itself: an svg clip on a picture with a map of its own did not always
+// draw). As an address the svg can show, encoded off the page's thread a moment after the print is drawn.
+function PrintOn({ p }) {
+	printsRun.value;
+	const e = app.engine, pic = e?.prints.picture(p.panelId), cloth = pic && (p.fitted ? e.fitted.clothFor(p.panelId) : e.clothOfCell(p.layer, p.cell, p.panelId));
+	const mine = pic && cloth === pic.piece, [url, setUrl] = useState(null), key = mine ? pic.rev : -1;
+	const F = frameOf(p), [a, b, c] = mine ? pic.corners.map(([u, v]) => F.toSvg(u, v)) : [[0, 0], [1, 0], [0, 1]];
+	useEffect(() => {
+		if (!mine) { setUrl(null); return undefined; }
+		let live = true, made = null;
+		const W = pic.canvas.width, H = pic.canvas.height, cv = document.createElement('canvas'), x = cv.getContext('2d');
+		cv.width = W; cv.height = H;
+		// the outline in the picture's own pixels: the svg's units back through the picture's map
+		const ux = b[0] - a[0], uy = b[1] - a[1], vx = c[0] - a[0], vy = c[1] - a[1], det = ux * vy - uy * vx || 1e-9, [ox, oy] = p.at;
+		x.beginPath();
+		for (const [px, py] of p.stitch ?? p.cutLine) { const dx = ox + px - a[0], dy = oy + p.size[1] - py - a[1]; x.lineTo(((dx * vy - dy * vx) / det) * W, ((ux * dy - uy * dx) / det) * H); }
+		x.closePath(); x.clip();
+		x.drawImage(pic.canvas, 0, 0);
+		cv.toBlob((blob) => { if (!blob) return; made = URL.createObjectURL(blob); if (live) setUrl(made); else URL.revokeObjectURL(made); }, 'image/png');
+		return () => { live = false; if (made) setTimeout(() => URL.revokeObjectURL(made), 500); };
+	}, [key, p.panelId, p.at[0], p.at[1]]);
+	if (!mine || !url) return null;
+	return <image href={url} width="1" height="1" preserveAspectRatio="none" transform={`matrix(${b[0] - a[0]} ${b[1] - a[1]} ${c[0] - a[0]} ${c[1] - a[1]} ${a[0]} ${a[1]})`} />;
+}
+
+// The piece as it will look: its colour (or fade), its printed patterns, a faint tile of its fabric, its outline; the name small.
 function LookPiece({ p, active, onClick, onFocus }) {
 	// the piece as it is seen sewn: its stitching line, not the cut with its seam allowance (stones stop at the stitching line)
 	const [ox, oy] = p.at, pt = ([x, y]) => `${ox + x},${oy + p.size[1] - y}`, s = lookOf(p), pts = (p.stitch ?? p.cutLine).map(pt).join(' ');
 	return (
 		<g class={`piece look ${active ? 'sel' : ''}`} onClick={(ev) => { if (!pickStone(p, ev)) onClick?.(ev); }} onDblClick={onFocus}>
 			<polygon points={pts} fill={s.ombre ? `url(#fade-${p.key})` : s.colour} stroke="none" />
+			<PrintOn p={p} />
 			{s.fabric ? <polygon points={pts} fill={`url(#tex-${thumbName(s.fabric)})`} opacity="0.5" style={{ mixBlendMode: 'soft-light' }} stroke="none" /> : null}
 			<OpeningBands p={p} pts={pts} colour={s.colour} />
 			<polygon class="look-edge" points={pts} fill="none" stroke={active ? '#1f1d1a' : 'rgba(31, 29, 26, 0.45)'} stroke-width={active ? 1.6 : 0.7} />

@@ -429,7 +429,7 @@ export class FittedView {
 	restone() {
 		const e = this.engine;
 		e.stoneGeoRev++; e.patternCache?.clear(); e.stoneCache = { gens: new Map() }; e.stonePending?.clear?.();
-		e.stonesDirty = true;
+		e.stonesDirty = true; e.printsDirty = 'now'; // (and the prints on those pieces: render/prints.js)
 	}
 
 	async refit() {
@@ -516,11 +516,14 @@ export class FittedView {
 		const front = byName.get('Front') ?? L0[0];
 		for (const mesh of this.meshes) {
 			// a strap (pipeline/design_strappy.py) is the binding carried on: the binding's look, not a panel's
-			const p = byName.get(mesh.userData.fitted) ?? front;
+			// (a piece with no panel of its own takes the front's look, less the front's printed patterns: those are a picture of the
+			// front's own flat shape, render/prints.js)
+			const own = byName.get(mesh.userData.fitted), p = own ?? front;
 			if (mesh.userData.fitted === 'Strap') mesh.material = this.trimMaterial(doc);
-			else if (p) mesh.material = view.material(p.id);
+			else if (p) mesh.material = own ? view.material(p.id) : view.plainMaterial(p.id);
 			if (mesh.parent !== view.group) view.group.add(mesh);
 		}
+		view.applyMaterials(doc); // (a look borrowed just now takes its panel's settings)
 		this.finish();
 		this.quiet();
 	}

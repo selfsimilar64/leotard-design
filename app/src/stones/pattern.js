@@ -17,13 +17,16 @@
 // Spec: knowledge/engineering/architecture/procedural-stone-patterns.md.
 import { LAYOUTS, GALLERY_ITEMS, layoutDefaults } from './layouts.js';
 import { Candidates, SIZES, realSize } from './candidates.js';
-import { Geometry } from './geometry.js';
+import { Geometry, PRI_LINE } from './geometry.js';
 import { distortion, distortionReach, frac } from './fields.js';
 import { layData, variantReady } from './gpu-lay.js';
 import { modsBuffer } from './gpu-wgsl.js';
 import { compileMods, modsFromOld, modWithGeometry, presetMods, sizeRange } from './modifiers.js';
 import { sizeOf, SHAPES } from './library.js';
 import { conflictsOf, aliveOf, resolvePeaks, blocked, FLAT_CLEAR } from './peaks.js';
+import { laysStones, isDesign } from '../prints/designs.js';
+import { inkBase, inkOf } from '../prints/ink.js';
+import { strokesOf } from '../prints/strokes.js';
 
 // how far from an opening edge a stone can be and still need the elastic's keep-out checked
 const NEAR_EDGE = 0.03;
@@ -62,14 +65,18 @@ export function patternParams(gen, piece = null) {
 // the arrangement becomes the preset's own, so nothing lies over from the last one. What stays is where the
 // pattern lies, its crystal (unless the last preset chose that size, or this one does), and the modifiers added
 // by hand; those that came with a preset go with it. ownSize: the crystal's size to go back to.
-const KEPT_BY_PRESET = ['x', 'y', 'rotate', 'flip', 'symmetric', 'size', 'gap', 'density', 'margin', 'keepOut', 'turn', 'stoneTurn'];
+const KEPT_BY_PRESET = ['x', 'y', 'rotate', 'flip', 'symmetric', 'size', 'gap', 'density', 'margin', 'keepOut', 'turn', 'stoneTurn', 'as'];
 export function presetPatch(params, key, ownSize = 'ss12') {
 	const it = GALLERY_ITEMS.get(key), patch = {}, last = GALLERY_ITEMS.get(params?.preset);
 	for (const k of Object.keys(params ?? {})) patch[k] = undefined;
 	for (const k of KEPT_BY_PRESET) if (params?.[k] !== undefined) patch[k] = params[k];
 	if (last?.params?.size && last.params.size === params?.size) patch.size = ownSize;
 	const own = (params?.mods ?? []).filter((m) => !m.preset);
-	return Object.assign(patch, { layout: it.layout, preset: key, ...layoutDefaults(it.layout), ...it.params, mods: [...presetMods(it, own), ...own] });
+	// the print's colours stay when they were chosen by hand (they are not the last preset's own); how they run is the new preset's
+	const lastStops = last ? last.params?.ink?.stops ?? inkBase(last.layout).stops : null, mine = params?.ink?.stops;
+	const ownStops = mine && JSON.stringify(mine) !== JSON.stringify(lastStops) ? mine : null;
+	const ink = it.params?.ink || ownStops ? { ...(it.params?.ink ?? {}), ...(ownStops ? { stops: ownStops } : {}) } : undefined;
+	return Object.assign(patch, { layout: it.layout, preset: key, ...layoutDefaults(it.layout), ...it.params, ink, mods: [...presetMods(it, own), ...own] });
 }
 
 // The arrangement's own space on the flat cloth: frame after plane. -> { a, b, c, d, e, f, sc: its scale,
@@ -166,7 +173,7 @@ const _p3 = { x: 0, y: 0, z: 0 };
 // Two rasters over a piece's flat cloth, read bilinearly, so that whether a stone is kept is a few lookups (on the CPU, and
 // the same on the GPU later: knowledge/engineering/architecture/gpu-stone-placement.md), never a search of the body.
 // Room: the distance to the piece's edge (ClothPiece.edgeAt's raster), less than nothing off the piece.
-function roomRaster(piece) {
+export function roomRaster(piece) {
 	let G = piece.roomRaster;
 	if (G) return G;
 	piece.edgeAt(piece.x0, piece.y0); // (a ClothPiece builds its raster when first asked: this one's nodes, then)
@@ -230,11 +237,16 @@ export function rigidOf(P, flat) {
 }
 // What a rigid move leaves alone in a pattern's parameters: the key of its drawn candidates.
 const RIGID = new Set(['x', 'y', 'rotate', 'flip', 'density', 'margin', 'keepOut', 'stoneTurn', 'turn']);
+// (what it is made as and its ink draw nothing of the crystals; except, where the crystals follow a printed design, how the
+// ink's colours fall on it: prints/field-stones.js)
+const INK_BANDS = ['soft', 'repeat', 'wrap', 'shift', 'balance', 'reverse', 'spread'];
 function candidateKey(P, isRound, seed) {
 	const sizeMods = (P.mods ?? []).filter((m) => !m.off && m.on === 'size'), byEdge = sizeMods.some((m) => m.shape === 'edge');
 	const kept = {};
-	for (const k of Object.keys(P)) if (k !== 'mods' && (byEdge || !RIGID.has(k))) kept[k] = P[k];
-	return JSON.stringify([kept, sizeMods, isRound, seed]);
+	for (const k of Object.keys(P)) if (k !== 'mods' && k !== 'ink' && k !== 'as' && (byEdge || !RIGID.has(k))) kept[k] = P[k];
+	let bands = null;
+	if (isDesign(P.layout)) { const ink = inkOf(P); bands = [ink.stops.map((c) => !!c), ...INK_BANDS.map((k) => ink[k])]; }
+	return JSON.stringify([kept, sizeMods, isRound, seed, bands]);
 }
 
 // What must be drawn: the piece seen from the frame's own space (rigidOf).
@@ -278,9 +290,12 @@ export function patternCandidates(gen, piece, cache = null) {
 	const key = candidateKey(P, isRound, seed);
 	const c = cache?.get(gen.id + '#cand');
 	if (c?.key === key && (flat || inside(need, c.local))) return { ...c.out, rigid, P };
-	const m = flat ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, distortion(P, seed));
+	// (own: an arrangement drawn in the frame's own space, its map already in what it draws: the crystals that follow a printed
+	// design, prints/field-stones.js)
+	const own = !!layout.local;
+	const m = flat || own ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, distortion(P, seed));
 	const local = flat ? null : drawnBox(piece, rigid, need, layout, c?.key === key ? c : null, P);
-	const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : boxOver(P, local, m);
+	const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : own ? { ...local } : boxOver(P, local, m);
 	const pitch = (d0 * gap) / m.sc;
 	// sizes that vary with place: the modifier's answer, some of each of the sizes it falls between; read in the frame's own
 	// space (a field of the piece's edge asks the cloth there, so its key holds the rigid part too)
@@ -289,7 +304,7 @@ export function patternCandidates(gen, piece, cache = null) {
 	const S = flat ? 1 : frameOf(P).S, sizeMods = compileMods(P.mods, { x: 0, y: 0, c: 1, s: 0, S, F: 1 }, edgeLocal, gen.stone ?? 'Crystal AB').size;
 	const diam = sizeMods ? (u, v, k, t, cat, rank) => ditherSize(d0 * k * sizeMods(u, v, k, t, cat, rank), frac(rank * 97.13 + 0.71)) : null;
 	const E = scratch.reset(box, pitch, seed, flat ? edgeAt : null, { map: m, clip: flat ? piece : local, d0, gap, diam, fine, angles: !isRound, jitter: P.jitter ?? 0 });
-	E.lay(geometryOf(gen, layout, P, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine, angles: !isRound }, cache));
+	E.lay(geometryOf(gen, layout, P, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine, angles: !isRound, piece }, cache));
 	const n = E.n, cut = (a) => a.slice(0, n);
 	const out = { n, GX: cut(E.X), GY: cut(E.Y), GA: cut(E.A), R: cut(E.R), K: cut(E.K), T: cut(E.T), C: cut(E.C), D: cut(E.D), PR: cut(E.P), rigid, P, d0, gap, fine, dart, isRound, flat, varied: !!sizeMods };
 	cache?.set(gen.id + '#cand', { key, local, rot: P.rotate, out });
@@ -410,12 +425,46 @@ export function posRasters(piece, mirrorPos) {
 	return (piece.posRasters = out);
 }
 
+// A crystal arrangement's drawing as what prints (prints/strokes.js): its lines as short stretches in the frame's own space, with
+// the frame's rigid part beside them (toCloth, columns first), drawn again only when something other than the rigid part changes;
+// and its single crystals as dots where they are kept (in the cloth's space: they are the kept stones themselves, so a
+// printed dot lies under its crystal). opts: { cache, edge, dot: a dot's size as a factor of its crystal's, width: the line's }.
+// -> { segs, nSegs, toCloth, dots, nDots }
+export function patternStrokes(gen, piece, opts = {}) {
+	const P = patternParams(gen, piece), layout = LAYOUTS[P.layout], flat = !!layout.flat, seed = gen.seed ?? 1, cache = opts.cache;
+	const d0 = sizeOf(P.size ?? 'ss12'), gap = P.gap ?? 1.2, rigid = rigidOf(P, flat);
+	const need = flat ? null : neededBox(piece, rigid), key = candidateKey(P, true, seed);
+	let c = cache?.get(gen.id + '#strokes');
+	if (!(c?.key === key && (flat || inside(need, c.local)))) {
+		const m = flat ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, distortion(P, seed));
+		const local = flat ? null : drawnBox(piece, rigid, need, layout, c?.key === key ? c : null, P);
+		const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : boxOver(P, local, m);
+		const pitch = (d0 * gap) / m.sc, edgeAt = (u, v) => piece.edgeAt(u, v);
+		const G = geometryOf(gen, layout, P, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine: 1, angles: false, piece }, cache);
+		c = { key, local, rot: P.rotate, out: strokesOf(G, m, flat ? piece : local) };
+		cache?.set(gen.id + '#strokes', c);
+	}
+	// the dots: every kept crystal that is not one of a line's own (a joint, a lattice's, a scatter's)
+	const dotK = opts.dot ?? 0, half = (opts.width ?? 0.002) / 2;
+	let dots = null, nDots = 0;
+	if (dotK > 0) {
+		const k = keepPattern(gen, piece, { cache, edge: opts.edge }), PR = k.Cd.PR;
+		dots = new Float32Array(Math.max(k.n, 1) * 5);
+		for (let j = 0; j < k.n; j++) {
+			if (PR[k.I[j]] === PRI_LINE) continue;
+			const o = nDots++ * 5;
+			dots[o] = dots[o + 2] = k.U[j]; dots[o + 1] = dots[o + 3] = k.V[j]; dots[o + 4] = Math.max((k.D[j] * dotK) / 2 - half, 0);
+		}
+	}
+	return { ...c.out, toCloth: new Float32Array([rigid.c * rigid.F, rigid.s * rigid.F, 0, -rigid.s, rigid.c, 0, rigid.x, rigid.y, 1]), dots, nDots };
+}
+
 // ctx: { cloth(panelId) -> { piece, pending, paired } | null, edge(p, keepOut) }; cache: Map (the group's
 // drawing between frames).
 export function runPattern(gen, ctx, cache = null, blockers = null) {
 	const panel = ctx.doc.panels.find((p) => p.id === gen.on?.panel);
 	if (!panel) throw new Error('No panel ' + gen.on?.panel);
-	if (panel.removed) return [];
+	if (panel.removed || !laysStones(gen.params)) return []; // (a pattern made only as print lays no crystals)
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return []; }
 	return patternStones(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks, blockers });
@@ -425,7 +474,7 @@ export function runPattern(gen, ctx, cache = null, blockers = null) {
 export function packPattern(gen, ctx, cache = null, blockers = null) {
 	const panel = ctx.doc.panels.find((p) => p.id === gen.on?.panel);
 	if (!panel) throw new Error('No panel ' + gen.on?.panel);
-	if (panel.removed) return null;
+	if (panel.removed || !laysStones(gen.params)) return null;
 	const cloth = ctx.cloth?.(panel.id), piece = cloth?.piece;
 	if (!piece) { if (cloth?.pending) ctx.pending?.add(gen.id); return null; }
 	const own = () => { const k = keepPattern(gen, piece, { cache, edge: ctx.edge, peaks: ctx.peaks, blockers: blockers?.grid ?? null }), n = k.n; return { n, U: k.U.slice(0, n), V: k.V.slice(0, n), A: k.A.slice(0, n), D: k.D.slice(0, n), H: k.H.slice(0, n), stone: k.stone }; };
@@ -454,11 +503,12 @@ export function patternGpu(gen, piece, opts = {}) {
 	const need = flat ? null : neededBox(piece, rigid), key = candidateKey(P, isRound, seed), c = cache?.get(gen.id + '#gpucand');
 	let lay = c?.key === key && (flat || inside(need, c.local)) ? c.lay : null;
 	if (!lay) {
-		const m = flat ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, distortion(P, seed));
+		const own = !!layout.local; // (as patternCandidates: drawn in the frame's own space)
+		const m = flat || own ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1, bend: null } : patternMap({ ...P, x: 0, y: 0, rotate: 0, flip: false }, distortion(P, seed));
 		const local = flat ? null : drawnBox(piece, rigid, need, layout, c?.key === key ? c : null, P);
-		const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : boxOver(P, local, m);
+		const box = flat ? { x0: piece.x0, x1: piece.x1, y0: piece.y0, y1: piece.y1, r: Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0) / 2 } : own ? { ...local } : boxOver(P, local, m);
 		const pitch = (d0 * gap) / m.sc, edgeAt = (u, v) => piece.edgeAt(u, v), diam = (P.mods ?? []).some((q) => !q.off && q.on === 'size');
-		const G = geometryOf(gen, layout, P, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine, angles: !isRound }, cache);
+		const G = geometryOf(gen, layout, P, box, pitch, seed, flat ? edgeAt : null, { d0, gap, fine, angles: !isRound, piece }, cache);
 		const bend = flat || !m.bend ? null : { twist: P.twist ?? 0, bulge: P.bulge ?? 0, R2: (P.bulgeR ?? 0.08) ** 2, waveA: P.waveA ?? 0, waveL: P.waveL ?? 0.06, warp: P.warp ?? 0, warpL: P.warpL ?? 0.08, seed };
 		const data = layData(G, { map: m, bend, clip: flat ? piece : local, pitch, d0, d1: realSize(d0), gap, fine, angles: !isRound, jitter: P.jitter ?? 0, seed, diam, S: flat ? 1 : frameOf(P).S, rigid, flat });
 		if (data.estSlots > 4e6) return null;

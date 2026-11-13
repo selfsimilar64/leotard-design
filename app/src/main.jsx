@@ -4,6 +4,7 @@ import { withKnownPose } from './app.js';
 import { Studio, useShortcuts } from './ui/Studio.jsx';
 import { rev, stats, display, hideMannequin, hideOverlay, libraryOpen, savedRev, fitStatus, compiling, settle } from './ui/state.js';
 import { warmEarly, warmUp } from './render/warmup.js';
+import { printEngine } from './prints/engine.js';
 import { curtainStep, curtainNote, liftCurtain } from './ui/curtain.js';
 import { loadDisplay, fitOptions } from './render/display.js';
 import { Viewport } from './render/viewport.js';
@@ -28,6 +29,8 @@ async function start(el) {
 	viewport.applyScene(app.doc.scene); // the studio's photograph loads beside the bodies (the engine applies the scene again)
 	// every fabric's shaders compiled from when the studio is lit, beside the bodies and the design (render/warmup.js)
 	if (!quick) warmEarly(viewport);
+	// and every printed design's, in the print engine's own context (prints/engine.js): sent at once, waited for in reveal
+	if (!quick) printsReady = printEngine()?.prepare().catch((err) => console.error('print shaders', err)) ?? null;
 	// a cold shader cache (the first start after a shader or the browser changed) takes ~20 s, a warm one ~8.5 s (2026-11-09,
 	// dev server, GTX 1650); most of it is now spent before the last step, so the note counts from the start (reveal clears it)
 	const long = setTimeout(() => curtainNote('Setting up every fabric once after an update. Afterwards it starts quickly.'), 12000);
@@ -82,6 +85,7 @@ function keepView(vp) {
 // working), so the first frame is the finished design, the curtain's animation never stops, and no later change waits for a shader. ?quick in the address
 // compiles only what the design shows (render/viewport.js prepare), for look-dev reloads after a shader change; anything
 // else then compiles when first shown, the stage's busy note saying so.
+let printsReady = null;
 async function reveal(engine) {
 	const v = engine.viewport, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 	curtainStep('Lighting the studio', 0.5);
@@ -92,6 +96,7 @@ async function reveal(engine) {
 	curtainStep('Preparing every fabric', 0.7);
 	if (quick) await v.prepare();
 	else await warmUp(engine, ({ done, total }) => curtainStep('Preparing every fabric', 0.7 + 0.28 * (done / total)));
+	await printsReady;
 	v.shaderKey = null; // (the frames look again for themselves from here)
 	v.holds.delete('startup');
 	curtainStep('Ready', 1);

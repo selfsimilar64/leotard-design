@@ -29,6 +29,7 @@ import { TRIMS } from '../garment/trim.js';
 import { FigureView, finishSurface } from './figure.js';
 import { markSkin } from './postfx.js';
 import { FittedView } from './fitted.js';
+import { PrintView } from './prints.js';
 
 const BEHIND = 0.006; // m: picks count this far behind the surface hit (what sits on the fabric)
 const _v = new THREE.Vector3();
@@ -95,6 +96,13 @@ export class Engine {
 		// hidden, the pattern view alone on screen, whose handles wait on it: ui/FlatStones.jsx)
 		viewport.onTick.add(() => {
 			if (this.stonesDirty && this.app) { this.stonesDirty = false; this.syncStones(this.app.doc, this.stonesLive ? new Set(['stones']) : null); this.stonesLive = false; this.onStones?.(); }
+			// the printed patterns (render/prints.js): with the drag while it runs, a coarser picture; at full size a moment after it ends
+			if (this.printsDirty && this.app) {
+				const live = this.printsDirty === 'live';
+				this.printsDirty = null;
+				this.prints.sync(this.app.doc, live);
+				this.printsRefine = live || this.prints.pending ? performance.now() + 220 : 0; // (pending: a piece not flat yet)
+			} else if (this.printsRefine && performance.now() > this.printsRefine && this.app) { this.printsRefine = 0; this.prints.sync(this.app.doc, false); }
 		});
 		viewport.onFrame.add(() => {
 			this.legacy.frame(viewport.keyDir);
@@ -107,6 +115,7 @@ export class Engine {
 		body.onGarment = [() => { if (this.pick) this.pick.update(body.garmentPos); else this.pick = new Surface(body.idx, body.garmentPos); this.gizmo?.again(); }];
 		this.raycaster = new THREE.Raycaster();
 		this.fitted = new FittedView(this); // a fitted garment in place of the drawn pieces (doc.meta.fitted)
+		this.prints = new PrintView(this);  // the patterns printed on the pieces (render/prints.js)
 		this.stoneView.fitAt = (fit, P, N) => this.fitted.frameAt(fit, P, N); // its stones sit on its fabric
 	}
 
@@ -277,6 +286,7 @@ export class Engine {
 			if (touched.has('panels')) for (const v of this.views) v.applyMaterials(doc);
 			// a stone group's slider or handle: redrawn in this frame
 			if (touched.has('stones')) { this.stonesDirty = true; this.stonesLive = true; }
+			if (touched.has('stones') || touched.has('panels')) this.printsDirty = 'live';
 			// the mannequin's colour picker: a finish change only (same body key: no re-fit)
 			if (touched.has('body')) this.applyBody(doc.body, false);
 		} else {
@@ -287,6 +297,7 @@ export class Engine {
 			if (t('decals') || t('layers') || t('curves') || t('panels')) this.syncDecals(doc);
 			if (t('body')) this.applyBody(doc.body, all);
 			this.fitted.sync(doc);
+			if (t('stones') || t('panels') || t('curves') || t('layers') || t('meta')) { this.prints.sync(doc); this.printsDirty = null; if (this.prints.pending) this.printsRefine = performance.now() + 220; }
 		}
 		if (!legacy && why !== 'gesture') this.drawOverlay(doc);
 		if (this.hover && why !== 'gesture') this.showHover();
@@ -321,7 +332,8 @@ export class Engine {
 					L.view.textures = this.textures;
 					L.view.wrinkles = this.wrinkleZones();
 					L.view.doubleSided = !!this.bodyHidden;
-					L.view.onFlat = () => { if (this.stonePending.size) this.stonesDirty = true; };
+					L.view.onFlat = () => { if (this.stonePending.size) this.stonesDirty = true; if (this.prints.pending) this.printsDirty = this.printsDirty || 'now'; };
+					L.view.printOf = (id) => this.prints.of(id);
 					this.layers.set(layer.id, L);
 				}
 				L.layer = layer; L.view.layer = layer; L.rims.kind = layer.kind; L.rims.layerId = layer.id; L.rims.bounds = new Set(layer.bounds ?? []);

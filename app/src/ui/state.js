@@ -8,6 +8,7 @@ import { targetOf } from '../doc/symmetry.js';
 // a component that shows a record and reads another signal must read rev too.
 export const rev = signal(0);
 export const stonesRun = signal(0);        // bumped when a drag's stones have been laid (a frame after its command)
+export const printsRun = signal(0);        // bumped when a piece's print has been drawn (render/prints.js)
 export const selection = signal(null);     // { kind: 'curves' | 'panels' | 'straps' | 'stones' | 'decals' | ..., id }
 export const tab = signal(null);           // the kind of work whose card is open (ui/Inspector.jsx): 'shape' | 'fabric' | 'sparkle' | 'stage', or null: the leotard alone
 export const facets = signal({});          // the face each kind of card was last on ({ piece: 'fabric', ... }), for this session (ui/kit.jsx useFacet)

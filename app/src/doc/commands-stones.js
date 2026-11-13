@@ -7,6 +7,8 @@ import { sizeOf, parseStone, SHAPES } from '../stones/library.js';
 import { GENERATOR_KINDS } from '../stones/generators.js';
 import { LAYOUTS } from '../stones/layouts.js';
 import { MOD_SHAPES, MOD_TARGETS } from '../stones/modifiers.js';
+import { AS } from '../prints/designs.js';
+import { parseHex } from './materials.js';
 
 function gen(tx, id) {
 	const g = tx.doc.stones.find((x) => x.id === id);
@@ -27,11 +29,17 @@ function checkStones(a) {
 			if (!MOD_SHAPES[m.shape]) throw new Error('Unknown modifier shape ' + m.shape + '. Shapes: ' + Object.keys(MOD_SHAPES).join(', '));
 			for (const s of m.stops ?? []) if (s) parseStone(s);
 		}
+		// what it is made as, and its print's ink (prints/ink.js)
+		if (p.as !== undefined && !AS.includes(p.as)) throw new Error('A pattern is made as one of ' + AS.join(', ') + ', not ' + p.as);
+		if (p.ink?.stops) {
+			if (!Array.isArray(p.ink.stops) || !p.ink.stops.length || p.ink.stops.length > 8) throw new Error('ink.stops: one to eight colours (#rrggbb), or null for the fabric\'s own');
+			for (const c of p.ink.stops) if (c !== null && !(typeof c === 'string' && parseHex(c))) throw new Error('ink.stops: ' + c + ' is not a colour (#rrggbb, or null for the fabric\'s own)');
+		}
 	}
 }
 
 defineCommand('stones.add', {
-	label: 'Add stones', args: '{ kind: pattern|row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...}, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, side?: left|right (one side of a paired line or piece), seed?, name? }',
+	label: 'Add stones', args: '{ kind: pattern|row|fill|scatter|rays|motif|lattice|cluster|fringe|lettering, on?: { curve | strap | panel }, at?: spec, params: {...; a pattern: layout, preset, as?: stones|print|both, ink?: { stops: [#rrggbb | null], soft: 0..1, repeat, wrap: once|repeat|mirror, shift, balance, strength, tint, width, dot }, gems?: { mode: edges|fill|tone } }, stone?: name | palette?: [{ stone, weight }], colourRamp?: [names], shape?: round|navette|pear|..., mirror?: none|both, side?: left|right (one side of a paired line or piece), seed?, name? }',
 	run(tx, a) {
 		if (!GENERATOR_KINDS.includes(a.kind)) throw new Error('kind must be one of: ' + GENERATOR_KINDS.join(', '));
 		checkStones(a);

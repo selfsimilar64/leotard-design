@@ -5,8 +5,19 @@ import { LATTICE_LAYOUTS, TILES } from './layouts-lattice.js';
 import { RADIAL_LAYOUTS } from './layouts-radial.js';
 import { TILING_LAYOUTS, WALLPAPER_GROUPS, STAR_TILINGS } from './layouts-tiling.js';
 import { CURVE_LAYOUTS, CURVES, DUSTS } from './layouts-curves.js';
+import { DESIGNS, PREFIX } from '../prints/designs.js';
+import { PRINT_GALLERY } from '../prints/gallery.js';
+import { fieldStones, gemsOf } from '../prints/field-stones.js';
 
-export const LAYOUTS = { ...LATTICE_LAYOUTS, ...RADIAL_LAYOUTS, ...TILING_LAYOUTS, ...CURVE_LAYOUTS };
+// The printed designs (prints/designs.js) as arrangements, named 'print-<key>': made as crystals, they follow the print's
+// colours (prints/field-stones.js), drawn in the frame's own space (local: stones/pattern.js patternCandidates).
+const DESIGN_LAYOUTS = Object.fromEntries(Object.entries(DESIGNS).map(([k, D]) => [PREFIX + k, {
+	label: D.label, params: D.params, grips: D.grips, own: D.own, random: D.random, flat: D.flat, angular: D.angular, design: true, local: true,
+	points: (P) => gemsOf(P).mode !== 'edges', fine: (P) => (gemsOf(P).mode === 'tone' ? Math.min(1, gemsOf(P).small) : 1),
+	make: (P, G) => fieldStones(P, G),
+}]));
+
+export const LAYOUTS = { ...LATTICE_LAYOUTS, ...RADIAL_LAYOUTS, ...TILING_LAYOUTS, ...CURVE_LAYOUTS, ...DESIGN_LAYOUTS };
 export const LAYOUT_KINDS = Object.keys(LAYOUTS);
 
 // A layout's parameters with its defaults under what the group has set.
@@ -24,7 +35,7 @@ const big = 'ss20', med = 'ss12';
 
 // { title, items: [{ key, label, layout, params?, mods?, hint? }] }: params the arrangement's own and the
 // crystal's size; mods its modifiers (without places: they start as they do for the piece).
-export const GALLERY = [
+const STONE_GALLERY = [
 	{
 		title: 'Gradients', items: [
 			{ key: 'fade-linear', label: 'Linear fade', layout: 'scatter', ...fade('linear') },
@@ -152,4 +163,7 @@ export const GALLERY = [
 		],
 	},
 ];
+// kind: what a family's presets are to begin with, crystals ('stones': a layout of lines and dots) or print (a design of
+// colours); either can be made as the other, or as both (prints/designs.js madeAs).
+export const GALLERY = [...STONE_GALLERY.map((g) => ({ ...g, kind: 'stones' })), ...PRINT_GALLERY.map((g) => ({ ...g, kind: 'print' }))];
 export const GALLERY_ITEMS = new Map(GALLERY.flatMap((g) => g.items.map((it) => [it.key, it])));

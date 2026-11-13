@@ -349,7 +349,7 @@ export class PackView {
 
 	fill(S, p, mirror) {
 		const k = p.k, n = k.n, geo = S.geo;
-		if (S.cap < n) {
+		if (S.cap < n || !geo.attributes.aStone) { // (also a pattern that lays no stone at all yet: its buffers are still wanted)
 			S.cap = Math.ceil(Math.max(n, 32) * 1.5);
 			geo.setAttribute('aStone', new THREE.InstancedBufferAttribute(new Float32Array(S.cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
 			geo.setAttribute('aColour', new THREE.InstancedBufferAttribute(new Float32Array(S.cap * 3), 3).setUsage(THREE.DynamicDrawUsage));

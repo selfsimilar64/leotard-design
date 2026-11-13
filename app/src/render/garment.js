@@ -9,6 +9,7 @@ import { addFabricAttributes, setFabricSlot, FABRIC_SLOTS } from '../materials/f
 import { cellPiece, cellSignature } from '../garment/pieces.js';
 import { Flattener } from '../garment/flattener.js';
 import { seamKeys, seamDistance, gradientField } from '../garment/fields.js';
+import { applyPrint } from './prints.js';
 
 // Print images by source (moodboard/, designs/, references/ or any URL the dev bridge serves).
 const prints = new Map();
@@ -21,6 +22,8 @@ function printTexture(src) {
 	}
 	return t;
 }
+
+const PLAIN = '~plain'; // a panel's look without its prints: GarmentView.plainMaterial
 
 export function sameSign(a, b) { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if ((a[i] > 0) !== (b[i] > 0)) return false; return true; }
 
@@ -108,7 +111,7 @@ export class GarmentView {
 	// A panel draws in cloth space once all its cells have UVs (tri-planar until then).
 	updateUVFlags() {
 		for (const [id, m] of this.materials) {
-			const cs = this.cells.filter((c) => c.panelId === id);
+			const own = id.endsWith(PLAIN) ? id.slice(0, -PLAIN.length) : id, cs = this.cells.filter((c) => c.panelId === own);
 			m.userData.u.uUV.value = cs.length && cs.every((c) => c.hasUV) ? 1 : 0;
 		}
 	}
@@ -131,37 +134,50 @@ export class GarmentView {
 		return m;
 	}
 
+	// A panel's look without its printed patterns, for a piece that borrows the look but has another flat shape (a fitted
+	// garment's sleeve on a design with no sleeve panel: render/fitted.js dress): a print is a picture of one piece's flat cloth.
+	plainMaterial(id) { return this.material(id + PLAIN); }
+
 	applyMaterials(doc) {
 		for (const p of doc.panels) {
 			if (p.removed || !p.stack?.length) continue;
-			const s = p.stack[0], m = this.material(p.id), u = m.userData.u;
-			applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone', s.colour2 ?? null, texScaleOf(s), s.satin);
-			// effect strength: how strongly a hologram, film or duochrome shows (1 = the fabric's own)
-			if (s.effect !== undefined && s.effect !== 1) { const e = s.effect; u.uFilmTint.value *= e; u.uHolo.value = Math.min(u.uHolo.value * e, 1); u.uDuo.value *= e; m.iridescence = Math.min(m.iridescence * e, 1); }
-			// rainbow speed: how fast a hologram's or opal's colours run through the spectrum as the
-			// surface turns (1 = the fabric's own)
-			if (s.rainbow !== undefined && s.rainbow !== 1) { u.uHoloFreq.value *= s.rainbow; u.uFilmHue.value.y *= s.rainbow; }
-			// sheerness of a mesh or lace net: the share of skin (or lining) seen through it, face on
-			// (light crosses the net twice, so the open share is its square root; materials/fabric.js)
-			if (s.sheer !== undefined && u.uMesh.value > 0.5) u.uHoleR.value = Math.sqrt(Math.sqrt(Math.min(Math.max(s.sheer, 0), 0.95)) / 3.6276);
-			u.uGrain.value = s.grain ?? 0;
-			// a gradient along a line or a direction: { colour, curve | axis, start, end } (metres)
-			if (s.ombre) { u.uOmbre.value = 2; u.uOmbreColor.value.set(s.ombre.colour ?? '#000000'); }
-			this.gradient(p.id, s.ombre);
-			// a sublimation print tiled in pattern space: { src, size: [w, h] m, offset }
-			if (s.print?.src) {
-				u.uPrint.value = 1; u.tPrint.value = printTexture(s.print.src);
-				u.uPrintSize.value.fromArray(s.print.size ?? [0.2, 0.2]); u.uPrintOffset.value.fromArray(s.print.offset ?? [0, 0]);
-			} else u.uPrint.value = 0;
-			this.applyDecals(m);
-			if (this.wrinkles) { u.uWrinkle.value = this.wrinkles.Z; u.uWrinkleN.value = this.wrinkles.N; }
-			bindScan(m, s, this.textures); // its own scan, or its fabric's default
-			fabricSide(m, this.doubleSided); // (after the fabric and scan: a see-through one is drawn differently)
-			// opaque panels take shadows (and so cast them: variance shadow maps); sheer ones do
-			// neither, so a lining under lace or mesh is not blacked out by it
-			for (const c of this.cells) if (c.panelId === p.id) c.mesh.castShadow = c.mesh.receiveShadow = !m.transparent;
+			this.applyPanel(doc, p, this.material(p.id), true);
+			const plain = this.materials.get(p.id + PLAIN);
+			if (plain) this.applyPanel(doc, p, plain, false);
 		}
 		this.updateUVFlags();
+	}
+	// printed: with the piece's printed patterns (render/prints.js).
+	applyPanel(doc, p, m, printed) {
+		const s = p.stack[0], u = m.userData.u;
+		applyFabric(m, s.fabric, s.colour, s.second ?? 'Tone-on-tone', s.colour2 ?? null, texScaleOf(s), s.satin);
+		// effect strength: how strongly a hologram, film or duochrome shows (1 = the fabric's own)
+		if (s.effect !== undefined && s.effect !== 1) { const e = s.effect; u.uFilmTint.value *= e; u.uHolo.value = Math.min(u.uHolo.value * e, 1); u.uDuo.value *= e; m.iridescence = Math.min(m.iridescence * e, 1); }
+		// rainbow speed: how fast a hologram's or opal's colours run through the spectrum as the
+		// surface turns (1 = the fabric's own)
+		if (s.rainbow !== undefined && s.rainbow !== 1) { u.uHoloFreq.value *= s.rainbow; u.uFilmHue.value.y *= s.rainbow; }
+		// sheerness of a mesh or lace net: the share of skin (or lining) seen through it, face on
+		// (light crosses the net twice, so the open share is its square root; materials/fabric.js)
+		if (s.sheer !== undefined && u.uMesh.value > 0.5) u.uHoleR.value = Math.sqrt(Math.sqrt(Math.min(Math.max(s.sheer, 0), 0.95)) / 3.6276);
+		u.uGrain.value = s.grain ?? 0;
+		// a gradient along a line or a direction: { colour, curve | axis, start, end } (metres)
+		if (s.ombre) { u.uOmbre.value = 2; u.uOmbreColor.value.set(s.ombre.colour ?? '#000000'); }
+		this.gradient(p.id, s.ombre);
+		// a sublimation print tiled in pattern space: { src, size: [w, h] m, offset }
+		if (s.print?.src) {
+			u.uPrint.value = 1; u.tPrint.value = printTexture(s.print.src);
+			u.uPrintSize.value.fromArray(s.print.size ?? [0.2, 0.2]); u.uPrintOffset.value.fromArray(s.print.offset ?? [0, 0]);
+		} else u.uPrint.value = 0;
+		// the piece's printed patterns, drawn as one picture of its flat cloth (render/prints.js), take the print's place
+		const picture = printed ? this.printOf?.(p.id) : null;
+		if (picture) applyPrint(u, picture);
+		this.applyDecals(m);
+		if (this.wrinkles) { u.uWrinkle.value = this.wrinkles.Z; u.uWrinkleN.value = this.wrinkles.N; }
+		bindScan(m, s, this.textures); // its own scan, or its fabric's default
+		fabricSide(m, this.doubleSided); // (after the fabric and scan: a see-through one is drawn differently)
+		// opaque panels take shadows (and so cast them: variance shadow maps); sheer ones do
+		// neither, so a lining under lace or mesh is not blacked out by it
+		if (printed) for (const c of this.cells) if (c.panelId === p.id) c.mesh.castShadow = c.mesh.receiveShadow = !m.transparent;
 	}
 
 	// Fill the gradient position (aKeepForm.w) on a panel's cells for its gradient (none: zeros). Cached per spec.

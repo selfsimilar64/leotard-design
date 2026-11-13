@@ -13,6 +13,7 @@ import { I } from './icons.jsx';
 import { PALETTE } from './PieceCard.jsx';
 import { COLOURS, SHAPES, SS } from '../stones/library.js';
 import { PatternGallery, patternLabel } from './PatternCard.jsx';
+import { madeAs } from '../prints/designs.js';
 
 const METALS = new Set(['Gold', 'Silver', 'Rose Gold', 'Hematite']);
 const SIZES = Object.keys(SS).map(Number);
@@ -146,7 +147,7 @@ function OnDesign({ doc }) {
 	const count = (g) => laid.countOf?.(g.id) ?? laid.stones.filter((x) => x.gen === g.id).length;
 	return (
 		<div class="part-list tall">
-			{doc.stones.map((g) => <PartRow key={g.id} icon={<I.rows size={18} />} label={groupLabel(g)} meta={count(g).toLocaleString()} on={sel?.id === g.id} onClick={() => { selection.value = { kind: 'stones', id: g.id }; }} />)}
+			{doc.stones.map((g) => <PartRow key={g.id} icon={g.kind === 'pattern' && madeAs(g.params) !== 'stones' ? <I.fill size={18} /> : <I.rows size={18} />} label={groupLabel(g)} meta={g.kind === 'pattern' && madeAs(g.params) === 'print' ? 'Print' : count(g).toLocaleString() + (g.kind === 'pattern' && madeAs(g.params) === 'both' ? ' · print' : '')} on={sel?.id === g.id} onClick={() => { selection.value = { kind: 'stones', id: g.id }; }} />)}
 			{doc.placed.length ? <PartRow icon={<I.gem size={18} />} label="Single crystals" meta={doc.placed.length.toLocaleString()} /> : null}
 			{doc.decals.map((x) => <PartRow key={x.id} icon={<I.text size={18} />} label={x.name || x.text?.split('\n')[0] || 'Logo'} meta={LOOKS.find(([k]) => k === (x.look ?? 'print'))?.[1]} on={sel?.id === x.id} onClick={() => { selection.value = { kind: 'decals', id: x.id }; }} />)}
 		</div>

@@ -365,6 +365,9 @@ input.card-title:focus { outline: none; background: var(--raised); box-shadow: 0
 .garment.on small { color: var(--on-ink); opacity: 0.7; }
 
 /* the gradient preview */
+.ramp-bar { display: block; height: 22px; border-radius: 9px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); }
+.gem.ink-stop { background: var(--c); box-shadow: inset 0 0 0 1px rgba(30, 25, 20, 0.16); }
+.gem.ink-stop.own { background: repeating-conic-gradient(rgba(30, 25, 20, 0.14) 0 25%, transparent 0 50%) 0 0 / 8px 8px, var(--c); }
 .grad-bar { height: 12px; border-radius: 999px; background: linear-gradient(to right, var(--a), var(--b)); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); }
 .fabric-name { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font: 500 15px/1.2 var(--serif); color: var(--ink); }
 .fabric-name small { font: 500 11.5px var(--sans); color: var(--ink-3); }

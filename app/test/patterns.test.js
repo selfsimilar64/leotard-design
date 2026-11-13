@@ -4,7 +4,11 @@
 // thinning never moves the stones that stay.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { loadBody } from './helpers.js';
-import { LAYOUTS, LAYOUT_KINDS, layoutDefaults, GALLERY, GALLERY_ITEMS } from '../src/stones/layouts.js';
+import { LAYOUTS, LAYOUT_KINDS as ALL_KINDS, layoutDefaults, GALLERY as ALL_GALLERY, GALLERY_ITEMS as ALL_ITEMS } from '../src/stones/layouts.js';
+// The crystal layouts. (A printed design's crystals follow its shader, which Node has none of: its pure parts are held by
+// test/prints.test.js, the shaders by dev/print-check.js in the app.)
+const LAYOUT_KINDS = ALL_KINDS.filter((k) => !LAYOUTS[k].design), GALLERY = ALL_GALLERY.filter((g) => g.kind === 'stones');
+const GALLERY_ITEMS = new Map([...ALL_ITEMS].filter(([, it]) => !LAYOUTS[it.layout].design));
 import { Candidates, SIZES } from '../src/stones/candidates.js';
 import { Geometry } from '../src/stones/geometry.js';
 import { blueTile, TILE_R, TILES } from '../src/stones/layouts-lattice.js';

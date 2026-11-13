@@ -23,7 +23,7 @@
 // touch screen).
 import * as THREE from 'three';
 import { signal } from '@preact/signals';
-import { drawnLines, tool, selection, notify, hideOverlay, showHandles, patternFocus, edit, stonesRun, prefs } from './state.js';
+import { drawnLines, tool, selection, notify, hideOverlay, showHandles, patternFocus, edit, stonesRun, printsRun, prefs } from './state.js';
 import { fromSP, toSP } from '../body/surface.js';
 import { evaluateCurve } from '../curves/evaluate.js';
 import { mirrorSP } from '../curves/points.js';
@@ -35,6 +35,7 @@ import { GALLERY_ITEMS, LAYOUTS, layoutDefaults } from '../stones/layouts.js';
 import { mirrorFast } from '../stones/cloth.js';
 import { presetMods } from '../stones/modifiers.js';
 import { patternParams } from '../stones/pattern.js';
+import { isDesign } from '../prints/designs.js';
 
 // Mirror on: a part this close to the centre is one part, not a pair (metres).
 const CENTRE = 0.006;
@@ -92,6 +93,7 @@ export class ToolController {
 			if ((touched.has('curves') || touched.has('panels')) && this.strokes.length && !this.picking) this.refreshRegions();
 		});
 		engine.onStones = () => { stonesRun.value++; this.refreshHandles(); }; // (also when a piece's flat shape arrives)
+		engine.prints.onDrawn = () => { printsRun.value++; };
 		engine.gizmo.onGrab = (k, e) => this.startHandle(k, e);
 		engine.gizmo.onPick = (id) => { patternFocus.value = id; };
 		patternFocus.subscribe(() => this.refreshHandles());
@@ -215,10 +217,13 @@ export class ToolController {
 		if (gen) this.engine.gizmo.hold(d.knob.key, d.knob.read?.(patternParams(gen, d.piece)) ?? '');
 	}
 
-	placePattern(h) {
-		const item = GALLERY_ITEMS.get(toolOptions.value.pattern) ?? GALLERY_ITEMS.get('fade-linear'), st = toolOptions.value.stone;
-		const id = this.run({ op: 'stones.add', kind: 'pattern', on: { panel: h.panel }, stone: st.stone, shape: st.shape, ...this.pieceSymmetry(h), ...(h.layer && h.layer !== 'L0' ? { layer: h.layer } : {}), name: item.label, params: this.patternAt(h, item) });
+	// as: what it is made as (prints/designs.js madeAs); none: a layout of lines and dots as crystals, and a design of colour
+	// as both, print and crystals on it, since it is laid with the crystals' tool (a piece's own Print face lays it as print).
+	placePattern(h, as = null) {
+		const item = GALLERY_ITEMS.get(toolOptions.value.pattern) ?? GALLERY_ITEMS.get('fade-linear'), st = toolOptions.value.stone, made = as ?? (isDesign(item.layout) ? 'both' : null);
+		const id = this.run({ op: 'stones.add', kind: 'pattern', on: { panel: h.panel }, stone: st.stone, shape: st.shape, ...this.pieceSymmetry(h), ...(h.layer && h.layer !== 'L0' ? { layer: h.layer } : {}), name: item.label, params: { ...this.patternAt(h, item), ...(made ? { as: made } : {}) } });
 		if (id) { selection.value = { kind: 'stones', id }; tool.value = 'move'; }
+		return id;
 	}
 	// A new pattern's parameters: its preset, the crystal chosen in the Sparkle card. It lies in the middle of the piece
 	// (a pattern that fills the piece, a gradient), or, for a design of its own size, where it was clicked.
